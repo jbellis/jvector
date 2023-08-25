@@ -28,6 +28,7 @@ public class SiftSmall {
         int buildThreads = 8;
         var es = Executors.newFixedThreadPool(buildThreads);
         var hnsw = builder.buildAsync(ravv.copy(), es, buildThreads).get();
+        es.shutdown();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var topKfound = new AtomicInteger(0);
