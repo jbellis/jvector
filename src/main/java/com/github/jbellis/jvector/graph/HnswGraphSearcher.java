@@ -96,7 +96,7 @@ public class HnswGraphSearcher<T> {
         vectors,
         vectorEncoding,
         similarityFunction,
-        graph,
+        graph.getView(),
         acceptOrds,
         visitedLimit,
         new GrowableBitSet(vectors.size()));
