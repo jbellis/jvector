@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * An List-backed implementation of the {@link RandomAccessVectorValues} interface.
  *
- * It is acceptable to provide this class to an HnswGraphBuilder, and then continue
+ * It is acceptable to provide this class to a GraphBuilder, and then continue
  * to add vectors to it as you add to the graph.
  *
  * This will be as threadsafe as the provided List.

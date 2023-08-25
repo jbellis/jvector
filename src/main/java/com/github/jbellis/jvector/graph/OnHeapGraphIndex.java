@@ -33,13 +33,13 @@ import java.util.concurrent.locks.StampedLock;
 import java.util.function.BiFunction;
 
 /**
- * An {@link HnswGraph} that offers concurrent access; for typical graphs you will get significant
+ * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
  * speedups in construction and searching as you add threads.
  *
  * <p>To search this graph, you should use a View obtained from {@link #getView()} to perform `seek`
  * and `nextNeighbor` operations.
  */
-public final class ConcurrentOnHeapHnswGraph extends HnswGraph implements Accountable {
+public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
   private final AtomicReference<NodeAtLevel>
       entryPoint; // the current graph entry node on the top level. -1 if not set
 
@@ -55,7 +55,7 @@ public final class ConcurrentOnHeapHnswGraph extends HnswGraph implements Accoun
   final int nsize0;
   private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
 
-  ConcurrentOnHeapHnswGraph(
+  OnHeapGraphIndex(
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
     this.neighborFactory = neighborFactory;
     this.entryPoint =
@@ -269,8 +269,8 @@ public final class ConcurrentOnHeapHnswGraph extends HnswGraph implements Accoun
    *
    * <p>Multiple Views may be searched concurrently.
    */
-  public HnswGraph getView() {
-    return new ConcurrentHnswGraphView();
+  public GraphIndex getView() {
+    return new ConcurrentGraphIndexView();
   }
 
   void validateEntryNode() {
@@ -290,7 +290,7 @@ public final class ConcurrentOnHeapHnswGraph extends HnswGraph implements Accoun
    * are allowed to change, so you could potentially get different top K results from the same query
    * if concurrent updates are in progress.)
    */
-  private class ConcurrentHnswGraphView extends HnswGraph {
+  private class ConcurrentGraphIndexView extends GraphIndex {
     // It is tempting, but incorrect, to try to provide "adequate" isolation by
     // (1) keeping a bitset of complete nodes and giving that to the searcher as nodes to
     // accept -- but we need to keep incomplete nodes out of the search path entirely,
@@ -305,28 +305,28 @@ public final class ConcurrentOnHeapHnswGraph extends HnswGraph implements Accoun
     private final int timestamp;
     private PrimitiveIterator.OfInt remainingNeighbors;
 
-    public ConcurrentHnswGraphView() {
+    public ConcurrentGraphIndexView() {
       this.timestamp = completions.clock();
     }
 
     @Override
     public int size() {
-      return ConcurrentOnHeapHnswGraph.this.size();
+      return OnHeapGraphIndex.this.size();
     }
 
     @Override
     public int numLevels() {
-      return ConcurrentOnHeapHnswGraph.this.numLevels();
+      return OnHeapGraphIndex.this.numLevels();
     }
 
     @Override
     public int entryNode() {
-      return ConcurrentOnHeapHnswGraph.this.entryNode();
+      return OnHeapGraphIndex.this.entryNode();
     }
 
     @Override
     public NodesIterator getNodesOnLevel(int level) {
-      return ConcurrentOnHeapHnswGraph.this.getNodesOnLevel(level);
+      return OnHeapGraphIndex.this.getNodesOnLevel(level);
     }
 
     @Override

@@ -48,10 +48,10 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  *
  * <p>Thread safety of inserts and searches depends on the implementation.
  */
-public abstract class HnswGraph {
+public abstract class GraphIndex {
 
   /** Sole constructor */
-  protected HnswGraph() {}
+  protected GraphIndex() {}
 
   /**
    * Move the pointer to exactly the given {@code level}'s {@code target}. After this method
@@ -89,8 +89,8 @@ public abstract class HnswGraph {
   public abstract NodesIterator getNodesOnLevel(int level) throws IOException;
 
   /** Empty graph value */
-  public static HnswGraph EMPTY =
-      new HnswGraph() {
+  public static GraphIndex EMPTY =
+      new GraphIndex() {
 
         @Override
         public int nextNeighbor() {

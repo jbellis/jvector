@@ -26,17 +26,11 @@ import com.github.jbellis.jvector.util.GrowableBitSet;
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 /**
- * Searches an HNSW graph to find nearest neighbors to a query vector. For more background on the
- * search algorithm, see {@link HnswGraph}.
- *
- * @param <T> the type of query vector
+ * Searches a graph to find nearest neighbors to a query vector. For more background on the
+ * search algorithm, see {@link GraphIndex}.
  */
-public class HnswSearcher<T> {
-  private final HnswGraph graph;
-  private final RandomAccessVectorValues<T> vectors; // TODO we don't need this, just need dimension count
-  private final NeighborSimilarity.ScoreFunction scoreFunction;
-  // TODO correct API is probably
-  // new Builder(graph).build().search(scoreFunction, topK, bits, visitLimit)
+public class GraphSearcher {
+  private final GraphIndex graph;
 
   /**
    * Scratch data structures that are used in each {@link #searchLevel} call. These can be expensive
@@ -49,48 +43,38 @@ public class HnswSearcher<T> {
   /**
    * Creates a new graph searcher.
    *
-   * @param scoreFunction the similarity function to compare vectors
    * @param visited bit set that will track nodes that have already been visited
    */
-  HnswSearcher(
-      HnswGraph graph,
-      RandomAccessVectorValues<T> vectors,
-      NeighborSimilarity.ScoreFunction scoreFunction,
+  GraphSearcher(
+      GraphIndex graph,
       BitSet visited) {
     this.graph = graph;
-    this.vectors = vectors;
-    this.scoreFunction = scoreFunction;
     this.candidates = new NeighborQueue(100, true);
     this.visited = visited;
   }
 
   /** Builder */
-  public static class Builder<T> {
-    private final HnswGraph graph;
-    private final RandomAccessVectorValues<T> vectors;
-    private final NeighborSimilarity.ScoreFunction scoreFunction;
+  public static class Builder {
+    private final GraphIndex graph;
     private boolean concurrent;
 
-    public Builder(HnswGraph graph,
-                   RandomAccessVectorValues<T> vectors,
-                   NeighborSimilarity.ScoreFunction scoreFunction) {
+    public Builder(GraphIndex graph) {
       this.graph = graph;
-      this.vectors = vectors;
-      this.scoreFunction = scoreFunction;
     }
 
-    public Builder<T> withConcurrentUpdates() {
+    public Builder withConcurrentUpdates() {
       this.concurrent = true;
       return this;
     }
 
-    public HnswSearcher<T> build() {
-      BitSet bits = concurrent ? new GrowableBitSet(vectors.size()) : new FixedBitSet(vectors.size());
-      return new HnswSearcher<>(graph, vectors, scoreFunction, bits);
+    public GraphSearcher build() {
+      BitSet bits = concurrent ? new GrowableBitSet(graph.size()) : new FixedBitSet(graph.size());
+      return new GraphSearcher(graph, bits);
     }
   }
 
   public NeighborQueue search(
+      NeighborSimilarity.ScoreFunction scoreFunction,
       int topK,
       Bits acceptOrds,
       int visitedLimit)
@@ -105,7 +89,7 @@ public class HnswSearcher<T> {
     int numVisited = 0;
     for (int level = graph.numLevels() - 1; level >= 1; level--) {
       results.clear();
-      searchLevel(results, 1, level, eps, null, visitedLimit);
+      searchLevel(scoreFunction, results, 1, level, eps, null, visitedLimit);
 
       numVisited += results.visitedCount();
       visitedLimit -= results.visitedCount();
@@ -118,7 +102,7 @@ public class HnswSearcher<T> {
     }
     results = new NeighborQueue(topK, false);
     searchLevel(
-        results, topK, 0, eps, acceptOrds, visitedLimit);
+        scoreFunction, results, topK, 0, eps, acceptOrds, visitedLimit);
     results.setVisitedCount(results.visitedCount() + numVisited);
     return results;
   }
@@ -130,6 +114,7 @@ public class HnswSearcher<T> {
    * last to be popped.
    */
   void searchLevel(
+      NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborQueue results,
       int topK,
       int level,
@@ -139,11 +124,11 @@ public class HnswSearcher<T> {
       throws IOException {
     assert results.isMinHeap();
 
-    prepareScratchState(vectors.size());
+    prepareScratchState(graph.size());
 
     int numVisited = 0;
     for (int ep : eps) {
-      if (visited.getAndSet(ep) == false) {
+      if (!visited.getAndSet(ep)) {
         if (numVisited >= visitedLimit) {
           results.markIncomplete();
           break;
@@ -163,7 +148,7 @@ public class HnswSearcher<T> {
     if (results.size() >= topK) {
       minAcceptedSimilarity = results.topScore();
     }
-    while (candidates.size() > 0 && results.incomplete() == false) {
+    while (candidates.size() > 0 && !results.incomplete()) {
       // get the best candidate (closest or best scoring)
       float topCandidateSimilarity = candidates.topScore();
       if (topCandidateSimilarity < minAcceptedSimilarity) {
@@ -217,23 +202,23 @@ public class HnswSearcher<T> {
 
   /**
    * Seek a specific node in the given graph. The default implementation will just call {@link
-   * HnswGraph#seek(int, int)}
+   * GraphIndex#seek(int, int)}
    *
    * @throws IOException when seeking the graph
    */
-  void graphSeek(HnswGraph graph, int level, int targetNode) throws IOException {
+  void graphSeek(GraphIndex graph, int level, int targetNode) throws IOException {
     graph.seek(level, targetNode);
   }
 
   /**
-   * Get the next neighbor from the graph, you must call {@link #graphSeek(HnswGraph, int, int)}
+   * Get the next neighbor from the graph, you must call {@link #graphSeek(GraphIndex, int, int)}
    * before calling this method. The default implementation will just call {@link
-   * HnswGraph#nextNeighbor()}
+   * GraphIndex#nextNeighbor()}
    *
-   * @return see {@link HnswGraph#nextNeighbor()}
+   * @return see {@link GraphIndex#nextNeighbor()}
    * @throws IOException when advance neighbors
    */
-  int graphNextNeighbor(HnswGraph graph) throws IOException {
+  int graphNextNeighbor(GraphIndex graph) throws IOException {
     return graph.nextNeighbor();
   }
 }

@@ -23,15 +23,15 @@ import com.github.jbellis.jvector.util.Accountable;
 import java.io.IOException;
 import java.util.Arrays;
 
-public abstract class ExtendedHnswGraph extends HnswGraph implements Accountable
+public abstract class ExtendedGraphIndex extends GraphIndex implements Accountable
 {
     public abstract int getNeighborCount(int level, int node) throws IOException;
 
-    static int[] getSortedNodes(HnswGraph hnsw, int level) {
-        HnswGraph.NodesIterator nodesOnLevel = null;
+    static int[] getSortedNodes(GraphIndex graph, int level) {
+        GraphIndex.NodesIterator nodesOnLevel = null;
         try
         {
-            nodesOnLevel = hnsw.getNodesOnLevel(level);
+            nodesOnLevel = graph.getNodesOnLevel(level);
         }
         catch (IOException e)
         {
@@ -40,7 +40,7 @@ public abstract class ExtendedHnswGraph extends HnswGraph implements Accountable
         var sortedNodes = new int[nodesOnLevel.size()];
 
         // if all ordinals appear on level (for instance, level 0), generate all ordinals in sorted order
-        if (nodesOnLevel.size() == hnsw.size())
+        if (nodesOnLevel.size() == graph.size())
         {
             Arrays.setAll(sortedNodes, i -> i);
             return sortedNodes;

@@ -19,14 +19,13 @@
 package com.github.jbellis.jvector.disk;
 
 import com.github.jbellis.jvector.annotations.VisibleForTesting;
-import com.github.jbellis.jvector.graph.HnswGraph;
+import com.github.jbellis.jvector.graph.GraphIndex;
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.function.Supplier;
 
-public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
+public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
 {
     private final ReaderSupplier readerSupplier;
     private final long segmentOffset;
@@ -35,7 +34,7 @@ public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
     private final int M;
     private final int dimension;
 
-    public OnDiskHnswGraph(ReaderSupplier readerSupplier, long offset)
+    public OnDiskGraphIndex(ReaderSupplier readerSupplier, long offset)
     {
         this.readerSupplier = readerSupplier;
         this.segmentOffset = offset;
@@ -46,7 +45,7 @@ public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
             M = reader.readInt();
             dimension = reader.readInt();
         } catch (Exception e) {
-            throw new RuntimeException("Error initializing OnDiskHnswGraph at offset " + offset, e);
+            throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
     }
 
@@ -82,13 +81,13 @@ public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
         return entryNode;
     }
 
-    /** return an HnswGraph that can be safely querried concurrently */
+    /** return an Graph that can be safely querried concurrently */
     public OnDiskView getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
 
-    public class OnDiskView extends HnswGraph implements AutoCloseable
+    public class OnDiskView extends GraphIndex implements AutoCloseable
     {
         private final RandomAccessReader reader;
         private int currentNeighborsRead;
@@ -110,7 +109,7 @@ public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
         @Override
         public int size()
         {
-            return OnDiskHnswGraph.this.size();
+            return OnDiskGraphIndex.this.size();
         }
 
         @Override
@@ -131,7 +130,7 @@ public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
         @Override
         public int entryNode()
         {
-            return OnDiskHnswGraph.this.entryNode();
+            return OnDiskGraphIndex.this.entryNode();
         }
 
         // getNodesOnLevel is only used when scanning the entire graph, i.e., during compaction (or tests)

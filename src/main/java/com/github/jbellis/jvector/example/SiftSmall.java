@@ -1,10 +1,7 @@
 package com.github.jbellis.jvector.example;
 
-import com.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.example.util.SiftLoader;
-import com.github.jbellis.jvector.graph.ConcurrentHnswGraphBuilder;
-import com.github.jbellis.jvector.graph.HnswGraphSearcher;
-import com.github.jbellis.jvector.graph.NeighborQueue;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -24,10 +21,10 @@ public class SiftSmall {
         var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
 
         var start = System.nanoTime();
-        var builder = new ConcurrentHnswGraphBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100);
+        var builder = new GraphBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100);
         int buildThreads = 8;
         var es = Executors.newFixedThreadPool(buildThreads);
-        var hnsw = builder.buildAsync(ravv.copy(), es, buildThreads).get();
+        var graph = builder.buildAsync(ravv.copy(), es, buildThreads).get();
         es.shutdown();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
@@ -38,7 +35,9 @@ public class SiftSmall {
             var queryVector = queryVectors.get(i);
             NeighborQueue nn;
             try {
-                nn = HnswGraphSearcher.searchConcurrent(queryVector, 100, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, hnsw, null, Integer.MAX_VALUE);
+                var searcher = new GraphSearcher.Builder(graph).build();
+                NeighborSimilarity.ScoreFunction scoreFunction = (j) -> VectorSimilarityFunction.COSINE.compare(queryVector, ravv.vectorValue(j));
+                nn = searcher.search(scoreFunction, 100, null, Integer.MAX_VALUE);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
