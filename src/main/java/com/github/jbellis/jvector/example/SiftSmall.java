@@ -11,13 +11,14 @@ import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 public class SiftSmall {
-    private static String siftPath = "/Users/jonathan/Projects/jvector/siftsmall";
+    private static String siftPath = System.getProperty("sift.path");
 
     public static double testRecall(ArrayList<float[]> baseVectors, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth) throws IOException, InterruptedException, ExecutionException {
         var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
