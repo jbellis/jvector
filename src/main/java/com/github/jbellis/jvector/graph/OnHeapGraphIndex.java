@@ -20,9 +20,6 @@ package com.github.jbellis.jvector.graph;
 import com.github.jbellis.jvector.util.Accountable;
 import com.github.jbellis.jvector.util.RamUsageEstimator;
 
-import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
-
-import java.io.IOException;
 import java.util.Map;
 import java.util.PrimitiveIterator;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +29,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.BiFunction;
 
+import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
  * speedups in construction and searching as you add threads.
@@ -39,8 +38,8 @@ import java.util.function.BiFunction;
  * <p>To search this graph, you should use a View obtained from {@link #getView()} to perform `seek`
  * and `nextNeighbor` operations.
  */
-public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
-  private final AtomicReference<NodeAtLevel>
+public final class OnHeapGraphIndex implements GraphIndex, Accountable {
+  private final AtomicReference<Integer>
       entryPoint; // the current graph entry node on the top level. -1 if not set
 
   // Unlike OnHeapHnswGraph (OHHG), we use the same data structure for Level 0 and higher node
@@ -59,23 +58,22 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
     this.neighborFactory = neighborFactory;
     this.entryPoint =
-        new AtomicReference<>(
-            new NodeAtLevel(0, -1)); // Entry node should be negative until a node is added
+        new AtomicReference<>(-1); // Entry node should be negative until a node is added
     this.nsize = M;
     this.nsize0 = 2 * M;
 
     this.graphLevels = new ConcurrentHashMap<>();
+    graphLevels.put(0, new ConcurrentHashMap<>());
     this.completions = new CompletionTracker(nsize0);
   }
 
   /**
    * Returns the neighbors connected to the given node.
    *
-   * @param level level of the graph
    * @param node the node whose neighbors are returned, represented as an ordinal on the level 0.
    */
-  public ConcurrentNeighborSet getNeighbors(int level, int node) {
-    return graphLevels.get(level).get(node);
+  public ConcurrentNeighborSet getNeighbors(int node) {
+    return graphLevels.get(0).get(node);
   }
 
   @Override
@@ -84,36 +82,16 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
     return levelZero == null ? 0 : levelZero.size(); // all nodes are located on the 0th level
   }
 
-  /**
-   * Add node on the given level with an empty set of neighbors.
-   *
-   * <p>Nodes can be inserted out of order, but it requires that the nodes preceded by the node
-   * inserted out of order are eventually added.
-   *
-   * <p>Actually populating the neighbors, and establishing bidirectional links, is the
-   * responsibility of the caller.
-   *
-   * <p>It is also the responsibility of the caller to ensure that each node is only added once.
-   *
-   * @param level level to add a node on
-   * @param node the node to add, represented as an ordinal on the level 0.
-   */
-  public void addNode(int level, int node) {
-    if (level >= graphLevels.size()) {
-      for (int i = graphLevels.size(); i <= level; i++) {
-        graphLevels.putIfAbsent(i, new ConcurrentHashMap<>());
-      }
-    }
-
-    graphLevels.get(level).put(node, neighborFactory.apply(node, connectionsOnLevel(level)));
+  public void addNode(int node) {
+    graphLevels.get(0).put(node, neighborFactory.apply(node, connectionsOnLevel(0)));
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
-  void markComplete(int level, int node) {
+  void markComplete(int node) {
     entryPoint.accumulateAndGet(
-        new NodeAtLevel(level, node),
+        node,
         (oldEntry, newEntry) -> {
-          if (oldEntry.node >= 0 && oldEntry.level >= level) {
+          if (oldEntry >= 0) {
             return oldEntry;
           } else {
             return newEntry;
@@ -123,72 +101,36 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
   }
 
   public void updateEntryNode(int node) {
-    entryPoint.set(new NodeAtLevel(0, node));
+    entryPoint.set(node);
   }
 
   private int connectionsOnLevel(int level) {
     return level == 0 ? nsize0 : nsize;
   }
 
-  @Override
-  public void seek(int level, int target) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int nextNeighbor() throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * @return the current number of levels in the graph where nodes have been added and we have a
-   *     valid entry point.
-   */
-  @Override
-  public int numLevels() {
-    return entryPoint.get().level + 1;
-  }
-
-  /**
-   * Returns the graph's current entry node on the top level shown as ordinals of the nodes on 0th
-   * level
-   *
-   * @return the graph's current entry node on the top level
-   */
-  @Override
-  public int entryNode() {
-    return entryPoint.get().node;
-  }
-
-  NodeAtLevel entry() {
+  int entry() {
     return entryPoint.get();
   }
 
   @Override
-  public NodesIterator getNodesOnLevel(int level) {
+  public NodesIterator getNodes() {
     // We avoid the temptation to optimize L0 by using ArrayNodesIterator.
     // This is because, while L0 will contain sequential ordinals once the graph is complete,
     // and internally Lucene only calls getNodesOnLevel at that point, this is a public
     // method so we cannot assume that that is the only time it will be called by third parties.
-    return new CollectionNodesIterator(graphLevels.get(level).keySet());
+    return new NodesIterator.CollectionNodesIterator(graphLevels.get(0).keySet());
   }
 
   @Override
   public long ramBytesUsed() {
     // the main graph structure
     long total = concurrentHashMapRamUsed(graphLevels.size());
-    for (int l = 0; l <= entryPoint.get().level; l++) {
-      Map<Integer, ConcurrentNeighborSet> level = graphLevels.get(l);
-      if (level == null) {
-        continue;
-      }
+    Map<Integer, ConcurrentNeighborSet> level = graphLevels.get(0);
+    int numNodesOnLevel = graphLevels.get(0).size();
+    long chmSize = concurrentHashMapRamUsed(numNodesOnLevel);
+    long neighborSize = neighborsRamUsed(connectionsOnLevel(0)) * numNodesOnLevel;
 
-      int numNodesOnLevel = graphLevels.get(l).size();
-      long chmSize = concurrentHashMapRamUsed(numNodesOnLevel);
-      long neighborSize = neighborsRamUsed(connectionsOnLevel(l)) * numNodesOnLevel;
-
-      total += chmSize + neighborSize;
-    }
+    total += chmSize + neighborSize;
 
     // logical clocks
     total += completions.ramBytesUsed();
@@ -269,7 +211,7 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
    *
    * <p>Multiple Views may be searched concurrently.
    */
-  public GraphIndex getView() {
+  public GraphIndex.View getView() {
     return new ConcurrentGraphIndexView();
   }
 
@@ -278,7 +220,7 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
       return;
     }
     var en = entryPoint.get();
-    if (!(en.level >= 0 && en.node >= 0 && graphLevels.get(en.level).containsKey(en.node))) {
+    if (!(en >= 0 && graphLevels.get(0).containsKey(en))) {
       throw new IllegalStateException("Entry node was incompletely added! " + en);
     }
   }
@@ -290,7 +232,7 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
    * are allowed to change, so you could potentially get different top K results from the same query
    * if concurrent updates are in progress.)
    */
-  private class ConcurrentGraphIndexView extends GraphIndex {
+  private class ConcurrentGraphIndexView implements GraphIndex.View {
     // It is tempting, but incorrect, to try to provide "adequate" isolation by
     // (1) keeping a bitset of complete nodes and giving that to the searcher as nodes to
     // accept -- but we need to keep incomplete nodes out of the search path entirely,
@@ -310,28 +252,8 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
     }
 
     @Override
-    public int size() {
-      return OnHeapGraphIndex.this.size();
-    }
-
-    @Override
-    public int numLevels() {
-      return OnHeapGraphIndex.this.numLevels();
-    }
-
-    @Override
-    public int entryNode() {
-      return OnHeapGraphIndex.this.entryNode();
-    }
-
-    @Override
-    public NodesIterator getNodesOnLevel(int level) {
-      return OnHeapGraphIndex.this.getNodesOnLevel(level);
-    }
-
-    @Override
-    public void seek(int level, int targetNode) {
-      remainingNeighbors = getNeighbors(level, targetNode).nodeIterator();
+    public void seek(int targetNode) {
+      remainingNeighbors = getNeighbors(targetNode).nodeIterator();
     }
 
     @Override
@@ -346,32 +268,18 @@ public final class OnHeapGraphIndex extends GraphIndex implements Accountable {
     }
 
     @Override
+    public int size() {
+      return OnHeapGraphIndex.this.size();
+    }
+
+    @Override
+    public int entryNode() {
+      return OnHeapGraphIndex.this.entryPoint.get();
+    }
+
+    @Override
     public String toString() {
       return "ConcurrentOnHeapHnswGraphView(size=" + size() + ", entryPoint=" + entryPoint.get();
-    }
-  }
-
-  static final class NodeAtLevel implements Comparable<NodeAtLevel> {
-    public final int level;
-    public final int node;
-
-    public NodeAtLevel(int level, int node) {
-      this.level = level;
-      this.node = node;
-    }
-
-    @Override
-    public int compareTo(NodeAtLevel o) {
-      int cmp = Integer.compare(level, o.level);
-      if (cmp == 0) {
-        cmp = Integer.compare(node, o.node);
-      }
-      return cmp;
-    }
-
-    @Override
-    public String toString() {
-      return "NodeAtLevel(level=" + level + ", node=" + node + ")";
     }
   }
 

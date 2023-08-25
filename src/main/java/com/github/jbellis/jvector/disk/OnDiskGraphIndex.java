@@ -20,12 +20,14 @@ package com.github.jbellis.jvector.disk;
 
 import com.github.jbellis.jvector.annotations.VisibleForTesting;
 import com.github.jbellis.jvector.graph.GraphIndex;
+import com.github.jbellis.jvector.graph.NodesIterator;
+
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 import java.io.IOException;
 import java.util.Arrays;
 
-public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
+public class OnDiskGraphIndex implements GraphIndex, AutoCloseable
 {
     private final ReaderSupplier readerSupplier;
     private final long segmentOffset;
@@ -49,12 +51,6 @@ public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
         }
     }
 
-    @Override
-    public void seek(int level, int target) throws IOException
-    {
-        throw new UnsupportedOperationException();
-    }
-
     private static long levelNodeOf(int level, int target)
     {
         return ((long) level << 32) | target;
@@ -65,29 +61,13 @@ public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
         return size;
     }
 
-    @Override
-    public int nextNeighbor()
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int numLevels() throws IOException {
-        return 1;
-    }
-
-    @Override
-    public int entryNode() {
-        return entryNode;
-    }
-
     /** return an Graph that can be safely querried concurrently */
     public OnDiskView getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
 
-    public class OnDiskView extends GraphIndex implements AutoCloseable
+    public class OnDiskView implements GraphIndex.View, AutoCloseable
     {
         private final RandomAccessReader reader;
         private int currentNeighborsRead;
@@ -101,15 +81,9 @@ public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
         }
 
         @Override
-        public void seek(int level, int target) throws IOException
+        public void seek(int target) throws IOException
         {
             // TODO
-        }
-
-        @Override
-        public int size()
-        {
-            return OnDiskGraphIndex.this.size();
         }
 
         @Override
@@ -123,22 +97,13 @@ public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
         }
 
         @Override
-        public int numLevels() throws IOException {
-            return 1;
+        public int size() {
+            return OnDiskGraphIndex.this.size();
         }
 
         @Override
-        public int entryNode()
-        {
-            return OnDiskGraphIndex.this.entryNode();
-        }
-
-        // getNodesOnLevel is only used when scanning the entire graph, i.e., during compaction (or tests)
-        @Override
-        public NodesIterator getNodesOnLevel(int level) throws IOException
-        {
-            // TODO
-            return null;
+        public int entryNode() {
+            return OnDiskGraphIndex.this.entryNode;
         }
 
         @Override
@@ -149,8 +114,13 @@ public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
     }
 
     @Override
-    public NodesIterator getNodesOnLevel(int level)
+    public NodesIterator getNodes()
     {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void addNode(int node) {
         throw new UnsupportedOperationException();
     }
 
@@ -205,26 +175,6 @@ public class OnDiskGraphIndex extends GraphIndex implements AutoCloseable
         public int[] nodesOnLevel()
         {
             return nodeIds;
-        }
-    }
-
-    @VisibleForTesting
-    abstract static class AbstractNodesIterator extends NodesIterator
-    {
-        public AbstractNodesIterator(int size)
-        {
-            super(size);
-        }
-
-        @Override
-        public int consume(int[] ints)
-        {
-            int i = 0;
-            while (i < ints.length && hasNext())
-            {
-                ints[i++] = nextInt();
-            }
-            return i;
         }
     }
 }

@@ -30,7 +30,7 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher {
-  private final GraphIndex graph;
+  private final GraphIndex.View graph;
 
   /**
    * Scratch data structures that are used in each {@link #searchLevel} call. These can be expensive
@@ -46,7 +46,7 @@ public class GraphSearcher {
    * @param visited bit set that will track nodes that have already been visited
    */
   GraphSearcher(
-      GraphIndex graph,
+      GraphIndex.View graph,
       BitSet visited) {
     this.graph = graph;
     this.candidates = new NeighborQueue(100, true);
@@ -55,10 +55,10 @@ public class GraphSearcher {
 
   /** Builder */
   public static class Builder {
-    private final GraphIndex graph;
+    private final GraphIndex.View graph;
     private boolean concurrent;
 
-    public Builder(GraphIndex graph) {
+    public Builder(GraphIndex.View graph) {
       this.graph = graph;
     }
 
@@ -87,22 +87,20 @@ public class GraphSearcher {
     results = new NeighborQueue(1, false);
     int[] eps = new int[] {graph.entryNode()};
     int numVisited = 0;
-    for (int level = graph.numLevels() - 1; level >= 1; level--) {
-      results.clear();
-      searchLevel(scoreFunction, results, 1, level, eps, null, visitedLimit);
+    results.clear();
+    searchLevel(scoreFunction, results, 1, eps, null, visitedLimit);
 
-      numVisited += results.visitedCount();
-      visitedLimit -= results.visitedCount();
+    numVisited += results.visitedCount();
+    visitedLimit -= results.visitedCount();
 
-      if (results.incomplete()) {
-        results.setVisitedCount(numVisited);
-        return results;
-      }
-      eps[0] = results.pop();
+    if (results.incomplete()) {
+      results.setVisitedCount(numVisited);
+      return results;
     }
+    eps[0] = results.pop();
     results = new NeighborQueue(topK, false);
     searchLevel(
-        scoreFunction, results, topK, 0, eps, acceptOrds, visitedLimit);
+        scoreFunction, results, topK, eps, acceptOrds, visitedLimit);
     results.setVisitedCount(results.visitedCount() + numVisited);
     return results;
   }
@@ -117,7 +115,6 @@ public class GraphSearcher {
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborQueue results,
       int topK,
-      int level,
       final int[] eps,
       Bits acceptOrds,
       int visitedLimit)
@@ -156,9 +153,9 @@ public class GraphSearcher {
       }
 
       int topCandidateNode = candidates.pop();
-      graphSeek(graph, level, topCandidateNode);
+      graph.seek(topCandidateNode);
       int friendOrd;
-      while ((friendOrd = graphNextNeighbor(graph)) != NO_MORE_DOCS) {
+      while ((friendOrd = graph.nextNeighbor()) != NO_MORE_DOCS) {
         if (visited.getAndSet(friendOrd)) {
           continue;
         }
@@ -198,27 +195,5 @@ public class GraphSearcher {
       // else GrowableBitSet knows how to grow itself safely
     }
     visited.clear();
-  }
-
-  /**
-   * Seek a specific node in the given graph. The default implementation will just call {@link
-   * GraphIndex#seek(int, int)}
-   *
-   * @throws IOException when seeking the graph
-   */
-  void graphSeek(GraphIndex graph, int level, int targetNode) throws IOException {
-    graph.seek(level, targetNode);
-  }
-
-  /**
-   * Get the next neighbor from the graph, you must call {@link #graphSeek(GraphIndex, int, int)}
-   * before calling this method. The default implementation will just call {@link
-   * GraphIndex#nextNeighbor()}
-   *
-   * @return see {@link GraphIndex#nextNeighbor()}
-   * @throws IOException when advance neighbors
-   */
-  int graphNextNeighbor(GraphIndex graph) throws IOException {
-    return graph.nextNeighbor();
   }
 }

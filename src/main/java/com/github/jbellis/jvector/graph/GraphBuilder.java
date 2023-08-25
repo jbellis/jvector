@@ -37,7 +37,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
-import com.github.jbellis.jvector.graph.OnHeapGraphIndex.NodeAtLevel;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -68,7 +67,7 @@ public class GraphBuilder<T> {
   private final ExplicitThreadLocal<NeighborQueue> beamCandidates;
 
   final OnHeapGraphIndex graph;
-  private final ConcurrentSkipListSet<NodeAtLevel> insertionsInProgress =
+  private final ConcurrentSkipListSet<Integer> insertionsInProgress =
           new ConcurrentSkipListSet<>();
 
   // we need two sources of vectors in order to perform diversity check comparisons without
@@ -161,7 +160,7 @@ public class GraphBuilder<T> {
 
     this.graphSearcher =
             ExplicitThreadLocal.withInitial(
-                    () -> new GraphSearcher.Builder(graph).withConcurrentUpdates().build());
+                    () -> new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build());
     // in scratch we store candidates in reverse order: worse candidates are first
     this.naturalScratch =
             ExplicitThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
@@ -273,11 +272,9 @@ public class GraphBuilder<T> {
                   pool.submit(
                           () -> {
                             try {
-                              for (int L = 0; L < graph.numLevels(); L++) {
-                                var neighbors = graph.getNeighbors(L, node);
-                                if (neighbors != null) {
-                                  neighbors.cleanup();
-                                }
+                              var neighbors = graph.getNeighbors(node);
+                              if (neighbors != null) {
+                                neighbors.cleanup();
                               }
                             } catch (Throwable e) {
                               asyncException.set(e);
@@ -350,18 +347,13 @@ public class GraphBuilder<T> {
   public long addGraphNode(int node, T value) throws IOException {
     // do this before adding to in-progress, so a concurrent writer checking
     // the in-progress set doesn't have to worry about uninitialized neighbor sets
-    final int nodeLevel = levelSupplier.get();
-    for (int level = nodeLevel; level >= 0; level--) {
-      graph.addNode(level, node);
-    }
+    graph.addNode(node);
 
-    NodeAtLevel progressMarker = new NodeAtLevel(nodeLevel, node);
-    insertionsInProgress.add(progressMarker);
-    ConcurrentSkipListSet<NodeAtLevel> inProgressBefore = insertionsInProgress.clone();
+    insertionsInProgress.add(node);
+    ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
     try {
       // find ANN of the new node by searching the graph
-      NodeAtLevel entry = graph.entry();
-      int ep = entry.node;
+      int ep = graph.entry();
       int[] eps = ep >= 0 ? new int[] {ep} : new int[0];
       var gs = graphSearcher.get();
       NeighborSimilarity.ScoreFunction scoreFunction = (i) -> {
@@ -373,64 +365,37 @@ public class GraphBuilder<T> {
         }
       };
 
-      // for levels > nodeLevel search with topk = 1
-      NeighborQueue candidates = new NeighborQueue(1, false);
-      for (int level = entry.level; level > nodeLevel; level--) {
-        candidates.clear();
-        gs.searchLevel(
-                scoreFunction,
-                candidates,
-                1,
-                level,
-                eps,
-                null,
-                Integer.MAX_VALUE);
-        eps = new int[] {candidates.pop()};
-      }
-
       // for levels <= nodeLevel search with topk = beamWidth, and add connections
-      candidates = beamCandidates.get();
-      for (int level = Math.min(nodeLevel, entry.level); level >= 0; level--) {
-        candidates.clear();
-        // find best "natural" candidates at this level with a beam search
-        gs.searchLevel(
-                scoreFunction,
-                candidates,
-                beamWidth,
-                level,
-                eps,
-                null,
-                Integer.MAX_VALUE);
-        eps = candidates.nodes();
+      NeighborQueue candidates = beamCandidates.get();
+      candidates.clear();
+      // find best "natural" candidates at this level with a beam search
+      gs.searchLevel(
+              scoreFunction,
+              candidates,
+              beamWidth,
+              eps,
+              null,
+              Integer.MAX_VALUE);
+      eps = candidates.nodes();
 
-        // Update neighbors with these candidates.
-        var natural = getNaturalCandidates(candidates);
-        var concurrent = getConcurrentCandidates(level, node, inProgressBefore, progressMarker);
-        updateNeighbors(node, level, natural, concurrent);
-      }
+      // Update neighbors with these candidates.
+      var natural = getNaturalCandidates(candidates);
+      var concurrent = getConcurrentCandidates(node, inProgressBefore);
+      updateNeighbors(node, natural, concurrent);
 
-      // If we're being added in a new level above the entry point, consider concurrent insertions
-      // for inclusion as neighbors at that level. There are no natural neighbors yet.
-      for (int level = entry.level + 1; level <= nodeLevel; level++) {
-        NeighborArray natural = this.naturalScratch.get();
-        natural.clear();
-        var concurrent = getConcurrentCandidates(level, node, inProgressBefore, progressMarker);
-        updateNeighbors(node, level, natural, concurrent);
-      }
-
-      graph.markComplete(nodeLevel, node);
+      graph.markComplete(node);
     } finally {
-      insertionsInProgress.remove(progressMarker);
+      insertionsInProgress.remove(node);
     }
 
-    return graph.ramBytesUsedOneNode(nodeLevel);
+    return graph.ramBytesUsedOneNode(0);
   }
 
-  private void updateNeighbors(int node, int level, NeighborArray natural, NeighborArray concurrent)
+  private void updateNeighbors(int node, NeighborArray natural, NeighborArray concurrent)
           throws IOException {
-    ConcurrentNeighborSet neighbors = graph.getNeighbors(level, node);
+    ConcurrentNeighborSet neighbors = graph.getNeighbors(node);
     neighbors.insertDiverse(natural, concurrent);
-    neighbors.backlink(i -> graph.getNeighbors(level, i), neighborOverflow);
+    neighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
 
   private NeighborArray getNaturalCandidates(NeighborQueue candidates) {
@@ -448,16 +413,15 @@ public class GraphBuilder<T> {
   }
 
   private NeighborArray getConcurrentCandidates(
-          int level, int newNode, Set<NodeAtLevel> inProgress, NodeAtLevel progressMarker)
+          int newNode, Set<Integer> inProgress)
           throws IOException {
     NeighborArray scratch = this.concurrentScratch.get();
     scratch.clear();
-    for (NodeAtLevel n : inProgress) {
-      if (n.level >= level && n != progressMarker) {
+    for (var n : inProgress) {
+      if (n != newNode) {
         scratch.insertSorted(
-                n.node,
-                scoreBetween(
-                        vectors.get().vectorValue(newNode), vectorsCopy.get().vectorValue(n.node)));
+                n,
+                scoreBetween(vectors.get().vectorValue(newNode), vectorsCopy.get().vectorValue(n)));
       }
     }
     return scratch;

@@ -35,7 +35,7 @@ public class SiftSmall {
             var queryVector = queryVectors.get(i);
             NeighborQueue nn;
             try {
-                var searcher = new GraphSearcher.Builder(graph).build();
+                var searcher = new GraphSearcher.Builder(graph.getView()).build();
                 NeighborSimilarity.ScoreFunction scoreFunction = (j) -> VectorSimilarityFunction.COSINE.compare(queryVector, ravv.vectorValue(j));
                 nn = searcher.search(scoreFunction, 100, null, Integer.MAX_VALUE);
             } catch (IOException e) {

@@ -23,15 +23,15 @@ import com.github.jbellis.jvector.util.Accountable;
 import java.io.IOException;
 import java.util.Arrays;
 
-public abstract class ExtendedGraphIndex extends GraphIndex implements Accountable
+public abstract class ExtendedGraphIndex implements GraphIndex, Accountable
 {
     public abstract int getNeighborCount(int level, int node) throws IOException;
 
     static int[] getSortedNodes(GraphIndex graph, int level) {
-        GraphIndex.NodesIterator nodesOnLevel = null;
+        NodesIterator nodesOnLevel = null;
         try
         {
-            nodesOnLevel = graph.getNodesOnLevel(level);
+            nodesOnLevel = graph.getNodes();
         }
         catch (IOException e)
         {
