@@ -1,6 +1,6 @@
 package com.github.jbellis.jvector.example;
 
-import com.github.jbellis.jvector.example.util.ListRandomAccessVectorValues;
+import com.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import com.github.jbellis.jvector.example.util.SiftLoader;
 import com.github.jbellis.jvector.graph.ConcurrentHnswGraphBuilder;
 import com.github.jbellis.jvector.graph.HnswGraphSearcher;

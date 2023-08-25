@@ -1,8 +1,6 @@
-package com.github.jbellis.jvector.example.util;
+package com.github.jbellis.jvector.graph;
 
 import java.util.List;
-
-import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
 
 /**
  * An List-backed implementation of the {@link RandomAccessVectorValues} interface.
