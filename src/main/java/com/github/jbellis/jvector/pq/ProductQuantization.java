@@ -259,10 +259,7 @@ public class ProductQuantization {
         }
     }
 
-    public static ProductQuantization load(InputStream raw) throws IOException {
-        // we don't close `in` because caller is responsible for closing `raw`
-        var in = new DataInputStream(raw);
-
+    public static ProductQuantization load(DataInput in) throws IOException {
         int globalCentroidLength = in.readInt();
         float[] globalCentroid = null;
         if (globalCentroidLength > 0) {
@@ -290,7 +287,7 @@ public class ProductQuantization {
         return new ProductQuantization(codebooks, globalCentroid);
     }
 
-    private static float[] readFloats(DataInputStream in, int size) throws IOException
+    private static float[] readFloats(DataInput in, int size) throws IOException
     {
         var v = new float[size];
         for (int i = 0; i < size; i++) {
