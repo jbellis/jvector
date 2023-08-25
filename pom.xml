@@ -2,30 +2,55 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.example</groupId>
+  <groupId>com.github.jbellis</groupId>
   <artifactId>jvector</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
-
+  <!-- Project Metadata setup -->
   <name>jvector</name>
-  <url>http://maven.apache.org</url>
-
+  <description>JVector: the most advanced embedded vector search engine</description>
+  <url>https://github.com/jbellis/jvector</url>
+  <scm>
+    <connection>scm:git:git://github.com/jbellis/jvector.git</connection>
+    <developerConnection>scm:git:git@github.com:jbellis/jvector.git</developerConnection>
+    <url>http://github.com/jbellis/jvector/tree/main/</url>
+  </scm>
+  <issueManagement>
+    <system>github</system>
+    <url>http://github.com/jbellis/jvector/issues</url>
+  </issueManagement>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <!-- Build property abstractions: versions, etc -->
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>20</maven.compiler.source>
     <maven.compiler.target>20</maven.compiler.target>
+    <junit.version>4.13.2</junit.version>
+    <surefire.version>3.1.2</surefire.version>
   </properties>
 
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>3.8.1</version>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -43,7 +68,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.1.2</version>
+        <version>${surefire.version}</version>
         <configuration>
           <argLine>
             --enable-preview

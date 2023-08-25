@@ -9,15 +9,16 @@ import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 public class SiftSmall {
-    private static String siftPath = "/Users/jonathan/Projects/jvector/siftsmall";
 
     public static double testRecall(ArrayList<float[]> baseVectors, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth) throws IOException, InterruptedException, ExecutionException {
         var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
@@ -50,10 +51,8 @@ public class SiftSmall {
     }
 
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
-        if (args.length > 0) {
-            siftPath = args[0];
-        }
-
+        var props = loadProperties("project.properties");
+        var siftPath = props.getProperty("sift.path");
         var baseVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_base.fvecs", siftPath));
         var queryVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_query.fvecs", siftPath));
         var groundTruth = SiftLoader.readIvecs(String.format("%s/siftsmall_groundtruth.ivecs", siftPath));
@@ -63,5 +62,17 @@ public class SiftSmall {
         var recall = testRecall(baseVectors, queryVectors, groundTruth);
 
         System.out.println("Recall: " + recall);
+    }
+
+    private static Properties loadProperties(String resourceName) throws IOException {
+        Properties properties = new Properties();
+
+        try (InputStream input = SiftSmall.class.getClassLoader().getResourceAsStream(resourceName)) {
+            if (input == null) {
+                throw new IOException("Resource not found: " + resourceName);
+            }
+            properties.load(input);
+        }
+        return properties;
     }
 }
