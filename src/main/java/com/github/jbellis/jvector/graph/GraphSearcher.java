@@ -54,7 +54,7 @@ public class GraphSearcher {
     this.visited = visited;
   }
 
-  public static <T> NeighborQueue search(T targetVector, int i, RandomAccessVectorValues<T> copy, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int maxValue) {
+  public static <T> NeighborQueue search(T targetVector, int topK, RandomAccessVectorValues<T> copy, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int maxValue) {
     var searcher = new GraphSearcher.Builder(graph.getView()).build();
     return searcher.search(i1 -> {
       switch (vectorEncoding) {
@@ -65,7 +65,7 @@ public class GraphSearcher {
         default:
           throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
       }
-    }, i, acceptOrds, maxValue);
+    }, topK, acceptOrds, maxValue);
   }
 
   /** Builder */

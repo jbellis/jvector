@@ -63,7 +63,6 @@ public class GraphIndexBuilder<T> {
   // we need two sources of vectors in order to perform diversity check comparisons without
   // colliding
   private final ExplicitThreadLocal<RandomAccessVectorValues<T>> vectorsCopy;
-  private final Supplier<Integer> levelSupplier;
 
   /**
    * Reads all the vectors from vector values, builds a graph connecting them by their dense
@@ -122,20 +121,6 @@ public class GraphIndexBuilder<T> {
     this.graph =
             new OnHeapGraphIndex(
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
-    if (alpha > 1.0f) {
-      levelSupplier = () -> 0;
-    } else {
-      double ml = M == 1 ? 1 : 1 / Math.log(1.0 * M);
-      levelSupplier = () -> {
-        double randDouble;
-        do {
-          randDouble =
-                  ThreadLocalRandom.current().nextDouble(); // avoid 0 value, as log(0) is undefined
-        } while (randDouble == 0.0);
-        return ((int) (-log(randDouble) * ml));
-      };
-    }
-
     this.graphSearcher =
             ExplicitThreadLocal.withInitial(
                     () -> new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build());
@@ -182,7 +167,7 @@ public class GraphIndexBuilder<T> {
     protected abstract U initialValue();
 
     public static <U> ExplicitThreadLocal<U> withInitial(Supplier<U> initialValue) {
-      return new ExplicitThreadLocal<U>() {
+      return new ExplicitThreadLocal<>() {
         @Override
         protected U initialValue() {
           return initialValue.get();
@@ -236,10 +221,8 @@ public class GraphIndexBuilder<T> {
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
       var gs = new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build(); // TODO cache these (but not with the same View)
-      NeighborSimilarity.ScoreFunction scoreFunction = (i) -> {
-        return scoreBetween(
-                vectors.get().vectorValue(i), value);
-      };
+      NeighborSimilarity.ScoreFunction scoreFunction = (i) -> scoreBetween(
+              vectors.get().vectorValue(i), value);
 
       // for levels <= nodeLevel search with topk = beamWidth, and add connections
       NeighborQueue candidates = beamCandidates.get();

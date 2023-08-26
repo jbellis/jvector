@@ -26,7 +26,7 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  */
 public interface GraphIndex {
   /** Returns the number of nodes in the graph */
-  public int size();
+  int size();
 
   /**
    * Get all nodes on a given level as node 0th ordinals. The nodes are NOT guaranteed to be
@@ -34,7 +34,7 @@ public interface GraphIndex {
    *
    * @return an iterator over nodes where {@code nextInt} returns a next node on the level
    */
-  public NodesIterator getNodes() throws IOException;
+  NodesIterator getNodes() throws IOException;
 
   /**
    * Add node on the given level with an empty set of neighbors.
@@ -49,21 +49,21 @@ public interface GraphIndex {
    *
    * @param node the node to add, represented as an ordinal on the level 0.
    */
-  public void addNode(int node);
+  void addNode(int node);
 
   /**
    * Return a View with which to navigate the graph.  Views are not threadsafe.
    */
-  public View getView();
+  View getView();
 
-  public interface View {
+  interface View {
     /**
      * Move the pointer to exactly the given {@code level}'s {@code target}. After this method
      * returns, call {@link #nextNeighbor()} to return successive (ordered) connected node ordinals.
      *
      * @param target ordinal of a node in the graph, must be &ge; 0 and &lt;.
      */
-    public void seek(int target);
+    void seek(int target);
 
     /**
      * Iterates over the neighbor list. It is illegal to call this method after it returns
@@ -71,11 +71,11 @@ public interface GraphIndex {
      *
      * @return a node ordinal in the graph, or NO_MORE_DOCS if the iteration is complete.
      */
-    public int nextNeighbor();
+    int nextNeighbor();
 
-    public int size();
+    int size();
 
-    public int entryNode();
+    int entryNode();
   }
 
   static String prettyPrint(GraphIndex graph) {
