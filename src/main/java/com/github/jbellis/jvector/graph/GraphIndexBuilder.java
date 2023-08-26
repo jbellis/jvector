@@ -142,28 +142,12 @@ public class GraphIndexBuilder<T> {
   }
 
   public OnHeapGraphIndex build() {
-    return build(Runtime.getRuntime().availableProcessors());
-  }
-
-  public OnHeapGraphIndex build(int threads) {
-    ForkJoinTask<?> future;
-    try (var fjp = new ForkJoinPool(threads)) {
-      future = fjp.submit(() -> {
-        IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
-          addGraphNode(i, vectors.get());
-        });
-        IntStream.range(0, graph.size()).parallel().forEach(i -> {
-          graph.getNeighbors(i).cleanup();
-        });
-      });
-    }
-    try {
-      future.get();
-    } catch (InterruptedException e) {
-      throw new ThreadInterruptedException(e);
-    } catch (ExecutionException e) {
-      throw new RuntimeException(e);
-    }
+    IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
+      addGraphNode(i, vectors.get());
+    });
+    IntStream.range(0, graph.size()).parallel().forEach(i -> {
+      graph.getNeighbors(i).cleanup();
+    });
     return graph;
   }
 

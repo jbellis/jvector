@@ -125,7 +125,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
-    var hnsw = builder.build(1);
+    var hnsw = buildInOrder(builder, vectors);
     // run some searches
     NeighborQueue nn = GraphSearcher.search(
             getTargetVector(),
@@ -165,7 +165,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(1);
+    OnHeapGraphIndex hnsw = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
     NeighborQueue nn =
@@ -199,7 +199,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(1);
+    OnHeapGraphIndex hnsw = buildInOrder(builder, vectors);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
     for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
@@ -242,7 +242,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(1);
+    OnHeapGraphIndex hnsw = builder.build();
 
     int topK = 50;
     int visitedLimit = topK + getRandom().nextInt(5);
@@ -451,7 +451,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(1);
+    OnHeapGraphIndex hnsw = builder.build();
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 
     int totalMatches = 0;
@@ -496,6 +496,13 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     assertTrue("overlap=" + overlap, overlap > 0.9);
   }
 
+  protected OnHeapGraphIndex buildInOrder(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
+    for (var i = 0; i < vectors.size(); i++) {
+      builder.addGraphNode(i, vectors);
+    }
+    return builder.getGraph();
+  }
+
   private int computeOverlap(int[] a, int[] b) {
     Arrays.sort(a);
     Arrays.sort(b);
@@ -530,7 +537,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                 return super.scoreBetween(v1, v2);
               }
             };
-    OnHeapGraphIndex hnsw = builder.build(1);
+    OnHeapGraphIndex hnsw = builder.build();
     for (int i = 0; i < vectors.size(); i++) {
       assertTrue(hnsw.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
     }
