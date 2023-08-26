@@ -134,7 +134,7 @@ public class GraphIndexBuilder<T> {
     return graph;
   }
 
-  private void complete() {
+  public void complete() {
     IntStream.range(0, graph.size()).parallel().forEach(i -> {
       graph.getNeighbors(i).cleanup();
     });

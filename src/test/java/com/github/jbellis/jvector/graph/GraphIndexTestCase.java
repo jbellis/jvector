@@ -450,7 +450,9 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
-    OnHeapGraphIndex graph = builder.build();
+    // FIXME I would really like this to be a parallel build, but we end up with a disconnected graph too often.
+    // is this a bug in the build algorithm or just a consequence of the random graph?
+    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 
     int totalMatches = 0;
@@ -499,6 +501,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     for (var i = 0; i < vectors.size(); i++) {
       builder.addGraphNode(i, vectors);
     }
+    builder.complete();
     return builder.getGraph();
   }
 
