@@ -124,7 +124,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
     var hnsw = builder.build(vectors.copy());
     // run some searches
     NeighborQueue nn = GraphSearcher.search(
@@ -144,7 +144,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     }
     // We expect to get approximately 100% recall;
     // the lowest docIds are closest to zero; sum(0,9) = 45
-    assertTrue("sum(result docs)=" + sum, sum < 75);
+    assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
 
     for (int i = 0; i < nDoc; i++) {
       ConcurrentNeighborSet neighbors = hnsw.getNeighbors(i);
@@ -164,7 +164,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
     OnHeapGraphIndex hnsw = builder.build(vectors.copy());
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
@@ -187,7 +187,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     }
     // We expect to get approximately 100% recall;
     // the lowest docIds are closest to zero; sum(0,9) = 45
-    assertTrue("sum(result docs)=" + sum, sum < 75);
+    assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
   }
 
   @Test
@@ -198,7 +198,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
     OnHeapGraphIndex hnsw = builder.build(vectors.copy());
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
@@ -209,31 +209,34 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     // Check the search finds all accepted vectors
     int numAccepted = acceptOrds.cardinality();
     NeighborQueue nn =
-        switch (getVectorEncoding()) {
-          case FLOAT32 -> GraphSearcher.search(
-              (float[]) getTargetVector(),
-              numAccepted,
-              (RandomAccessVectorValues<float[]>) vectors.copy(),
-              getVectorEncoding(),
-              similarityFunction,
-              hnsw,
-              acceptOrds,
-              Integer.MAX_VALUE);
-          case BYTE -> GraphSearcher.search(
-              (byte[]) getTargetVector(),
-              numAccepted,
-              (RandomAccessVectorValues<byte[]>) vectors.copy(),
-              getVectorEncoding(),
-              similarityFunction,
-              hnsw,
-              acceptOrds,
-              Integer.MAX_VALUE);
-        };
+            GraphSearcher.search(
+                    getTargetVector(),
+                    numAccepted,
+                    vectors.copy(),
+                    getVectorEncoding(),
+                    similarityFunction,
+                    hnsw,
+                    acceptOrds,
+                    Integer.MAX_VALUE);
 
     int[] nodes = nn.nodes();
-    assertEquals(numAccepted, nodes.length);
     for (int node : nodes) {
-      assertTrue("the results include a deleted document: " + node, acceptOrds.get(node));
+      assertTrue("the results include a deleted document: %d for %s".formatted(
+              node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
+    }
+    for (int i = 0; i < acceptOrds.length(); i++) {
+      if (acceptOrds.get(i)) {
+        int finalI = i;
+        assertTrue("the results do not include an accepted document: %d for %s".formatted(
+                i, GraphIndex.prettyPrint(builder.graph)), Arrays.stream(nodes).anyMatch(j -> j == finalI));
+      }
+    }
+  }
+
+  @Test
+  public void testMultiple() throws IOException {
+    for (int i = 0; i < 10000; i++) {
+      testSearchWithSelectiveAcceptOrds();
     }
   }
 
@@ -245,7 +248,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
     OnHeapGraphIndex hnsw = builder.build(vectors.copy());
 
     int topK = 50;
@@ -457,7 +460,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     int topK = 5;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
     OnHeapGraphIndex hnsw = builder.build(((RandomAccessVectorValues<T>) vectors).copy());
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 

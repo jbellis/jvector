@@ -17,11 +17,13 @@
 
 package com.github.jbellis.jvector.graph;
 
+import com.github.jbellis.jvector.util.ArrayUtil;
 import com.github.jbellis.jvector.util.BitSet;
 import com.github.jbellis.jvector.util.FixedBitSet;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Arrays;
 import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;

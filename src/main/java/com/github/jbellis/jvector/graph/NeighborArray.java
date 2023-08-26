@@ -17,6 +17,7 @@
 
 package com.github.jbellis.jvector.graph;
 
+import com.github.jbellis.jvector.annotations.VisibleForTesting;
 import com.github.jbellis.jvector.util.ArrayUtil;
 
 import java.util.Arrays;
@@ -197,7 +198,7 @@ public class NeighborArray {
     return start;
   }
 
-  /** for testing */
+  @VisibleForTesting
   boolean contains(int node) {
     for (int i = 0; i < size; i++) {
       if (this.node[i] == node) {
@@ -205,5 +206,10 @@ public class NeighborArray {
       }
     }
     return false;
+  }
+
+  @VisibleForTesting
+  int[] copyDenseNodes() {
+    return Arrays.copyOf(node, size);
   }
 }
