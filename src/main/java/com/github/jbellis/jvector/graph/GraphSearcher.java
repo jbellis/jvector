@@ -34,7 +34,7 @@ public class GraphSearcher {
   private final GraphIndex.View view;
 
   /**
-   * Scratch data structures that are used in each {@link #searchLevel} call. These can be expensive
+   * Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
    * to allocate, so they're cleared and reused across calls.
    */
   private final NeighborQueue candidates;
@@ -99,8 +99,7 @@ public class GraphSearcher {
     }
     NeighborQueue results;
     results = new NeighborQueue(topK, false);
-    searchLevel(
-        scoreFunction, results, topK, view.entryNode(), acceptOrds, visitedLimit);
+    searchInternal(scoreFunction, results, topK, view.entryNode(), acceptOrds, visitedLimit);
     return results;
   }
 
@@ -110,7 +109,7 @@ public class GraphSearcher {
    * score/comparison value, will be at the top of the heap, while the closest neighbor will be the
    * last to be popped.
    */
-  void searchLevel(
+  void searchInternal(
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborQueue results,
       int topK,

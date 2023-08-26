@@ -64,8 +64,7 @@ public class GraphIndexBuilder<T> {
    *
    * @param vectorValues the vectors whose relations are represented by the graph - must provide a
    *     different view over those vectors than the one used to add via addGraphNode.
-   * @param M – graph fanout parameter used to calculate the maximum number of connections a node
-   *     can have – M on upper layers, and M * 2 on the lowest level.
+   * @param M – the maximum number of connections a node can have
    * @param beamWidth the size of the beam search to use when finding nearest neighbors.
    * @param neighborOverflow the ratio of extra neighbors to allow temporarily when inserting a
    *     node. larger values will build more efficiently, but use more memory.
@@ -93,7 +92,6 @@ public class GraphIndexBuilder<T> {
       throw new IllegalArgumentException("beamWidth must be positive");
     }
     this.beamWidth = beamWidth;
-    // normalization factor for level generation; currently not configurable
 
     NeighborSimilarity similarity =
             new NeighborSimilarity() {
@@ -169,7 +167,7 @@ public class GraphIndexBuilder<T> {
    *
    * <p>To allow correctness under concurrency, we track in-progress updates in a
    * ConcurrentSkipListSet. After adding ourselves, we take a snapshot of this set, and consider all
-   * other in-progress updates as neighbor candidates (subject to normal level constraints).
+   * other in-progress updates as neighbor candidates.
    *
    * @param node the node ID to add
    * @param value the vector value to add
@@ -189,17 +187,10 @@ public class GraphIndexBuilder<T> {
       NeighborSimilarity.ScoreFunction scoreFunction = (i) -> scoreBetween(
               vectors.get().vectorValue(i), value);
 
-      // for levels <= nodeLevel search with topk = beamWidth, and add connections
       NeighborQueue candidates = beamCandidates.get();
       candidates.clear();
-      // find best "natural" candidates at this level with a beam search
-      gs.searchLevel(
-              scoreFunction,
-              candidates,
-              beamWidth,
-              ep,
-              null,
-              Integer.MAX_VALUE);
+      // find best "natural" candidates with a beam search
+      gs.searchInternal(scoreFunction, candidates, beamWidth, ep, null, Integer.MAX_VALUE);
 
       // Update neighbors with these candidates.
       var natural = getNaturalCandidates(candidates);

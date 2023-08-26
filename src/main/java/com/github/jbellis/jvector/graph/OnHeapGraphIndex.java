@@ -23,10 +23,7 @@ import com.github.jbellis.jvector.util.RamUsageEstimator;
 import java.util.Map;
 import java.util.PrimitiveIterator;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.StampedLock;
 import java.util.function.BiFunction;
 
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
@@ -39,14 +36,14 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  * and `nextNeighbor` operations.
  */
 public final class OnHeapGraphIndex implements GraphIndex, Accountable {
-  private final AtomicReference<Integer>
-      entryPoint; // the current graph entry node on the top level. -1 if not set
+  // the current graph entry node on the top level. -1 if not set
+  private final AtomicReference<Integer> entryPoint; 
 
   // Unlike OnHeapGraphIndex (OHHG), we use the same data structure for Level 0 and higher node
   // lists, a ConcurrentHashMap.  While the ArrayList used for L0 in OHHG is faster for
   // single-threaded workloads, it imposes an unacceptable contention burden for concurrent
   // graph building.
-  private final Map<Integer, Map<Integer, ConcurrentNeighborSet>> graphLevels;
+  private final Map<Integer, ConcurrentNeighborSet> nodes;
 
   // Neighbours' size on upper levels (nsize) and level 0 (nsize0)
   final int nsize;
@@ -61,8 +58,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     this.nsize = M;
     this.nsize0 = 2 * M;
 
-    this.graphLevels = new ConcurrentHashMap<>();
-    graphLevels.put(0, new ConcurrentHashMap<>());
+    this.nodes = new ConcurrentHashMap<>();
   }
 
   /**
@@ -71,17 +67,16 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
    * @param node the node whose neighbors are returned, represented as an ordinal on the level 0.
    */
   public ConcurrentNeighborSet getNeighbors(int node) {
-    return graphLevels.get(0).get(node);
+    return nodes.get(node);
   }
 
   @Override
   public int size() {
-    Map<Integer, ConcurrentNeighborSet> levelZero = graphLevels.get(0);
-    return levelZero == null ? 0 : levelZero.size(); // all nodes are located on the 0th level
+    return nodes.size();
   }
 
   public void addNode(int node) {
-    graphLevels.get(0).put(node, neighborFactory.apply(node, connectionsOnLevel(0)));
+    nodes.put(node, neighborFactory.apply(node, connectionsOnLevel(0)));
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
@@ -115,17 +110,15 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     // This is because, while L0 will contain sequential ordinals once the graph is complete,
     // and internally Lucene only calls getNodesOnLevel at that point, this is a public
     // method so we cannot assume that that is the only time it will be called by third parties.
-    return new NodesIterator.CollectionNodesIterator(graphLevels.get(0).keySet());
+    return new NodesIterator.CollectionNodesIterator(nodes.keySet());
   }
 
   @Override
   public long ramBytesUsed() {
     // the main graph structure
-    long total = concurrentHashMapRamUsed(graphLevels.size());
-    Map<Integer, ConcurrentNeighborSet> level = graphLevels.get(0);
-    int numNodesOnLevel = graphLevels.get(0).size();
-    long chmSize = concurrentHashMapRamUsed(numNodesOnLevel);
-    long neighborSize = neighborsRamUsed(connectionsOnLevel(0)) * numNodesOnLevel;
+    long total = concurrentHashMapRamUsed(size());
+    long chmSize = concurrentHashMapRamUsed(size());
+    long neighborSize = neighborsRamUsed(connectionsOnLevel(0)) * size();
 
     total += chmSize + neighborSize;
 
@@ -214,7 +207,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
       return;
     }
     var en = entryPoint.get();
-    if (!(en >= 0 && graphLevels.get(0).containsKey(en))) {
+    if (!(en >= 0 && nodes.containsKey(en))) {
       throw new IllegalStateException("Entry node was incompletely added! " + en);
     }
   }
