@@ -84,24 +84,9 @@ public class GraphSearcher {
       return new NeighborQueue(1, true);
     }
     NeighborQueue results;
-    results = new NeighborQueue(1, false);
-    int[] eps = new int[] {graph.entryNode()};
-    int numVisited = 0;
-    results.clear();
-    searchLevel(scoreFunction, results, 1, eps, null, visitedLimit);
-
-    numVisited += results.visitedCount();
-    visitedLimit -= results.visitedCount();
-
-    if (results.incomplete()) {
-      results.setVisitedCount(numVisited);
-      return results;
-    }
-    eps[0] = results.pop();
     results = new NeighborQueue(topK, false);
     searchLevel(
-        scoreFunction, results, topK, eps, acceptOrds, visitedLimit);
-    results.setVisitedCount(results.visitedCount() + numVisited);
+        scoreFunction, results, topK, graph.entryNode(), acceptOrds, visitedLimit);
     return results;
   }
 
@@ -115,28 +100,25 @@ public class GraphSearcher {
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborQueue results,
       int topK,
-      final int[] eps,
+      int ep,
       Bits acceptOrds,
       int visitedLimit)
       throws IOException {
     assert results.isMinHeap();
 
+    if (ep < 0) {
+      return;
+    }
+
     prepareScratchState(graph.size());
 
     int numVisited = 0;
-    for (int ep : eps) {
-      if (!visited.getAndSet(ep)) {
-        if (numVisited >= visitedLimit) {
-          results.markIncomplete();
-          break;
-        }
-        float score = scoreFunction.apply(ep);
-        numVisited++;
-        candidates.add(ep, score);
-        if (acceptOrds == null || acceptOrds.get(ep)) {
-          results.add(ep, score);
-        }
-      }
+    visited.set(ep);
+    float score = scoreFunction.apply(ep);
+    numVisited++;
+    candidates.add(ep, score);
+    if (acceptOrds == null || acceptOrds.get(ep)) {
+      results.add(ep, score);
     }
 
     // A bound that holds the minimum similarity to the query vector that a candidate vector must

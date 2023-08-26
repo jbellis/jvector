@@ -354,7 +354,6 @@ public class GraphBuilder<T> {
     try {
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
-      int[] eps = ep >= 0 ? new int[] {ep} : new int[0];
       var gs = graphSearcher.get();
       NeighborSimilarity.ScoreFunction scoreFunction = (i) -> {
         try {
@@ -373,10 +372,9 @@ public class GraphBuilder<T> {
               scoreFunction,
               candidates,
               beamWidth,
-              eps,
+              ep,
               null,
               Integer.MAX_VALUE);
-      eps = candidates.nodes();
 
       // Update neighbors with these candidates.
       var natural = getNaturalCandidates(candidates);

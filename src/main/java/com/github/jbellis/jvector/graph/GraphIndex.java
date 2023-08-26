@@ -19,6 +19,8 @@ package com.github.jbellis.jvector.graph;
 
 import java.io.IOException;
 
+import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+
 /**
  * TODO: add javadoc
  */
@@ -74,5 +76,33 @@ public interface GraphIndex {
     public int size();
 
     public int entryNode();
+  }
+
+  static String prettyPrint(GraphIndex graph) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(graph);
+    sb.append("\n");
+
+    var view = graph.getView();
+    try {
+      NodesIterator it = graph.getNodes();
+      while (it.hasNext()) {
+        int node = it.nextInt();
+        sb.append("  ").append(node).append(" -> ");
+        view.seek(node);
+        while (true) {
+          int neighbor = view.nextNeighbor();
+          if (neighbor == NO_MORE_DOCS) {
+            break;
+          }
+          sb.append(" ").append(neighbor);
+        }
+        sb.append("\n");
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    return sb.toString();
   }
 }
