@@ -17,11 +17,12 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.io.IOException;
 import com.github.jbellis.jvector.util.BitSet;
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.util.FixedBitSet;
 import com.github.jbellis.jvector.util.GrowableBitSet;
+import com.github.jbellis.jvector.vector.VectorEncoding;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
@@ -30,7 +31,7 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher {
-  private final GraphIndex.View graph;
+  private final GraphIndex.View view;
 
   /**
    * Scratch data structures that are used in each {@link #searchLevel} call. These can be expensive
@@ -46,11 +47,25 @@ public class GraphSearcher {
    * @param visited bit set that will track nodes that have already been visited
    */
   GraphSearcher(
-      GraphIndex.View graph,
+      GraphIndex.View view,
       BitSet visited) {
-    this.graph = graph;
+    this.view = view;
     this.candidates = new NeighborQueue(100, true);
     this.visited = visited;
+  }
+
+  public static <T> NeighborQueue search(T targetVector, int i, RandomAccessVectorValues<T> copy, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int maxValue) {
+    var searcher = new GraphSearcher.Builder(graph.getView()).build();
+    return searcher.search(i1 -> {
+      switch (vectorEncoding) {
+        case BYTE:
+          return similarityFunction.compare((byte[]) targetVector, (byte[]) copy.vectorValue(i1));
+        case FLOAT32:
+          return similarityFunction.compare((float[]) targetVector, (float[]) copy.vectorValue(i1));
+        default:
+          throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
+      }
+    }, i, acceptOrds, maxValue);
   }
 
   /** Builder */
@@ -77,16 +92,15 @@ public class GraphSearcher {
       NeighborSimilarity.ScoreFunction scoreFunction,
       int topK,
       Bits acceptOrds,
-      int visitedLimit)
-      throws IOException {
-    int initialEp = graph.entryNode();
+      int visitedLimit) {
+    int initialEp = view.entryNode();
     if (initialEp == -1) {
       return new NeighborQueue(1, true);
     }
     NeighborQueue results;
     results = new NeighborQueue(topK, false);
     searchLevel(
-        scoreFunction, results, topK, graph.entryNode(), acceptOrds, visitedLimit);
+        scoreFunction, results, topK, view.entryNode(), acceptOrds, visitedLimit);
     return results;
   }
 
@@ -102,20 +116,19 @@ public class GraphSearcher {
       int topK,
       int ep,
       Bits acceptOrds,
-      int visitedLimit)
-      throws IOException {
+      int visitedLimit) {
     assert results.isMinHeap();
 
     if (ep < 0) {
       return;
     }
 
-    prepareScratchState(graph.size());
+    prepareScratchState(view.size());
 
     int numVisited = 0;
-    visited.set(ep);
     float score = scoreFunction.apply(ep);
     numVisited++;
+    visited.set(ep);
     candidates.add(ep, score);
     if (acceptOrds == null || acceptOrds.get(ep)) {
       results.add(ep, score);
@@ -135,9 +148,9 @@ public class GraphSearcher {
       }
 
       int topCandidateNode = candidates.pop();
-      graph.seek(topCandidateNode);
+      view.seek(topCandidateNode);
       int friendOrd;
-      while ((friendOrd = graph.nextNeighbor()) != NO_MORE_DOCS) {
+      while ((friendOrd = view.nextNeighbor()) != NO_MORE_DOCS) {
         if (visited.getAndSet(friendOrd)) {
           continue;
         }

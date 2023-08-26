@@ -17,6 +17,7 @@
 
 package com.github.jbellis.jvector.graph;
 
+import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.github.jbellis.jvector.util.ArrayUtil;
 
 class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
@@ -53,7 +54,7 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
 
   @Override
   public byte[] vectorValue() {
-    if (LuceneTestCase.random().nextBoolean()) {
+    if (RandomizedTest.getRandom().nextBoolean()) {
       return values[pos];
     } else {
       // Sometimes use the same scratch array repeatedly, mimicing what the codec will do.

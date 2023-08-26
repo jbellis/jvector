@@ -63,7 +63,7 @@ public interface GraphIndex {
      *
      * @param target ordinal of a node in the graph, must be &ge; 0 and &lt;.
      */
-    public void seek(int target) throws IOException;
+    public void seek(int target);
 
     /**
      * Iterates over the neighbor list. It is illegal to call this method after it returns
@@ -71,7 +71,7 @@ public interface GraphIndex {
      *
      * @return a node ordinal in the graph, or NO_MORE_DOCS if the iteration is complete.
      */
-    public int nextNeighbor() throws IOException;
+    public int nextNeighbor();
 
     public int size();
 

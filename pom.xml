@@ -31,16 +31,19 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>20</maven.compiler.source>
     <maven.compiler.target>20</maven.compiler.target>
-    <junit.version>4.13.2</junit.version>
-    <surefire.version>3.1.2</surefire.version>
   </properties>
 
   <dependencies>
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>${junit.version}</version>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>5.9.1</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.carrotsearch.randomizedtesting</groupId>
+      <artifactId>randomizedtesting-runner</artifactId>
+      <version>2.8.1</version>
     </dependency>
   </dependencies>
 
@@ -62,18 +65,6 @@
             <arg>--add-modules</arg>
             <arg>jdk.incubator.vector</arg>
           </compilerArgs>
-        </configuration>
-      </plugin>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>${surefire.version}</version>
-        <configuration>
-          <argLine>
-            --enable-preview
-            --add-modules jdk.incubator.vector
-          </argLine>
         </configuration>
       </plugin>
     </plugins>

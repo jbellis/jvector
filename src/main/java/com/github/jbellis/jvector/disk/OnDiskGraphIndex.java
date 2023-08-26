@@ -81,8 +81,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable
         }
 
         @Override
-        public void seek(int target) throws IOException
-        {
+        public void seek(int target) {
             // TODO
         }
 

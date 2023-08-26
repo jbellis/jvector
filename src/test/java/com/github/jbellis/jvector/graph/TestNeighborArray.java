@@ -17,16 +17,19 @@
 
 package com.github.jbellis.jvector.graph;
 
-import org.apache.lucene.tests.util.LuceneTestCase;
+import com.carrotsearch.randomizedtesting.RandomizedTest;
+import org.junit.Test;
 
-public class TestNeighborArray extends LuceneTestCase {
+import static org.junit.jupiter.api.Assertions.*;
 
+public class TestNeighborArray extends RandomizedTest {
+  @Test
   public void testScoresDescOrder() {
     NeighborArray neighbors = new NeighborArray(10, true);
     neighbors.addInOrder(0, 1);
     neighbors.addInOrder(1, 0.8f);
 
-    AssertionError ex = expectThrows(AssertionError.class, () -> neighbors.addInOrder(2, 0.9f));
+    AssertionError ex = assertThrows(AssertionError.class, () -> neighbors.addInOrder(2, 0.9f));
     assert ex.getMessage().startsWith("Nodes are added in the incorrect order!") : ex.getMessage();
 
     neighbors.insertSorted(3, 0.9f);
@@ -70,12 +73,13 @@ public class TestNeighborArray extends LuceneTestCase {
     assertNodesEqual(new int[] {0, 3, 8, 1}, neighbors);
   }
 
+  @Test
   public void testScoresAscOrder() {
     NeighborArray neighbors = new NeighborArray(10, false);
     neighbors.addInOrder(0, 0.1f);
     neighbors.addInOrder(1, 0.3f);
 
-    AssertionError ex = expectThrows(AssertionError.class, () -> neighbors.addInOrder(2, 0.15f));
+    AssertionError ex = assertThrows(AssertionError.class, () -> neighbors.addInOrder(2, 0.15f));
     assert ex.getMessage().startsWith("Nodes are added in the incorrect order!") : ex.getMessage();
 
     neighbors.insertSorted(3, 0.3f);
@@ -119,11 +123,12 @@ public class TestNeighborArray extends LuceneTestCase {
     assertNodesEqual(new int[] {8, 0, 6, 7}, neighbors);
   }
 
+  @Test
   public void testSortAsc() {
     NeighborArray neighbors = new NeighborArray(10, false);
     neighbors.addOutOfOrder(1, 2);
     // we disallow calling addInOrder after addOutOfOrder even if they're actual in order
-    expectThrows(AssertionError.class, () -> neighbors.addInOrder(1, 2));
+    assertThrows(AssertionError.class, () -> neighbors.addInOrder(1, 2));
     neighbors.addOutOfOrder(2, 3);
     neighbors.addOutOfOrder(5, 6);
     neighbors.addOutOfOrder(3, 4);
@@ -149,11 +154,12 @@ public class TestNeighborArray extends LuceneTestCase {
     assertScoresEqual(new float[] {1, 2, 3, 4, 5, 6, 7}, neighbors2);
   }
 
+  @Test
   public void testSortDesc() {
     NeighborArray neighbors = new NeighborArray(10, true);
     neighbors.addOutOfOrder(1, 7);
     // we disallow calling addInOrder after addOutOfOrder even if they're actual in order
-    expectThrows(AssertionError.class, () -> neighbors.addInOrder(1, 2));
+    assertThrows(AssertionError.class, () -> neighbors.addInOrder(1, 2));
     neighbors.addOutOfOrder(2, 6);
     neighbors.addOutOfOrder(5, 3);
     neighbors.addOutOfOrder(3, 5);

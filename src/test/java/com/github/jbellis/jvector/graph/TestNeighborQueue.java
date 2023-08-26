@@ -17,10 +17,13 @@
 
 package com.github.jbellis.jvector.graph;
 
-import org.apache.lucene.tests.util.LuceneTestCase;
+import com.carrotsearch.randomizedtesting.RandomizedTest;
+import org.junit.Test;
 
-public class TestNeighborQueue extends LuceneTestCase {
+import static org.junit.jupiter.api.Assertions.*;
 
+public class TestNeighborQueue extends RandomizedTest {
+  @Test
   public void testNeighborsProduct() {
     // make sure we have the sign correct
     NeighborQueue nn = new NeighborQueue(2, false);
@@ -33,6 +36,7 @@ public class TestNeighborQueue extends LuceneTestCase {
     nn.pop();
   }
 
+  @Test
   public void testNeighborsMaxHeap() {
     NeighborQueue nn = new NeighborQueue(2, true);
     assertTrue(nn.insertWithOverflow(2, 2));
@@ -43,6 +47,7 @@ public class TestNeighborQueue extends LuceneTestCase {
     assertEquals(1f, nn.topScore(), 0);
   }
 
+  @Test
   public void testTopMaxHeap() {
     NeighborQueue nn = new NeighborQueue(2, true);
     nn.add(1, 2);
@@ -52,6 +57,7 @@ public class TestNeighborQueue extends LuceneTestCase {
     assertEquals(1, nn.topNode());
   }
 
+  @Test
   public void testTopMinHeap() {
     NeighborQueue nn = new NeighborQueue(2, false);
     nn.add(1, 0.5f);
@@ -61,12 +67,14 @@ public class TestNeighborQueue extends LuceneTestCase {
     assertEquals(2, nn.topNode());
   }
 
+  @Test
   public void testVisitedCount() {
     NeighborQueue nn = new NeighborQueue(2, false);
     nn.setVisitedCount(100);
     assertEquals(100, nn.visitedCount());
   }
 
+  @Test
   public void testClear() {
     NeighborQueue nn = new NeighborQueue(2, false);
     nn.add(1, 1.1f);
@@ -80,6 +88,7 @@ public class TestNeighborQueue extends LuceneTestCase {
     assertFalse(nn.incomplete());
   }
 
+  @Test
   public void testMaxSizeQueue() {
     NeighborQueue nn = new NeighborQueue(2, false);
     nn.add(1, 1);
@@ -97,13 +106,14 @@ public class TestNeighborQueue extends LuceneTestCase {
     assertEquals(3, nn.size());
   }
 
+  @Test
   public void testUnboundedQueue() {
     NeighborQueue nn = new NeighborQueue(1, true);
     float maxScore = -2;
     int maxNode = -1;
     for (int i = 0; i < 256; i++) {
       // initial size is 32
-      float score = random().nextFloat();
+      float score = getRandom().nextFloat();
       if (score > maxScore) {
         maxScore = score;
         maxNode = i;
@@ -114,10 +124,12 @@ public class TestNeighborQueue extends LuceneTestCase {
     assertEquals(maxNode, nn.topNode());
   }
 
+  @Test
   public void testInvalidArguments() {
-    expectThrows(IllegalArgumentException.class, () -> new NeighborQueue(0, false));
+    assertThrows(IllegalArgumentException.class, () -> new NeighborQueue(0, false));
   }
 
+  @Test
   public void testToString() {
     assertEquals("Neighbors[0]", new NeighborQueue(2, false).toString());
   }

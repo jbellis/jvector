@@ -17,20 +17,23 @@
 
 package com.github.jbellis.jvector.graph;
 
-import org.apache.lucene.index.VectorSimilarityFunction;
-import org.apache.lucene.tests.util.LuceneTestCase;
-import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.hnsw.ConcurrentNeighborSet.ConcurrentNeighborArray;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.IntStream;
 
-import static org.apache.lucene.util.hnsw.ConcurrentNeighborSet.mergeNeighbors;
+import com.carrotsearch.randomizedtesting.RandomizedTest;
+import com.github.jbellis.jvector.graph.ConcurrentNeighborSet.ConcurrentNeighborArray;
+import com.github.jbellis.jvector.util.ArrayUtil;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
-public class TestConcurrentNeighborSet extends LuceneTestCase {
+import org.junit.jupiter.api.Test;
+
+import static com.github.jbellis.jvector.graph.ConcurrentNeighborSet.mergeNeighbors;
+import static org.junit.Assert.*;
+
+public class TestConcurrentNeighborSet extends RandomizedTest {
   private static final NeighborSimilarity simpleScore =
       new NeighborSimilarity() {
         @Override
@@ -48,6 +51,7 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     return simpleScore.score(0, neighbor);
   }
 
+  @Test
   public void testInsertAndSize() throws IOException {
     ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 2, simpleScore);
     neighbors.insert(1, baseScore(1));
@@ -58,6 +62,7 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     assertEquals(2, neighbors.size());
   }
 
+  @Test
   public void testRemoveLeastDiverseFromEnd() throws IOException {
     ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 3, simpleScore);
     neighbors.insert(1, baseScore(1));
@@ -77,9 +82,10 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     assertFalse(iterator.hasNext());
   }
 
+  @Test
   public void testInsertDiverse() {
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    var vectors = new HnswGraphTestCase.CircularFloatVectorValues(10);
+    var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var candidates = new NeighborArray(10, true);
     NeighborSimilarity scoreBetween =
@@ -110,9 +116,10 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     assert neighbors.contains(6);
   }
 
+  @Test
   public void testInsertDiverseConcurrent() {
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    var vectors = new HnswGraphTestCase.CircularFloatVectorValues(10);
+    var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var natural = new NeighborArray(10, true);
     var concurrent = new NeighborArray(10, true);
@@ -146,6 +153,7 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     assert neighbors.contains(6);
   }
 
+  @Test
   public void testNoDuplicatesDescOrder() {
     ConcurrentNeighborArray cna = new ConcurrentNeighborArray(5, true);
     cna.insertSorted(1, 10.0f);
@@ -158,6 +166,7 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
         new float[] {10.0f, 9.0f, 8.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
   }
 
+  @Test
   public void testNoDuplicatesAscOrder() {
     ConcurrentNeighborArray cna = new ConcurrentNeighborArray(5, false);
     cna.insertSorted(1, 8.0f);
@@ -166,10 +175,10 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     cna.insertSorted(1, 8.0f); // This is a duplicate and should be ignored
     cna.insertSorted(3, 10.0f); // This is also a duplicate
     assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
-    assertArrayEquals(
-        new float[] {8.0f, 9.0f, 10.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
+    assertArrayEquals(new float[] {8.0f, 9.0f, 10.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
   }
 
+  @Test
   public void testNoDuplicatesSameScores() {
     ConcurrentNeighborArray cna = new ConcurrentNeighborArray(5, true);
     cna.insertSorted(1, 10.0f);
@@ -178,12 +187,10 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
     cna.insertSorted(1, 10.0f); // This is a duplicate and should be ignored
     cna.insertSorted(3, 10.0f); // This is also a duplicate
     assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
-    assertArrayEquals(
-        new float[] {10.0f, 10.0f, 10.0f},
-        ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()),
-        0.01f);
+    assertArrayEquals(new float[] {10.0f, 10.0f, 10.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
   }
 
+  @Test
   public void testMergeCandidatesSimple() {
     NeighborArray arr1 = new NeighborArray(3, true);
     arr1.addInOrder(3, 3.0f);
@@ -219,27 +226,41 @@ public class TestConcurrentNeighborSet extends LuceneTestCase {
   }
 
   private void testMergeCandidatesOnce() {
-    int maxSize = 1 + random().nextInt(5);
+    int maxSize = 1 + getRandom().nextInt(5);
 
     NeighborArray arr1 = new NeighborArray(maxSize, true);
-    int a1Size = random().nextBoolean() ? maxSize : 1 + random().nextInt(maxSize);
+    int a1Size;
+    if (getRandom().nextBoolean()) {
+      a1Size = maxSize;
+    } else {
+      a1Size = 1 + getRandom().nextInt(maxSize);
+    }
     for (int i = 0; i < a1Size; i++) {
-      arr1.insertSorted(i, random().nextFloat());
+      arr1.insertSorted(i, getRandom().nextFloat());
     }
 
     NeighborArray arr2 = new NeighborArray(maxSize, true);
-    int a2Size = random().nextBoolean() ? maxSize : 1 + random().nextInt(maxSize);
+    int a2Size;
+    if (getRandom().nextBoolean()) {
+      a2Size = maxSize;
+    } else {
+      a2Size = 1 + getRandom().nextInt(maxSize);
+    }
     for (int i = 0; i < a2Size; i++) {
-      if (random().nextBoolean()) {
+      if (getRandom().nextBoolean()) {
         // duplicate entry
-        int j = random().nextInt(a1Size);
+        int j = getRandom().nextInt(a1Size);
         if (!arr2.contains(arr1.node[j])) {
           arr2.insertSorted(arr1.node[j], arr1.score[j]);
         }
       } else {
         // duplicate just score
-        float score =
-            random().nextBoolean() ? random().nextFloat() : arr1.score[random().nextInt(a1Size)];
+        float score;
+        if (getRandom().nextBoolean()) {
+          score = getRandom().nextFloat();
+        } else {
+          score = arr1.score[getRandom().nextInt(a1Size)];
+        }
         arr2.insertSorted(i + arr1.size, score);
       }
     }

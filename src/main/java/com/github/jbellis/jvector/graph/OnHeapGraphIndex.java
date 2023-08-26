@@ -42,7 +42,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
   private final AtomicReference<Integer>
       entryPoint; // the current graph entry node on the top level. -1 if not set
 
-  // Unlike OnHeapHnswGraph (OHHG), we use the same data structure for Level 0 and higher node
+  // Unlike OnHeapGraphIndex (OHHG), we use the same data structure for Level 0 and higher node
   // lists, a ConcurrentHashMap.  While the ArrayList used for L0 in OHHG is faster for
   // single-threaded workloads, it imposes an unacceptable contention burden for concurrent
   // graph building.
@@ -202,7 +202,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
 
   @Override
   public String toString() {
-    return "ConcurrentOnHeapHnswGraph(size=" + size() + ", entryPoint=" + entryPoint.get();
+    return "OnHeapGraphIndex(size=%d, entryPoint=%d)".formatted(size(), entryPoint.get());
   }
 
   /**
@@ -279,7 +279,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
 
     @Override
     public String toString() {
-      return "ConcurrentOnHeapHnswGraphView(size=" + size() + ", entryPoint=" + entryPoint.get();
+      return "OnHeapGraphIndexView(size=" + size() + ", entryPoint=" + entryPoint.get();
     }
   }
 

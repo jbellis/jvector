@@ -42,12 +42,12 @@ public interface RandomAccessVectorValues<T> {
    *
    * @param targetOrd a valid ordinal, &ge; 0 and &lt; {@link #size()}.
    */
-  T vectorValue(int targetOrd) throws IOException;
+  T vectorValue(int targetOrd);
 
   /**
    * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
    * access different values at once, to avoid overwriting the underlying float vector returned by
    * {@link RandomAccessVectorValues#vectorValue}.
    */
-  RandomAccessVectorValues<T> copy() throws IOException;
+  RandomAccessVectorValues<T> copy();
 }

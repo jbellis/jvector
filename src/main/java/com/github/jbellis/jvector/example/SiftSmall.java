@@ -21,7 +21,7 @@ public class SiftSmall {
         var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
 
         var start = System.nanoTime();
-        var builder = new GraphBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100);
         int buildThreads = 8;
         var es = Executors.newFixedThreadPool(buildThreads);
         var graph = builder.buildAsync(ravv.copy(), es, buildThreads).get();
@@ -34,13 +34,9 @@ public class SiftSmall {
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
             NeighborQueue nn;
-            try {
-                var searcher = new GraphSearcher.Builder(graph.getView()).build();
-                NeighborSimilarity.ScoreFunction scoreFunction = (j) -> VectorSimilarityFunction.COSINE.compare(queryVector, ravv.vectorValue(j));
-                nn = searcher.search(scoreFunction, 100, null, Integer.MAX_VALUE);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            var searcher = new GraphSearcher.Builder(graph.getView()).build();
+            NeighborSimilarity.ScoreFunction scoreFunction = (j) -> VectorSimilarityFunction.COSINE.compare(queryVector, ravv.vectorValue(j));
+            nn = searcher.search(scoreFunction, 100, null, Integer.MAX_VALUE);
 
             var gt = groundTruth.get(i);
             var n = IntStream.range(0, topK).filter(j -> gt.contains(nn.nodes()[j])).count();

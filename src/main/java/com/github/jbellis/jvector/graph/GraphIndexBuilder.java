@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.vector.VectorEncoding;
@@ -46,7 +47,7 @@ import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
  *
  * @param <T> the type of vector
  */
-public class GraphBuilder<T> {
+public class GraphIndexBuilder<T> {
   /** Default number of maximum connections per node */
   public static final int DEFAULT_MAX_CONN = 16;
 
@@ -90,7 +91,7 @@ public class GraphBuilder<T> {
    *        allow longer edges.  If alpha &gt; 1.0 then a single level, Vamana-style graph
    *        will be created instead of HNSW.
    */
-  public GraphBuilder(
+  public GraphIndexBuilder(
           RandomAccessVectorValues<T> vectorValues,
           VectorEncoding vectorEncoding,
           VectorSimilarityFunction similarityFunction,
@@ -116,28 +117,16 @@ public class GraphBuilder<T> {
             new NeighborSimilarity() {
               @Override
               public float score(int node1, int node2) {
-                try {
-                  return scoreBetween(
-                          vectors.get().vectorValue(node1), vectorsCopy.get().vectorValue(node2));
-                } catch (IOException e) {
-                  throw new UncheckedIOException(e);
-                }
+                return scoreBetween(
+                        vectors.get().vectorValue(node1), vectorsCopy.get().vectorValue(node2));
               }
 
               @Override
               public ScoreFunction scoreProvider(int node1) {
                 T v1;
-                try {
-                  v1 = vectors.get().vectorValue(node1);
-                } catch (IOException e) {
-                  throw new UncheckedIOException(e);
-                }
+                v1 = vectors.get().vectorValue(node1);
                 return node2 -> {
-                  try {
-                    return scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
-                  } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                  }
+                  return scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
                 };
               }
             };
@@ -170,13 +159,24 @@ public class GraphBuilder<T> {
             ExplicitThreadLocal.withInitial(() -> new NeighborQueue(beamWidth, false));
   }
 
-  public GraphBuilder(
+  public GraphIndexBuilder(
           RandomAccessVectorValues<T> vectorValues,
           VectorEncoding vectorEncoding,
           VectorSimilarityFunction similarityFunction,
           int M,
           int beamWidth) {
     this(vectorValues, vectorEncoding, similarityFunction, M, beamWidth, 1.0f, 1.0f);
+  }
+
+  public OnHeapGraphIndex build(RandomAccessVectorValues<T> ravv) {
+    IntStream.range(0, ravv.size()).parallel().forEach(i -> {
+      try {
+        addGraphNode(i, ravv.copy());
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
+      }
+    });
+    return graph;
   }
 
   private abstract static class ExplicitThreadLocal<U> {
@@ -305,14 +305,7 @@ public class GraphBuilder<T> {
 
   private static <T> ExplicitThreadLocal<RandomAccessVectorValues<T>> createThreadSafeVectors(
           RandomAccessVectorValues<T> vectorValues) {
-    return ExplicitThreadLocal.withInitial(
-            () -> {
-              try {
-                return vectorValues.copy();
-              } catch (IOException e) {
-                throw new UncheckedIOException(e);
-              }
-            });
+    return ExplicitThreadLocal.withInitial(vectorValues::copy);
   }
 
   /**
@@ -354,14 +347,10 @@ public class GraphBuilder<T> {
     try {
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
-      var gs = graphSearcher.get();
+      var gs = new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build(); // TODO cache these (but not with the same View)
       NeighborSimilarity.ScoreFunction scoreFunction = (i) -> {
-        try {
-          return scoreBetween(
-                  vectors.get().vectorValue(i), value);
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
-        }
+        return scoreBetween(
+                vectors.get().vectorValue(i), value);
       };
 
       // for levels <= nodeLevel search with topk = beamWidth, and add connections

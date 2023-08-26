@@ -18,23 +18,14 @@
 package com.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.KnnByteVectorField;
-import org.apache.lucene.index.ByteVectorValues;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.VectorEncoding;
-import org.apache.lucene.index.VectorSimilarityFunction;
-import org.apache.lucene.search.KnnByteVectorQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.util.ArrayUtil;
+import com.github.jbellis.jvector.vector.VectorEncoding;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
 
-import java.io.IOException;
-
-import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
+import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 /** Tests HNSW KNN graphs */
-public class TestHnswByteVectorGraph extends HnswGraphTestCase<byte[]> {
+public class TestHnswByteVectorGraph extends GraphIndexTestCase<byte[]> {
 
   @Before
   public void setup() {
@@ -47,18 +38,13 @@ public class TestHnswByteVectorGraph extends HnswGraphTestCase<byte[]> {
   }
 
   @Override
-  Query knnQuery(String field, byte[] vector, int k) {
-    return new KnnByteVectorQuery(field, vector, k);
-  }
-
-  @Override
   byte[] randomVector(int dim) {
-    return randomVector8(random(), dim);
+    return randomVector8(getRandom(), dim);
   }
 
   @Override
   AbstractMockVectorValues<byte[]> vectorValues(int size, int dimension) {
-    return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, random()));
+    return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, getRandom()));
   }
 
   static boolean fitsInByte(float v) {
@@ -94,7 +80,7 @@ public class TestHnswByteVectorGraph extends HnswGraphTestCase<byte[]> {
       int pregeneratedOffset) {
     byte[][] vectors = new byte[size][];
     byte[][] randomVectors =
-        createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, random());
+        createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
     for (int i = 0; i < pregeneratedOffset; i++) {
       vectors[i] = randomVectors[i];
@@ -112,24 +98,6 @@ public class TestHnswByteVectorGraph extends HnswGraphTestCase<byte[]> {
     }
 
     return MockByteVectorValues.fromValues(vectors);
-  }
-
-  @Override
-  AbstractMockVectorValues<byte[]> vectorValues(LeafReader reader, String fieldName)
-      throws IOException {
-    ByteVectorValues vectorValues = reader.getByteVectorValues(fieldName);
-    byte[][] vectors = new byte[reader.maxDoc()][];
-    while (vectorValues.nextDoc() != NO_MORE_DOCS) {
-      vectors[vectorValues.docID()] =
-          ArrayUtil.copyOfSubArray(
-              vectorValues.vectorValue(), 0, vectorValues.vectorValue().length);
-    }
-    return MockByteVectorValues.fromValues(vectors);
-  }
-
-  @Override
-  Field knnVectorField(String name, byte[] vector, VectorSimilarityFunction similarityFunction) {
-    return new KnnByteVectorField(name, vector, similarityFunction);
   }
 
   @Override
