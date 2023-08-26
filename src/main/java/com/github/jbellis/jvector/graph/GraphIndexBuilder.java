@@ -67,8 +67,6 @@ public class GraphIndexBuilder<T> {
   private final ExplicitThreadLocal<GraphSearcher> graphSearcher;
   private final ExplicitThreadLocal<NeighborQueue> beamCandidates;
 
-  private final AtomicInteger evaluateMediodIn = new AtomicInteger(Runtime.getRuntime().availableProcessors());
-
   final OnHeapGraphIndex graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
           new ConcurrentSkipListSet<>();
@@ -372,52 +370,11 @@ public class GraphIndexBuilder<T> {
       updateNeighbors(node, natural, concurrent);
 
       graph.markComplete(node);
-      if (evaluateMediodIn.decrementAndGet() == 0) {
-        graph.updateEntryNode(approximateMediod());
-        evaluateMediodIn.set(2 * graph.size());
-      }
     } finally {
       insertionsInProgress.remove(node);
     }
 
     return graph.ramBytesUsedOneNode(0);
-  }
-
-  private int approximateMediod() {
-    var v1 = vectors.get();
-    var v2 = vectorsCopy.get();
-
-    GraphIndex.View view = graph.getView();
-    var startNode = view.entryNode();
-    int newStartNode;
-
-    // Check start node's neighbors for a better candidate, until we reach a local minimum.
-    // This isn't a very good mediod approximation, but all we really need to accomplish is
-    // not to be stuck with the worst possible candidate -- searching isn't super sensitive
-    // to how good the mediod is, especially in higher dimensions
-    while (true) {
-      var startNeighbors = graph.getNeighbors(startNode).getCurrent();
-      // Map each neighbor node to a pair of node and its average distance score.
-      // (We use average instead of total, since nodes may have different numbers of neighbors.)
-      newStartNode = IntStream.concat(IntStream.of(startNode), Arrays.stream(startNeighbors.node(), 0, startNeighbors.size))
-              .mapToObj(node -> {
-                var nodeNeighbors = graph.getNeighbors(node).getCurrent();
-                double score = Arrays.stream(nodeNeighbors.node(), 0, nodeNeighbors.size)
-                        .mapToDouble(i -> scoreBetween(v1.vectorValue(node), v2.vectorValue(i)))
-                        .sum();
-                return new AbstractMap.SimpleEntry<>(node, score / v2.size());
-              })
-              // Find the entry with the minimum score
-              .min(Comparator.comparingDouble(AbstractMap.SimpleEntry::getValue))
-              // Extract the node of the minimum entry
-              .map(AbstractMap.SimpleEntry::getKey).get();
-      if (startNode != newStartNode) {
-        startNode = newStartNode;
-      } else {
-        System.out.println("New mediod: " + newStartNode);
-        return newStartNode;
-      }
-    }
   }
 
   private void updateNeighbors(int node, NeighborArray natural, NeighborArray concurrent) {
