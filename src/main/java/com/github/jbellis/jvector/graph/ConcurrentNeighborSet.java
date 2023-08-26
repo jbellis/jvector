@@ -17,13 +17,11 @@
 
 package com.github.jbellis.jvector.graph;
 
-import com.github.jbellis.jvector.util.ArrayUtil;
 import com.github.jbellis.jvector.util.BitSet;
 import com.github.jbellis.jvector.util.FixedBitSet;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -78,8 +76,7 @@ public class ConcurrentNeighborSet {
     return new NeighborIterator(neighborsRef.get());
   }
 
-  public void backlink(Function<Integer, ConcurrentNeighborSet> neighborhoodOf, float overflow)
-      throws IOException {
+  public void backlink(Function<Integer, ConcurrentNeighborSet> neighborhoodOf, float overflow) {
     NeighborArray neighbors = neighborsRef.get();
     for (int i = 0; i < neighbors.size(); i++) {
       int nbr = neighbors.node[i];
@@ -273,7 +270,7 @@ public class ConcurrentNeighborSet {
    * Insert a new neighbor, maintaining our size cap by removing the least diverse neighbor if
    * necessary. "Overflow" is the factor by which to allow going over the size cap temporarily.
    */
-  public void insert(int neighborId, float score, float overflow) throws IOException {
+  public void insert(int neighborId, float score, float overflow) {
     assert neighborId != nodeId : "can't add self as neighbor at node " + nodeId;
     neighborsRef.getAndUpdate(
         current -> {
@@ -288,7 +285,7 @@ public class ConcurrentNeighborSet {
         });
   }
 
-  public void insert(int neighborId, float score) throws IOException {
+  public void insert(int neighborId, float score) {
     insert(neighborId, score, 1.0f);
   }
 

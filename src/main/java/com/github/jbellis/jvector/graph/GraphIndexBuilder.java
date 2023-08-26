@@ -21,8 +21,7 @@ import static java.lang.Math.log;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +31,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -66,6 +66,8 @@ public class GraphIndexBuilder<T> {
   private final ExplicitThreadLocal<RandomAccessVectorValues<T>> vectors;
   private final ExplicitThreadLocal<GraphSearcher> graphSearcher;
   private final ExplicitThreadLocal<NeighborQueue> beamCandidates;
+
+  private final AtomicInteger evaluateMediodIn = new AtomicInteger(Runtime.getRuntime().availableProcessors());
 
   final OnHeapGraphIndex graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
@@ -170,11 +172,10 @@ public class GraphIndexBuilder<T> {
 
   public OnHeapGraphIndex build(RandomAccessVectorValues<T> ravv) {
     IntStream.range(0, ravv.size()).parallel().forEach(i -> {
-      try {
-        addGraphNode(i, ravv.copy());
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      addGraphNode(i, ravv.copy());
+    });
+    IntStream.range(0, ravv.size()).parallel().forEach(i -> {
+      graph.getNeighbors(i).cleanup();
     });
     return graph;
   }
@@ -313,7 +314,7 @@ public class GraphIndexBuilder<T> {
    *
    * <p>See {@link #addGraphNode(int, Object)} for more details.
    */
-  public long addGraphNode(int node, RandomAccessVectorValues<T> values) throws IOException {
+  public long addGraphNode(int node, RandomAccessVectorValues<T> values) {
     return addGraphNode(node, values.vectorValue(node));
   }
 
@@ -337,7 +338,7 @@ public class GraphIndexBuilder<T> {
    * @param value the vector value to add
    * @return an estimate of the number of extra bytes used by the graph after adding the given node
    */
-  public long addGraphNode(int node, T value) throws IOException {
+  public long addGraphNode(int node, T value) {
     // do this before adding to in-progress, so a concurrent writer checking
     // the in-progress set doesn't have to worry about uninitialized neighbor sets
     graph.addNode(node);
@@ -371,6 +372,10 @@ public class GraphIndexBuilder<T> {
       updateNeighbors(node, natural, concurrent);
 
       graph.markComplete(node);
+      if (evaluateMediodIn.decrementAndGet() == 0) {
+        graph.updateEntryNode(approximateMediod());
+        evaluateMediodIn.set(2 * graph.size());
+      }
     } finally {
       insertionsInProgress.remove(node);
     }
@@ -378,8 +383,44 @@ public class GraphIndexBuilder<T> {
     return graph.ramBytesUsedOneNode(0);
   }
 
-  private void updateNeighbors(int node, NeighborArray natural, NeighborArray concurrent)
-          throws IOException {
+  private int approximateMediod() {
+    var v1 = vectors.get();
+    var v2 = vectorsCopy.get();
+
+    GraphIndex.View view = graph.getView();
+    var startNode = view.entryNode();
+    int newStartNode;
+
+    // Check start node's neighbors for a better candidate, until we reach a local minimum.
+    // This isn't a very good mediod approximation, but all we really need to accomplish is
+    // not to be stuck with the worst possible candidate -- searching isn't super sensitive
+    // to how good the mediod is, especially in higher dimensions
+    while (true) {
+      var startNeighbors = graph.getNeighbors(startNode).getCurrent();
+      // Map each neighbor node to a pair of node and its average distance score.
+      // (We use average instead of total, since nodes may have different numbers of neighbors.)
+      newStartNode = IntStream.concat(IntStream.of(startNode), Arrays.stream(startNeighbors.node(), 0, startNeighbors.size))
+              .mapToObj(node -> {
+                var nodeNeighbors = graph.getNeighbors(node).getCurrent();
+                double score = Arrays.stream(nodeNeighbors.node(), 0, nodeNeighbors.size)
+                        .mapToDouble(i -> scoreBetween(v1.vectorValue(node), v2.vectorValue(i)))
+                        .sum();
+                return new AbstractMap.SimpleEntry<>(node, score / v2.size());
+              })
+              // Find the entry with the minimum score
+              .min(Comparator.comparingDouble(AbstractMap.SimpleEntry::getValue))
+              // Extract the node of the minimum entry
+              .map(AbstractMap.SimpleEntry::getKey).get();
+      if (startNode != newStartNode) {
+        startNode = newStartNode;
+      } else {
+        System.out.println("New mediod: " + newStartNode);
+        return newStartNode;
+      }
+    }
+  }
+
+  private void updateNeighbors(int node, NeighborArray natural, NeighborArray concurrent) {
     ConcurrentNeighborSet neighbors = graph.getNeighbors(node);
     neighbors.insertDiverse(natural, concurrent);
     neighbors.backlink(graph::getNeighbors, neighborOverflow);
@@ -399,9 +440,7 @@ public class GraphIndexBuilder<T> {
     return scratch;
   }
 
-  private NeighborArray getConcurrentCandidates(
-          int newNode, Set<Integer> inProgress)
-          throws IOException {
+  private NeighborArray getConcurrentCandidates(int newNode, Set<Integer> inProgress) {
     NeighborArray scratch = this.concurrentScratch.get();
     scratch.clear();
     for (var n : inProgress) {
