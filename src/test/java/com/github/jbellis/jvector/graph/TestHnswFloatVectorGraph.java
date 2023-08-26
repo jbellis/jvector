@@ -102,8 +102,7 @@ public class TestHnswFloatVectorGraph extends GraphIndexTestCase<float[]> {
     RandomAccessVectorValues<float[]> vectors = circularVectorValues(nDoc);
     VectorEncoding vectorEncoding = getVectorEncoding();
     getRandom().nextInt();
-    GraphIndexBuilder<float[]> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100);
+    GraphIndexBuilder<float[]> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
     OnHeapGraphIndex hnsw = buildInOrder(builder, vectors);
 
     // Skip over half of the documents that are closest to the query vector
@@ -133,4 +132,5 @@ public class TestHnswFloatVectorGraph extends GraphIndexTestCase<float[]> {
     // are closest to the query vector: sum(500,509) = 5045
     assertTrue("sum(result docs)=" + sum, sum < 5100);
   }
+
 }

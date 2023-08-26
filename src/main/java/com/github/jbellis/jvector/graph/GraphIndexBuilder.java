@@ -126,15 +126,6 @@ public class GraphIndexBuilder<T> {
             ThreadLocal.withInitial(() -> new NeighborQueue(beamWidth, false));
   }
 
-  public GraphIndexBuilder(
-          RandomAccessVectorValues<T> vectorValues,
-          VectorEncoding vectorEncoding,
-          VectorSimilarityFunction similarityFunction,
-          int M,
-          int beamWidth) {
-    this(vectorValues, vectorEncoding, similarityFunction, M, beamWidth, 1.0f, 1.0f);
-  }
-
   public OnHeapGraphIndex build() {
     IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
       addGraphNode(i, vectors.get());

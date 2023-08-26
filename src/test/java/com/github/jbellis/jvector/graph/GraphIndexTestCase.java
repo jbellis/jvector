@@ -276,15 +276,14 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   @Test
   public void testGraphIndexBuilderInvalid() {
     assertThrows(
-        NullPointerException.class, () -> new GraphIndexBuilder<>(null, null, null, 0, 0));
+        NullPointerException.class, () -> new GraphIndexBuilder<>(null, null, null, 0, 0, 1.0f, 1.0f));
     // M must be > 0
     assertThrows(
         IllegalArgumentException.class,
         () -> {
           RandomAccessVectorValues<T> vectors = vectorValues(1, 1);
           VectorEncoding vectorEncoding = getVectorEncoding();
-          new GraphIndexBuilder<>(
-              vectors, vectorEncoding, VectorSimilarityFunction.EUCLIDEAN, 0, 10);
+          new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 0, 10, 1.0f, 1.0f);
         });
     // beamWidth must be > 0
     assertThrows(
@@ -292,8 +291,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
         () -> {
           RandomAccessVectorValues<T> vectors = vectorValues(1, 1);
           VectorEncoding vectorEncoding = getVectorEncoding();
-          new GraphIndexBuilder<>(
-              vectors, vectorEncoding, VectorSimilarityFunction.EUCLIDEAN, 10, 0);
+          new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 0, 1.0f, 1.0f);
         });
   }
 
@@ -320,7 +318,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     // First add nodes until everybody gets a full neighbor list
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10, 1.0f, 1.0f);
     // node 0 is added by the builder constructor
     builder.addGraphNode(0, vectors);
     builder.addGraphNode(1, vectors);
@@ -376,7 +374,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     // First add nodes until everybody gets a full neighbor list
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10, 1.0f, 1.0f);
     builder.addGraphNode(0, vectors);
     builder.addGraphNode(1, vectors);
     builder.addGraphNode(2, vectors);
@@ -408,7 +406,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     // First add nodes until everybody gets a full neighbor list
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10);
+        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10, 1.0f, 1.0f);
     builder.addGraphNode(0, vectors);
     builder.addGraphNode(1, vectors);
     builder.addGraphNode(2, vectors);
@@ -443,6 +441,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
   @Test
   @SuppressWarnings("unchecked")
+  // build a random graph, then check that it has at least 90% recall
   public void testRandom() throws IOException {
     int size = between(100, 200);
     int dim = between(10, 20);
@@ -526,7 +525,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   public void testConcurrentNeighbors() throws IOException {
     RandomAccessVectorValues<T> vectors = circularVectorValues(3);
     GraphIndexBuilder<T> builder =
-            new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 1, 30) {
+            new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 1, 30, 1.0f, 1.0f) {
               @Override
               protected float scoreBetween(T v1, T v2) {
                 try {

@@ -20,7 +20,7 @@ public class SiftSmall {
         var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
 
         var start = System.nanoTime();
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100, 1.5f, 1.4f);
         var graph = builder.build();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
