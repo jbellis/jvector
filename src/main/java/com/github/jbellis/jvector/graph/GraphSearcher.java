@@ -95,7 +95,7 @@ public class GraphSearcher {
       int visitedLimit) {
     int initialEp = view.entryNode();
     if (initialEp == -1) {
-      return new NeighborQueue(1, true);
+      return new NeighborQueue(1, false);
     }
     NeighborQueue results;
     results = new NeighborQueue(topK, false);
