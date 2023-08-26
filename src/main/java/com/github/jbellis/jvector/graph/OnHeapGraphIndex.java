@@ -19,6 +19,7 @@ package com.github.jbellis.jvector.graph;
 
 import com.github.jbellis.jvector.util.Accountable;
 import com.github.jbellis.jvector.util.RamUsageEstimator;
+import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
 import java.util.Map;
 import java.util.PrimitiveIterator;
@@ -43,7 +44,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
   // lists, a ConcurrentHashMap.  While the ArrayList used for L0 in OHHG is faster for
   // single-threaded workloads, it imposes an unacceptable contention burden for concurrent
   // graph building.
-  private final Map<Integer, ConcurrentNeighborSet> nodes;
+  private final NonBlockingHashMapLong<ConcurrentNeighborSet> nodes;
 
   // Neighbours' size on upper levels (nsize) and level 0 (nsize0)
   final int nsize;
@@ -58,7 +59,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     this.nsize = M;
     this.nsize0 = 2 * M;
 
-    this.nodes = new ConcurrentHashMap<>();
+    this.nodes = new NonBlockingHashMapLong<>();
   }
 
   /**
@@ -110,7 +111,18 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     // This is because, while L0 will contain sequential ordinals once the graph is complete,
     // and internally Lucene only calls getNodesOnLevel at that point, this is a public
     // method so we cannot assume that that is the only time it will be called by third parties.
-    return new NodesIterator.CollectionNodesIterator(nodes.keySet());
+    var keysInts = nodes.keySet().stream().mapToInt(Long::intValue).iterator();
+    return new NodesIterator(nodes.size()) {
+      @Override
+      public int nextInt() {
+        return keysInts.nextInt();
+      }
+
+      @Override
+      public boolean hasNext() {
+        return keysInts.hasNext();
+      }
+    };
   }
 
   @Override
