@@ -21,6 +21,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
 
+import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -138,10 +139,14 @@ public class GraphIndexBuilder<T> {
     IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
       addGraphNode(i, vectors.get());
     });
+    complete();
+    return graph;
+  }
+
+  private void complete() {
     IntStream.range(0, graph.size()).parallel().forEach(i -> {
       graph.getNeighbors(i).cleanup();
     });
-    return graph;
   }
 
   /**
@@ -187,10 +192,11 @@ public class GraphIndexBuilder<T> {
       NeighborSimilarity.ScoreFunction scoreFunction = (i) -> scoreBetween(
               vectors.get().vectorValue(i), value);
 
+      var bits = new ExcludingBits(node);
       NeighborQueue candidates = beamCandidates.get();
       candidates.clear();
       // find best "natural" candidates with a beam search
-      gs.searchInternal(scoreFunction, candidates, beamWidth, ep, null, Integer.MAX_VALUE);
+      gs.searchInternal(scoreFunction, candidates, beamWidth, ep, bits, Integer.MAX_VALUE);
 
       // Update neighbors with these candidates.
       var natural = getNaturalCandidates(candidates);
@@ -250,6 +256,24 @@ public class GraphIndexBuilder<T> {
         return similarityFunction.compare((float[]) v1, (float[]) v2);
       default:
         throw new IllegalArgumentException();
+    }
+  }
+
+  private static class ExcludingBits implements Bits {
+    private final int excluded;
+
+    public ExcludingBits(int excluded) {
+        this.excluded = excluded;
+    }
+
+    @Override
+    public boolean get(int index) {
+      return index != excluded;
+    }
+
+    @Override
+    public int length() {
+      throw new UnsupportedOperationException();
     }
   }
 }
