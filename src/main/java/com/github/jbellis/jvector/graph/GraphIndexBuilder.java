@@ -17,15 +17,10 @@
 
 package com.github.jbellis.jvector.graph;
 
-import static java.lang.Math.log;
-
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
-import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -45,15 +40,15 @@ public class GraphIndexBuilder<T> {
   public static final int DEFAULT_BEAM_WIDTH = 100;
 
   private final int beamWidth;
-  private final ExplicitThreadLocal<NeighborArray> naturalScratch;
-  private final ExplicitThreadLocal<NeighborArray> concurrentScratch;
+  private final ThreadLocal<NeighborArray> naturalScratch;
+  private final ThreadLocal<NeighborArray> concurrentScratch;
 
   private final VectorSimilarityFunction similarityFunction;
   private final float neighborOverflow;
   private final VectorEncoding vectorEncoding;
-  private final ExplicitThreadLocal<RandomAccessVectorValues<T>> vectors;
-  private final ExplicitThreadLocal<GraphSearcher> graphSearcher;
-  private final ExplicitThreadLocal<NeighborQueue> beamCandidates;
+  private final ThreadLocal<RandomAccessVectorValues<T>> vectors;
+  private final ThreadLocal<GraphSearcher> graphSearcher;
+  private final ThreadLocal<NeighborQueue> beamCandidates;
 
   final OnHeapGraphIndex graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
@@ -61,7 +56,7 @@ public class GraphIndexBuilder<T> {
 
   // we need two sources of vectors in order to perform diversity check comparisons without
   // colliding
-  private final ExplicitThreadLocal<RandomAccessVectorValues<T>> vectorsCopy;
+  private final ThreadLocal<RandomAccessVectorValues<T>> vectorsCopy;
 
   /**
    * Reads all the vectors from vector values, builds a graph connecting them by their dense
@@ -86,8 +81,8 @@ public class GraphIndexBuilder<T> {
           int beamWidth,
           float neighborOverflow,
           float alpha) {
-    this.vectors = createThreadSafeVectors(vectorValues);
-    this.vectorsCopy = createThreadSafeVectors(vectorValues);
+    this.vectors = ThreadLocal.withInitial(vectorValues::copy);
+    this.vectorsCopy = ThreadLocal.withInitial(vectorValues::copy);
     this.vectorEncoding = Objects.requireNonNull(vectorEncoding);
     this.similarityFunction = Objects.requireNonNull(similarityFunction);
     this.neighborOverflow = neighborOverflow;
@@ -121,15 +116,15 @@ public class GraphIndexBuilder<T> {
             new OnHeapGraphIndex(
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
     this.graphSearcher =
-            ExplicitThreadLocal.withInitial(
+            ThreadLocal.withInitial(
                     () -> new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build());
     // in scratch we store candidates in reverse order: worse candidates are first
     this.naturalScratch =
-            ExplicitThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
+            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
     this.concurrentScratch =
-            ExplicitThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
+            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
     this.beamCandidates =
-            ExplicitThreadLocal.withInitial(() -> new NeighborQueue(beamWidth, false));
+            ThreadLocal.withInitial(() -> new NeighborQueue(beamWidth, false));
   }
 
   public GraphIndexBuilder(
@@ -149,31 +144,6 @@ public class GraphIndexBuilder<T> {
       graph.getNeighbors(i).cleanup();
     });
     return graph;
-  }
-
-  private abstract static class ExplicitThreadLocal<U> {
-    private final ConcurrentHashMap<Long, U> map = new ConcurrentHashMap<>();
-    private final Function<Long, U> initialSupplier = k -> initialValue();
-
-    public U get() {
-      return map.computeIfAbsent(Thread.currentThread().getId(), initialSupplier);
-    }
-
-    protected abstract U initialValue();
-
-    public static <U> ExplicitThreadLocal<U> withInitial(Supplier<U> initialValue) {
-      return new ExplicitThreadLocal<>() {
-        @Override
-        protected U initialValue() {
-          return initialValue.get();
-        }
-      };
-    }
-  }
-
-  private static <T> ExplicitThreadLocal<RandomAccessVectorValues<T>> createThreadSafeVectors(
-          RandomAccessVectorValues<T> vectorValues) {
-    return ExplicitThreadLocal.withInitial(vectorValues::copy);
   }
 
   /**
@@ -235,7 +205,6 @@ public class GraphIndexBuilder<T> {
       var natural = getNaturalCandidates(candidates);
       var concurrent = getConcurrentCandidates(node, inProgressBefore);
       updateNeighbors(node, natural, concurrent);
-
       graph.markComplete(node);
     } finally {
       insertionsInProgress.remove(node);

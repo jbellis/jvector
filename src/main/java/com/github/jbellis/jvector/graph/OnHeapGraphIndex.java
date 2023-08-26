@@ -47,7 +47,6 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
   // single-threaded workloads, it imposes an unacceptable contention burden for concurrent
   // graph building.
   private final Map<Integer, Map<Integer, ConcurrentNeighborSet>> graphLevels;
-  private final CompletionTracker completions;
 
   // Neighbours' size on upper levels (nsize) and level 0 (nsize0)
   final int nsize;
@@ -64,7 +63,6 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
 
     this.graphLevels = new ConcurrentHashMap<>();
     graphLevels.put(0, new ConcurrentHashMap<>());
-    this.completions = new CompletionTracker(nsize0);
   }
 
   /**
@@ -97,7 +95,6 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
             return newEntry;
           }
         });
-    completions.markComplete(node);
   }
 
   public void updateEntryNode(int node) {
@@ -131,9 +128,6 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     long neighborSize = neighborsRamUsed(connectionsOnLevel(0)) * numNodesOnLevel;
 
     total += chmSize + neighborSize;
-
-    // logical clocks
-    total += completions.ramBytesUsed();
 
     return total;
   }
@@ -225,31 +219,8 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     }
   }
 
-  /**
-   * A concurrent View of the graph that is safe to search concurrently with updates and with other
-   * searches. The View provides a limited kind of snapshot isolation: only nodes completely added
-   * to the graph at the time the View was created will be visible (but the connections between them
-   * are allowed to change, so you could potentially get different top K results from the same query
-   * if concurrent updates are in progress.)
-   */
   private class ConcurrentGraphIndexView implements GraphIndex.View {
-    // It is tempting, but incorrect, to try to provide "adequate" isolation by
-    // (1) keeping a bitset of complete nodes and giving that to the searcher as nodes to
-    // accept -- but we need to keep incomplete nodes out of the search path entirely,
-    // not just out of the result set, or
-    // (2) keeping a bitset of complete nodes and restricting the View to those nodes
-    // -- but we needs to consider neighbor diversity separately for concurrent
-    // inserts and completed nodes; this allows us to keep the former out of the latter,
-    // but not the latter out of the former (when a node completes while we are working,
-    // that was in-progress when we started.)
-    // The only really foolproof solution is to implement snapshot isolation as
-    // we have done here.
-    private final int timestamp;
     private PrimitiveIterator.OfInt remainingNeighbors;
-
-    public ConcurrentGraphIndexView() {
-      this.timestamp = completions.clock();
-    }
 
     @Override
     public void seek(int targetNode) {
@@ -258,13 +229,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
 
     @Override
     public int nextNeighbor() {
-      while (remainingNeighbors.hasNext()) {
-        int next = remainingNeighbors.nextInt();
-        if (completions.completedAt(next) < timestamp) {
-          return next;
-        }
-      }
-      return NO_MORE_DOCS;
+      return remainingNeighbors.hasNext() ? remainingNeighbors.nextInt() : NO_MORE_DOCS;
     }
 
     @Override
@@ -280,87 +245,6 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
     @Override
     public String toString() {
       return "OnHeapGraphIndexView(size=" + size() + ", entryPoint=" + entryPoint.get();
-    }
-  }
-
-  /** Class to provide snapshot isolation for nodes in the progress of being added. */
-  static final class CompletionTracker implements Accountable {
-    private final AtomicInteger logicalClock = new AtomicInteger();
-    private volatile AtomicIntegerArray completionTimes;
-    private final StampedLock sl = new StampedLock();
-
-    public CompletionTracker(int initialSize) {
-      completionTimes = new AtomicIntegerArray(initialSize);
-      for (int i = 0; i < initialSize; i++) {
-        completionTimes.set(i, Integer.MAX_VALUE);
-      }
-    }
-
-    /**
-     * @param node ordinal
-     */
-    void markComplete(int node) {
-      int completionClock = logicalClock.getAndIncrement();
-      ensureCapacity(node);
-      long stamp;
-      do {
-        stamp = sl.tryOptimisticRead();
-        completionTimes.set(node, completionClock);
-      } while (!sl.validate(stamp));
-    }
-
-    /**
-     * @return the current logical timestamp; can be compared with completedAt values
-     */
-    int clock() {
-      return logicalClock.get();
-    }
-
-    /**
-     * @param node ordinal
-     * @return the logical clock completion time of the node, or Integer.MAX_VALUE if the node has
-     *     not yet been completed.
-     */
-    public int completedAt(int node) {
-      AtomicIntegerArray ct = completionTimes;
-      if (node >= ct.length()) {
-        return Integer.MAX_VALUE;
-      }
-      return ct.get(node);
-    }
-
-    @Override
-    public long ramBytesUsed() {
-      int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-      return REF_BYTES
-          + Integer.BYTES // logicalClock
-          + REF_BYTES
-          + (long) Integer.BYTES * completionTimes.length();
-    }
-
-    private void ensureCapacity(int node) {
-      if (node < completionTimes.length()) {
-        return;
-      }
-
-      long stamp = sl.writeLock();
-      try {
-        AtomicIntegerArray oldArray = completionTimes;
-        if (node >= oldArray.length()) {
-          int newSize = (node + 1) * 2;
-          AtomicIntegerArray newArray = new AtomicIntegerArray(newSize);
-          for (int i = 0; i < newSize; i++) {
-            if (i < oldArray.length()) {
-              newArray.set(i, oldArray.get(i));
-            } else {
-              newArray.set(i, Integer.MAX_VALUE);
-            }
-          }
-          completionTimes = newArray;
-        }
-      } finally {
-        sl.unlockWrite(stamp);
-      }
     }
   }
 }
