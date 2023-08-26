@@ -20,13 +20,12 @@ package com.github.jbellis.jvector.graph;
 import static java.lang.Math.log;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
+import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -147,12 +146,24 @@ public class GraphIndexBuilder<T> {
   }
 
   public OnHeapGraphIndex build(int threads) {
-    IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
-      addGraphNode(i, vectors.get());
-    });
-    IntStream.range(0, graph.size()).parallel().forEach(i -> {
-      graph.getNeighbors(i).cleanup();
-    });
+    ForkJoinTask<?> future;
+    try (var fjp = new ForkJoinPool(threads)) {
+      future = fjp.submit(() -> {
+        IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
+          addGraphNode(i, vectors.get());
+        });
+        IntStream.range(0, graph.size()).parallel().forEach(i -> {
+          graph.getNeighbors(i).cleanup();
+        });
+      });
+    }
+    try {
+      future.get();
+    } catch (InterruptedException e) {
+      throw new ThreadInterruptedException(e);
+    } catch (ExecutionException e) {
+      throw new RuntimeException(e);
+    }
     return graph;
   }
 
