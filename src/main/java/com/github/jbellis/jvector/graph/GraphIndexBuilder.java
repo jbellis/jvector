@@ -70,8 +70,8 @@ public class GraphIndexBuilder<T> {
    * @param neighborOverflow the ratio of extra neighbors to allow temporarily when inserting a
    *     node. larger values will build more efficiently, but use more memory.
    * @param alpha how aggressive pruning diverse neighbors should be.  Set alpha &gt; 1.0 to
-   *        allow longer edges.  If alpha &gt; 1.0 then a single level, Vamana-style graph
-   *        will be created instead of HNSW.
+   *        allow longer edges.  If alpha = 1.0 then the equivalent of the lowest level of
+   *        an HNSW graph will be created, which is usually not what you want.
    */
   public GraphIndexBuilder(
           RandomAccessVectorValues<T> vectorValues,

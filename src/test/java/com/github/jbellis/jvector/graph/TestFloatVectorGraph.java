@@ -29,8 +29,8 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Tests HNSW KNN graphs */
-public class TestHnswFloatVectorGraph extends GraphIndexTestCase<float[]> {
+/** Tests KNN graphs */
+public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
 
   @Before
   public void setup() {
@@ -103,7 +103,7 @@ public class TestHnswFloatVectorGraph extends GraphIndexTestCase<float[]> {
     VectorEncoding vectorEncoding = getVectorEncoding();
     getRandom().nextInt();
     GraphIndexBuilder<float[]> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
-    OnHeapGraphIndex hnsw = buildInOrder(builder, vectors);
+    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
 
     // Skip over half of the documents that are closest to the query vector
     FixedBitSet acceptOrds = new FixedBitSet(nDoc);
@@ -117,7 +117,7 @@ public class TestHnswFloatVectorGraph extends GraphIndexTestCase<float[]> {
             vectors.copy(),
             getVectorEncoding(),
             similarityFunction,
-            hnsw,
+            graph,
             acceptOrds,
             Integer.MAX_VALUE);
 

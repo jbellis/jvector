@@ -21,7 +21,7 @@ import com.github.jbellis.jvector.util.LongHeap;
 import com.github.jbellis.jvector.util.NumericUtils;
 
 /**
- * NeighborQueue uses a {@link LongHeap} to store lists of arcs in an HNSW graph, represented as a
+ * NeighborQueue uses a {@link LongHeap} to store lists of arcs in a graph, represented as a
  * neighbor node id with an associated score packed together as a sortable long, which is sorted
  * primarily by score. The queue provides both fixed-size and unbounded operations via {@link
  * #insertWithOverflow(int, float)} and {@link #add(int, float)}, and provides MIN and MAX heap

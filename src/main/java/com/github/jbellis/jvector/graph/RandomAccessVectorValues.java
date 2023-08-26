@@ -20,7 +20,7 @@ package com.github.jbellis.jvector.graph;
 import java.io.IOException;
 
 /**
- * Provides random access to vectors by dense ordinal. This interface is used by HNSW-based
+ * Provides random access to vectors by dense ordinal. This interface is used by graph-based
  * implementations of KNN search.
  *
  * @lucene.experimental

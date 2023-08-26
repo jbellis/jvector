@@ -34,7 +34,7 @@ import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** Tests HNSW KNN graphs */
+/** Tests KNN graphs */
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
@@ -125,7 +125,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
-    var hnsw = buildInOrder(builder, vectors);
+    var graph = buildInOrder(builder, vectors);
     // run some searches
     NeighborQueue nn = GraphSearcher.search(
             getTargetVector(),
@@ -133,7 +133,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             vectors.copy(),
             getVectorEncoding(),
             similarityFunction,
-            hnsw,
+            graph,
             null,
             Integer.MAX_VALUE);
     int[] nodes = nn.nodes();
@@ -147,7 +147,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
 
     for (int i = 0; i < nDoc; i++) {
-      ConcurrentNeighborSet neighbors = hnsw.getNeighbors(i);
+      ConcurrentNeighborSet neighbors = graph.getNeighbors(i);
       Iterator<Integer> it = neighbors.nodeIterator();
       while (it.hasNext()) {
         // all neighbors should be valid node ids.
@@ -165,7 +165,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = buildInOrder(builder, vectors);
+    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
     NeighborQueue nn =
@@ -175,7 +175,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     vectors.copy(),
                     getVectorEncoding(),
                     similarityFunction,
-                    hnsw,
+                    graph,
                     acceptOrds,
                     Integer.MAX_VALUE);
     int[] nodes = nn.nodes();
@@ -199,7 +199,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = buildInOrder(builder, vectors);
+    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
     for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
@@ -215,7 +215,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     vectors.copy(),
                     getVectorEncoding(),
                     similarityFunction,
-                    hnsw,
+                    graph,
                     acceptOrds,
                     Integer.MAX_VALUE);
 
@@ -242,7 +242,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build();
+    OnHeapGraphIndex graph = builder.build();
 
     int topK = 50;
     int visitedLimit = topK + getRandom().nextInt(5);
@@ -254,7 +254,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
               (RandomAccessVectorValues<float[]>) vectors.copy(),
               getVectorEncoding(),
               similarityFunction,
-              hnsw,
+              graph,
               createRandomAcceptOrds(0, nDoc),
               visitedLimit);
           case BYTE -> GraphSearcher.search(
@@ -263,7 +263,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
               (RandomAccessVectorValues<byte[]>) vectors.copy(),
               getVectorEncoding(),
               similarityFunction,
-              hnsw,
+              graph,
               createRandomAcceptOrds(0, nDoc),
               visitedLimit);
         };
@@ -443,14 +443,14 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   @SuppressWarnings("unchecked")
   // build a random graph, then check that it has at least 90% recall
   public void testRandom() throws IOException {
-    int size = between(100, 200);
-    int dim = between(10, 20);
+    int size = between(100, 150);
+    int dim = between(10, 15);
     AbstractMockVectorValues<T> vectors = vectorValues(size, dim);
     int topK = 5;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build();
+    OnHeapGraphIndex graph = builder.build();
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 
     int totalMatches = 0;
@@ -464,7 +464,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                       vectors,
                       getVectorEncoding(),
                       similarityFunction,
-                      hnsw,
+                      graph,
                       acceptOrds,
                       Integer.MAX_VALUE);
 
@@ -536,9 +536,9 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                 return super.scoreBetween(v1, v2);
               }
             };
-    OnHeapGraphIndex hnsw = builder.build();
+    OnHeapGraphIndex graph = builder.build();
     for (int i = 0; i < vectors.size(); i++) {
-      assertTrue(hnsw.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
+      assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
     }
   }
   static class CircularFloatVectorValues

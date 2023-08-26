@@ -24,8 +24,8 @@ import org.junit.Before;
 
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
-/** Tests HNSW KNN graphs */
-public class TestHnswByteVectorGraph extends GraphIndexTestCase<byte[]> {
+/** Tests KNN graphs */
+public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
 
   @Before
   public void setup() {

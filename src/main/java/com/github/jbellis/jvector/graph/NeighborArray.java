@@ -23,7 +23,7 @@ import com.github.jbellis.jvector.util.ArrayUtil;
 import java.util.Arrays;
 
 /**
- * NeighborArray encodes the neighbors of a node and their mutual scores in the HNSW graph as a pair
+ * NeighborArray encodes the neighbors of a node and their mutual scores in the graph as a pair
  * of growable arrays. Nodes are arranged in the sorted order of their scores in descending order
  * (if scoresDescOrder is true), or in the ascending order of their scores (if scoresDescOrder is
  * false)
