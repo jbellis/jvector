@@ -104,7 +104,7 @@ public class TestHnswFloatVectorGraph extends GraphIndexTestCase<float[]> {
     getRandom().nextInt();
     GraphIndexBuilder<float[]> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100);
-    OnHeapGraphIndex hnsw = builder.build(vectors.copy());
+    OnHeapGraphIndex hnsw = builder.build(1);
 
     // Skip over half of the documents that are closest to the query vector
     FixedBitSet acceptOrds = new FixedBitSet(nDoc);

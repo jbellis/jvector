@@ -125,7 +125,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
-    var hnsw = builder.build(vectors.copy());
+    var hnsw = builder.build(1);
     // run some searches
     NeighborQueue nn = GraphSearcher.search(
             getTargetVector(),
@@ -165,7 +165,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(vectors.copy());
+    OnHeapGraphIndex hnsw = builder.build(1);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
     NeighborQueue nn =
@@ -199,7 +199,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(vectors.copy());
+    OnHeapGraphIndex hnsw = builder.build(1);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
     for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
@@ -234,13 +234,6 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   }
 
   @Test
-  public void testMultiple() throws IOException {
-    for (int i = 0; i < 10000; i++) {
-      testSearchWithSelectiveAcceptOrds();
-    }
-  }
-
-  @Test
   @SuppressWarnings("unchecked")
   public void testVisitedLimit() throws IOException {
     int nDoc = 500;
@@ -249,7 +242,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(vectors.copy());
+    OnHeapGraphIndex hnsw = builder.build(1);
 
     int topK = 50;
     int visitedLimit = topK + getRandom().nextInt(5);
@@ -329,17 +322,16 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10);
     // node 0 is added by the builder constructor
-    RandomAccessVectorValues<T> vectorsCopy = vectors.copy();
-    builder.addGraphNode(0, vectorsCopy);
-    builder.addGraphNode(1, vectorsCopy);
-    builder.addGraphNode(2, vectorsCopy);
+    builder.addGraphNode(0, vectors);
+    builder.addGraphNode(1, vectors);
+    builder.addGraphNode(2, vectors);
     // now every node has tried to attach every other node as a neighbor, but
     // some were excluded based on diversity check.
     assertLevel0Neighbors(builder.graph, 0, 1, 2);
     assertLevel0Neighbors(builder.graph, 1, 0);
     assertLevel0Neighbors(builder.graph, 2, 0);
 
-    builder.addGraphNode(3, vectorsCopy);
+    builder.addGraphNode(3, vectors);
     assertLevel0Neighbors(builder.graph, 0, 1, 2);
     // we added 3 here
     assertLevel0Neighbors(builder.graph, 1, 0, 3);
@@ -347,7 +339,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     assertLevel0Neighbors(builder.graph, 3, 1);
 
     // supplant an existing neighbor
-    builder.addGraphNode(4, vectorsCopy);
+    builder.addGraphNode(4, vectors);
     // 4 is the same distance from 0 that 2 is; we leave the existing node in place
     assertLevel0Neighbors(builder.graph, 0, 1, 2);
     assertLevel0Neighbors(builder.graph, 1, 0, 3, 4);
@@ -356,7 +348,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     assertLevel0Neighbors(builder.graph, 3, 1, 4);
     assertLevel0Neighbors(builder.graph, 4, 1, 3);
 
-    builder.addGraphNode(5, vectorsCopy);
+    builder.addGraphNode(5, vectors);
     assertLevel0Neighbors(builder.graph, 0, 1, 2);
     assertLevel0Neighbors(builder.graph, 1, 0, 3, 4, 5);
     assertLevel0Neighbors(builder.graph, 2, 0);
@@ -385,17 +377,16 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10);
-    RandomAccessVectorValues<T> vectorsCopy = vectors.copy();
-    builder.addGraphNode(0, vectorsCopy);
-    builder.addGraphNode(1, vectorsCopy);
-    builder.addGraphNode(2, vectorsCopy);
+    builder.addGraphNode(0, vectors);
+    builder.addGraphNode(1, vectors);
+    builder.addGraphNode(2, vectors);
     assertLevel0Neighbors(builder.graph, 0, 1, 2);
     // 2 is closer to 0 than 1, so it is excluded as non-diverse
     assertLevel0Neighbors(builder.graph, 1, 0);
     // 1 is closer to 0 than 2, so it is excluded as non-diverse
     assertLevel0Neighbors(builder.graph, 2, 0);
 
-    builder.addGraphNode(3, vectorsCopy);
+    builder.addGraphNode(3, vectors);
     // this is one case we are testing; 2 has been displaced by 3
     assertLevel0Neighbors(builder.graph, 0, 1, 3);
     assertLevel0Neighbors(builder.graph, 1, 0);
@@ -418,17 +409,16 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10);
-    RandomAccessVectorValues<T> vectorsCopy = vectors.copy();
-    builder.addGraphNode(0, vectorsCopy);
-    builder.addGraphNode(1, vectorsCopy);
-    builder.addGraphNode(2, vectorsCopy);
+    builder.addGraphNode(0, vectors);
+    builder.addGraphNode(1, vectors);
+    builder.addGraphNode(2, vectors);
     assertLevel0Neighbors(builder.graph, 0, 1, 2);
     // 2 is closer to 0 than 1, so it is excluded as non-diverse
     assertLevel0Neighbors(builder.graph, 1, 0);
     // 1 is closer to 0 than 2, so it is excluded as non-diverse
     assertLevel0Neighbors(builder.graph, 2, 0);
 
-    builder.addGraphNode(3, vectorsCopy);
+    builder.addGraphNode(3, vectors);
     // this is one case we are testing; 1 has been displaced by 3
     assertLevel0Neighbors(builder.graph, 0, 2, 3);
     assertLevel0Neighbors(builder.graph, 1, 0, 3);
@@ -461,7 +451,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
-    OnHeapGraphIndex hnsw = builder.build(((RandomAccessVectorValues<T>) vectors).copy());
+    OnHeapGraphIndex hnsw = builder.build(1);
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 
     int totalMatches = 0;
@@ -540,7 +530,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                 return super.scoreBetween(v1, v2);
               }
             };
-    OnHeapGraphIndex hnsw = builder.build(vectors.copy());
+    OnHeapGraphIndex hnsw = builder.build(1);
     for (int i = 0; i < vectors.size(); i++) {
       assertTrue(hnsw.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
     }

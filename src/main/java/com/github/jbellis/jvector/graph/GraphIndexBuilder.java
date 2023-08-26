@@ -19,25 +19,14 @@ package com.github.jbellis.jvector.graph;
 
 import static java.lang.Math.log;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
-import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -168,11 +157,15 @@ public class GraphIndexBuilder<T> {
     this(vectorValues, vectorEncoding, similarityFunction, M, beamWidth, 1.0f, 1.0f);
   }
 
-  public OnHeapGraphIndex build(RandomAccessVectorValues<T> ravv) {
-    IntStream.range(0, ravv.size()).parallel().forEach(i -> {
-      addGraphNode(i, ravv.copy());
+  public OnHeapGraphIndex build() {
+    return build(Runtime.getRuntime().availableProcessors());
+  }
+
+  public OnHeapGraphIndex build(int threads) {
+    IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
+      addGraphNode(i, vectors.get());
     });
-    IntStream.range(0, ravv.size()).parallel().forEach(i -> {
+    IntStream.range(0, graph.size()).parallel().forEach(i -> {
       graph.getNeighbors(i).cleanup();
     });
     return graph;
@@ -196,110 +189,6 @@ public class GraphIndexBuilder<T> {
         }
       };
     }
-  }
-
-  /**
-   * Bring-your-own ExecutorService graph builder.
-   *
-   * <p>Reads all the vectors from two copies of a {@link RandomAccessVectorValues}. Providing two
-   * copies enables efficient retrieval without extra data copying, while avoiding collision of the
-   * returned values.
-   *
-   * @param vectorsToAdd the vectors for which to build a nearest neighbors graph. Must be an
-   *     independent accessor for the vectors
-   * @param pool The ExecutorService to use. Must be an instance of ThreadPoolExecutor.
-   * @param concurrentTasks the number of tasks to submit in parallel.
-   */
-  public Future<OnHeapGraphIndex> buildAsync(
-          RandomAccessVectorValues<T> vectorsToAdd, ExecutorService pool, int concurrentTasks) {
-    if (vectorsToAdd == this.vectors) {
-      throw new IllegalArgumentException(
-              "Vectors to build must be independent of the source of vectors provided to GraphBuilder()");
-    }
-    return addVectors(vectorsToAdd, pool, concurrentTasks);
-  }
-
-  // the goal here is to keep all the ExecutorService threads busy, but not to create potentially
-  // millions of futures by naively throwing everything at submit at once.  So, we use
-  // a semaphore to wait until a thread is free before adding a new task.
-  private Future<OnHeapGraphIndex> addVectors(
-          RandomAccessVectorValues<T> vectorsToAdd, ExecutorService pool, int concurrentTasks) {
-    Semaphore semaphore = new Semaphore(concurrentTasks);
-    Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
-    AtomicReference<Throwable> asyncException = new AtomicReference<>(null);
-
-    ExplicitThreadLocal<RandomAccessVectorValues<T>> threadSafeVectors =
-            createThreadSafeVectors(vectorsToAdd);
-
-    return CompletableFuture.supplyAsync(
-            () -> {
-              // parallel build
-              for (int i = 0; i < vectorsToAdd.size() && asyncException.get() == null; i++) {
-                final int node = i; // copy for closure
-                try {
-                  semaphore.acquire();
-                  inFlight.add(node);
-                  pool.submit(
-                          () -> {
-                            try {
-                              addGraphNode(node, threadSafeVectors.get());
-                            } catch (Throwable e) {
-                              asyncException.set(e);
-                            } finally {
-                              semaphore.release();
-                              inFlight.remove(node);
-                            }
-                          });
-                } catch (InterruptedException e) {
-                  throw new ThreadInterruptedException(e);
-                }
-              }
-              while (!inFlight.isEmpty()) {
-                try {
-                  TimeUnit.MILLISECONDS.sleep(10);
-                } catch (InterruptedException e) {
-                  throw new ThreadInterruptedException(e);
-                }
-              }
-
-              // parallel cleanup
-              for (int i = 0; i < vectorsToAdd.size() && asyncException.get() == null; i++) {
-                final int node = i; // copy for closure
-                try {
-                  semaphore.acquire();
-                  inFlight.add(node);
-                  pool.submit(
-                          () -> {
-                            try {
-                              var neighbors = graph.getNeighbors(node);
-                              if (neighbors != null) {
-                                neighbors.cleanup();
-                              }
-                            } catch (Throwable e) {
-                              asyncException.set(e);
-                            } finally {
-                              semaphore.release();
-                              inFlight.remove(node);
-                            }
-                          });
-                } catch (InterruptedException e) {
-                  throw new ThreadInterruptedException(e);
-                }
-              }
-              while (!inFlight.isEmpty()) {
-                try {
-                  TimeUnit.MILLISECONDS.sleep(10);
-                } catch (InterruptedException e) {
-                  throw new ThreadInterruptedException(e);
-                }
-              }
-
-              if (asyncException.get() != null) {
-                throw new CompletionException(asyncException.get());
-              }
-              graph.validateEntryNode();
-              return graph;
-            });
   }
 
   private static <T> ExplicitThreadLocal<RandomAccessVectorValues<T>> createThreadSafeVectors(

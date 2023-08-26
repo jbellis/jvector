@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -22,10 +21,7 @@ public class SiftSmall {
 
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100);
-        int buildThreads = 8;
-        var es = Executors.newFixedThreadPool(buildThreads);
-        var graph = builder.buildAsync(ravv.copy(), es, buildThreads).get();
-        es.shutdown();
+        var graph = builder.build();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var topKfound = new AtomicInteger(0);
