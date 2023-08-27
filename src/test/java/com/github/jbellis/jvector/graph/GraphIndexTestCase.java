@@ -136,7 +136,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             graph,
             null,
             Integer.MAX_VALUE);
-    int[] nodes = nn.nodes();
+    int[] nodes = nn.nodesCopy();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -178,7 +178,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     graph,
                     acceptOrds,
                     Integer.MAX_VALUE);
-    int[] nodes = nn.nodes();
+    int[] nodes = nn.nodesCopy();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -219,7 +219,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     acceptOrds,
                     Integer.MAX_VALUE);
 
-    int[] nodes = nn.nodes();
+    int[] nodes = nn.nodesCopy();
     for (int node : nodes) {
       assertTrue("the results include a deleted document: %d for %s".formatted(
               node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
@@ -444,17 +444,16 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   // build a random graph, then check that it has at least 90% recall
   public void testRandom() throws IOException {
     int size = between(100, 150);
-    int dim = between(10, 15);
+    int dim = between(2, 15);
     AbstractMockVectorValues<T> vectors = vectorValues(size, dim);
     int topK = 5;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
-    // FIXME I would really like this to be a parallel build, but we end up with a disconnected graph too often.
-    // is this a bug in the build algorithm or just a consequence of the random graph?
-    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
+    OnHeapGraphIndex graph = builder.build();
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 
+    int efSearch = 100;
     int totalMatches = 0;
     for (int i = 0; i < 100; i++) {
       NeighborQueue actual;
@@ -462,7 +461,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
       actual =
               GraphSearcher.search(
                       query,
-                      100,
+                      efSearch,
                       vectors,
                       getVectorEncoding(),
                       similarityFunction,
@@ -491,8 +490,11 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
         }
       }
       assertEquals(topK, actual.size());
-      totalMatches += computeOverlap(actual.nodes(), expected.nodes());
+      totalMatches += computeOverlap(actual.nodesCopy(), expected.nodesCopy());
     }
+    // with the current settings, we can visit every node in the graph, so this should actually be 100%
+    // except in cases where the graph ends up partitioned.  If that happens, it probably means
+    // a bug has been introduced in graph construction.
     double overlap = totalMatches / (double) (100 * topK);
     assertTrue("overlap=" + overlap, overlap > 0.9);
   }

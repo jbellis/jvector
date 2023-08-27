@@ -22,6 +22,8 @@ import com.github.jbellis.jvector.util.ArrayUtil;
 
 import java.util.Arrays;
 
+import static org.junit.Assert.assertTrue;
+
 /**
  * NeighborArray encodes the neighbors of a node and their mutual scores in the graph as a pair
  * of growable arrays. Nodes are arranged in the sorted order of their scores in descending order
@@ -34,7 +36,7 @@ public class NeighborArray {
 
   float[] score;
   int[] node;
-  private int sortedNodeSize;
+  private int sortedNodeSize; // TODO remove this
 
   public NeighborArray(int maxSize, boolean descOrder) {
     node = new int[maxSize];

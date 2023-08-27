@@ -35,7 +35,7 @@ public class SiftSmall {
             nn = searcher.search(scoreFunction, 100, null, Integer.MAX_VALUE);
 
             var gt = groundTruth.get(i);
-            var n = IntStream.range(0, topK).filter(j -> gt.contains(nn.nodes()[j])).count();
+            var n = IntStream.range(0, topK).filter(j -> gt.contains(nn.nodesCopy()[j])).count();
             topKfound.addAndGet((int) n);
         });
         System.out.printf("  Querying %d vectors in parallel took %s seconds%n", queryVectors.size(), (System.nanoTime() - start) / 1_000_000_000.0);

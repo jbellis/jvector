@@ -132,7 +132,7 @@ public class NeighborQueue {
   }
 
   /** Returns a copy of the internal nodes array. Not sorted by score! */
-  public int[] nodes() {
+  public int[] nodesCopy() {
     int size = size();
     int[] nodes = new int[size];
     for (int i = 0; i < size; i++) {

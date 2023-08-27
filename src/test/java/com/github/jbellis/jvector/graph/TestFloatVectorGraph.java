@@ -22,6 +22,7 @@ import com.github.jbellis.jvector.util.FixedBitSet;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
 
@@ -121,7 +122,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
             acceptOrds,
             Integer.MAX_VALUE);
 
-    int[] nodes = nn.nodes();
+    int[] nodes = nn.nodesCopy();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -132,5 +133,4 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
     // are closest to the query vector: sum(500,509) = 5045
     assertTrue("sum(result docs)=" + sum, sum < 5100);
   }
-
 }

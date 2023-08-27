@@ -54,18 +54,23 @@ public class GraphSearcher {
     this.visited = visited;
   }
 
-  public static <T> NeighborQueue search(T targetVector, int topK, RandomAccessVectorValues<T> copy, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int maxValue) {
+  /**
+   * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
+   * is the unique owner of the vectors instance passed in here.
+   */
+  public static <T> NeighborQueue search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int visitedLimit) {
     var searcher = new GraphSearcher.Builder(graph.getView()).build();
-    return searcher.search(i1 -> {
+    NeighborSimilarity.ScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
         case BYTE:
-          return similarityFunction.compare((byte[]) targetVector, (byte[]) copy.vectorValue(i1));
+          return similarityFunction.compare((byte[]) targetVector, (byte[]) vectors.vectorValue(i));
         case FLOAT32:
-          return similarityFunction.compare((float[]) targetVector, (float[]) copy.vectorValue(i1));
+          return similarityFunction.compare((float[]) targetVector, (float[]) vectors.vectorValue(i));
         default:
           throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
       }
-    }, topK, acceptOrds, maxValue);
+    };
+    return searcher.search(scoreFunction, topK, acceptOrds, visitedLimit);
   }
 
   /** Builder */

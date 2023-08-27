@@ -51,6 +51,12 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     return simpleScore.score(0, neighbor);
   }
 
+  private static void validateSortedByScore(NeighborArray na) {
+    for (int i = 0; i < na.size() - 1; i++) {
+      assertTrue(na.score[i] >= na.score[i + 1]);
+    }
+  }
+
   @Test
   public void testInsertAndSize() throws IOException {
     ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 2, simpleScore);
@@ -60,19 +66,23 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
     neighbors.insert(3, baseScore(3));
     assertEquals(2, neighbors.size());
+    validateSortedByScore(neighbors.getCurrent());
   }
 
   @Test
   public void testRemoveLeastDiverseFromEnd() throws IOException {
+    // start with 3 neighbors
     ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 3, simpleScore);
     neighbors.insert(1, baseScore(1));
     neighbors.insert(2, baseScore(2));
     neighbors.insert(3, baseScore(3));
     assertEquals(3, neighbors.size());
 
+    // insert a 4th neighbor, but it should be evicted
     neighbors.insert(4, baseScore(4));
     assertEquals(3, neighbors.size());
 
+    // check that the original 3 neighbors are still there
     List<Integer> expectedValues = Arrays.asList(1, 2, 3);
     Iterator<Integer> iterator = neighbors.nodeIterator();
     for (Integer expectedValue : expectedValues) {
@@ -80,6 +90,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
       assertEquals(expectedValue, iterator.next());
     }
     assertFalse(iterator.hasNext());
+    validateSortedByScore(neighbors.getCurrent());
   }
 
   @Test
@@ -114,6 +125,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
+    validateSortedByScore(neighbors.getCurrent());
   }
 
   @Test
@@ -151,6 +163,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
+    validateSortedByScore(neighbors.getCurrent());
   }
 
   @Test
@@ -164,6 +177,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
     assertArrayEquals(
         new float[] {10.0f, 9.0f, 8.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
+    validateSortedByScore(cna);
   }
 
   @Test
@@ -188,6 +202,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     cna.insertSorted(3, 10.0f); // This is also a duplicate
     assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
     assertArrayEquals(new float[] {10.0f, 10.0f, 10.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
+    validateSortedByScore(cna);
   }
 
   @Test
@@ -223,6 +238,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {3, 2}, Arrays.copyOf(merged.node(), 2));
     assertArrayEquals(new float[] {3.0f, 2.0f}, Arrays.copyOf(merged.score(), 2), 0.0f);
+    validateSortedByScore(merged);
   }
 
   private void testMergeCandidatesOnce() {
