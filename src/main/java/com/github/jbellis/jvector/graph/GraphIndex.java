@@ -17,8 +17,6 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.io.IOException;
-
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 /**
@@ -34,7 +32,7 @@ public interface GraphIndex {
    *
    * @return an iterator over nodes where {@code nextInt} returns a next node on the level
    */
-  NodesIterator getNodes() throws IOException;
+  NodesIterator getNodes();
 
   /**
    * Add node on the given level with an empty set of neighbors.
@@ -84,23 +82,19 @@ public interface GraphIndex {
     sb.append("\n");
 
     var view = graph.getView();
-    try {
-      NodesIterator it = graph.getNodes();
-      while (it.hasNext()) {
-        int node = it.nextInt();
-        sb.append("  ").append(node).append(" -> ");
-        view.seek(node);
-        while (true) {
-          int neighbor = view.nextNeighbor();
-          if (neighbor == NO_MORE_DOCS) {
-            break;
-          }
-          sb.append(" ").append(neighbor);
+    NodesIterator it = graph.getNodes();
+    while (it.hasNext()) {
+      int node = it.nextInt();
+      sb.append("  ").append(node).append(" -> ");
+      view.seek(node);
+      while (true) {
+        int neighbor = view.nextNeighbor();
+        if (neighbor == NO_MORE_DOCS) {
+          break;
         }
-        sb.append("\n");
+        sb.append(" ").append(neighbor);
       }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+      sb.append("\n");
     }
 
     return sb.toString();

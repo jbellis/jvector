@@ -58,7 +58,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   @Test
-  public void testInsertAndSize() throws IOException {
+  public void testInsertAndSize() {
     ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 2, simpleScore);
     neighbors.insert(1, baseScore(1));
     neighbors.insert(2, baseScore(2));
@@ -70,7 +70,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   @Test
-  public void testRemoveLeastDiverseFromEnd() throws IOException {
+  public void testRemoveLeastDiverseFromEnd() {
     // start with 3 neighbors
     ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 3, simpleScore);
     neighbors.insert(1, baseScore(1));

@@ -299,11 +299,7 @@ public class ConcurrentNeighborSet {
 
   private void enforceMaxConnLimit(NeighborArray neighbors) {
     if (neighbors.size() > maxConnections) {
-      try {
-        removeLeastDiverse(neighbors, neighbors.size() - maxConnections);
-      } catch (IOException e) {
-        throw new UncheckedIOException(e); // called from closures
-      }
+      removeLeastDiverse(neighbors, neighbors.size() - maxConnections);
     }
   }
 
@@ -312,7 +308,7 @@ public class ConcurrentNeighborSet {
    * all nodes e2 that are closer to the base node than e1 is. If any e2 is closer to e1 than e1 is
    * to the base node, remove e1.
    */
-  private void removeLeastDiverse(NeighborArray neighbors, int n) throws IOException {
+  private void removeLeastDiverse(NeighborArray neighbors, int n) {
     for (int i = neighbors.size() - 1; i >= 1 && n > 0; i--) {
       int e1Id = neighbors.node[i];
       float baseScore = neighbors.score[i];

@@ -70,7 +70,7 @@ abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T
   @Override
   public abstract AbstractMockVectorValues<T> copy();
 
-  public abstract T vectorValue() throws IOException;
+  public abstract T vectorValue();
 
   private boolean seek(int target) {
     if (target >= 0 && target < values.length && values[target] != null) {
