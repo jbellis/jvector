@@ -123,68 +123,6 @@ public class TestNeighborArray extends RandomizedTest {
     assertNodesEqual(new int[] {8, 0, 6, 7}, neighbors);
   }
 
-  @Test
-  public void testSortAsc() {
-    NeighborArray neighbors = new NeighborArray(10, false);
-    neighbors.addOutOfOrder(1, 2);
-    // we disallow calling addInOrder after addOutOfOrder even if they're actual in order
-    assertThrows(AssertionError.class, () -> neighbors.addInOrder(1, 2));
-    neighbors.addOutOfOrder(2, 3);
-    neighbors.addOutOfOrder(5, 6);
-    neighbors.addOutOfOrder(3, 4);
-    neighbors.addOutOfOrder(7, 8);
-    neighbors.addOutOfOrder(6, 7);
-    neighbors.addOutOfOrder(4, 5);
-    int[] unchecked = neighbors.sort();
-    assertArrayEquals(new int[] {0, 1, 2, 3, 4, 5, 6}, unchecked);
-    assertNodesEqual(new int[] {1, 2, 3, 4, 5, 6, 7}, neighbors);
-    assertScoresEqual(new float[] {2, 3, 4, 5, 6, 7, 8}, neighbors);
-
-    NeighborArray neighbors2 = new NeighborArray(10, false);
-    neighbors2.addInOrder(0, 1);
-    neighbors2.addInOrder(1, 2);
-    neighbors2.addInOrder(4, 5);
-    neighbors2.addOutOfOrder(2, 3);
-    neighbors2.addOutOfOrder(6, 7);
-    neighbors2.addOutOfOrder(5, 6);
-    neighbors2.addOutOfOrder(3, 4);
-    unchecked = neighbors2.sort();
-    assertArrayEquals(new int[] {2, 3, 5, 6}, unchecked);
-    assertNodesEqual(new int[] {0, 1, 2, 3, 4, 5, 6}, neighbors2);
-    assertScoresEqual(new float[] {1, 2, 3, 4, 5, 6, 7}, neighbors2);
-  }
-
-  @Test
-  public void testSortDesc() {
-    NeighborArray neighbors = new NeighborArray(10, true);
-    neighbors.addOutOfOrder(1, 7);
-    // we disallow calling addInOrder after addOutOfOrder even if they're actual in order
-    assertThrows(AssertionError.class, () -> neighbors.addInOrder(1, 2));
-    neighbors.addOutOfOrder(2, 6);
-    neighbors.addOutOfOrder(5, 3);
-    neighbors.addOutOfOrder(3, 5);
-    neighbors.addOutOfOrder(7, 1);
-    neighbors.addOutOfOrder(6, 2);
-    neighbors.addOutOfOrder(4, 4);
-    int[] unchecked = neighbors.sort();
-    assertArrayEquals(new int[] {0, 1, 2, 3, 4, 5, 6}, unchecked);
-    assertNodesEqual(new int[] {1, 2, 3, 4, 5, 6, 7}, neighbors);
-    assertScoresEqual(new float[] {7, 6, 5, 4, 3, 2, 1}, neighbors);
-
-    NeighborArray neighbors2 = new NeighborArray(10, true);
-    neighbors2.addInOrder(1, 7);
-    neighbors2.addInOrder(2, 6);
-    neighbors2.addInOrder(5, 3);
-    neighbors2.addOutOfOrder(3, 5);
-    neighbors2.addOutOfOrder(7, 1);
-    neighbors2.addOutOfOrder(6, 2);
-    neighbors2.addOutOfOrder(4, 4);
-    unchecked = neighbors2.sort();
-    assertArrayEquals(new int[] {2, 3, 5, 6}, unchecked);
-    assertNodesEqual(new int[] {1, 2, 3, 4, 5, 6, 7}, neighbors2);
-    assertScoresEqual(new float[] {7, 6, 5, 4, 3, 2, 1}, neighbors2);
-  }
-
   private void assertScoresEqual(float[] scores, NeighborArray neighbors) {
     for (int i = 0; i < scores.length; i++) {
       assertEquals(scores[i], neighbors.score[i], 0.01f);

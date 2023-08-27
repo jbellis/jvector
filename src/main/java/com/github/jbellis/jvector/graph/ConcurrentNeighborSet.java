@@ -374,8 +374,8 @@ public class ConcurrentNeighborSet {
       }
       int insertionPoint =
           scoresDescOrder
-              ? descSortFindRightMostInsertionPoint(newScore, size)
-              : ascSortFindRightMostInsertionPoint(newScore, size);
+              ? descSortFindRightMostInsertionPoint(newScore)
+              : ascSortFindRightMostInsertionPoint(newScore);
       if (!duplicateExistsNear(insertionPoint, newNode, newScore)) {
         System.arraycopy(node, insertionPoint, node, insertionPoint + 1, size - insertionPoint);
         System.arraycopy(score, insertionPoint, score, insertionPoint + 1, size - insertionPoint);
