@@ -47,7 +47,6 @@ public class GraphIndexBuilder<T> {
   private final VectorSimilarityFunction similarityFunction;
   private final float neighborOverflow;
   private final VectorEncoding vectorEncoding;
-  private final ThreadLocal<RandomAccessVectorValues<T>> vectors;
   private final ThreadLocal<GraphSearcher> graphSearcher;
   private final ThreadLocal<NeighborQueue> beamCandidates;
 
@@ -55,8 +54,11 @@ public class GraphIndexBuilder<T> {
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
           new ConcurrentSkipListSet<>();
 
-  // we need two sources of vectors in order to perform diversity check comparisons without
-  // colliding
+  // We need two sources of vectors in order to perform diversity check comparisons without
+  // colliding.  Usually it's obvious because you can see the different sources being used
+  // in the same method.  The only tricky place is in addGraphNode, which uses `vectors` immediately,
+  // and `vectorsCopy` later on when defining the ScoreFunction for search.
+  private final ThreadLocal<RandomAccessVectorValues<T>> vectors;
   private final ThreadLocal<RandomAccessVectorValues<T>> vectorsCopy;
 
   /**
@@ -104,11 +106,8 @@ public class GraphIndexBuilder<T> {
 
               @Override
               public ScoreFunction scoreProvider(int node1) {
-                T v1;
-                v1 = vectors.get().vectorValue(node1);
-                return node2 -> {
-                  return scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
-                };
+                T v1 = vectors.get().vectorValue(node1);
+                return node2 -> scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
               }
             };
     this.graph =
@@ -181,7 +180,7 @@ public class GraphIndexBuilder<T> {
       int ep = graph.entry();
       var gs = new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build(); // TODO cache these (but not with the same View)
       NeighborSimilarity.ScoreFunction scoreFunction = (i) -> scoreBetween(
-              vectors.get().vectorValue(i), value);
+              vectorsCopy.get().vectorValue(i), value);
 
       var bits = new ExcludingBits(node);
       NeighborQueue candidates = beamCandidates.get();
