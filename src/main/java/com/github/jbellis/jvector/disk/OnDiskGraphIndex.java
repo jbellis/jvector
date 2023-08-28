@@ -79,19 +79,14 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable
             this.reader = reader;
         }
 
-        @Override
-        public void seek(int target) {
+        public Object getVector(int node) {
             // TODO
+            return null;
         }
 
-        @Override
-        public int nextNeighbor()
-        {
-            if (currentNeighborsRead++ < currentNeighbors.length)
-            {
-                return currentNeighbors[currentNeighborsRead - 1];
-            }
-            return NO_MORE_NEIGHBORS;
+        public NodesIterator getNeighborsIterator(int node) {
+            // TODO
+            return null;
         }
 
         @Override

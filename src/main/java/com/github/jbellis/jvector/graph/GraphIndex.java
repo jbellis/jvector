@@ -39,22 +39,21 @@ public interface GraphIndex {
    */
   View getView();
 
-  interface View {
+  interface View<T> {
     /**
-     * Move the pointer to exactly the given {@code level}'s {@code target}. After this method
-     * returns, call {@link #nextNeighbor()} to return successive (ordered) connected node ordinals.
-     *
-     * @param target ordinal of a node in the graph, must be &ge; 0 and &lt;.
+     * Retrieve the vector associated with a given node.
+     * <p/>
+     * This will only be called when a search is performed using approximate similarities.
+     * In that situation, we will want to reorder the results by the exact similarity
+     * at the end of the search.
      */
-    void seek(int target);
+    T getVector(int node);
 
     /**
-     * Iterates over the neighbor list. It is illegal to call this method after it returns
-     * NO_MORE_DOCS without calling {@link #seek(int)}, which resets the iterator.
-     *
-     * @return a node ordinal in the graph, or NO_MORE_DOCS if the iteration is complete.
+     * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
+     * is guaranteed to be valid.
      */
-    int nextNeighbor();
+    NodesIterator getNeighborsIterator(int node);
 
     int size();
 
@@ -71,13 +70,8 @@ public interface GraphIndex {
     while (it.hasNext()) {
       int node = it.nextInt();
       sb.append("  ").append(node).append(" -> ");
-      view.seek(node);
-      while (true) {
-        int neighbor = view.nextNeighbor();
-        if (neighbor == NO_MORE_NEIGHBORS) {
-          break;
-        }
-        sb.append(" ").append(neighbor);
+      for (var neighbors = view.getNeighborsIterator(node); neighbors.hasNext(); ) {
+        sb.append(" ").append(neighbors.nextInt());
       }
       sb.append("\n");
     }

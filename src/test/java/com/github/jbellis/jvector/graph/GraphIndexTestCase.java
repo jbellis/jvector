@@ -99,8 +99,6 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var hv = h.getView();
     while (nodesOnLevel.hasNext()) {
       int node = nodesOnLevel.nextInt();
-      gv.seek(node);
-      hv.seek(node);
       assertEquals(
               String.format(
                       Locale.ROOT,
@@ -108,8 +106,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                       node,
                       prettyG,
                       prettyH),
-              getNeighborNodes(gv),
-              getNeighborNodes(hv));
+              getNeighborNodes(gv, node),
+              getNeighborNodes(hv, node));
     }
   }
 
@@ -625,9 +623,10 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     };
   }
 
-  private Set<Integer> getNeighborNodes(GraphIndex.View g) throws IOException {
+  private Set<Integer> getNeighborNodes(GraphIndex.View g, int node) throws IOException {
     Set<Integer> neighbors = new HashSet<>();
-    for (int n = g.nextNeighbor(); n != NO_MORE_NEIGHBORS; n = g.nextNeighbor()) {
+    for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
+      int n = it.nextInt();
       neighbors.add(n);
     }
     return neighbors;

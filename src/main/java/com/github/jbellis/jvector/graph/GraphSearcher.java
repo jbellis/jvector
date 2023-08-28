@@ -24,8 +24,6 @@ import com.github.jbellis.jvector.util.GrowableBitSet;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
-
 /**
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
  * search algorithm, see {@link GraphIndex}.
@@ -152,9 +150,8 @@ public class GraphSearcher {
       }
 
       int topCandidateNode = candidates.pop();
-      view.seek(topCandidateNode);
-      int friendOrd;
-      while ((friendOrd = view.nextNeighbor()) != NO_MORE_NEIGHBORS) {
+      for (var it = view.getNeighborsIterator(topCandidateNode); it.hasNext(); ) {
+        int friendOrd = it.nextInt();
         if (visited.getAndSet(friendOrd)) {
           continue;
         }

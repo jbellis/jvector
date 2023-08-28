@@ -69,9 +69,7 @@ public class ConcurrentNeighborSet {
     neighborsRef = new AtomicReference<>(old.neighborsRef.get());
   }
 
-  public PrimitiveIterator.OfInt nodeIterator() {
-    // don't use a stream here. stream's implementation of iterator buffers
-    // very aggressively, which is a big waste for a lot of searches.
+  public NodesIterator nodeIterator() {
     return new NeighborIterator(neighborsRef.get());
   }
 
@@ -97,11 +95,12 @@ public class ConcurrentNeighborSet {
         });
   }
 
-  private static class NeighborIterator implements PrimitiveIterator.OfInt {
+  private static class NeighborIterator extends NodesIterator {
     private final NeighborArray neighbors;
     private int i;
 
     private NeighborIterator(NeighborArray neighbors) {
+      super(neighbors.size());
       this.neighbors = neighbors;
       i = 0;
     }

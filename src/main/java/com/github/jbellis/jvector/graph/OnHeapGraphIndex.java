@@ -236,16 +236,12 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
   }
 
   private class ConcurrentGraphIndexView implements GraphIndex.View {
-    private PrimitiveIterator.OfInt remainingNeighbors;
-
-    @Override
-    public void seek(int targetNode) {
-      remainingNeighbors = getNeighbors(targetNode).nodeIterator();
+    public Object getVector(int node) {
+      throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
     }
 
-    @Override
-    public int nextNeighbor() {
-      return remainingNeighbors.hasNext() ? remainingNeighbors.nextInt() : NO_MORE_NEIGHBORS;
+    public NodesIterator getNeighborsIterator(int node) {
+      return getNeighbors(node).nodeIterator();
     }
 
     @Override
