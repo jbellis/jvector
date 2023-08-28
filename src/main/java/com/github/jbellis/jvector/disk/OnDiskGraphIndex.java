@@ -22,8 +22,6 @@ import com.github.jbellis.jvector.annotations.VisibleForTesting;
 import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.graph.NodesIterator;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
-
 import java.io.IOException;
 import java.util.Arrays;
 
@@ -122,5 +120,3 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
         readerSupplier.close();
     }
 }
-
-

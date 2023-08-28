@@ -8,7 +8,6 @@ import java.util.PrimitiveIterator;
  * particular order.
  */
 public abstract class NodesIterator implements PrimitiveIterator.OfInt {
-    public static final int NO_MORE_NEIGHBORS = Integer.MAX_VALUE;
     protected final int size;
 
     /**

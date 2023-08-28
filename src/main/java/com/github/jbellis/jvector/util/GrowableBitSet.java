@@ -17,8 +17,6 @@
 
 package com.github.jbellis.jvector.util;
 
-import com.github.jbellis.jvector.graph.NodesIterator;
-
 /**
  * A {@link BitSet} implementation that grows as needed to accommodate set(index) calls. When it
  * does so, it will grow its internal storage multiplicatively, assuming that more growth will be
@@ -99,7 +97,7 @@ public class GrowableBitSet extends BitSet {
   public int nextSetBit(int i) {
     int next = bitSet.nextSetBit(i);
     if (next == -1) {
-      next = NodesIterator.NO_MORE_NEIGHBORS;
+      next = DocIdSetIterator.NO_MORE_DOCS;
     }
     return next;
   }

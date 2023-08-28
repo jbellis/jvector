@@ -25,8 +25,6 @@ import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
-
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
  * speedups in construction and searching as you add threads.

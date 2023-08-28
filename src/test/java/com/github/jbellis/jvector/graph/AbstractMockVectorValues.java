@@ -19,7 +19,9 @@ package com.github.jbellis.jvector.graph;
 
 import com.github.jbellis.jvector.util.BytesRef;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
+import java.io.IOException;
+
+import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T> {
 
@@ -93,6 +95,6 @@ abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T
         return pos;
       }
     }
-    return NO_MORE_NEIGHBORS;
+    return NO_MORE_DOCS;
   }
 }

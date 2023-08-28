@@ -27,10 +27,8 @@ import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import com.github.jbellis.jvector.vector.VectorUtil;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.*;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -625,31 +623,6 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
       neighbors.add(n);
     }
     return neighbors;
-  }
-
-  void assertVectorsEqual(AbstractMockVectorValues<T> u, AbstractMockVectorValues<T> v) {
-    int uDoc, vDoc;
-    while (true) {
-      uDoc = u.nextDoc();
-      vDoc = v.nextDoc();
-      assertEquals(uDoc, vDoc);
-      if (uDoc == NO_MORE_NEIGHBORS) {
-        break;
-      }
-      switch (getVectorEncoding()) {
-        case BYTE -> assertArrayEquals(
-            "vectors do not match for doc=" + uDoc,
-            (byte[]) u.vectorValue(),
-            (byte[]) v.vectorValue());
-        case FLOAT32 -> assertArrayEquals(
-            "vectors do not match for doc=" + uDoc,
-            (float[]) u.vectorValue(),
-            (float[]) v.vectorValue(),
-            1e-4f);
-        default -> throw new IllegalArgumentException(
-            "unknown vector encoding: " + getVectorEncoding());
-      }
-    }
   }
 
   static float[][] createRandomFloatVectors(int size, int dimension, Random random) {

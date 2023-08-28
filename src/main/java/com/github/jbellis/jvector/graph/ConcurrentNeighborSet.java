@@ -17,15 +17,13 @@
 
 package com.github.jbellis.jvector.graph;
 
-import com.github.jbellis.jvector.util.BitSet;
-import com.github.jbellis.jvector.util.FixedBitSet;
-
-import java.util.Arrays;
-import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
+import com.github.jbellis.jvector.util.BitSet;
+import com.github.jbellis.jvector.util.FixedBitSet;
+
+import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 /** A concurrent set of neighbors. */
 public class ConcurrentNeighborSet {
@@ -276,7 +274,7 @@ public class ConcurrentNeighborSet {
     }
 
     NeighborSimilarity.ScoreFunction scoreProvider = similarity.scoreProvider(node);
-    for (int i = selected.nextSetBit(0); i != NO_MORE_NEIGHBORS; i = selected.nextSetBit(i + 1)) {
+    for (int i = selected.nextSetBit(0); i != NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
       int otherNode = others.node()[i];
       if (node == otherNode) {
         break;

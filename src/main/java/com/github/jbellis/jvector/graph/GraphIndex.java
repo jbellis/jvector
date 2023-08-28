@@ -19,8 +19,6 @@ package com.github.jbellis.jvector.graph;
 
 import java.util.Arrays;
 
-import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
-
 /**
  * TODO: add javadoc
  */

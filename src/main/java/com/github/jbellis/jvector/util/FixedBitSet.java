@@ -18,8 +18,6 @@ package com.github.jbellis.jvector.util;
 
 import java.util.Arrays;
 
-import com.github.jbellis.jvector.graph.NodesIterator;
-
 /**
  * BitSet of fixed length (numBits), backed by accessible ({@link #getBits}) long[], accessed with
  * an int index, implementing {@link Bits}.
@@ -275,7 +273,7 @@ public final class FixedBitSet extends BitSet {
             }
         }
 
-        return NodesIterator.NO_MORE_NEIGHBORS;
+        return DocIdSetIterator.NO_MORE_DOCS;
     }
 
     @Override

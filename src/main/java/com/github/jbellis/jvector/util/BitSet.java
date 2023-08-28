@@ -16,8 +16,6 @@
  */
 package com.github.jbellis.jvector.util;
 
-import com.github.jbellis.jvector.graph.NodesIterator;
-
 /**
  * Base implementation for a bit set.
  */
@@ -67,7 +65,7 @@ public abstract class BitSet implements Bits {
 
   /**
    * Returns the index of the first set bit starting at the index specified. {@link
-   * NodesIterator#NO_MORE_NEIGHBORS} is returned if there are no more set bits.
+   * DocIdSetIterator#NO_MORE_DOCS} is returned if there are no more set bits.
    */
   public abstract int nextSetBit(int index);
 }
