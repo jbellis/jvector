@@ -406,9 +406,7 @@ public final class RamUsageEstimator {
     return alignObjectSize(size);
   }
 
-  // Extracted to a method to give the SuppressForbidden annotation the smallest possible scope
   @SuppressWarnings("removal")
-  @SuppressForbidden(reason = "security manager")
   private static <T> T doPrivileged(PrivilegedAction<T> action) {
     return AccessController.doPrivileged(action);
   }

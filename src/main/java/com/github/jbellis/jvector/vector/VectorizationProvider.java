@@ -17,8 +17,6 @@
 
 package com.github.jbellis.jvector.vector;
 
-import com.github.jbellis.jvector.util.SuppressForbidden;
-
 import java.lang.Runtime.Version;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -142,7 +140,6 @@ public abstract class VectorizationProvider {
   }
 
   @SuppressWarnings("removal")
-  @SuppressForbidden(reason = "security manager")
   private static boolean isClientVM() {
     try {
       final PrivilegedAction<Boolean> action =
