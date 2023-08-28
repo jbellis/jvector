@@ -34,7 +34,7 @@ import static org.junit.Assert.*;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
   private static final NeighborSimilarity simpleScore = a -> {
-    return b -> VectorSimilarityFunction.EUCLIDEAN.compare(new float[] { a }, new float[] { b });
+    return (NeighborSimilarity.ExactScoreFunction) b -> VectorSimilarityFunction.EUCLIDEAN.compare(new float[] { a }, new float[] { b });
   };
 
   private static float baseScore(int neighbor) {
@@ -90,7 +90,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var vectorsCopy = vectors.copy();
     var candidates = new NeighborArray(10, true);
     NeighborSimilarity scoreBetween = a -> {
-      return b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+      return (NeighborSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     };
     IntStream.range(0, 10)
         .filter(i -> i != 7)
@@ -117,7 +117,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var natural = new NeighborArray(10, true);
     var concurrent = new NeighborArray(10, true);
     NeighborSimilarity scoreBetween = a -> {
-      return b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+      return (NeighborSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     };
     IntStream.range(0, 7)
         .forEach(

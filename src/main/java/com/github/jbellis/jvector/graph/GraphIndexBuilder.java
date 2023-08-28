@@ -98,7 +98,7 @@ public class GraphIndexBuilder<T> {
 
     NeighborSimilarity similarity = node1 -> {
       T v1 = vectors.get().vectorValue(node1);
-      return node2 -> scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
+      return (NeighborSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
     };
     this.graph =
             new OnHeapGraphIndex<>(

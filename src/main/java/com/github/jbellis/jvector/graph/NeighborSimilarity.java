@@ -28,10 +28,35 @@ public interface NeighborSimilarity {
    * For when we're going to compare node1 with multiple other nodes. This allows us to skip loading
    * node1's vector (potentially from disk) redundantly for each comparison.
    */
-  ExactScoreFunction scoreProvider(int node1);
+  ScoreFunction scoreProvider(int node1);
 
-  @FunctionalInterface
-  interface ExactScoreFunction {
+  /**
+   * Provides an API for encapsulating similarity to another node or vector.  Used both for
+   * building the graph (as part of NeighborSimilarity) or for searching it (used standalone,
+   * with a reference to the query vector).
+   * <p/>
+   * ExactScoreFunction and ApproximateScoreFunction are provided for convenience so they
+   * can be defined as a simple lambda.
+   */
+  interface ScoreFunction {
+    boolean isExact();
+
+    float similarityTo(int node2);
+  }
+
+  interface ExactScoreFunction extends ScoreFunction {
+    default boolean isExact() {
+      return true;
+    }
+
+    float similarityTo(int node2);
+  }
+
+  interface ApproximateScoreFunction extends ScoreFunction {
+    default boolean isExact() {
+      return false;
+    }
+
     float similarityTo(int node2);
   }
 }
