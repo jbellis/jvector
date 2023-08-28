@@ -77,7 +77,6 @@ public class ConcurrentNeighborSet {
 
   public void backlink(Function<Integer, ConcurrentNeighborSet> neighborhoodOf, float overflow) {
     NeighborArray neighbors = neighborsRef.get();
-    System.out.println("Backlinking " + nodeId + " -> " + Arrays.toString(neighbors.copyDenseNodes()));
     for (int i = 0; i < neighbors.size(); i++) {
       int nbr = neighbors.node[i];
       float nbrScore = neighbors.score[i];
