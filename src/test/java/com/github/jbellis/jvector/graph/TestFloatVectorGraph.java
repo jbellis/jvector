@@ -22,11 +22,10 @@ import com.github.jbellis.jvector.util.FixedBitSet;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
-import org.junit.Test;
 
 import java.io.IOException;
 
-import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -74,7 +73,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
     }
 
     int currentDoc;
-    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != NO_MORE_DOCS) {
+    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != NO_MORE_NEIGHBORS) {
       vectors[pregeneratedOffset + currentDoc] = pregeneratedVectorValues.values[currentDoc];
     }
 

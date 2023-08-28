@@ -17,7 +17,7 @@
 
 package com.github.jbellis.jvector.graph;
 
-import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 
 /**
  * TODO: add javadoc
@@ -89,7 +89,7 @@ public interface GraphIndex {
       view.seek(node);
       while (true) {
         int neighbor = view.nextNeighbor();
-        if (neighbor == NO_MORE_DOCS) {
+        if (neighbor == NO_MORE_NEIGHBORS) {
           break;
         }
         sb.append(" ").append(neighbor);

@@ -22,7 +22,7 @@ import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
 
-import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 
 /** Tests KNN graphs */
 public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
@@ -87,7 +87,7 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
     }
 
     int currentDoc;
-    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != NO_MORE_DOCS) {
+    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != NO_MORE_NEIGHBORS) {
       vectors[pregeneratedOffset + currentDoc] = pregeneratedVectorValues.values[currentDoc];
     }
 

@@ -21,13 +21,11 @@ import com.github.jbellis.jvector.util.Accountable;
 import com.github.jbellis.jvector.util.RamUsageEstimator;
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
-import java.util.Map;
 import java.util.PrimitiveIterator;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
-import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
@@ -234,7 +232,7 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
 
     @Override
     public int nextNeighbor() {
-      return remainingNeighbors.hasNext() ? remainingNeighbors.nextInt() : NO_MORE_DOCS;
+      return remainingNeighbors.hasNext() ? remainingNeighbors.nextInt() : NO_MORE_NEIGHBORS;
     }
 
     @Override

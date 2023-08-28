@@ -30,7 +30,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.*;
 
-import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -627,7 +627,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
   private Set<Integer> getNeighborNodes(GraphIndex.View g) throws IOException {
     Set<Integer> neighbors = new HashSet<>();
-    for (int n = g.nextNeighbor(); n != NO_MORE_DOCS; n = g.nextNeighbor()) {
+    for (int n = g.nextNeighbor(); n != NO_MORE_NEIGHBORS; n = g.nextNeighbor()) {
       neighbors.add(n);
     }
     return neighbors;
@@ -640,7 +640,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
       uDoc = u.nextDoc();
       vDoc = v.nextDoc();
       assertEquals(uDoc, vDoc);
-      if (uDoc == NO_MORE_DOCS) {
+      if (uDoc == NO_MORE_NEIGHBORS) {
         break;
       }
       switch (getVectorEncoding()) {
