@@ -20,7 +20,9 @@ package com.github.jbellis.jvector.graph;
 /** Encapsulates comparing node distances for diversity checks. */
 public interface NeighborSimilarity {
   /** for one-off comparisons between nodes */
-  float score(int node1, int node2);
+  default float score(int node1, int node2) {
+    return scoreProvider(node1).apply(node2);
+  }
 
   /**
    * For when we're going to compare node1 with multiple other nodes. This allows us to skip loading

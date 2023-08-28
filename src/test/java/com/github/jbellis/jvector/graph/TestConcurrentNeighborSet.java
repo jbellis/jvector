@@ -17,7 +17,6 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -34,18 +33,9 @@ import static com.github.jbellis.jvector.graph.ConcurrentNeighborSet.mergeNeighb
 import static org.junit.Assert.*;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
-  private static final NeighborSimilarity simpleScore =
-      new NeighborSimilarity() {
-        @Override
-        public float score(int a, int b) {
-          return VectorSimilarityFunction.EUCLIDEAN.compare(new float[] {a}, new float[] {b});
-        }
-
-        @Override
-        public ScoreFunction scoreProvider(int a) {
-          return b -> score(a, b);
-        }
-      };
+  private static final NeighborSimilarity simpleScore = a -> {
+    return b -> VectorSimilarityFunction.EUCLIDEAN.compare(new float[] { a }, new float[] { b });
+  };
 
   private static float baseScore(int neighbor) {
     return simpleScore.score(0, neighbor);
@@ -99,18 +89,9 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var candidates = new NeighborArray(10, true);
-    NeighborSimilarity scoreBetween =
-        new NeighborSimilarity() {
-          @Override
-          public float score(int a, int b) {
-            return similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
-          }
-
-          @Override
-          public ScoreFunction scoreProvider(int a) {
-            return b -> score(a, b);
-          }
-        };
+    NeighborSimilarity scoreBetween = a -> {
+      return b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    };
     IntStream.range(0, 10)
         .filter(i -> i != 7)
         .forEach(
@@ -135,18 +116,9 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var vectorsCopy = vectors.copy();
     var natural = new NeighborArray(10, true);
     var concurrent = new NeighborArray(10, true);
-    NeighborSimilarity scoreBetween =
-        new NeighborSimilarity() {
-          @Override
-          public float score(int a, int b) {
-            return similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
-          }
-
-          @Override
-          public ScoreFunction scoreProvider(int a) {
-            return b -> score(a, b);
-          }
-        };
+    NeighborSimilarity scoreBetween = a -> {
+      return b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    };
     IntStream.range(0, 7)
         .forEach(
             i -> {

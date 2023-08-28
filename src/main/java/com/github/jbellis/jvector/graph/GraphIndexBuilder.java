@@ -96,20 +96,10 @@ public class GraphIndexBuilder<T> {
     }
     this.beamWidth = beamWidth;
 
-    NeighborSimilarity similarity =
-            new NeighborSimilarity() {
-              @Override
-              public float score(int node1, int node2) {
-                return scoreBetween(
-                        vectors.get().vectorValue(node1), vectorsCopy.get().vectorValue(node2));
-              }
-
-              @Override
-              public ScoreFunction scoreProvider(int node1) {
-                T v1 = vectors.get().vectorValue(node1);
-                return node2 -> scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
-              }
-            };
+    NeighborSimilarity similarity = node1 -> {
+      T v1 = vectors.get().vectorValue(node1);
+      return node2 -> scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
+    };
     this.graph =
             new OnHeapGraphIndex<>(
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
