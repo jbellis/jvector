@@ -37,19 +37,6 @@ public final class ArrayUtil {
   */
 
   /**
-   * Parses a char array into an int.
-   *
-   * @param chars the character array
-   * @param offset The offset into the array
-   * @param len The length
-   * @return the int
-   * @throws NumberFormatException if it can't parse
-   */
-  public static int parseInt(char[] chars, int offset, int len) throws NumberFormatException {
-    return parseInt(chars, offset, len, 10);
-  }
-
-  /**
    * Parses the string argument as if it was an int value and returns the result. Throws
    * NumberFormatException if the string does not represent an int quantity. The second argument
    * specifies the radix to use when parsing the value.
@@ -222,11 +209,6 @@ public final class ArrayUtil {
     return copy;
   }
 
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static <T> T[] grow(T[] array) {
-    return grow(array, 1 + array.length);
-  }
-
   /**
    * Returns an array whose size is at least {@code minSize}, generally over-allocating
    * exponentially
@@ -259,11 +241,6 @@ public final class ArrayUtil {
     } else return array;
   }
 
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static short[] grow(short[] array) {
-    return grow(array, 1 + array.length);
-  }
-
   /**
    * Returns a new array whose size is exact the specified {@code newLength} without over-allocating
    */
@@ -286,11 +263,6 @@ public final class ArrayUtil {
     } else return array;
   }
 
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static float[] grow(float[] array) {
-    return grow(array, 1 + array.length);
-  }
-
   /**
    * Returns a new array whose size is exact the specified {@code newLength} without over-allocating
    */
@@ -311,11 +283,6 @@ public final class ArrayUtil {
     } else return array;
   }
 
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static double[] grow(double[] array) {
-    return grow(array, 1 + array.length);
-  }
-
   /**
    * Returns a new array whose size is exact the specified {@code newLength} without over-allocating
    */
@@ -333,17 +300,6 @@ public final class ArrayUtil {
     assert minSize >= 0 : "size must be positive (got " + minSize + "): likely integer overflow?";
     if (array.length < minSize) {
       return growExact(array, oversize(minSize, Integer.BYTES));
-    } else return array;
-  }
-
-  /**
-   * Returns an array whose size is at least {@code minSize}, generally over-allocating
-   * exponentially, and it will not copy the origin data to the new array
-   */
-  public static int[] growNoCopy(int[] array, int minSize) {
-    assert minSize >= 0 : "size must be positive (got " + minSize + "): likely integer overflow?";
-    if (array.length < minSize) {
-      return new int[oversize(minSize, Integer.BYTES)];
     } else return array;
   }
 
@@ -373,22 +329,6 @@ public final class ArrayUtil {
   }
 
   /**
-   * Returns an array whose size is at least {@code minSize}, generally over-allocating
-   * exponentially, and it will not copy the origin data to the new array
-   */
-  public static long[] growNoCopy(long[] array, int minSize) {
-    assert minSize >= 0 : "size must be positive (got " + minSize + "): likely integer overflow?";
-    if (array.length < minSize) {
-      return new long[oversize(minSize, Long.BYTES)];
-    } else return array;
-  }
-
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static long[] grow(long[] array) {
-    return grow(array, 1 + array.length);
-  }
-
-  /**
    * Returns a new array whose size is exact the specified {@code newLength} without over-allocating
    */
   public static byte[] growExact(byte[] array, int newLength) {
@@ -406,22 +346,6 @@ public final class ArrayUtil {
     if (array.length < minSize) {
       return growExact(array, oversize(minSize, Byte.BYTES));
     } else return array;
-  }
-
-  /**
-   * Returns an array whose size is at least {@code minSize}, generally over-allocating
-   * exponentially, and it will not copy the origin data to the new array
-   */
-  public static byte[] growNoCopy(byte[] array, int minSize) {
-    assert minSize >= 0 : "size must be positive (got " + minSize + "): likely integer overflow?";
-    if (array.length < minSize) {
-      return new byte[oversize(minSize, Byte.BYTES)];
-    } else return array;
-  }
-
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static byte[] grow(byte[] array) {
-    return grow(array, 1 + array.length);
   }
 
   /**
@@ -444,25 +368,6 @@ public final class ArrayUtil {
     } else return array;
   }
 
-  /** Returns a larger array, generally over-allocating exponentially */
-  public static char[] grow(char[] array) {
-    return grow(array, 1 + array.length);
-  }
-
-  /** Returns hash of chars in range start (inclusive) to end (inclusive) */
-  public static int hashCode(char[] array, int start, int end) {
-    int code = 0;
-    for (int i = end - 1; i >= start; i--) code = code * 31 + array[i];
-    return code;
-  }
-
-  /** Swap values stored in slots <code>i</code> and <code>j</code> */
-  public static <T> void swap(T[] arr, int i, int j) {
-    final T tmp = arr[i];
-    arr[i] = arr[j];
-    arr[j] = tmp;
-  }
-
   /**
    * Copies the specified range of the given array into a new sub array.
    *
@@ -472,32 +377,6 @@ public final class ArrayUtil {
    */
   public static byte[] copyOfSubArray(byte[] array, int from, int to) {
     final byte[] copy = new byte[to - from];
-    System.arraycopy(array, from, copy, 0, to - from);
-    return copy;
-  }
-
-  /**
-   * Copies the specified range of the given array into a new sub array.
-   *
-   * @param array the input array
-   * @param from the initial index of range to be copied (inclusive)
-   * @param to the final index of range to be copied (exclusive)
-   */
-  public static char[] copyOfSubArray(char[] array, int from, int to) {
-    final char[] copy = new char[to - from];
-    System.arraycopy(array, from, copy, 0, to - from);
-    return copy;
-  }
-
-  /**
-   * Copies the specified range of the given array into a new sub array.
-   *
-   * @param array the input array
-   * @param from the initial index of range to be copied (inclusive)
-   * @param to the final index of range to be copied (exclusive)
-   */
-  public static short[] copyOfSubArray(short[] array, int from, int to) {
-    final short[] copy = new short[to - from];
     System.arraycopy(array, from, copy, 0, to - from);
     return copy;
   }
@@ -522,34 +401,8 @@ public final class ArrayUtil {
    * @param from the initial index of range to be copied (inclusive)
    * @param to the final index of range to be copied (exclusive)
    */
-  public static long[] copyOfSubArray(long[] array, int from, int to) {
-    final long[] copy = new long[to - from];
-    System.arraycopy(array, from, copy, 0, to - from);
-    return copy;
-  }
-
-  /**
-   * Copies the specified range of the given array into a new sub array.
-   *
-   * @param array the input array
-   * @param from the initial index of range to be copied (inclusive)
-   * @param to the final index of range to be copied (exclusive)
-   */
   public static float[] copyOfSubArray(float[] array, int from, int to) {
     final float[] copy = new float[to - from];
-    System.arraycopy(array, from, copy, 0, to - from);
-    return copy;
-  }
-
-  /**
-   * Copies the specified range of the given array into a new sub array.
-   *
-   * @param array the input array
-   * @param from the initial index of range to be copied (inclusive)
-   * @param to the final index of range to be copied (exclusive)
-   */
-  public static double[] copyOfSubArray(double[] array, int from, int to) {
-    final double[] copy = new double[to - from];
     System.arraycopy(array, from, copy, 0, to - from);
     return copy;
   }
@@ -571,42 +424,5 @@ public final class ArrayUtil {
             : (T[]) Array.newInstance(type.getComponentType(), subLength);
     System.arraycopy(array, from, copy, 0, subLength);
     return copy;
-  }
-
-  /** Comparator for a fixed number of bytes. */
-  @FunctionalInterface
-  public static interface ByteArrayComparator {
-
-    /**
-     * Compare bytes starting from the given offsets. The return value has the same contract as
-     * {@link Comparator#compare(Object, Object)}.
-     */
-    int compare(byte[] a, int aI, byte[] b, int bI);
-  }
-
-  /** Return a comparator for exactly the specified number of bytes. */
-  public static ByteArrayComparator getUnsignedComparator(int numBytes) {
-    if (numBytes == Long.BYTES) {
-      // Used by LongPoint, DoublePoint
-      return ArrayUtil::compareUnsigned8;
-    } else if (numBytes == Integer.BYTES) {
-      // Used by IntPoint, FloatPoint, LatLonPoint, LatLonShape
-      return ArrayUtil::compareUnsigned4;
-    } else {
-      return (a, aOffset, b, bOffset) ->
-          Arrays.compareUnsigned(a, aOffset, aOffset + numBytes, b, bOffset, bOffset + numBytes);
-    }
-  }
-
-  /** Compare exactly 8 unsigned bytes from the provided arrays. */
-  public static int compareUnsigned8(byte[] a, int aOffset, byte[] b, int bOffset) {
-    return Long.compareUnsigned(
-        (long) BitUtil.VH_BE_LONG.get(a, aOffset), (long) BitUtil.VH_BE_LONG.get(b, bOffset));
-  }
-
-  /** Compare exactly 4 unsigned bytes from the provided arrays. */
-  public static int compareUnsigned4(byte[] a, int aOffset, byte[] b, int bOffset) {
-    return Integer.compareUnsigned(
-        (int) BitUtil.VH_BE_INT.get(a, aOffset), (int) BitUtil.VH_BE_INT.get(b, bOffset));
   }
 }

@@ -20,35 +20,13 @@ package com.github.jbellis.jvector.util;
 public final class Constants {
   private Constants() {} // can't construct
 
-  /** JVM vendor info. */
-  public static final String JVM_VENDOR = System.getProperty("java.vm.vendor");
-
-  /** JVM vendor name. */
-  public static final String JVM_NAME = System.getProperty("java.vm.name");
-
-  /** The value of <code>System.getProperty("os.name")</code>. * */
+    /** The value of <code>System.getProperty("os.name")</code>. * */
   public static final String OS_NAME = System.getProperty("os.name");
-  /** True iff running on Linux. */
-  public static final boolean LINUX = OS_NAME.startsWith("Linux");
-  /** True iff running on Windows. */
-  public static final boolean WINDOWS = OS_NAME.startsWith("Windows");
-  /** True iff running on SunOS. */
-  public static final boolean SUN_OS = OS_NAME.startsWith("SunOS");
-  /** True iff running on Mac OS X */
-  public static final boolean MAC_OS_X = OS_NAME.startsWith("Mac OS X");
-  /** True iff running on FreeBSD */
-  public static final boolean FREE_BSD = OS_NAME.startsWith("FreeBSD");
 
-  /** The value of <code>System.getProperty("os.arch")</code>. */
+    /** The value of <code>System.getProperty("os.arch")</code>. */
   public static final String OS_ARCH = System.getProperty("os.arch");
 
-  /** The value of <code>System.getProperty("os.version")</code>. */
-  public static final String OS_VERSION = System.getProperty("os.version");
-
-  /** The value of <code>System.getProperty("java.vendor")</code>. */
-  public static final String JAVA_VENDOR = System.getProperty("java.vendor");
-
-  /** True iff running on a 64bit JVM */
+    /** True iff running on a 64bit JVM */
   public static final boolean JRE_IS_64BIT;
 
   static {

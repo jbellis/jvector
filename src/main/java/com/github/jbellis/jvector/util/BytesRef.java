@@ -45,12 +45,7 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
   /** Length of used bytes. */
   public int length;
 
-  /** Create a BytesRef with {@link #EMPTY_BYTES} */
-  public BytesRef() {
-    this(EMPTY_BYTES);
-  }
-
-  /** This instance will directly reference bytes w/o making a copy. bytes should not be null. */
+    /** This instance will directly reference bytes w/o making a copy. bytes should not be null. */
   public BytesRef(byte[] bytes, int offset, int length) {
     this.bytes = bytes;
     this.offset = offset;
@@ -71,17 +66,7 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
     this.bytes = new byte[capacity];
   }
 
-  /**
-   * Initialize the byte[] from the UTF8 bytes for the provided String.
-   *
-   * @param text This must be well-formed unicode text, with no unpaired surrogates.
-   */
-  public BytesRef(CharSequence text) {
-    this(new byte[UnicodeUtil.maxUTF8Length(text.length())]);
-    length = UnicodeUtil.UTF16toUTF8(text, 0, text.length(), bytes);
-  }
-
-  /**
+    /**
    * Expert: compares the bytes against another BytesRef, returning true if the bytes are equal.
    *
    * @param other Another BytesRef, should not be null.
@@ -119,14 +104,7 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
     return false;
   }
 
-  /** Interprets stored bytes as UTF8 bytes, returning the resulting string */
-  public String utf8ToString() {
-    final char[] ref = new char[length];
-    final int len = UnicodeUtil.UTF8toUTF16(bytes, offset, length, ref);
-    return new String(ref, 0, len);
-  }
-
-  /** Returns hex encoded bytes, eg [0x6c 0x75 0x63 0x65 0x6e 0x65] */
+    /** Returns hex encoded bytes, eg [0x6c 0x75 0x63 0x65 0x6e 0x65] */
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
@@ -154,19 +132,7 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
         other.offset + other.length);
   }
 
-  /**
-   * Creates a new BytesRef that points to a copy of the bytes from <code>other</code>
-   *
-   * <p>The returned BytesRef will have a length of other.length and an offset of zero.
-   */
-  public static BytesRef deepCopyOf(BytesRef other) {
-    return new BytesRef(
-        ArrayUtil.copyOfSubArray(other.bytes, other.offset, other.offset + other.length),
-        0,
-        other.length);
-  }
-
-  /** Performs internal consistency checks. Always returns true (or throws IllegalStateException) */
+    /** Performs internal consistency checks. Always returns true (or throws IllegalStateException) */
   public boolean isValid() {
     if (bytes == null) {
       throw new IllegalStateException("bytes is null");

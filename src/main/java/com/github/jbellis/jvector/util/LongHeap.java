@@ -177,25 +177,11 @@ public final class LongHeap {
     heap[i] = value; // install saved value
   }
 
-  public void pushAll(LongHeap other) {
-    for (int i = 1; i <= other.size; i++) {
-      push(other.heap[i]);
-    }
-  }
-
-  /**
+    /**
    * Return the element at the ith location in the heap array. Use for iterating over elements when
    * the order doesn't matter. Note that the valid arguments range from [1, size].
    */
   public long get(int i) {
     return heap[i];
-  }
-
-  /**
-   * This method returns the internal heap array.
-   */
-  // pkg-private for testing
-  final long[] getHeapArray() {
-    return heap;
   }
 }
