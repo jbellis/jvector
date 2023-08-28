@@ -29,14 +29,7 @@ public abstract class ExtendedGraphIndex implements GraphIndex, Accountable
 
     static int[] getSortedNodes(GraphIndex graph, int level) {
         NodesIterator nodesOnLevel = null;
-        try
-        {
-            nodesOnLevel = graph.getNodes();
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        nodesOnLevel = graph.getNodes();
         var sortedNodes = new int[nodesOnLevel.size()];
 
         // if all ordinals appear on level (for instance, level 0), generate all ordinals in sorted order
