@@ -117,11 +117,6 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public void addNode(int node) {
-        throw new UnsupportedOperationException();
-    }
-
     public void close() throws Exception {
         readerSupplier.close();
     }
