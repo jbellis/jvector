@@ -17,12 +17,14 @@
 
 package com.github.jbellis.jvector.graph;
 
+import java.util.Arrays;
+
 import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
 
 /**
  * TODO: add javadoc
  */
-public interface GraphIndex {
+public interface GraphIndex<T> {
   /** Returns the number of nodes in the graph */
   int size();
 
@@ -39,16 +41,16 @@ public interface GraphIndex {
    */
   View getView();
 
-  interface View<T> {
-    /**
-     * Retrieve the vector associated with a given node.
-     * <p/>
-     * This will only be called when a search is performed using approximate similarities.
-     * In that situation, we will want to reorder the results by the exact similarity
-     * at the end of the search.
-     */
-    T getVector(int node);
+  /**
+   * Retrieve the vector associated with a given node.
+   * <p/>
+   * This will only be called when a search is performed using approximate similarities.
+   * In that situation, we will want to reorder the results by the exact similarity
+   * at the end of the search.
+   */
+  T getVector(int node);
 
+  interface View {
     /**
      * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
      * is guaranteed to be valid.
@@ -60,7 +62,17 @@ public interface GraphIndex {
     int entryNode();
   }
 
-  static String prettyPrint(GraphIndex graph) {
+  // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
+  int getNeighborCount(int node);
+
+  // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
+  default int[] getSortedNodes() {
+    int[] sortedNodes = new int[size()];
+    Arrays.setAll(sortedNodes, i -> i);
+    return sortedNodes;
+  }
+
+  static <T> String prettyPrint(GraphIndex<T> graph) {
     StringBuilder sb = new StringBuilder();
     sb.append(graph);
     sb.append("\n");

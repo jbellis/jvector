@@ -58,7 +58,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
   abstract T getTargetVector();
 
-  List<Integer> sortedNodes(GraphIndex h) throws IOException {
+  List<Integer> sortedNodes(GraphIndex<T> h) {
     var nodesOnLevel = h.getNodes();
     List<Integer> nodes = new ArrayList<>();
     while (nodesOnLevel.hasNext()) {
@@ -68,7 +68,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     return nodes;
   }
 
-  void assertGraphEqual(GraphIndex g, GraphIndex h) throws IOException {
+  void assertGraphEqual(GraphIndex<T> g, GraphIndex<T> h) {
     // construct these up front since they call seek which will mess up our test loop
     String prettyG = GraphIndex.prettyPrint(g);
     String prettyH = GraphIndex.prettyPrint(h);
@@ -115,8 +115,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   // ensuring that we have all the distance functions, comparators, priority queues and so on
   // oriented in the right directions
   @Test
-  @SuppressWarnings("unchecked")
-  public void testAknnDiverse() throws IOException {
+  public void testAknnDiverse() {
     int nDoc = 100;
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
@@ -155,15 +154,14 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  public void testSearchWithAcceptOrds() throws IOException {
+  public void testSearchWithAcceptOrds() {
     int nDoc = 100;
     RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
+    var graph = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
     NeighborQueue nn =
@@ -189,15 +187,14 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  public void testSearchWithSelectiveAcceptOrds() throws IOException {
+  public void testSearchWithSelectiveAcceptOrds() {
     int nDoc = 100;
     RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
+    var graph = buildInOrder(builder, vectors);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
     for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
@@ -233,14 +230,14 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  public void testVisitedLimit() throws IOException {
+  public void testVisitedLimit() {
     int nDoc = 500;
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    OnHeapGraphIndex graph = builder.build();
+    var graph = builder.build();
 
     int topK = 50;
     int visitedLimit = topK + getRandom().nextInt(5);
@@ -295,12 +292,11 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
   // FIXME
   @Test
-  public void testRamUsageEstimate() throws IOException {
+  public void testRamUsageEstimate() {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  public void testDiversity() throws IOException {
+  public void testDiversity() {
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     // Some carefully checked test cases with simple 2d vectors on the unit circle:
     float[][] values = {
@@ -355,7 +351,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   }
 
   @Test
-  public void testDiversityFallback() throws IOException {
+  public void testDiversityFallback() {
     similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
     // Some test cases can't be exercised in two dimensions;
     // in particular if a new neighbor displaces an existing neighbor
@@ -391,7 +387,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   }
 
   @Test
-  public void testDiversity3d() throws IOException {
+  public void testDiversity3d() {
     similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
     // test the case when a neighbor *becomes* non-diverse when a newer better neighbor arrives
     float[][] values = {
@@ -422,7 +418,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     assertLevel0Neighbors(builder.graph, 3, 0, 1);
   }
 
-  private void assertLevel0Neighbors(OnHeapGraphIndex graph, int node, int... expected) {
+  private void assertLevel0Neighbors(OnHeapGraphIndex<T> graph, int node, int... expected) {
     Arrays.sort(expected);
     ConcurrentNeighborSet nn = graph.getNeighbors(node);
     Iterator<Integer> it = nn.nodeIterator();
@@ -438,9 +434,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   // build a random graph, then check that it has at least 90% recall
-  public void testRandom() throws IOException {
+  public void testRandom() {
     int size = between(100, 150);
     int dim = between(2, 15);
     AbstractMockVectorValues<T> vectors = vectorValues(size, dim);
@@ -448,7 +443,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     VectorEncoding vectorEncoding = getVectorEncoding();
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
-    OnHeapGraphIndex graph = builder.build();
+    var graph = builder.build();
     Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
 
     int efSearch = 100;
@@ -497,7 +492,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     assertTrue("overlap=" + overlap, overlap > 0.9);
   }
 
-  protected OnHeapGraphIndex buildInOrder(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
+  protected OnHeapGraphIndex<T> buildInOrder(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
     for (var i = 0; i < vectors.size(); i++) {
       builder.addGraphNode(i, vectors);
     }
@@ -525,7 +520,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
   /** Returns vectors evenly distributed around the upper unit semicircle. */
   @Test
-  public void testConcurrentNeighbors() throws IOException {
+  public void testConcurrentNeighbors() {
     RandomAccessVectorValues<T> vectors = circularVectorValues(3);
     GraphIndexBuilder<T> builder =
             new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 1, 30, 1.0f, 1.0f) {
@@ -539,7 +534,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                 return super.scoreBetween(v1, v2);
               }
             };
-    OnHeapGraphIndex graph = builder.build();
+    var graph = builder.build();
     for (int i = 0; i < vectors.size(); i++) {
       assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
     }
@@ -623,7 +618,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     };
   }
 
-  private Set<Integer> getNeighborNodes(GraphIndex.View g, int node) throws IOException {
+  private Set<Integer> getNeighborNodes(GraphIndex.View g, int node) {
     Set<Integer> neighbors = new HashSet<>();
     for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
       int n = it.nextInt();
@@ -632,8 +627,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     return neighbors;
   }
 
-  void assertVectorsEqual(AbstractMockVectorValues<T> u, AbstractMockVectorValues<T> v)
-      throws IOException {
+  void assertVectorsEqual(AbstractMockVectorValues<T> u, AbstractMockVectorValues<T> v) {
     int uDoc, vDoc;
     while (true) {
       uDoc = u.nextDoc();

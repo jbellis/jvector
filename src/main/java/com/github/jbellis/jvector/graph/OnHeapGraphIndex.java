@@ -34,7 +34,7 @@ import static com.github.jbellis.jvector.graph.NodesIterator.NO_MORE_NEIGHBORS;
  * <p>To search this graph, you should use a View obtained from {@link #getView()} to perform `seek`
  * and `nextNeighbor` operations.
  */
-public final class OnHeapGraphIndex implements GraphIndex, Accountable {
+public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   // the current graph entry node on the top level. -1 if not set
   private final AtomicReference<Integer> entryPoint; 
 
@@ -114,6 +114,15 @@ public final class OnHeapGraphIndex implements GraphIndex, Accountable {
 
   int entry() {
     return entryPoint.get();
+  }
+
+  public T getVector(int node) {
+    throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
+  }
+
+  public int getNeighborCount(int node) {
+    // TODO
+    throw new UnsupportedOperationException();
   }
 
   @Override

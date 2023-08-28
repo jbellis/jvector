@@ -50,7 +50,7 @@ public class GraphIndexBuilder<T> {
   private final ThreadLocal<GraphSearcher> graphSearcher;
   private final ThreadLocal<NeighborQueue> beamCandidates;
 
-  final OnHeapGraphIndex graph;
+  final OnHeapGraphIndex<T> graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
           new ConcurrentSkipListSet<>();
 
@@ -111,7 +111,7 @@ public class GraphIndexBuilder<T> {
               }
             };
     this.graph =
-            new OnHeapGraphIndex(
+            new OnHeapGraphIndex<>(
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
     this.graphSearcher =
             ThreadLocal.withInitial(
@@ -125,7 +125,7 @@ public class GraphIndexBuilder<T> {
             ThreadLocal.withInitial(() -> new NeighborQueue(beamWidth, false));
   }
 
-  public OnHeapGraphIndex build() {
+  public OnHeapGraphIndex<T> build() {
     IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
       addGraphNode(i, vectors.get());
     });
@@ -148,7 +148,7 @@ public class GraphIndexBuilder<T> {
     return addGraphNode(node, values.vectorValue(node));
   }
 
-  public OnHeapGraphIndex getGraph() {
+  public OnHeapGraphIndex<T> getGraph() {
     return graph;
   }
 
