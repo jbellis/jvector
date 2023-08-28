@@ -273,13 +273,13 @@ public class ConcurrentNeighborSet {
       return true;
     }
 
-    NeighborSimilarity.ScoreFunction scoreProvider = similarity.scoreProvider(node);
+    NeighborSimilarity.ExactScoreFunction scoreProvider = similarity.scoreProvider(node);
     for (int i = selected.nextSetBit(0); i != NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
       int otherNode = others.node()[i];
       if (node == otherNode) {
         break;
       }
-      if (scoreProvider.apply(otherNode) > score * alpha) {
+      if (scoreProvider.similarityTo(otherNode) > score * alpha) {
         return false;
       }
 
@@ -306,11 +306,11 @@ public class ConcurrentNeighborSet {
     for (int i = neighbors.size() - 1; i >= 1 && n > 0; i--) {
       int e1Id = neighbors.node[i];
       float baseScore = neighbors.score[i];
-      NeighborSimilarity.ScoreFunction scoreProvider = similarity.scoreProvider(e1Id);
+      NeighborSimilarity.ExactScoreFunction scoreProvider = similarity.scoreProvider(e1Id);
 
       for (int j = i - 1; j >= 0; j--) {
         int n2Id = neighbors.node[j];
-        float n1n2Score = scoreProvider.apply(n2Id);
+        float n1n2Score = scoreProvider.similarityTo(n2Id);
         if (n1n2Score > baseScore * alpha) {
           neighbors.removeIndex(i);
           n--;

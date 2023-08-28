@@ -169,7 +169,7 @@ public class GraphIndexBuilder<T> {
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
       var gs = new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build(); // TODO cache these (but not with the same View)
-      NeighborSimilarity.ScoreFunction scoreFunction = (i) -> scoreBetween(
+      NeighborSimilarity.ExactScoreFunction scoreFunction = (i) -> scoreBetween(
               vectorsCopy.get().vectorValue(i), value);
 
       var bits = new ExcludingBits(node);

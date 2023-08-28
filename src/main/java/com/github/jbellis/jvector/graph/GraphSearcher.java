@@ -58,7 +58,7 @@ public class GraphSearcher {
    */
   public static <T> NeighborQueue search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int visitedLimit) {
     var searcher = new GraphSearcher.Builder(graph.getView()).build();
-    NeighborSimilarity.ScoreFunction scoreFunction = i -> {
+    NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
         case BYTE:
           return similarityFunction.compare((byte[]) targetVector, (byte[]) vectors.vectorValue(i));
@@ -92,7 +92,7 @@ public class GraphSearcher {
   }
 
   public NeighborQueue search(
-      NeighborSimilarity.ScoreFunction scoreFunction,
+      NeighborSimilarity.ExactScoreFunction scoreFunction,
       int topK,
       Bits acceptOrds,
       int visitedLimit) {
@@ -113,7 +113,7 @@ public class GraphSearcher {
    * last to be popped.
    */
   void searchInternal(
-      NeighborSimilarity.ScoreFunction scoreFunction,
+      NeighborSimilarity.ExactScoreFunction scoreFunction,
       NeighborQueue results,
       int topK,
       int ep,
@@ -128,7 +128,7 @@ public class GraphSearcher {
     prepareScratchState(view.size());
 
     int numVisited = 0;
-    float score = scoreFunction.apply(ep);
+    float score = scoreFunction.similarityTo(ep);
     numVisited++;
     visited.set(ep);
     candidates.add(ep, score);
@@ -160,7 +160,7 @@ public class GraphSearcher {
           results.markIncomplete();
           break;
         }
-        float friendSimilarity = scoreFunction.apply(friendOrd);
+        float friendSimilarity = scoreFunction.similarityTo(friendOrd);
         numVisited++;
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
