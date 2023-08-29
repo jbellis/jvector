@@ -17,7 +17,6 @@
 
 package com.github.jbellis.jvector.example;
 
-import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.example.util.PQRandomAccessVectorValues;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
