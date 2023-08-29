@@ -18,13 +18,10 @@
 package com.github.jbellis.jvector.vector;
 
 import java.lang.Runtime.Version;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -86,39 +83,23 @@ public abstract class VectorizationProvider {
         return new DefaultVectorizationProvider();
       }
       try {
-        // we use method handles with lookup, so we do not need to deal with setAccessible as we
-        // have private access through the lookup:
-        final var lookup = MethodHandles.lookup();
-        final var cls =
-            lookup.findClass(
-                "org.apache.lucene.internal.vectorization.PanamaVectorizationProvider");
-        final var constr =
-            lookup.findConstructor(cls, MethodType.methodType(void.class, boolean.class));
-        try {
-          return (VectorizationProvider) constr.invoke(testMode);
-        } catch (UnsupportedOperationException uoe) {
-          // not supported because preferred vector size too small or similar
-          LOG.warning("Java vector incubator API was not enabled. " + uoe.getMessage());
-          return new DefaultVectorizationProvider();
-        } catch (RuntimeException | Error e) {
-          throw e;
-        } catch (Throwable th) {
-          throw new AssertionError(th);
-        }
-      } catch (NoSuchMethodException | IllegalAccessException e) {
-        throw new LinkageError(
-            "PanamaVectorizationProvider is missing correctly typed constructor", e);
-      } catch (ClassNotFoundException cnfe) {
-        throw new LinkageError("PanamaVectorizationProvider is missing in Lucene JAR file", cnfe);
+        return new PanamaVectorizationProvider();
+      } catch (UnsupportedOperationException uoe) {
+        // not supported because preferred vector size too small or similar
+        LOG.warning("Java vector incubator API was not enabled. " + uoe.getMessage());
+        return new DefaultVectorizationProvider();
+      } catch (RuntimeException | Error e) {
+        throw e;
+      } catch (Throwable th) {
+        throw new AssertionError(th);
       }
     } else if (runtimeVersion >= 22) {
-      LOG.warning(
-          "You are running with Java 22 or later. To make full use of the Vector API, please update Apache Lucene.");
+      LOG.warning("You are running with Java 22 or later. To make full use of the Vector API, please update jvector.");
     }
     return new DefaultVectorizationProvider();
   }
 
-  private static boolean vectorModulePresentAndReadable() {
+  static boolean vectorModulePresentAndReadable() {
     var opt =
         ModuleLayer.boot().modules().stream()
             .filter(m -> m.getName().equals("jdk.incubator.vector"))
@@ -154,9 +135,6 @@ public abstract class VectorizationProvider {
       return false;
     }
   }
-
-  // add all possible callers here as FQCN:
-  private static final Set<String> VALID_CALLERS = Set.of("org.apache.lucene.util.VectorUtil");
 
   /** This static holder class prevents classloading deadlock. */
   private static final class Holder {
