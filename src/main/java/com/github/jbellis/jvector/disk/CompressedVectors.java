@@ -31,10 +31,18 @@ public class CompressedVectors
     private final ProductQuantization pq;
     private final List<byte[]> compressedVectors;
 
-    private CompressedVectors(ProductQuantization pq, List<byte[]> compressedVectors) throws IOException
+    public CompressedVectors(ProductQuantization pq, List<byte[]> compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
+    }
+
+    public ProductQuantization getPq() {
+        return pq;
+    }
+
+    public List<byte[]> getCompressedVectors() {
+        return compressedVectors;
     }
 
     public static CompressedVectors load(RandomAccessReader in, long offset) throws IOException
