@@ -7,9 +7,6 @@ import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
 
-import static jdk.incubator.vector.VectorOperators.B2I;
-import static jdk.incubator.vector.VectorOperators.ZERO_EXTEND_B2I;
-
 public class SimdOps {
     public static float simdSum(float[] vector) {
         float sum = 0.0f;
