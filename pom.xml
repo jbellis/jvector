@@ -91,6 +91,7 @@
               <arguments>
                 <argument>-classpath</argument>
                 <classpath/>
+                <argument>--add-modules=jdk.incubator.vector</argument>
                 <argument>-ea</argument>
                 <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
               </arguments>

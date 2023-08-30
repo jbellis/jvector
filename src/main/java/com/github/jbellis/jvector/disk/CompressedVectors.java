@@ -37,14 +37,6 @@ public class CompressedVectors
         this.compressedVectors = compressedVectors;
     }
 
-    public ProductQuantization getPq() {
-        return pq;
-    }
-
-    public List<byte[]> getCompressedVectors() {
-        return compressedVectors;
-    }
-
     public static CompressedVectors load(RandomAccessReader in, long offset) throws IOException
     {
         in.seek(offset);

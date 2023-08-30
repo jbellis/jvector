@@ -16,7 +16,7 @@
 
 package com.github.jbellis.jvector.example;
 
-import com.github.jbellis.jvector.example.util.PQRandomAccessVectorValues;
+import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
@@ -28,6 +28,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -35,7 +36,7 @@ import java.util.stream.IntStream;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-    private static void testRecall(int M, int efConstruction, List<Boolean> pqOptions, List<Integer> efSearchOptions, DataSet ds, PQRandomAccessVectorValues pqvv)
+    private static void testRecall(int M, int efConstruction, List<Boolean> pqOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv)
     {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
         var topK = ds.groundTruth.get(0).size();
@@ -49,7 +50,7 @@ public class Bench {
         for (int overquery : efSearchOptions) {
             for (boolean usePq : pqOptions) {
                 start = System.nanoTime();
-                var pqr = performQueries(ds, usePq ? pqvv : floatVectors, index, topK, topK * overquery, queryRuns);
+                var pqr = performQueries(ds, floatVectors, usePq ? cv : null, index, topK, topK * overquery, queryRuns);
                 var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
                 System.out.format("Index   M=%d ef=%d PQ=%b: top %d/%d recall %.4f, build %.2fs, query %.2fs. %s nodes visited%n",
                         M, efConstruction, usePq, topK, overquery, recall, buildNanos / 1_000_000_000.0, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
@@ -77,51 +78,36 @@ public class Bench {
         return resultSet.stream().filter(gt::contains).count();
     }
 
-    private static ResultSummary performQueries(DataSet ds, RandomAccessVectorValues<float[]> ravv, GraphIndex index, int topK, int efSearch, int queryRuns) {
+    private static long topKCorrect(int topK, NeighborQueue nn, Set<Integer> gt) {
+        var a = new int[nn.size()];
+        for (int j = a.length - 1; j >= 0; j--) {
+            a[j] = nn.pop();
+        }
+        return topKCorrect(topK, a, gt);
+    }
+
+    private static ResultSummary performQueries(DataSet ds, RandomAccessVectorValues<float[]> exactVv, CompressedVectors cv, GraphIndex<float[]> index, int topK, int efSearch, int queryRuns) {
         assert efSearch >= topK;
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
-        var usePq = ravv instanceof PQRandomAccessVectorValues;
         for (int k = 0; k < queryRuns; k++) {
             IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = ds.queryVectors.get(i);
                 NeighborQueue nn;
-                if (usePq) {
-                    NeighborSimilarity.ApproximateScoreFunction sf = (other) -> ((PQRandomAccessVectorValues) ravv).decodedSimilarity(other, queryVector, ds.similarityFunction);
-                    nn = new GraphSearcher.Builder(index.getView())
+                if (cv != null) {
+                    var view = index.getView();
+                    NeighborSimilarity.ApproximateScoreFunction asf = (other) -> cv.decodedSimilarity(other, queryVector, ds.similarityFunction);
+                    Function<Integer, float[]> vectorFetch = (index instanceof OnHeapGraphIndex<float[]>) ? exactVv::vectorValue : view::getVector; // We'll use view::getVector once Bench actually goes to disk
+                    NeighborSimilarity.ExactScoreFunction esf = (other) -> ds.similarityFunction.compare(vectorFetch.apply(other), queryVector);
+                    nn = new GraphSearcher.Builder(view)
                             .build()
-                            .search(sf, efSearch, null, Integer.MAX_VALUE);
+                            .search(esf, asf, efSearch, null, Integer.MAX_VALUE);
                 } else {
-                    nn = GraphSearcher.search(queryVector, efSearch, ravv, VectorEncoding.FLOAT32, ds.similarityFunction, index, null, Integer.MAX_VALUE);
-                }
-
-                int[] results;
-                if (usePq && efSearch > topK) {
-                    // re-rank the quantized results by the original similarity function
-                    // Decorate
-                    int[] raw = new int[nn.size()];
-                    for (int j = raw.length - 1; j >= 0; j--) {
-                        raw[j] = nn.pop();
-                    }
-                    // Pair each item in `raw` with its computed similarity
-                    Map.Entry<Integer, Double>[] decorated = new AbstractMap.SimpleEntry[raw.length];
-                    for (int j = 0; j < raw.length; j++) {
-                        double similarity = ds.similarityFunction.compare(queryVector, ds.baseVectors.get(raw[j]));
-                        decorated[j] = new AbstractMap.SimpleEntry<>(raw[j], similarity);
-                    }
-                    // Sort based on the computed similarity
-                    Arrays.sort(decorated, (p1, p2) -> Double.compare(p2.getValue(), p1.getValue())); // Note the order for reversed sort
-                    // Undecorate
-                    results = Arrays.stream(decorated).mapToInt(Map.Entry::getKey).toArray();
-                } else {
-                    results = new int[nn.size()];
-                    for (int j = results.length - 1; j >= 0; j--) {
-                        results[j] = nn.pop();
-                    }
+                    nn = GraphSearcher.search(queryVector, efSearch, exactVv, VectorEncoding.FLOAT32, ds.similarityFunction, index, null, Integer.MAX_VALUE);
                 }
 
                 var gt = ds.groundTruth.get(i);
-                var n = topKCorrect(topK, results, gt);
+                var n = topKCorrect(topK, nn, gt);
                 topKfound.add(n);
                 nodesVisited.add(nn.visitedCount());
             });
@@ -253,11 +239,11 @@ public class Bench {
         var quantizedVectors = pq.encodeAll(ds.baseVectors);
         System.out.format("PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        var pqvv = new PQRandomAccessVectorValues(pq, quantizedVectors);
+        var compressedVectors = new CompressedVectors(pq, quantizedVectors);
 
         for (int M : mGrid) {
             for (int beamWidth : efConstructionGrid) {
-                testRecall(M, beamWidth, pqOptions, efSearchFactor, ds, pqvv);
+                testRecall(M, beamWidth, pqOptions, efSearchFactor, ds, compressedVectors);
             }
         }
     }

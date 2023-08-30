@@ -92,7 +92,7 @@ public class GraphSearcher {
   }
 
   public NeighborQueue search(
-      NeighborSimilarity.ScoreFunction scoreFunction,
+      NeighborSimilarity.ExactScoreFunction scoreFunction,
       int topK,
       Bits acceptOrds,
       int visitedLimit) {
@@ -103,6 +103,36 @@ public class GraphSearcher {
     NeighborQueue results;
     results = new NeighborQueue(topK, false);
     searchInternal(scoreFunction, results, topK, view.entryNode(), acceptOrds, visitedLimit);
+
+    return results;
+  }
+
+  public NeighborQueue search(
+          NeighborSimilarity.ExactScoreFunction exactScoreFunction,
+          NeighborSimilarity.ApproximateScoreFunction approximateScoreFunction,
+          int topK,
+          Bits acceptOrds,
+          int visitedLimit) {
+    int initialEp = view.entryNode();
+    if (initialEp == -1) {
+      return new NeighborQueue(1, false);
+    }
+    NeighborQueue results;
+    results = new NeighborQueue(topK, false);
+    searchInternal(approximateScoreFunction, results, topK, view.entryNode(), acceptOrds, visitedLimit);
+
+    // re-rank the quantized results by the original similarity function
+    // Decorate
+    // TODO: if we capture ef/actual topK here, we can avoid rerank when nn.size < topK
+    int[] raw = new int[results.size()];
+    for (int j = raw.length - 1; j >= 0; j--) {
+      raw[j] = results.pop();
+    }
+
+    for (int j = 0; j < raw.length; j++) {
+      results.add(raw[j], exactScoreFunction.similarityTo(raw[j]));
+    }
+
     return results;
   }
 
