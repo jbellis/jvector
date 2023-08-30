@@ -103,21 +103,13 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     entryPoint.set(node);
   }
 
+  @Override
   public int maxEdgesPerNode() {
     return nsize0;
   }
 
   int entry() {
     return entryPoint.get();
-  }
-
-  public T getVector(int node) {
-    throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
-  }
-
-  public int getNeighborCount(int node) {
-    // TODO
-    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -225,10 +217,11 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    *
    * <p>Multiple Views may be searched concurrently.
    */
-  public GraphIndex.View getView() {
+  public GraphIndex.View<T> getView() {
     return new ConcurrentGraphIndexView();
   }
 
+  // TODO should call this when build is complete
   void validateEntryNode() {
     if (size() == 0) {
       return;
@@ -239,8 +232,9 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     }
   }
 
-  private class ConcurrentGraphIndexView implements GraphIndex.View {
-    public Object getVector(int node) {
+  private class ConcurrentGraphIndexView implements GraphIndex.View<T> {
+    @Override
+    public T getVector(int node) {
       throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
     }
 

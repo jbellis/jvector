@@ -37,18 +37,14 @@ public interface GraphIndex<T> {
   /**
    * Return a View with which to navigate the graph.  Views are not threadsafe.
    */
-  View getView();
+  View<T> getView();
 
   /**
-   * Retrieve the vector associated with a given node.
-   * <p/>
-   * This will only be called when a search is performed using approximate similarities.
-   * In that situation, we will want to reorder the results by the exact similarity
-   * at the end of the search.
+   * @return the maximum number of edges per node
    */
-  T getVector(int node);
+  int maxEdgesPerNode();
 
-  interface View {
+  interface View<T> {
     /**
      * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
      * is guaranteed to be valid.
@@ -58,16 +54,27 @@ public interface GraphIndex<T> {
     int size();
 
     int entryNode();
-  }
 
-  // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
-  int getNeighborCount(int node);
+    /**
+     * Retrieve the vector associated with a given node.
+     * <p/>
+     * This will only be called when a search is performed using approximate similarities.
+     * In that situation, we will want to reorder the results by the exact similarity
+     * at the end of the search.
+     */
+    T getVector(int node);
 
-  // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
-  default int[] getSortedNodes() {
-    int[] sortedNodes = new int[size()];
-    Arrays.setAll(sortedNodes, i -> i);
-    return sortedNodes;
+    // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
+    default int[] getSortedNodes() {
+      int[] sortedNodes = new int[size()];
+      Arrays.setAll(sortedNodes, i -> i);
+      return sortedNodes;
+    }
+
+    //  for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still want/need it
+    default int getNeighborCount(int node) {
+      return getNeighborsIterator(node).size();
+    }
   }
 
   static <T> String prettyPrint(GraphIndex<T> graph) {
