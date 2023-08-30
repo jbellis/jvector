@@ -21,7 +21,6 @@ import com.github.jbellis.jvector.util.Accountable;
 import com.github.jbellis.jvector.util.RamUsageEstimator;
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
-import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
@@ -42,8 +41,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   // graph building.
   private final NonBlockingHashMapLong<ConcurrentNeighborSet> nodes;
 
-  // Neighbours' size on upper levels (nsize) and level 0 (nsize0)
-  final int nsize;
+  // max neighbors/edges per node
   final int nsize0;
   private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
 
@@ -52,7 +50,6 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     this.neighborFactory = neighborFactory;
     this.entryPoint =
         new AtomicReference<>(-1); // Entry node should be negative until a node is added
-    this.nsize = M;
     this.nsize0 = 2 * M;
 
     this.nodes = new NonBlockingHashMapLong<>();
@@ -86,7 +83,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    * @param node the node to add, represented as an ordinal on the level 0.
    */
   public void addNode(int node) {
-    nodes.put(node, neighborFactory.apply(node, connectionsOnLevel(0)));
+    nodes.put(node, neighborFactory.apply(node, maxEdgesPerNode()));
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
@@ -106,8 +103,8 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     entryPoint.set(node);
   }
 
-  private int connectionsOnLevel(int level) {
-    return level == 0 ? nsize0 : nsize;
+  public int maxEdgesPerNode() {
+    return nsize0;
   }
 
   int entry() {
@@ -148,7 +145,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     // the main graph structure
     long total = concurrentHashMapRamUsed(size());
     long chmSize = concurrentHashMapRamUsed(size());
-    long neighborSize = neighborsRamUsed(connectionsOnLevel(0)) * size();
+    long neighborSize = neighborsRamUsed(maxEdgesPerNode()) * size();
 
     total += chmSize + neighborSize;
 
@@ -159,8 +156,8 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     int entryCount = (int) (nodeLevel / CHM_LOAD_FACTOR);
     var graphBytesUsed =
         chmEntriesRamUsed(entryCount)
-            + neighborsRamUsed(connectionsOnLevel(0))
-            + nodeLevel * neighborsRamUsed(connectionsOnLevel(1));
+            + neighborsRamUsed(maxEdgesPerNode())
+            + nodeLevel * neighborsRamUsed(maxEdgesPerNode());
     var clockBytesUsed = Integer.BYTES;
     return graphBytesUsed + clockBytesUsed;
   }
