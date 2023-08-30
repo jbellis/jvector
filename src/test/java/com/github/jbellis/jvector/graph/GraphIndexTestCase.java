@@ -660,7 +660,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     return bits;
   }
 
-  static float[] randomVector(Random random, int dim) {
+  public static float[] randomVector(Random random, int dim) {
     float[] vec = new float[dim];
     for (int i = 0; i < dim; i++) {
       vec[i] = random.nextFloat();
@@ -672,7 +672,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     return vec;
   }
 
-  static byte[] randomVector8(Random random, int dim) {
+  public static byte[] randomVector8(Random random, int dim) {
     float[] fvec = randomVector(random, dim);
     byte[] bvec = new byte[dim];
     for (int i = 0; i < dim; i++) {
