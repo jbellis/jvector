@@ -5,6 +5,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.github.jbellis.jvector.disk.Io;
 import com.github.jbellis.jvector.vector.VectorUtil;
 
 import static com.github.jbellis.jvector.vector.SimdOps.*;
@@ -232,7 +233,7 @@ public class ProductQuantization {
             out.writeInt(0);
         } else {
             out.writeInt(globalCentroid.length);
-            writeFloats(out, globalCentroid);
+            Io.writeFloats(out, globalCentroid);
         }
 
         out.writeInt(M);
@@ -247,15 +248,8 @@ public class ProductQuantization {
         out.writeInt(codebooks.get(0).size());
         for (var codebook : codebooks) {
             for (var centroid : codebook) {
-                writeFloats(out, centroid);
+                Io.writeFloats(out, centroid);
             }
-        }
-    }
-
-    private void writeFloats(DataOutputStream out, float[] v) throws IOException
-    {
-        for (var a : v) {
-            out.writeFloat(a);
         }
     }
 
@@ -263,7 +257,7 @@ public class ProductQuantization {
         int globalCentroidLength = in.readInt();
         float[] globalCentroid = null;
         if (globalCentroidLength > 0) {
-            globalCentroid = readFloats(in, globalCentroidLength);
+            globalCentroid = Io.readFloats(in, globalCentroidLength);
         }
 
         int M = in.readInt();
@@ -278,21 +272,12 @@ public class ProductQuantization {
             List<float[]> codebook = new ArrayList<>();
             for (int i = 0; i < clusters; i++) {
                 int n = subvectorSizes[m];
-                float[] centroid = readFloats(in, n);
+                float[] centroid = Io.readFloats(in, n);
                 codebook.add(centroid);
             }
             codebooks.add(codebook);
         }
 
         return new ProductQuantization(codebooks, globalCentroid);
-    }
-
-    private static float[] readFloats(DataInput in, int size) throws IOException
-    {
-        var v = new float[size];
-        for (int i = 0; i < size; i++) {
-            v[i] = in.readFloat();
-        }
-        return v;
     }
 }
