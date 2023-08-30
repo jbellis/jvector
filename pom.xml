@@ -106,7 +106,7 @@
               <arguments>
                 <argument>-classpath</argument>
                 <classpath/>
-                <!--<argument> - -add-modules=jdk.incubator.vector</argument # Reenable once vectorization provider fixed-->
+                <argument>--add-modules=jdk.incubator.vector</argument>
                 <argument>-Xmx32G</argument>
                 <argument>-ea</argument>
                 <argument>com.github.jbellis.jvector.example.Bench</argument>

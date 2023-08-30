@@ -92,7 +92,7 @@ public class GraphSearcher {
   }
 
   public NeighborQueue search(
-      NeighborSimilarity.ExactScoreFunction scoreFunction,
+      NeighborSimilarity.ScoreFunction scoreFunction,
       int topK,
       Bits acceptOrds,
       int visitedLimit) {
@@ -113,7 +113,7 @@ public class GraphSearcher {
    * last to be popped.
    */
   void searchInternal(
-      NeighborSimilarity.ExactScoreFunction scoreFunction,
+      NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborQueue results,
       int topK,
       int ep,
