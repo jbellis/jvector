@@ -178,8 +178,9 @@ public class GraphSearcher<T> {
     if (scoreFunction.isExact()) {
       var nodes = new NodeScore[resultsQueue.size()];
       for (int i = 0; i < nodes.length; i++) {
+          var nScore = resultsQueue.topScore();
           var n = resultsQueue.pop();
-          nodes[i] = new NodeScore(n, scoreFunction.similarityTo(n));
+          nodes[i] = new NodeScore(n, nScore);
       }
       return nodes;
     } else {
