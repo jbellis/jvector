@@ -17,10 +17,6 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Map;
-
 import com.github.jbellis.jvector.graph.NeighborQueue.NodeScore;
 import com.github.jbellis.jvector.util.BitSet;
 import com.github.jbellis.jvector.util.Bits;
@@ -28,6 +24,10 @@ import com.github.jbellis.jvector.util.FixedBitSet;
 import com.github.jbellis.jvector.util.GrowableBitSet;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Map;
 
 /**
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
@@ -132,9 +132,7 @@ public class GraphSearcher<T> {
     var resultsQueue = new NeighborQueue(topK, false);
     Map<Integer, T> vectorsEncountered = !scoreFunction.isExact() ? new java.util.HashMap<>() : null;
 
-    int numVisited = 0;
     float score = scoreFunction.similarityTo(ep);
-    numVisited++;
     visited.set(ep);
     candidates.add(ep, score);
     if (acceptOrds == null || acceptOrds.get(ep)) {
@@ -165,7 +163,6 @@ public class GraphSearcher<T> {
         }
 
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
-        numVisited++;
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
           if (acceptOrds == null || acceptOrds.get(friendOrd)) {
