@@ -59,4 +59,8 @@ public interface NeighborSimilarity {
 
     float similarityTo(int node2);
   }
+
+  interface ReRanker<T>  {
+    float similarityTo(int node2, RandomAccessVectorValues<T> vectors);
+  }
 }

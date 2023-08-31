@@ -51,8 +51,6 @@ public class NeighborQueue {
   private final LongHeap heap;
   private final Order order;
 
-  // Used to track the number of neighbors visited during a single graph traversal
-  private int visitedCount;
   // Whether the search stopped early because it reached the visited nodes limit
   private boolean incomplete;
 
@@ -141,6 +139,18 @@ public class NeighborQueue {
     return nodes;
   }
 
+  public record NodeScore(int node, float score) {}
+
+  public NodeScore[] nodesCopy(NeighborSimilarity.ScoreFunction sf) {
+    int size = size();
+    NodeScore[] ns = new NodeScore[size];
+    for (int i = 0; i < size; i++) {
+      var node = decodeNodeId(heap.get(i + 1));
+      ns[i] = new NodeScore(node, sf.similarityTo(node));
+    }
+    return ns;
+  }
+
   /** Returns the top element's node id. */
   public int topNode() {
     return decodeNodeId(heap.top());
@@ -156,16 +166,7 @@ public class NeighborQueue {
 
   public void clear() {
     heap.clear();
-    visitedCount = 0;
     incomplete = false;
-  }
-
-  public int visitedCount() {
-    return visitedCount;
-  }
-
-  public void setVisitedCount(int visitedCount) {
-    this.visitedCount = visitedCount;
   }
 
   public boolean incomplete() {
