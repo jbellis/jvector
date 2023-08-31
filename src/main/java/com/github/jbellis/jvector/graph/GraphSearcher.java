@@ -185,7 +185,7 @@ public class GraphSearcher<T> {
       return nodes;
     } else {
       var nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
-      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble(NodeScore::score).reversed());
+      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble(NodeScore::score));
       return nodes;
     }
   }

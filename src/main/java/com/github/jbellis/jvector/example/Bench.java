@@ -84,7 +84,7 @@ public class Bench {
     private static long topKCorrect(int topK, int[] resultNodes, Set<Integer> gt) {
         int count = Math.min(resultNodes.length, topK);
         // stream the first count results into a Set
-        var resultSet = Arrays.stream(resultNodes, 0, count)
+        var resultSet = Arrays.stream(resultNodes, resultNodes.length - count, resultNodes.length)
                 .boxed()
                 .collect(Collectors.toSet());
         assert resultSet.size() == count : String.format("%s duplicate results out of %s", count - resultSet.size(), count);
