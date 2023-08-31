@@ -40,19 +40,11 @@ public class SiftSmall {
         DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(testOutputFile));
         OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
-        var onDiskGraph = new OnDiskGraphIndex<float[]>(new ReaderSupplier() {
-            @Override
-            public RandomAccessReader get() {
-                try {
-                    return new FileRandomAccessReader(testOutputFile.getAbsolutePath());
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            @Override
-            public void close() throws Exception {
-
+        var onDiskGraph = new OnDiskGraphIndex<float[]>(() -> {
+            try {
+                return new FileRandomAccessReader(testOutputFile.getAbsolutePath());
+            } catch (FileNotFoundException e) {
+                throw new UncheckedIOException(e);
             }
         }, 0);
 
