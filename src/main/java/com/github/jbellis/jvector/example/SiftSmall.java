@@ -92,11 +92,7 @@ public class SiftSmall {
         var testOutputPath = testDirectory.resolve("graph_test");
         try {
             testRecall(baseVectors, queryVectors, groundTruth, testOutputPath.toFile());
-        } catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-        finally {
+        } finally {
             Files.delete(testOutputPath);
             Files.delete(testDirectory);
         }

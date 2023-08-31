@@ -95,7 +95,8 @@ public class GraphSearcher {
       NeighborSimilarity.ExactScoreFunction scoreFunction,
       int topK,
       Bits acceptOrds,
-      int visitedLimit) {
+      int visitedLimit)
+  {
     int initialEp = view.entryNode();
     if (initialEp == -1) {
       return new NeighborQueue(1, false);
@@ -112,7 +113,8 @@ public class GraphSearcher {
           NeighborSimilarity.ApproximateScoreFunction approximateScoreFunction,
           int topK,
           Bits acceptOrds,
-          int visitedLimit) {
+          int visitedLimit)
+  {
     int initialEp = view.entryNode();
     if (initialEp == -1) {
       return new NeighborQueue(1, false);
