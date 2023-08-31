@@ -59,20 +59,21 @@ public class SiftSmall {
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
-            NeighborQueue nn;
+            NeighborQueue.NodeScore[] nn;
             var view = graph.getView();
             var searcher = new GraphSearcher.Builder(view).build();
-            if (compressedVectors != null) {
-                NeighborSimilarity.ExactScoreFunction esf = (j) -> VectorSimilarityFunction.COSINE.compare(queryVector, view.getVector(j));
-                NeighborSimilarity.ApproximateScoreFunction asf = (j) -> compressedVectors.decodedSimilarity(j, queryVector, VectorSimilarityFunction.COSINE);
-                nn = searcher.search(esf, asf, 100, null, Integer.MAX_VALUE);
-            } else {
-                NeighborSimilarity.ExactScoreFunction scoreFunction = (j) -> VectorSimilarityFunction.COSINE.compare(queryVector, ravv.vectorValue(j));
-                nn = searcher.search(scoreFunction, 100, null, Integer.MAX_VALUE);
+            if (compressedVectors == null) {
+                NeighborSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
+                nn = searcher.search(sf, null, 100, null);
+            }
+            else {
+                NeighborSimilarity.ApproximateScoreFunction sf = (j) -> compressedVectors.decodedSimilarity(j, queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
+                nn = searcher.search(sf, rr, 100, null);
             }
 
             var gt = groundTruth.get(i);
-            var n = IntStream.range(0, topK).filter(j -> gt.contains(nn.nodesCopy()[j])).count();
+            var n = IntStream.range(0, topK).filter(j -> gt.contains(nn[j].node())).count();
             topKfound.addAndGet((int) n);
         });
         System.out.printf("  (%s) Querying %d vectors in parallel took %s seconds%n", graphType, queryVectors.size(), (System.nanoTime() - start) / 1_000_000_000.0);

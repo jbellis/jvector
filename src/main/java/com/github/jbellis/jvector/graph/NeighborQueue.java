@@ -141,7 +141,7 @@ public class NeighborQueue {
 
   public record NodeScore(int node, float score) {}
 
-  public NodeScore[] nodesCopy(NeighborSimilarity.ScoreFunction sf) {
+  public NodeScore[] nodesCopy(NeighborSimilarity.ExactScoreFunction sf) {
     int size = size();
     NodeScore[] ns = new NodeScore[size];
     for (int i = 0; i < size; i++) {

@@ -22,7 +22,6 @@ import com.github.jbellis.jvector.util.FixedBitSet;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
-import org.junit.Test;
 
 import java.io.IOException;
 
@@ -119,8 +118,8 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
             getVectorEncoding(),
             similarityFunction,
             graph,
-            acceptOrds,
-            Integer.MAX_VALUE);
+            acceptOrds
+        );
 
     int[] nodes = nn.nodesCopy();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);

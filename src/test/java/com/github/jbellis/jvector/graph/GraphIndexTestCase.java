@@ -129,8 +129,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             getVectorEncoding(),
             similarityFunction,
             graph,
-            null,
-            Integer.MAX_VALUE);
+            null
+    );
     int[] nodes = nn.nodesCopy();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
@@ -170,8 +170,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     getVectorEncoding(),
                     similarityFunction,
                     graph,
-                    acceptOrds,
-                    Integer.MAX_VALUE);
+                    acceptOrds
+            );
     int[] nodes = nn.nodesCopy();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
@@ -209,8 +209,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     getVectorEncoding(),
                     similarityFunction,
                     graph,
-                    acceptOrds,
-                    Integer.MAX_VALUE);
+                    acceptOrds
+            );
 
     int[] nodes = nn.nodesCopy();
     for (int node : nodes) {
@@ -248,8 +248,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
               getVectorEncoding(),
               similarityFunction,
               graph,
-              createRandomAcceptOrds(0, nDoc),
-              visitedLimit);
+              createRandomAcceptOrds(0, nDoc)
+          );
           case BYTE -> GraphSearcher.search(
               (byte[]) getTargetVector(),
               topK,
@@ -257,8 +257,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
               getVectorEncoding(),
               similarityFunction,
               graph,
-              createRandomAcceptOrds(0, nDoc),
-              visitedLimit);
+              createRandomAcceptOrds(0, nDoc)
+          );
         };
 
     assertTrue(nn.incomplete());
@@ -457,8 +457,8 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                       getVectorEncoding(),
                       similarityFunction,
                       graph,
-                      acceptOrds,
-                      Integer.MAX_VALUE);
+                      acceptOrds
+              );
 
       while (actual.size() > topK) {
         actual.pop();

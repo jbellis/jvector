@@ -61,7 +61,7 @@ public class GraphSearcher<T> {
    * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
    * is the unique owner of the vectors instance passed in here.
    */
-  public static <T> NeighborQueue search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int visitedLimit) {
+  public static <T> NodeScore[] search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
     var searcher = new GraphSearcher.Builder(graph.getView()).build();
     NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
@@ -73,7 +73,7 @@ public class GraphSearcher<T> {
           throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
       }
     };
-    return searcher.search(scoreFunction, topK, acceptOrds, visitedLimit);
+    return searcher.search(scoreFunction, null, topK, acceptOrds);
   }
 
   /** Builder */
@@ -102,17 +102,17 @@ public class GraphSearcher<T> {
       int topK,
       Bits acceptOrds)
   {
-    return searchInternal(scoreFunction, reRanker, topK, view.entryNode(), acceptOrds, visitedLimit);
+    return searchInternal(scoreFunction, reRanker, topK, view.entryNode(), acceptOrds);
   }
 
   /**
-   * Add the closest neighbors found to a priority queue (heap). These are returned in REVERSE
-   * proximity order -- the most distant neighbor of the topK found, i.e. the one with the lowest
-   * score/comparison value, will be at the top of the heap, while the closest neighbor will be the
-   * last to be popped.
-   *
+   * Add the closest neighbors found to a priority queue (heap). These are returned in
+   * proximity order -- the closest neighbor of the topK found, i.e. the one with the highest
+   * score/comparison value, will be at the front of the array.
+   * <p/>
    * If scoreFunction is exact, then reRanker may be null.
    */
+  // TODO add back ability to re-use a results structure instead of allocating a new one each time?
   NodeScore[] searchInternal(
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborSimilarity.ReRanker<T> reRanker,
@@ -164,10 +164,6 @@ public class GraphSearcher<T> {
           continue;
         }
 
-        if (numVisited >= visitedLimit) {
-          resultsQueue.markIncomplete();
-          break;
-        }
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
         numVisited++;
         if (friendSimilarity >= minAcceptedSimilarity) {
@@ -190,26 +186,7 @@ public class GraphSearcher<T> {
       }
       return nodes;
     } else {
-      var ravv = new RandomAccessVectorValues<T>() {
-        public int size() {
-          return view.size();
-        }
-
-        public int dimension() {
-          // FIXME wow this is gross -- not sure where we should push the dimension,
-          // maybe we should just stash it the first time we read a vector earlier?
-          return ((float[]) vectorsEncountered.values().iterator().next()).length;
-        }
-
-        public T vectorValue(int targetOrd) {
-          return vectorsEncountered.get(targetOrd);
-        }
-
-        public RandomAccessVectorValues<T> copy() {
-          throw new UnsupportedOperationException();
-        }
-      };
-      var nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, ravv));
+      var nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
       Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble(NodeScore::score).reversed());
       return nodes;
     }

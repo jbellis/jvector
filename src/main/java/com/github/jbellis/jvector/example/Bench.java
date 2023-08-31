@@ -78,41 +78,37 @@ public class Bench {
         return resultSet.stream().filter(gt::contains).count();
     }
 
-    private static long topKCorrect(int topK, NeighborQueue nn, Set<Integer> gt) {
-        var a = new int[nn.size()];
-        for (int j = a.length - 1; j >= 0; j--) {
-            a[j] = nn.pop();
-        }
+    private static long topKCorrect(int topK, NeighborQueue.NodeScore[] nn, Set<Integer> gt) {
+        var a = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
         return topKCorrect(topK, a, gt);
     }
 
     private static ResultSummary performQueries(DataSet ds, RandomAccessVectorValues<float[]> exactVv, CompressedVectors cv, GraphIndex<float[]> index, int topK, int efSearch, int queryRuns) {
         assert efSearch >= topK;
         LongAdder topKfound = new LongAdder();
-        LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
             IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = ds.queryVectors.get(i);
-                NeighborQueue nn;
+                NeighborQueue.NodeScore[] nn;
                 if (cv != null) {
                     var view = index.getView();
-                    NeighborSimilarity.ApproximateScoreFunction asf = (other) -> cv.decodedSimilarity(other, queryVector, ds.similarityFunction);
+                    NeighborSimilarity.ApproximateScoreFunction sf = (other) -> cv.decodedSimilarity(other, queryVector, ds.similarityFunction);
                     Function<Integer, float[]> vectorFetch = (index instanceof OnHeapGraphIndex<float[]>) ? exactVv::vectorValue : view::getVector; // We'll use view::getVector once Bench actually goes to disk
+                    NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
                     NeighborSimilarity.ExactScoreFunction esf = (other) -> ds.similarityFunction.compare(vectorFetch.apply(other), queryVector);
                     nn = new GraphSearcher.Builder(view)
                             .build()
-                            .search(esf, asf, efSearch, null, Integer.MAX_VALUE);
+                            .search(sf, rr, efSearch, null);
                 } else {
-                    nn = GraphSearcher.search(queryVector, efSearch, exactVv, VectorEncoding.FLOAT32, ds.similarityFunction, index, null, Integer.MAX_VALUE);
+                    nn = GraphSearcher.search(queryVector, efSearch, exactVv, VectorEncoding.FLOAT32, ds.similarityFunction, index, null);
                 }
 
                 var gt = ds.groundTruth.get(i);
                 var n = topKCorrect(topK, nn, gt);
                 topKfound.add(n);
-                nodesVisited.add(nn.visitedCount());
             });
         }
-        return new ResultSummary((int) topKfound.sum(), (int) nodesVisited.sum());
+        return new ResultSummary((int) topKfound.sum(), -1); // TODO do we care enough about visited count to hack it back into searcher?
     }
 
     record DataSet(VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<Set<Integer>> groundTruth) { }

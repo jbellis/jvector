@@ -17,6 +17,8 @@
 
 package com.github.jbellis.jvector.graph;
 
+import java.util.Map;
+
 /** Encapsulates comparing node distances for diversity checks. */
 public interface NeighborSimilarity {
   /** for one-off comparisons between nodes */
@@ -61,6 +63,6 @@ public interface NeighborSimilarity {
   }
 
   interface ReRanker<T>  {
-    float similarityTo(int node2, RandomAccessVectorValues<T> vectors);
+    float similarityTo(int node2, Map<Integer, T> vectors);
   }
 }
