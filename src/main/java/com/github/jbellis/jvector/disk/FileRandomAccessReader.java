@@ -17,10 +17,19 @@
 package com.github.jbellis.jvector.disk;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.RandomAccessFile;
 
 public class FileRandomAccessReader extends RandomAccessFile implements RandomAccessReader {
     public FileRandomAccessReader(String name) throws FileNotFoundException {
         super(name, "r");
+    }
+
+    @Override
+    public void readFloatsAt(long offset, float[] buffer) throws IOException {
+        seek(offset);
+        for (int i = 0; i < buffer.length; i++) {
+            buffer[i] = readFloat();
+        }
     }
 }
