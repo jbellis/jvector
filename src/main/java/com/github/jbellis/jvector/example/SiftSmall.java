@@ -1,8 +1,8 @@
 package com.github.jbellis.jvector.example;
 
 import com.github.jbellis.jvector.disk.CompressedVectors;
-import com.github.jbellis.jvector.disk.FileRandomAccessReader;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
 import com.github.jbellis.jvector.example.util.SiftLoader;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
@@ -10,7 +10,10 @@ import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.apache.commons.io.FileUtils;
 
-import java.io.*;
+import java.io.DataOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -45,13 +48,9 @@ public class SiftSmall {
         DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(testOutputFile));
         OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
-        var onDiskGraph = new OnDiskGraphIndex<float[]>(() -> {
-            try {
-                return new FileRandomAccessReader(testOutputFile.getAbsolutePath());
-            } catch (FileNotFoundException e) {
-                throw new UncheckedIOException(e);
-            }
-        }, 0);
+        var marr = new MappedRandomAccessReader(testOutputFile.getAbsolutePath());
+
+        var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
 
         testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
         testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);

@@ -17,18 +17,24 @@
 package com.github.jbellis.jvector.example;
 
 import com.github.jbellis.jvector.disk.CompressedVectors;
+import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import com.github.jbellis.jvector.vector.VectorUtil;
 import io.jhdf.HdfFile;
+import org.apache.commons.io.FileUtils;
 
+import java.io.DataOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -36,26 +42,33 @@ import java.util.stream.IntStream;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-    private static void testRecall(int M, int efConstruction, List<Boolean> pqOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv)
-    {
+    private static void testRecall(int M, int efConstruction, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv, Path testDirectory) throws IOException {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
         var topK = ds.groundTruth.get(0).size();
 
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.5f, 1.4f);
-        var index = builder.build();
+        var onHeapGraph = builder.build();
         long buildNanos = System.nanoTime() - start;
+
+        var testOutputFile = testDirectory.resolve("graph" + M + efConstruction + ds.name).toFile();
+        DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(testOutputFile));
+        OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputFile);
+        var marr = new MappedRandomAccessReader(testOutputFile.getAbsolutePath());
+        var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
 
         int queryRuns = 10;
         for (int overquery : efSearchOptions) {
-            for (boolean usePq : pqOptions) {
+            for (boolean useDisk : diskOptions) {
                 start = System.nanoTime();
-                var pqr = performQueries(ds, floatVectors, usePq ? cv : null, index, topK, topK * overquery, queryRuns);
+                var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
                 var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
                 System.out.format("Index   M=%d ef=%d PQ=%b: top %d/%d recall %.4f, build %.2fs, query %.2fs. %s nodes visited%n",
-                        M, efConstruction, usePq, topK, overquery, recall, buildNanos / 1_000_000_000.0, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                        M, efConstruction, useDisk, topK, overquery, recall, buildNanos / 1_000_000_000.0, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
             }
         }
+
+        FileUtils.deleteQuietly(testOutputFile);
     }
 
     private static float normOf(float[] baseVector) {
@@ -93,9 +106,7 @@ public class Bench {
                 if (cv != null) {
                     var view = index.getView();
                     NeighborSimilarity.ApproximateScoreFunction sf = (other) -> cv.decodedSimilarity(other, queryVector, ds.similarityFunction);
-                    Function<Integer, float[]> vectorFetch = (index instanceof OnHeapGraphIndex<float[]>) ? exactVv::vectorValue : view::getVector; // We'll use view::getVector once Bench actually goes to disk
                     NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
-                    NeighborSimilarity.ExactScoreFunction esf = (other) -> ds.similarityFunction.compare(vectorFetch.apply(other), queryVector);
                     nn = new GraphSearcher.Builder(view)
                             .build()
                             .search(sf, rr, efSearch, null);
@@ -111,7 +122,7 @@ public class Bench {
         return new ResultSummary((int) topKfound.sum(), -1); // TODO do we care enough about visited count to hack it back into searcher?
     }
 
-    record DataSet(VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<Set<Integer>> groundTruth) { }
+    record DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<Set<Integer>> groundTruth) { }
 
     private static DataSet load(String pathStr) {
         // infer the similarity
@@ -128,7 +139,8 @@ public class Bench {
         float[][] baseVectors;
         float[][] queryVectors;
         int[][] groundTruth;
-        try (HdfFile hdf = new HdfFile(Paths.get(pathStr))) {
+        Path path = Paths.get(pathStr);
+        try (HdfFile hdf = new HdfFile(path)) {
             baseVectors = (float[][]) hdf.getDatasetByPath("train").getData();
             queryVectors = (float[][]) hdf.getDatasetByPath("test").getData();
             groundTruth = (int[][]) hdf.getDatasetByPath("neighbors").getData();
@@ -187,7 +199,7 @@ public class Bench {
         System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
                 pathStr, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
 
-        return new DataSet(similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
+        return new DataSet(path.getFileName().toString(), similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
 
     private static void normalizeAll(Iterable<float[]> vectors) {
@@ -196,7 +208,7 @@ public class Bench {
         }
     }
 
-    public static void main(String[] args) throws ExecutionException, InterruptedException {
+    public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
         var files = List.of(
                 "hdf5/nytimes-256-angular.hdf5",
@@ -206,12 +218,12 @@ public class Bench {
         var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchFactor = List.of(1, 2, 4);
-        var pqOptions = List.of(false, true);
+        var diskOptions = List.of(false, true);
         // large files not yet supported
 //                "hdf5/deep-image-96-angular.hdf5",
 //                "hdf5/gist-960-euclidean.hdf5");
         for (var f : files) {
-            gridSearch(f, mGrid, efConstructionGrid, pqOptions, efSearchFactor);
+            gridSearch(f, mGrid, efConstructionGrid, diskOptions, efSearchFactor);
         }
 
         // tiny dataset, don't waste time building a huge index
@@ -219,11 +231,11 @@ public class Bench {
         mGrid = List.of(8, 12, 16, 24);
         efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
         for (var f : files) {
-            gridSearch(f, mGrid, efConstructionGrid, pqOptions, efSearchFactor);
+            gridSearch(f, mGrid, efConstructionGrid, diskOptions, efSearchFactor);
         }
     }
 
-    private static void gridSearch(String f, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> pqOptions, List<Integer> efSearchFactor) throws ExecutionException, InterruptedException {
+    private static void gridSearch(String f, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
         var ds = load(f);
 
         var start = System.nanoTime();
@@ -237,10 +249,16 @@ public class Bench {
 
         var compressedVectors = new CompressedVectors(pq, quantizedVectors);
 
-        for (int M : mGrid) {
-            for (int beamWidth : efConstructionGrid) {
-                testRecall(M, beamWidth, pqOptions, efSearchFactor, ds, compressedVectors);
+        var testDirectory = Files.createTempDirectory("BenchGraphDir");
+
+        try {
+            for (int M : mGrid) {
+                for (int beamWidth : efConstructionGrid) {
+                    testRecall(M, beamWidth, diskOptions, efSearchFactor, ds, compressedVectors, testDirectory);
+                }
             }
+        } finally {
+            FileUtils.deleteQuietly(testDirectory.toFile());
         }
     }
 }
