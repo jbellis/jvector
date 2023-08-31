@@ -222,7 +222,6 @@ public class GraphIndexBuilder<T> {
       if (startNode != newStartNode) {
         startNode = newStartNode;
       } else {
-        System.out.println("New mediod: " + newStartNode);
         return newStartNode;
       }
     }
