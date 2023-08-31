@@ -1,14 +1,18 @@
 package com.github.jbellis.jvector.example;
 
-import com.github.jbellis.jvector.disk.*;
-import com.github.jbellis.jvector.graph.*;
+import com.github.jbellis.jvector.disk.CompressedVectors;
+import com.github.jbellis.jvector.disk.FileRandomAccessReader;
+import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.example.util.SiftLoader;
+import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Properties;
@@ -18,7 +22,7 @@ import java.util.stream.IntStream;
 
 public class SiftSmall {
 
-    public static void testRecall(ArrayList<float[]> baseVectors, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, File testOutputFile) throws IOException, InterruptedException, ExecutionException {
+    public static void testRecall(ArrayList<float[]> baseVectors, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, Path testDirectory) throws IOException, InterruptedException, ExecutionException {
         var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
 
         var start = System.nanoTime();
@@ -37,6 +41,7 @@ public class SiftSmall {
         var onHeapGraph = builder.build();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
+        var testOutputFile = testDirectory.resolve("graph_test").toFile();
         DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(testOutputFile));
         OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
@@ -90,14 +95,11 @@ public class SiftSmall {
                 baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
 
         var testDirectory = Files.createTempDirectory("SiftSmallGraphDir");
-        var testOutputPath = testDirectory.resolve("graph_test");
         try {
-            testRecall(baseVectors, queryVectors, groundTruth, testOutputPath.toFile());
+            testRecall(baseVectors, queryVectors, groundTruth, testDirectory);
         } finally {
-            Files.delete(testOutputPath);
-            Files.delete(testDirectory);
+            FileUtils.deleteQuietly(testDirectory.toFile());
         }
-
     }
 
     private static Properties loadProperties(String resourceName) throws IOException {
