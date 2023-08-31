@@ -17,13 +17,14 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.stream.IntStream;
-
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.stream.IntStream;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -193,7 +194,9 @@ public class GraphIndexBuilder<T> {
   private NeighborArray getNaturalCandidates(NeighborQueue.NodeScore[] candidates) {
     NeighborArray scratch = this.naturalScratch.get();
     scratch.clear();
-    for (NeighborQueue.NodeScore candidate : candidates) {
+    int candidateCount = candidates.length;
+    for (int i = candidateCount - 1; i >= 0; i--) {
+      var candidate = candidates[i];
       scratch.addInOrder(candidate.node(), candidate.score());
     }
     return scratch;

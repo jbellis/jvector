@@ -24,6 +24,7 @@ import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static org.junit.Assert.assertEquals;
@@ -110,7 +111,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
     for (int i = 500; i < nDoc; i++) {
       acceptOrds.set(i);
     }
-    NeighborQueue nn =
+    NeighborQueue.NodeScore[] nn =
         GraphSearcher.search(
             getTargetVector(),
             10,
@@ -121,7 +122,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
             acceptOrds
         );
 
-    int[] nodes = nn.nodesCopy();
+    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {

@@ -122,7 +122,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
     var graph = buildInOrder(builder, vectors);
     // run some searches
-    NeighborQueue nn = GraphSearcher.search(
+    NeighborQueue.NodeScore[] nn = GraphSearcher.search(
             getTargetVector(),
             10,
             vectors.copy(),
@@ -131,7 +131,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             graph,
             null
     );
-    int[] nodes = nn.nodesCopy();
+    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -162,7 +162,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
-    NeighborQueue nn =
+    NeighborQueue.NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     10,
@@ -172,7 +172,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     graph,
                     acceptOrds
             );
-    int[] nodes = nn.nodesCopy();
+    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -201,7 +201,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
     // Check the search finds all accepted vectors
     int numAccepted = acceptOrds.cardinality();
-    NeighborQueue nn =
+    NeighborQueue.NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     numAccepted,
@@ -212,7 +212,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     acceptOrds
             );
 
-    int[] nodes = nn.nodesCopy();
+    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
     for (int node : nodes) {
       assertTrue("the results include a deleted document: %d for %s".formatted(
               node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
@@ -224,46 +224,6 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                 i, GraphIndex.prettyPrint(builder.graph)), Arrays.stream(nodes).anyMatch(j -> j == finalI));
       }
     }
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  public void testVisitedLimit() {
-    int nDoc = 500;
-    similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
-    VectorEncoding vectorEncoding = getVectorEncoding();
-    GraphIndexBuilder<T> builder =
-        new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-    var graph = builder.build();
-
-    int topK = 50;
-    int visitedLimit = topK + getRandom().nextInt(5);
-    NeighborQueue nn =
-        switch (getVectorEncoding()) {
-          case FLOAT32 -> GraphSearcher.search(
-              (float[]) getTargetVector(),
-              topK,
-              (RandomAccessVectorValues<float[]>) vectors.copy(),
-              getVectorEncoding(),
-              similarityFunction,
-              graph,
-              createRandomAcceptOrds(0, nDoc)
-          );
-          case BYTE -> GraphSearcher.search(
-              (byte[]) getTargetVector(),
-              topK,
-              (RandomAccessVectorValues<byte[]>) vectors.copy(),
-              getVectorEncoding(),
-              similarityFunction,
-              graph,
-              createRandomAcceptOrds(0, nDoc)
-          );
-        };
-
-    assertTrue(nn.incomplete());
-    // The visited count shouldn't exceed the limit
-    assertTrue(nn.visitedCount() <= visitedLimit);
   }
 
   @Test
@@ -447,7 +407,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     int efSearch = 100;
     int totalMatches = 0;
     for (int i = 0; i < 100; i++) {
-      NeighborQueue actual;
+      NeighborQueue.NodeScore[] actual;
       T query = randomVector(dim);
       actual =
               GraphSearcher.search(
@@ -460,9 +420,6 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                       acceptOrds
               );
 
-      while (actual.size() > topK) {
-        actual.pop();
-      }
       NeighborQueue expected = new NeighborQueue(topK, false);
       for (int j = 0; j < size; j++) {
         if (vectors.vectorValue(j) != null && (acceptOrds == null || acceptOrds.get(j))) {
@@ -480,8 +437,10 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
           }
         }
       }
-      assertEquals(topK, actual.size());
-      totalMatches += computeOverlap(actual.nodesCopy(), expected.nodesCopy());
+      var actualNodeIds = Arrays.stream(actual, actual.length - topK, actual.length).mapToInt(NeighborQueue.NodeScore::node).toArray();
+
+      assertEquals(topK, actualNodeIds.length);
+      totalMatches += computeOverlap(actualNodeIds, expected.nodesCopy());
     }
     // with the current settings, we can visit every node in the graph, so this should actually be 100%
     // except in cases where the graph ends up partitioned.  If that happens, it probably means
