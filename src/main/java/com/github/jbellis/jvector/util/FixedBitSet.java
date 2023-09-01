@@ -23,6 +23,9 @@ import java.util.Arrays;
  * an int index, implementing {@link Bits}.
  */
 public final class FixedBitSet extends BitSet {
+    private static final long BASE_RAM_BYTES_USED =
+            RamUsageEstimator.shallowSizeOfInstance(FixedBitSet.class);
+
     private final long[] bits; // Array of longs holding the bits
     private final int numBits; // The number of bits in use
     private final int numWords; // The exact number of longs needed to hold numBits (<= bits.length)
@@ -551,5 +554,10 @@ public final class FixedBitSet extends BitSet {
             }
             return bitSet;
         }
+    }
+
+    @Override
+    public long ramBytesUsed() {
+        return BASE_RAM_BYTES_USED + RamUsageEstimator.sizeOf(bits);
     }
 }

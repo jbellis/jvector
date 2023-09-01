@@ -425,4 +425,17 @@ public final class ArrayUtil {
     System.arraycopy(array, from, copy, 0, subLength);
     return copy;
   }
+
+  /**
+   * Copies the specified range of the given array into a new sub array.
+   *
+   * @param array the input array
+   * @param from the initial index of range to be copied (inclusive)
+   * @param to the final index of range to be copied (exclusive)
+   */
+  public static long[] copyOfSubArray(long[] array, int from, int to) {
+    final long[] copy = new long[to - from];
+    System.arraycopy(array, from, copy, 0, to - from);
+    return copy;
+  }
 }

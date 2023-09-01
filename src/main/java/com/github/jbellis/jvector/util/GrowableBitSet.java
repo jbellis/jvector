@@ -101,4 +101,9 @@ public class GrowableBitSet extends BitSet {
     }
     return next;
   }
+
+  @Override
+  public long ramBytesUsed() {
+    throw new UnsupportedOperationException();
+  }
 }

@@ -19,7 +19,7 @@ package com.github.jbellis.jvector.util;
 /**
  * Base implementation for a bit set.
  */
-public abstract class BitSet implements Bits {
+public abstract class BitSet implements Bits, Accountable {
   /**
    * Clear all the bits of the set.
    *

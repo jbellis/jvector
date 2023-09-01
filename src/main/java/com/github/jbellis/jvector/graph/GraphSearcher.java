@@ -17,10 +17,7 @@
 
 package com.github.jbellis.jvector.graph;
 
-import com.github.jbellis.jvector.util.BitSet;
-import com.github.jbellis.jvector.util.Bits;
-import com.github.jbellis.jvector.util.FixedBitSet;
-import com.github.jbellis.jvector.util.GrowableBitSet;
+import com.github.jbellis.jvector.util.*;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -90,7 +87,7 @@ public class GraphSearcher<T> {
     }
 
     public GraphSearcher build() {
-      BitSet bits = concurrent ? new GrowableBitSet(graph.size()) : new FixedBitSet(graph.size());
+      BitSet bits = concurrent ? new GrowableBitSet(graph.size()) : new SparseFixedBitSet(graph.size());
       return new GraphSearcher(graph, bits);
     }
   }
