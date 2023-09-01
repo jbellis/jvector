@@ -27,9 +27,9 @@ public class TestNeighborQueue extends RandomizedTest {
   public void testNeighborsProduct() {
     // make sure we have the sign correct
     NeighborQueue nn = new NeighborQueue(2, false);
-    assertTrue(nn.insertWithOverflow(2, 0.5f));
-    assertTrue(nn.insertWithOverflow(1, 0.2f));
-    assertTrue(nn.insertWithOverflow(3, 1f));
+    assertTrue(nn.insertWithReplacement(2, 0.5f));
+    assertTrue(nn.insertWithReplacement(1, 0.2f));
+    assertTrue(nn.insertWithReplacement(3, 1f));
     assertEquals(0.5f, nn.topScore(), 0);
     nn.pop();
     assertEquals(1f, nn.topScore(), 0);
@@ -39,9 +39,9 @@ public class TestNeighborQueue extends RandomizedTest {
   @Test
   public void testNeighborsMaxHeap() {
     NeighborQueue nn = new NeighborQueue(2, true);
-    assertTrue(nn.insertWithOverflow(2, 2));
-    assertTrue(nn.insertWithOverflow(1, 1));
-    assertFalse(nn.insertWithOverflow(3, 3));
+    assertTrue(nn.insertWithReplacement(2, 2));
+    assertTrue(nn.insertWithReplacement(1, 1));
+    assertFalse(nn.insertWithReplacement(3, 3));
     assertEquals(2f, nn.topScore(), 0);
     nn.pop();
     assertEquals(1f, nn.topScore(), 0);
@@ -88,7 +88,7 @@ public class TestNeighborQueue extends RandomizedTest {
     assertEquals(1, nn.topNode());
 
     // insertWithOverflow does not extend the queue
-    nn.insertWithOverflow(3, 3);
+    nn.insertWithReplacement(3, 3);
     assertEquals(2, nn.size());
     assertEquals(2, nn.topNode());
 

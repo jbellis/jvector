@@ -166,7 +166,7 @@ public class GraphSearcher<T> {
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
           if (acceptOrds == null || acceptOrds.get(friendOrd)) {
-            if (resultsQueue.insertWithOverflow(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
+            if (resultsQueue.insertWithReplacement(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
               minAcceptedSimilarity = resultsQueue.topScore();
             }
           }

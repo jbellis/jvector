@@ -24,7 +24,7 @@ import com.github.jbellis.jvector.util.NumericUtils;
  * NeighborQueue uses a {@link LongHeap} to store lists of arcs in a graph, represented as a
  * neighbor node id with an associated score packed together as a sortable long, which is sorted
  * primarily by score. The queue provides both fixed-size and unbounded operations via {@link
- * #insertWithOverflow(int, float)} and {@link #add(int, float)}, and provides MIN and MAX heap
+ * #insertWithReplacement(int, float)} and {@link #add(int, float)}, and provides MIN and MAX heap
  * subclasses.
  */
 public class NeighborQueue {
@@ -78,15 +78,14 @@ public class NeighborQueue {
 
   /**
    * If the heap is not full (size is less than the initialSize provided to the constructor), adds a
-   * new node-and-score element. If the heap is full, compares the score against the current top
-   * score, and replaces the top element if newScore is better than (greater than unless the heap is
-   * reversed), the current top score.
+   * new node-and-score element. If the heap is full, compares newScore against the current worst
+   * score; if newScore is better, the worst node+score is discarded and newNode+newScore is added.
    *
    * @param newNode the neighbor node id
    * @param newScore the score of the neighbor, relative to some other node
    */
-  public boolean insertWithOverflow(int newNode, float newScore) {
-    return heap.insertWithOverflow(encode(newNode, newScore));
+  public boolean insertWithReplacement(int newNode, float newScore) {
+    return heap.insertWithReplacement(encode(newNode, newScore));
   }
 
   /**

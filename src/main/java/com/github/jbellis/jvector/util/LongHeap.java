@@ -21,7 +21,7 @@ package com.github.jbellis.jvector.util;
  * a partial ordering of its elements such that the least element can always be found in constant
  * time. Put()'s and pop()'s require log(size). This heap provides unbounded growth via {@link
  * #push(long)}, and bounded-size insertion based on its nominal maxSize via {@link
- * #insertWithOverflow(long)}. The heap is a min heap, meaning that the top element is the lowest
+ * #insertWithReplacement(long)}. The heap is a min heap, meaning that the top element is the lowest
  * value of the heap.
  */
 public final class LongHeap {
@@ -72,7 +72,7 @@ public final class LongHeap {
    * @return whether the value was added (unless the heap is full, or the new value is less than the
    *     top value)
    */
-  public boolean insertWithOverflow(long value) {
+  public boolean insertWithReplacement(long value) {
     if (size >= maxSize) {
       if (value < heap[1]) {
         return false;
