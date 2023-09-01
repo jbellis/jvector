@@ -17,13 +17,13 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.stream.IntStream;
-
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.stream.IntStream;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -48,7 +48,6 @@ public class GraphIndexBuilder<T> {
   private final float neighborOverflow;
   private final VectorEncoding vectorEncoding;
   private final ThreadLocal<GraphSearcher> graphSearcher;
-  private final ThreadLocal<NeighborQueue> beamCandidates;
 
   final OnHeapGraphIndex<T> graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
@@ -111,8 +110,6 @@ public class GraphIndexBuilder<T> {
             ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
     this.concurrentScratch =
             ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
-    this.beamCandidates =
-            ThreadLocal.withInitial(() -> new NeighborQueue(beamWidth, false));
   }
 
   public OnHeapGraphIndex<T> build() {
@@ -170,14 +167,11 @@ public class GraphIndexBuilder<T> {
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
       var gs = new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build(); // TODO cache these (but not with the same View)
-      NeighborSimilarity.ExactScoreFunction scoreFunction = (i) -> scoreBetween(
-              vectorsCopy.get().vectorValue(i), value);
+      NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vectorsCopy.get().vectorValue(i), value);
 
       var bits = new ExcludingBits(node);
-      NeighborQueue candidates = beamCandidates.get();
-      candidates.clear();
       // find best "natural" candidates with a beam search
-      gs.searchInternal(scoreFunction, candidates, beamWidth, ep, bits, Integer.MAX_VALUE);
+      var candidates = gs.searchInternal(scoreFunction, null, beamWidth, ep, bits);
 
       // Update neighbors with these candidates.
       var natural = getNaturalCandidates(candidates);
@@ -233,16 +227,11 @@ public class GraphIndexBuilder<T> {
     neighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
 
-  private NeighborArray getNaturalCandidates(NeighborQueue candidates) {
+  private NeighborArray getNaturalCandidates(NeighborQueue.NodeScore[] candidates) {
     NeighborArray scratch = this.naturalScratch.get();
     scratch.clear();
-    int candidateCount = candidates.size();
-    for (int i = candidateCount - 1; i >= 0; i--) {
-      float score = candidates.topScore();
-      int node = candidates.pop();
-      scratch.node()[i] = node;
-      scratch.score()[i] = score;
-      scratch.size = candidateCount;
+    for (NeighborQueue.NodeScore candidate : candidates) {
+        scratch.addInOrder(candidate.node(), candidate.score());
     }
     return scratch;
   }

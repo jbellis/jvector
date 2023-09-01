@@ -17,6 +17,7 @@
 
 package com.github.jbellis.jvector.graph;
 
+import com.github.jbellis.jvector.graph.NeighborQueue.NodeScore;
 import com.github.jbellis.jvector.util.BitSet;
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.util.FixedBitSet;
@@ -24,12 +25,16 @@ import com.github.jbellis.jvector.util.GrowableBitSet;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Map;
+
 /**
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
  * search algorithm, see {@link GraphIndex}.
  */
-public class GraphSearcher {
-  private final GraphIndex.View view;
+public class GraphSearcher<T> {
+  private final GraphIndex.View<T> view;
 
   /**
    * Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
@@ -45,7 +50,7 @@ public class GraphSearcher {
    * @param visited bit set that will track nodes that have already been visited
    */
   GraphSearcher(
-      GraphIndex.View view,
+      GraphIndex.View<T> view,
       BitSet visited) {
     this.view = view;
     this.candidates = new NeighborQueue(100, true);
@@ -56,7 +61,7 @@ public class GraphSearcher {
    * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
    * is the unique owner of the vectors instance passed in here.
    */
-  public static <T> NeighborQueue search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds, int visitedLimit) {
+  public static <T> NodeScore[] search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
     var searcher = new GraphSearcher.Builder(graph.getView()).build();
     NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
@@ -68,7 +73,7 @@ public class GraphSearcher {
           throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
       }
     };
-    return searcher.search(scoreFunction, topK, acceptOrds, visitedLimit);
+    return searcher.search(scoreFunction, null, topK, acceptOrds);
   }
 
   /** Builder */
@@ -91,58 +96,56 @@ public class GraphSearcher {
     }
   }
 
-  public NeighborQueue search(
+  public NodeScore[] search(
       NeighborSimilarity.ScoreFunction scoreFunction,
+      NeighborSimilarity.ReRanker<T> reRanker,
       int topK,
-      Bits acceptOrds,
-      int visitedLimit) {
-    int initialEp = view.entryNode();
-    if (initialEp == -1) {
-      return new NeighborQueue(1, false);
-    }
-    NeighborQueue results;
-    results = new NeighborQueue(topK, false);
-    searchInternal(scoreFunction, results, topK, view.entryNode(), acceptOrds, visitedLimit);
-    return results;
+      Bits acceptOrds)
+  {
+    return searchInternal(scoreFunction, reRanker, topK, view.entryNode(), acceptOrds);
   }
 
   /**
-   * Add the closest neighbors found to a priority queue (heap). These are returned in REVERSE
-   * proximity order -- the most distant neighbor of the topK found, i.e. the one with the lowest
-   * score/comparison value, will be at the top of the heap, while the closest neighbor will be the
-   * last to be popped.
+   * Add the closest neighbors found to a priority queue (heap). These are returned in
+   * proximity order -- the closest neighbor of the topK found, i.e. the one with the highest
+   * score/comparison value, will be at the front of the array.
+   * <p/>
+   * If scoreFunction is exact, then reRanker may be null.
    */
-  void searchInternal(
+  // TODO add back ability to re-use a results structure instead of allocating a new one each time?
+  NodeScore[] searchInternal(
       NeighborSimilarity.ScoreFunction scoreFunction,
-      NeighborQueue results,
+      NeighborSimilarity.ReRanker<T> reRanker,
       int topK,
       int ep,
-      Bits acceptOrds,
-      int visitedLimit) {
-    assert results.isMinHeap();
+      Bits acceptOrds)
+  {
+    if (!scoreFunction.isExact() && reRanker == null) {
+      throw new IllegalArgumentException("Either scoreFunction must be exact, or reRanker must not be null");
+    }
 
     if (ep < 0) {
-      return;
+      return new NodeScore[0];
     }
 
     prepareScratchState(view.size());
+    var resultsQueue = new NeighborQueue(topK, false);
+    Map<Integer, T> vectorsEncountered = !scoreFunction.isExact() ? new java.util.HashMap<>() : null;
 
-    int numVisited = 0;
     float score = scoreFunction.similarityTo(ep);
-    numVisited++;
     visited.set(ep);
     candidates.add(ep, score);
     if (acceptOrds == null || acceptOrds.get(ep)) {
-      results.add(ep, score);
+      resultsQueue.add(ep, score);
     }
 
     // A bound that holds the minimum similarity to the query vector that a candidate vector must
     // have to be considered.
     float minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
-    if (results.size() >= topK) {
-      minAcceptedSimilarity = results.topScore();
+    if (resultsQueue.size() >= topK) {
+      minAcceptedSimilarity = resultsQueue.topScore();
     }
-    while (candidates.size() > 0 && !results.incomplete()) {
+    while (candidates.size() > 0 && !resultsQueue.incomplete()) {
       // get the best candidate (closest or best scoring)
       float topCandidateSimilarity = candidates.topScore();
       if (topCandidateSimilarity < minAcceptedSimilarity) {
@@ -150,32 +153,41 @@ public class GraphSearcher {
       }
 
       int topCandidateNode = candidates.pop();
+      if (!scoreFunction.isExact()) {
+        vectorsEncountered.put(topCandidateNode, view.getVector(topCandidateNode));
+      }
       for (var it = view.getNeighborsIterator(topCandidateNode); it.hasNext(); ) {
         int friendOrd = it.nextInt();
         if (visited.getAndSet(friendOrd)) {
           continue;
         }
 
-        if (numVisited >= visitedLimit) {
-          results.markIncomplete();
-          break;
-        }
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
-        numVisited++;
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
           if (acceptOrds == null || acceptOrds.get(friendOrd)) {
-            if (results.insertWithOverflow(friendOrd, friendSimilarity) && results.size() >= topK) {
-              minAcceptedSimilarity = results.topScore();
+            if (resultsQueue.insertWithOverflow(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
+              minAcceptedSimilarity = resultsQueue.topScore();
             }
           }
         }
       }
     }
-    while (results.size() > topK) {
-      results.pop();
+    assert resultsQueue.size() <= topK;
+
+    if (scoreFunction.isExact()) {
+      var nodes = new NodeScore[resultsQueue.size()];
+      for (int i = nodes.length - 1; i >= 0; i--) {
+          var nScore = resultsQueue.topScore();
+          var n = resultsQueue.pop();
+          nodes[i] = new NodeScore(n, nScore);
+      }
+      return nodes;
+    } else {
+      var nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
+      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble(NodeScore::score).reversed());
+      return nodes;
     }
-    results.setVisitedCount(numVisited);
   }
 
   private void prepareScratchState(int capacity) {

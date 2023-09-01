@@ -68,23 +68,14 @@ public class TestNeighborQueue extends RandomizedTest {
   }
 
   @Test
-  public void testVisitedCount() {
-    NeighborQueue nn = new NeighborQueue(2, false);
-    nn.setVisitedCount(100);
-    assertEquals(100, nn.visitedCount());
-  }
-
-  @Test
   public void testClear() {
     NeighborQueue nn = new NeighborQueue(2, false);
     nn.add(1, 1.1f);
     nn.add(2, -2.2f);
-    nn.setVisitedCount(42);
     nn.markIncomplete();
     nn.clear();
 
     assertEquals(0, nn.size());
-    assertEquals(0, nn.visitedCount());
     assertFalse(nn.incomplete());
   }
 

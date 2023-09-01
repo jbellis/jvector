@@ -60,12 +60,13 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
         return M;
     }
 
-    /** return an Graph that can be safely querried concurrently */
+    /** return a Graph that can be safely queried concurrently */
     public GraphIndex.View<T> getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
 
+    // TODO: This is fake generic until the reading functionality uses T
     public class OnDiskView implements GraphIndex.View<T>, AutoCloseable
     {
         private final RandomAccessReader reader;
@@ -78,7 +79,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
 
         public T getVector(int node) {
             try {
-                reader.seek(neighborsOffset + node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * M));
+                reader.seek(neighborsOffset +
+                        node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (M + 1)) // earlier entries
+                        + Integer.BYTES // skip the ID
+                );
+
                 return (T) Io.readFloats(reader, dimension);
             }
             catch (IOException e) {
@@ -88,7 +93,10 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
 
         public NodesIterator getNeighborsIterator(int node) {
             try {
-                reader.seek(neighborsOffset + (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) + node * (long) Integer.BYTES * M);
+                // Cache full-precision coordinates per DiskANN 3.5
+                reader.seek(neighborsOffset +
+                        (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) +
+                        (node * (long) Integer.BYTES * (M + 1)));
                 int neighborCount = reader.readInt();
                 return new NodesIterator(neighborCount)
                 {
@@ -127,7 +135,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
         }
 
         @Override
-        public void close()
+        public void close() throws Exception
         {
             reader.close();
         }

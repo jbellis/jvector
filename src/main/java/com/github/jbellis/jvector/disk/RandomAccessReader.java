@@ -7,6 +7,4 @@ public interface RandomAccessReader extends DataInput, AutoCloseable {
     public void seek(long offset) throws IOException;
 
     public void readFloatsAt(long offset, float[] buffer) throws IOException;
-
-    public void close();
 }
