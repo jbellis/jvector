@@ -111,7 +111,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
     for (int i = 500; i < nDoc; i++) {
       acceptOrds.set(i);
     }
-    NeighborQueue.NodeScore[] nn =
+    NodeScore[] nn =
         GraphSearcher.search(
             getTargetVector(),
             10,
@@ -122,7 +122,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
             acceptOrds
         );
 
-    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
+    int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {

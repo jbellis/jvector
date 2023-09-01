@@ -66,7 +66,7 @@ public class SiftSmall {
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
-            NeighborQueue.NodeScore[] nn;
+            NodeScore[] nn;
             var view = graph.getView();
             var searcher = new GraphSearcher.Builder(view).build();
             if (compressedVectors == null) {
@@ -80,7 +80,7 @@ public class SiftSmall {
             }
 
             var gt = groundTruth.get(i);
-            var n = IntStream.range(0, topK).filter(j -> gt.contains(nn[j].node())).count();
+            var n = IntStream.range(0, topK).filter(j -> gt.contains(nn[j].node)).count();
             topKfound.addAndGet((int) n);
         });
         System.out.printf("  (%s) Querying %d vectors in parallel took %s seconds%n", graphType, queryVectors.size(), (System.nanoTime() - start) / 1_000_000_000.0);

@@ -122,7 +122,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
     var graph = buildInOrder(builder, vectors);
     // run some searches
-    NeighborQueue.NodeScore[] nn = GraphSearcher.search(
+    NodeScore[] nn = GraphSearcher.search(
             getTargetVector(),
             10,
             vectors.copy(),
@@ -131,7 +131,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             graph,
             null
     );
-    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
+    int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -162,7 +162,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
-    NeighborQueue.NodeScore[] nn =
+    NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     10,
@@ -172,7 +172,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     graph,
                     acceptOrds
             );
-    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
+    int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
     for (int node : nodes) {
@@ -201,7 +201,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
     // Check the search finds all accepted vectors
     int numAccepted = acceptOrds.cardinality();
-    NeighborQueue.NodeScore[] nn =
+    NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     numAccepted,
@@ -212,7 +212,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     acceptOrds
             );
 
-    int[] nodes = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
+    int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     for (int node : nodes) {
       assertTrue("the results include a deleted document: %d for %s".formatted(
               node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
@@ -407,7 +407,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     int efSearch = 100;
     int totalMatches = 0;
     for (int i = 0; i < 100; i++) {
-      NeighborQueue.NodeScore[] actual;
+      NodeScore[] actual;
       T query = randomVector(dim);
       actual =
               GraphSearcher.search(
@@ -437,7 +437,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
           }
         }
       }
-      var actualNodeIds = Arrays.stream(actual, 0, topK).mapToInt(NeighborQueue.NodeScore::node).toArray();
+      var actualNodeIds = Arrays.stream(actual, 0, topK).mapToInt(nodeScore -> nodeScore.node).toArray();
 
       assertEquals(topK, actualNodeIds.length);
       totalMatches += computeOverlap(actualNodeIds, expected.nodesCopy());

@@ -94,8 +94,8 @@ public class Bench {
         return resultSet.stream().filter(gt::contains).count();
     }
 
-    private static long topKCorrect(int topK, NeighborQueue.NodeScore[] nn, Set<Integer> gt) {
-        var a = Arrays.stream(nn).mapToInt(NeighborQueue.NodeScore::node).toArray();
+    private static long topKCorrect(int topK, NodeScore[] nn, Set<Integer> gt) {
+        var a = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
         return topKCorrect(topK, a, gt);
     }
 
@@ -105,7 +105,7 @@ public class Bench {
         for (int k = 0; k < queryRuns; k++) {
             IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = ds.queryVectors.get(i);
-                NeighborQueue.NodeScore[] nn;
+                NodeScore[] nn;
                 if (cv != null) {
                     var view = index.getView();
                     NeighborSimilarity.ApproximateScoreFunction sf = (other) -> cv.decodedSimilarity(other, queryVector, ds.similarityFunction);

@@ -138,8 +138,6 @@ public class NeighborQueue {
     return nodes;
   }
 
-  public record NodeScore(int node, float score) {}
-
   public NodeScore[] nodesCopy(NeighborSimilarity.ExactScoreFunction sf) {
     int size = size();
     NodeScore[] ns = new NodeScore[size];
