@@ -224,33 +224,42 @@ public class ProductQuantization {
         return sizes;
     }
 
-    public void save(OutputStream raw) throws IOException
+    /**
+     * @return the size of the PQ written
+     */
+    public long write(DataOutput out) throws IOException
     {
-        // we don't close `out` because caller is responsible for closing `raw`
-        var out = new DataOutputStream(raw);
-
+        long bytesWritten = 0;
         if (globalCentroid == null) {
             out.writeInt(0);
+            bytesWritten += Integer.BYTES;
         } else {
             out.writeInt(globalCentroid.length);
             Io.writeFloats(out, globalCentroid);
+            bytesWritten += Integer.BYTES + (long) globalCentroid.length * Float.BYTES;
         }
 
         out.writeInt(M);
+        bytesWritten += Integer.BYTES;
         assert Arrays.stream(subvectorSizes).sum() == originalDimension;
         assert M == subvectorSizes.length;
         for (var a : subvectorSizes) {
             out.writeInt(a);
         }
+        bytesWritten += (long) M * Integer.BYTES;
 
         assert codebooks.size() == M;
         assert codebooks.get(0).size() == CLUSTERS;
         out.writeInt(codebooks.get(0).size());
+        bytesWritten += Integer.BYTES;
         for (var codebook : codebooks) {
             for (var centroid : codebook) {
                 Io.writeFloats(out, centroid);
+                bytesWritten += (long) centroid.length * Float.BYTES;
             }
         }
+
+        return bytesWritten;
     }
 
     public static ProductQuantization load(DataInput in) throws IOException {

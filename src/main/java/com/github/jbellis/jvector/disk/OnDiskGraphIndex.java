@@ -22,7 +22,7 @@ import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.graph.NodesIterator;
 import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
 
-import java.io.DataOutputStream;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
@@ -157,7 +157,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
     /**
      * @return the size of what was written
      */
-    public static <T> long write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutputStream out) throws IOException {
+    public static <T> long write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
         assert graph.size() == vectors.size() : "graph size %d != vectors size %d".formatted(graph.size(), vectors.size());
 
         var view = graph.getView();
