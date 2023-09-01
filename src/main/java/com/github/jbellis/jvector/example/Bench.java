@@ -41,7 +41,7 @@ public class Bench {
         var topK = ds.groundTruth.get(0).size();
 
         var start = System.nanoTime();
-        var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.5f, 1.4f);
+        var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.4f);
         var index = builder.build();
         long buildNanos = System.nanoTime() - start;
 
