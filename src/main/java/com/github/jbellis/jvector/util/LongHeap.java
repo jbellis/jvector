@@ -16,6 +16,8 @@
  */
 package com.github.jbellis.jvector.util;
 
+import com.github.jbellis.jvector.annotations.VisibleForTesting;
+
 /**
  * A min heap that stores longs; a primitive priority queue that like all priority queues maintains
  * a partial ordering of its elements such that the least element can always be found in constant
@@ -183,5 +185,10 @@ public final class LongHeap {
    */
   public long get(int i) {
     return heap[i];
+  }
+
+  @VisibleForTesting
+  long[] getHeapArray() {
+    return heap;
   }
 }
