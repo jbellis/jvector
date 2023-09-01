@@ -18,6 +18,6 @@ You can run SiftSmall and Bench directly to get an idea of what all is going on 
 requires some datasets to be downloaded from https://github.com/erikbern/ann-benchmarks. The files used by SiftSmall can be found in the siftsmall directory in the project root. 
 
 To run either class, you can use the Maven exec-plugin via the following incantations:
-```mvn exec:exec@bench``` 
+```mvn clean install exec:exec@bench``` 
 or for Sift:
-```mvn exec:exec@sift```
+```mvn clean install exec:exec@sift```
