@@ -82,8 +82,7 @@ public class ConcurrentNeighborSet {
   }
 
   public void cleanup() {
-    neighborsRef.getAndUpdate(
-        current -> removeAllNonDiverse(current));
+    neighborsRef.getAndUpdate(this::removeAllNonDiverse);
   }
 
   private static class NeighborIterator extends NodesIterator {
@@ -134,9 +133,10 @@ public class ConcurrentNeighborSet {
       // only those into a new NeighborArray.  This is less expensive than doing the
       // diversity computation in-place, since we are going to do multiple passes and
       // pruning back extras is expensive.
-      NeighborArray merged = mergeNeighbors(mergeNeighbors(natural, current), concurrent);
+      var merged = mergeNeighbors(mergeNeighbors(natural, current), concurrent);
       BitSet selected = selectDiverse(merged);
-      return copyDiverse(merged, selected);
+      merged.retain(selected);
+      return merged;
     });
   }
 
@@ -186,11 +186,11 @@ public class ConcurrentNeighborSet {
     return neighborsRef.get();
   }
 
-  static NeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
+  static ConcurrentNeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
     assert a1.scoresDescOrder;
     assert a2.scoresDescOrder;
 
-    NeighborArray merged = new NeighborArray(a1.size() + a2.size(), true);
+    ConcurrentNeighborArray merged = new ConcurrentNeighborArray(a1.size() + a2.size(), true);
     int i = 0, j = 0;
 
     while (i < a1.size() && j < a2.size()) {
@@ -314,13 +314,6 @@ public class ConcurrentNeighborSet {
       super(maxSize, descOrder);
     }
 
-    public ConcurrentNeighborArray(int maxSize, NeighborArray other) {
-      super(maxSize, other.scoresDescOrder);
-      System.arraycopy(other.node(), 0, node, 0, other.size());
-      System.arraycopy(other.score(), 0, score, 0, other.size());
-      size = other.size();
-    }
-
     // two nodes may attempt to add each other in the Concurrent classes,
     // so we need to check if the node is already present.  this means that we can't use
     // the parent approach of "append it, and then move it into place"
@@ -358,6 +351,33 @@ public class ConcurrentNeighborSet {
       }
 
       return false;
+    }
+
+    /**
+     * Retains only the elements in the current ConcurrentNeighborArray whose corresponding index
+     * is set in the given BitSet.
+     * <p/>
+     * This modifies the array in place, preserving the relative order of the elements retained.
+     * <p/>
+     * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
+     */
+    public void retain(BitSet selected) {
+      int writeIdx = 0; // index for where to write the next retained element
+
+      for (int readIdx = 0; readIdx < size; readIdx++) {
+        if (selected.get(readIdx)) {
+          if (writeIdx != readIdx) {
+            // Move the selected entries to the front while maintaining their relative order
+            node[writeIdx] = node[readIdx];
+            score[writeIdx] = score[readIdx];
+          }
+          // else { we haven't created any gaps in the backing arrays yet, so we don't need to move anything }
+
+          writeIdx++;
+        }
+      }
+
+      size = writeIdx;
     }
 
     public ConcurrentNeighborArray copy() {
