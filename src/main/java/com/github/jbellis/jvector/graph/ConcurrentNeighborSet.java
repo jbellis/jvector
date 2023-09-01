@@ -82,9 +82,6 @@ public class ConcurrentNeighborSet {
   }
 
   public void cleanup() {
-    // TODO try pruning down the nighbors list to only diverse neighbors
-    // (instead of stopping when we are under the edge count) and see if
-    // that improves search times
     neighborsRef.getAndUpdate(
         current -> enforceMaxConnLimit(current));
   }
