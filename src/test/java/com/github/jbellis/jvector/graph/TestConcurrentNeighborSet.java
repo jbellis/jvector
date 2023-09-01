@@ -55,31 +55,9 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertEquals(2, neighbors.size());
 
     neighbors.insert(3, baseScore(3));
-    assertEquals(2, neighbors.size());
-    validateSortedByScore(neighbors.getCurrent());
-  }
-
-  @Test
-  public void testRemoveLeastDiverseFromEnd() {
-    // start with 3 neighbors
-    ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 3, simpleScore);
-    neighbors.insert(1, baseScore(1));
-    neighbors.insert(2, baseScore(2));
-    neighbors.insert(3, baseScore(3));
-    assertEquals(3, neighbors.size());
-
-    // insert a 4th neighbor, but it should be evicted
-    neighbors.insert(4, baseScore(4));
-    assertEquals(3, neighbors.size());
-
-    // check that the original 3 neighbors are still there
-    List<Integer> expectedValues = Arrays.asList(1, 2, 3);
-    Iterator<Integer> iterator = neighbors.nodeIterator();
-    for (Integer expectedValue : expectedValues) {
-      assertTrue(iterator.hasNext());
-      assertEquals(expectedValue, iterator.next());
-    }
-    assertFalse(iterator.hasNext());
+    // going past the max size results in evicting ALL non-diverse neighbors which leave us at 1
+    assertEquals(1, neighbors.size());
+    assertEquals(1, neighbors.nodeIterator().nextInt());
     validateSortedByScore(neighbors.getCurrent());
   }
 

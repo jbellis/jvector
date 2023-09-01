@@ -83,7 +83,7 @@ public class ConcurrentNeighborSet {
 
   public void cleanup() {
     neighborsRef.getAndUpdate(
-        current -> enforceMaxConnLimit(current));
+        current -> removeAllNonDiverse(current));
   }
 
   private static class NeighborIterator extends NodesIterator {
@@ -249,7 +249,7 @@ public class ConcurrentNeighborSet {
           // we do a lot of duplicate work scanning nodes that we won't remove
           var hardMax = overflow * maxConnections;
           if (next.size > hardMax) {
-            next = enforceMaxConnLimit(next);
+            next = removeAllNonDiverse(next);
           }
           return next;
         });
@@ -285,7 +285,7 @@ public class ConcurrentNeighborSet {
     return true;
   }
 
-  private ConcurrentNeighborArray enforceMaxConnLimit(ConcurrentNeighborArray neighbors) {
+  private ConcurrentNeighborArray removeAllNonDiverse(ConcurrentNeighborArray neighbors) {
     if (neighbors.size <= maxConnections) {
       return neighbors;
     }
