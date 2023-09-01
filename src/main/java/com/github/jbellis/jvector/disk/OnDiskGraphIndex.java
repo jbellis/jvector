@@ -154,7 +154,10 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
     // takes Graph and Vectors separately since I'm reluctant to introduce a Vectors reference
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
-    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutputStream out) throws IOException {
+    /**
+     * @return the size of what was written
+     */
+    public static <T> long write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutputStream out) throws IOException {
         assert graph.size() == vectors.size() : "graph size %d != vectors size %d".formatted(graph.size(), vectors.size());
 
         var view = graph.getView();
@@ -164,22 +167,31 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
         out.writeInt(vectors.dimension());
         out.writeInt(view.entryNode());
         out.writeInt(graph.maxEdgesPerNode());
+        long bytesWritten = 4 * Integer.BYTES;
 
         // for each graph node, write the associated vector and its neighbors
         for (int node = 0; node < graph.size(); node++) {
             out.writeInt(node); // unnecessary, but a reasonable sanity check
+            bytesWritten += Integer.BYTES;
             Io.writeFloats(out, (float[]) vectors.vectorValue(node));
+            bytesWritten += (long) vectors.dimension() * Float.BYTES;
+
             var neighbors = view.getNeighborsIterator(node);
             out.writeInt(neighbors.size());
+            bytesWritten += Integer.BYTES;
             int n = 0;
             for ( ; n < neighbors.size(); n++) {
                 out.writeInt(neighbors.nextInt());
             }
             assert !neighbors.hasNext();
+
             // pad out to maxEdgesPerNode
             for ( ; n < graph.maxEdgesPerNode(); n++) {
                 out.writeInt(-1);
             }
+            bytesWritten += (long) graph.maxEdgesPerNode() * Integer.BYTES;
         }
+
+        return bytesWritten;
     }
 }
