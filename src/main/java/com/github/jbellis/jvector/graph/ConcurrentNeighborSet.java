@@ -82,15 +82,7 @@ public class ConcurrentNeighborSet {
   }
 
   public void cleanup() {
-    // TODO try pruning down the nighbors list to only diverse neighbors
-    // (instead of stopping when we are under the edge count) and see if
-    // that improves search times
-    neighborsRef.getAndUpdate(
-        current -> {
-          ConcurrentNeighborArray next = current.copy();
-          enforceMaxConnLimit(next);
-          return next;
-        });
+    neighborsRef.getAndUpdate(this::removeAllNonDiverse);
   }
 
   private static class NeighborIterator extends NodesIterator {
@@ -141,9 +133,10 @@ public class ConcurrentNeighborSet {
       // only those into a new NeighborArray.  This is less expensive than doing the
       // diversity computation in-place, since we are going to do multiple passes and
       // pruning back extras is expensive.
-      NeighborArray merged = mergeNeighbors(mergeNeighbors(natural, current), concurrent);
+      var merged = mergeNeighbors(mergeNeighbors(natural, current), concurrent);
       BitSet selected = selectDiverse(merged);
-      return copyDiverse(merged, selected);
+      merged.retain(selected);
+      return merged;
     });
   }
 
@@ -193,11 +186,11 @@ public class ConcurrentNeighborSet {
     return neighborsRef.get();
   }
 
-  static NeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
+  static ConcurrentNeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
     assert a1.scoresDescOrder;
     assert a2.scoresDescOrder;
 
-    NeighborArray merged = new NeighborArray(a1.size() + a2.size(), true);
+    ConcurrentNeighborArray merged = new ConcurrentNeighborArray(a1.size() + a2.size(), true);
     int i = 0, j = 0;
 
     while (i < a1.size() && j < a2.size()) {
@@ -254,8 +247,9 @@ public class ConcurrentNeighborSet {
           next.insertSorted(neighborId, score);
           // batch up the enforcement of the max connection limit, since otherwise
           // we do a lot of duplicate work scanning nodes that we won't remove
-          if (next.size > overflow * maxConnections) {
-            enforceMaxConnLimit(next);
+          var hardMax = overflow * maxConnections;
+          if (next.size > hardMax) {
+            next = removeAllNonDiverse(next);
           }
           return next;
         });
@@ -291,39 +285,12 @@ public class ConcurrentNeighborSet {
     return true;
   }
 
-  private void enforceMaxConnLimit(NeighborArray neighbors) {
-    if (neighbors.size() > maxConnections) {
-      removeLeastDiverse(neighbors, neighbors.size() - maxConnections);
+  private ConcurrentNeighborArray removeAllNonDiverse(ConcurrentNeighborArray neighbors) {
+    if (neighbors.size <= maxConnections) {
+      return neighbors;
     }
-  }
-
-  /**
-   * For each node e1 starting with the last neighbor (i.e. least similar to the base node), look at
-   * all nodes e2 that are closer to the base node than e1 is. If any e2 is closer to e1 than e1 is
-   * to the base node, remove e1.
-   */
-  private void removeLeastDiverse(NeighborArray neighbors, int n) {
-    for (int i = neighbors.size() - 1; i >= 1 && n > 0; i--) {
-      int e1Id = neighbors.node[i];
-      float baseScore = neighbors.score[i];
-      var scoreProvider = similarity.scoreProvider(e1Id);
-
-      for (int j = i - 1; j >= 0; j--) {
-        int n2Id = neighbors.node[j];
-        float n1n2Score = scoreProvider.similarityTo(n2Id);
-        if (n1n2Score > baseScore * alpha) {
-          neighbors.removeIndex(i);
-          n--;
-          break;
-        }
-      }
-    }
-
-    // if we still have a quota to fill after pruning all "non-diverse" neighbors, remove the
-    // farthest
-    while (n-- > 0) {
-      neighbors.removeIndex(neighbors.size() - 1);
-    }
+    BitSet selected = selectDiverse(neighbors);
+    return copyDiverse(neighbors, selected);
   }
 
   public ConcurrentNeighborSet copy() {
@@ -345,13 +312,6 @@ public class ConcurrentNeighborSet {
   static class ConcurrentNeighborArray extends NeighborArray {
     public ConcurrentNeighborArray(int maxSize, boolean descOrder) {
       super(maxSize, descOrder);
-    }
-
-    public ConcurrentNeighborArray(int maxSize, NeighborArray other) {
-      super(maxSize, other.scoresDescOrder);
-      System.arraycopy(other.node(), 0, node, 0, other.size());
-      System.arraycopy(other.score(), 0, score, 0, other.size());
-      size = other.size();
     }
 
     // two nodes may attempt to add each other in the Concurrent classes,
@@ -391,6 +351,33 @@ public class ConcurrentNeighborSet {
       }
 
       return false;
+    }
+
+    /**
+     * Retains only the elements in the current ConcurrentNeighborArray whose corresponding index
+     * is set in the given BitSet.
+     * <p/>
+     * This modifies the array in place, preserving the relative order of the elements retained.
+     * <p/>
+     * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
+     */
+    public void retain(BitSet selected) {
+      int writeIdx = 0; // index for where to write the next retained element
+
+      for (int readIdx = 0; readIdx < size; readIdx++) {
+        if (selected.get(readIdx)) {
+          if (writeIdx != readIdx) {
+            // Move the selected entries to the front while maintaining their relative order
+            node[writeIdx] = node[readIdx];
+            score[writeIdx] = score[readIdx];
+          }
+          // else { we haven't created any gaps in the backing arrays yet, so we don't need to move anything }
+
+          writeIdx++;
+        }
+      }
+
+      size = writeIdx;
     }
 
     public ConcurrentNeighborArray copy() {
