@@ -86,11 +86,7 @@ public class ConcurrentNeighborSet {
     // (instead of stopping when we are under the edge count) and see if
     // that improves search times
     neighborsRef.getAndUpdate(
-        current -> {
-          ConcurrentNeighborArray next = current.copy();
-          enforceMaxConnLimit(next);
-          return next;
-        });
+        current -> enforceMaxConnLimit(current));
   }
 
   private static class NeighborIterator extends NodesIterator {
@@ -254,8 +250,9 @@ public class ConcurrentNeighborSet {
           next.insertSorted(neighborId, score);
           // batch up the enforcement of the max connection limit, since otherwise
           // we do a lot of duplicate work scanning nodes that we won't remove
-          if (next.size > overflow * maxConnections) {
-            enforceMaxConnLimit(next);
+          var hardMax = overflow * maxConnections;
+          if (next.size > hardMax) {
+            next = enforceMaxConnLimit(next);
           }
           return next;
         });
@@ -291,39 +288,12 @@ public class ConcurrentNeighborSet {
     return true;
   }
 
-  private void enforceMaxConnLimit(NeighborArray neighbors) {
-    if (neighbors.size() > maxConnections) {
-      removeLeastDiverse(neighbors, neighbors.size() - maxConnections);
+  private ConcurrentNeighborArray enforceMaxConnLimit(ConcurrentNeighborArray neighbors) {
+    if (neighbors.size <= maxConnections) {
+      return neighbors;
     }
-  }
-
-  /**
-   * For each node e1 starting with the last neighbor (i.e. least similar to the base node), look at
-   * all nodes e2 that are closer to the base node than e1 is. If any e2 is closer to e1 than e1 is
-   * to the base node, remove e1.
-   */
-  private void removeLeastDiverse(NeighborArray neighbors, int n) {
-    for (int i = neighbors.size() - 1; i >= 1 && n > 0; i--) {
-      int e1Id = neighbors.node[i];
-      float baseScore = neighbors.score[i];
-      var scoreProvider = similarity.scoreProvider(e1Id);
-
-      for (int j = i - 1; j >= 0; j--) {
-        int n2Id = neighbors.node[j];
-        float n1n2Score = scoreProvider.similarityTo(n2Id);
-        if (n1n2Score > baseScore * alpha) {
-          neighbors.removeIndex(i);
-          n--;
-          break;
-        }
-      }
-    }
-
-    // if we still have a quota to fill after pruning all "non-diverse" neighbors, remove the
-    // farthest
-    while (n-- > 0) {
-      neighbors.removeIndex(neighbors.size() - 1);
-    }
+    BitSet selected = selectDiverse(neighbors);
+    return copyDiverse(neighbors, selected);
   }
 
   public ConcurrentNeighborSet copy() {
