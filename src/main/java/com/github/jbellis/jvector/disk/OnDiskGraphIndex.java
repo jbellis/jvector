@@ -79,12 +79,12 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
 
         public T getVector(int node) {
             try {
-                reader.seek(neighborsOffset +
+                long offset = neighborsOffset +
                         node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (M + 1)) // earlier entries
-                        + Integer.BYTES // skip the ID
-                );
-
-                return (T) Io.readFloats(reader, dimension);
+                        + Integer.BYTES; // skip the ID
+                float[] vector = new float[dimension];
+                reader.readFloatsAt(offset, vector);
+                return (T) vector;
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);
