@@ -26,8 +26,8 @@ import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import com.github.jbellis.jvector.vector.VectorUtil;
 import io.jhdf.HdfFile;
 
+import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,8 +52,9 @@ public class Bench {
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         try {
-            DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
-            OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputFile);
+            DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
+            OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+            outputStream.flush();
             var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
 
