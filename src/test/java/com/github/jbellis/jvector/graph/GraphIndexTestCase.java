@@ -437,7 +437,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
           }
         }
       }
-      var actualNodeIds = Arrays.stream(actual, actual.length - topK, actual.length).mapToInt(NeighborQueue.NodeScore::node).toArray();
+      var actualNodeIds = Arrays.stream(actual, 0, topK).mapToInt(NeighborQueue.NodeScore::node).toArray();
 
       assertEquals(topK, actualNodeIds.length);
       totalMatches += computeOverlap(actualNodeIds, expected.nodesCopy());

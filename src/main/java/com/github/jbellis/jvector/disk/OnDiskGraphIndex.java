@@ -48,8 +48,6 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
-
-        //TODO: DiskANN 3.4 Cache Frequently Visited Vertices (by hops from entryNode) at load time, share between views
     }
 
     @Override

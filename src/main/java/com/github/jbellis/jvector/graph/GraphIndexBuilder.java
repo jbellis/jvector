@@ -194,10 +194,8 @@ public class GraphIndexBuilder<T> {
   private NeighborArray getNaturalCandidates(NeighborQueue.NodeScore[] candidates) {
     NeighborArray scratch = this.naturalScratch.get();
     scratch.clear();
-    int candidateCount = candidates.length;
-    for (int i = candidateCount - 1; i >= 0; i--) {
-      var candidate = candidates[i];
-      scratch.addInOrder(candidate.node(), candidate.score());
+    for (NeighborQueue.NodeScore candidate : candidates) {
+        scratch.addInOrder(candidate.node(), candidate.score());
     }
     return scratch;
   }

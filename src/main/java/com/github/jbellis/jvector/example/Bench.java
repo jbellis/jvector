@@ -25,7 +25,6 @@ import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import com.github.jbellis.jvector.vector.VectorUtil;
 import io.jhdf.HdfFile;
-import org.apache.commons.io.FileUtils;
 
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
@@ -51,24 +50,27 @@ public class Bench {
         var onHeapGraph = builder.build();
         long buildNanos = System.nanoTime() - start;
 
-        var testOutputFile = testDirectory.resolve("graph" + M + efConstruction + ds.name).toFile();
-        DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(testOutputFile));
-        OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputFile);
-        var marr = new MappedRandomAccessReader(testOutputFile.getAbsolutePath());
-        var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+        var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
+        try {
+            DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
+            OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputFile);
+            var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
+            var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
 
-        int queryRuns = 10;
-        for (int overquery : efSearchOptions) {
-            for (boolean useDisk : diskOptions) {
-                start = System.nanoTime();
-                var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
-                var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                System.out.format("Index   M=%d ef=%d PQ=%b: top %d/%d recall %.4f, build %.2fs, query %.2fs. %s nodes visited%n",
-                        M, efConstruction, useDisk, topK, overquery, recall, buildNanos / 1_000_000_000.0, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+            int queryRuns = 10;
+            for (int overquery : efSearchOptions) {
+                for (boolean useDisk : diskOptions) {
+                    start = System.nanoTime();
+                    var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
+                    var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
+                    System.out.format("Index   M=%d ef=%d PQ=%b: top %d/%d recall %.4f, build %.2fs, query %.2fs. %s nodes visited%n",
+                            M, efConstruction, useDisk, topK, overquery, recall, buildNanos / 1_000_000_000.0, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                }
             }
         }
-
-        FileUtils.deleteQuietly(testOutputFile);
+        finally {
+            Files.deleteIfExists(graphPath);
+        }
     }
 
     private static float normOf(float[] baseVector) {
@@ -84,7 +86,7 @@ public class Bench {
     private static long topKCorrect(int topK, int[] resultNodes, Set<Integer> gt) {
         int count = Math.min(resultNodes.length, topK);
         // stream the first count results into a Set
-        var resultSet = Arrays.stream(resultNodes, resultNodes.length - count, resultNodes.length)
+        var resultSet = Arrays.stream(resultNodes, 0, count)
                 .boxed()
                 .collect(Collectors.toSet());
         assert resultSet.size() == count : String.format("%s duplicate results out of %s", count - resultSet.size(), count);
@@ -258,7 +260,7 @@ public class Bench {
                 }
             }
         } finally {
-            FileUtils.deleteQuietly(testDirectory.toFile());
+            Files.delete(testDirectory);
         }
     }
 }

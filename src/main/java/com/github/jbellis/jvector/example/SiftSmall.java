@@ -8,7 +8,6 @@ import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import org.apache.commons.io.FileUtils;
 
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
@@ -44,16 +43,20 @@ public class SiftSmall {
         var onHeapGraph = builder.build();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        var testOutputFile = testDirectory.resolve("graph_test").toFile();
-        DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(testOutputFile));
-        OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
+        var graphPath = testDirectory.resolve("graph_test");
+        try {
+            DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
+            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
-        var marr = new MappedRandomAccessReader(testOutputFile.getAbsolutePath());
+            var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
 
-        var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+            var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
 
-        testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
-        testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
+            testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
+            testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
+        } finally {
+            Files.deleteIfExists(graphPath);
+        }
     }
 
     private static void testRecallInternal(GraphIndex<float[]> graph, RandomAccessVectorValues<float[]> ravv, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, CompressedVectors compressedVectors) {
@@ -97,7 +100,7 @@ public class SiftSmall {
         try {
             testRecall(baseVectors, queryVectors, groundTruth, testDirectory);
         } finally {
-            FileUtils.deleteQuietly(testDirectory.toFile());
+            Files.delete(testDirectory);
         }
     }
 

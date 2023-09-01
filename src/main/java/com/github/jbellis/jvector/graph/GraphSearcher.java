@@ -177,7 +177,7 @@ public class GraphSearcher<T> {
 
     if (scoreFunction.isExact()) {
       var nodes = new NodeScore[resultsQueue.size()];
-      for (int i = 0; i < nodes.length; i++) {
+      for (int i = nodes.length - 1; i >= 0; i--) {
           var nScore = resultsQueue.topScore();
           var n = resultsQueue.pop();
           nodes[i] = new NodeScore(n, nScore);
@@ -185,7 +185,7 @@ public class GraphSearcher<T> {
       return nodes;
     } else {
       var nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
-      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble(NodeScore::score));
+      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble(NodeScore::score).reversed());
       return nodes;
     }
   }
