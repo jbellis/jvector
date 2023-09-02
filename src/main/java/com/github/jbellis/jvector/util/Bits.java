@@ -33,4 +33,42 @@ public interface Bits {
 
     /** Returns the number of bits in this set */
     int length();
+
+    /** Bits impl of the specified length with all bits set. */
+    class MatchAllBits implements Bits {
+        final int len;
+
+        public MatchAllBits(int len) {
+            this.len = len;
+        }
+
+        @Override
+        public boolean get(int index) {
+            return true;
+        }
+
+        @Override
+        public int length() {
+            return len;
+        }
+    }
+
+    /** Bits impl of the specified length with no bits set. */
+    class MatchNoBits implements Bits {
+        final int len;
+
+        public MatchNoBits(int len) {
+            this.len = len;
+        }
+
+        @Override
+        public boolean get(int index) {
+            return false;
+        }
+
+        @Override
+        public int length() {
+            return len;
+        }
+    }
 }
