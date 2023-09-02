@@ -57,8 +57,8 @@ public class GraphSearcher<T> {
    * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
    * is the unique owner of the vectors instance passed in here.
    */
-  public static <T> NodeScore[] search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
-    var searcher = new GraphSearcher.Builder(graph.getView()).build();
+  public static <T> NodeScore[] search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
+    var searcher = new GraphSearcher.Builder<>(graph.getView()).build();
     NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
         case BYTE:
@@ -73,22 +73,22 @@ public class GraphSearcher<T> {
   }
 
   /** Builder */
-  public static class Builder {
-    private final GraphIndex.View graph;
+  public static class Builder<T> {
+    private final GraphIndex.View<T> graph;
     private boolean concurrent;
 
-    public Builder(GraphIndex.View graph) {
+    public Builder(GraphIndex.View<T> graph) {
       this.graph = graph;
     }
 
-    public Builder withConcurrentUpdates() {
+    public Builder<T> withConcurrentUpdates() {
       this.concurrent = true;
       return this;
     }
 
-    public GraphSearcher build() {
+    public GraphSearcher<T> build() {
       BitSet bits = concurrent ? new GrowableBitSet(graph.size()) : new SparseFixedBitSet(graph.size());
-      return new GraphSearcher(graph, bits);
+      return new GraphSearcher<>(graph, bits);
     }
   }
 
