@@ -21,12 +21,13 @@ package com.github.jbellis.jvector.disk;
 import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.graph.NodesIterator;
 import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import com.github.jbellis.jvector.util.Accountable;
 
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
+public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
 {
     private final ReaderSupplier readerSupplier;
     private final long neighborsOffset;
@@ -147,7 +148,12 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable
         throw new UnsupportedOperationException();
     }
 
-    public void close() throws Exception {
+    @Override
+    public long ramBytesUsed() {
+        return Long.BYTES + 4 * Integer.BYTES;
+    }
+
+    public void close() {
         readerSupplier.close();
     }
 
