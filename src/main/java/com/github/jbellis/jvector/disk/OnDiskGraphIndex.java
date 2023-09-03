@@ -163,7 +163,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     /**
      * @return the size of what was written
      */
-    public static <T> long write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
+    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
         assert graph.size() == vectors.size() : "graph size %d != vectors size %d".formatted(graph.size(), vectors.size());
 
         var view = graph.getView();
@@ -173,18 +173,14 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         out.writeInt(vectors.dimension());
         out.writeInt(view.entryNode());
         out.writeInt(graph.maxEdgesPerNode());
-        long bytesWritten = 4 * Integer.BYTES;
 
         // for each graph node, write the associated vector and its neighbors
         for (int node = 0; node < graph.size(); node++) {
             out.writeInt(node); // unnecessary, but a reasonable sanity check
-            bytesWritten += Integer.BYTES;
             Io.writeFloats(out, (float[]) vectors.vectorValue(node));
-            bytesWritten += (long) vectors.dimension() * Float.BYTES;
 
             var neighbors = view.getNeighborsIterator(node);
             out.writeInt(neighbors.size());
-            bytesWritten += Integer.BYTES;
             int n = 0;
             for ( ; n < neighbors.size(); n++) {
                 out.writeInt(neighbors.nextInt());
@@ -195,9 +191,6 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
             for ( ; n < graph.maxEdgesPerNode(); n++) {
                 out.writeInt(-1);
             }
-            bytesWritten += (long) graph.maxEdgesPerNode() * Integer.BYTES;
         }
-
-        return bytesWritten;
     }
 }
