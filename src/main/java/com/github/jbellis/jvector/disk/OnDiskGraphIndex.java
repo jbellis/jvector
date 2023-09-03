@@ -99,6 +99,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                         (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) +
                         (node * (long) Integer.BYTES * (M + 1)));
                 int neighborCount = reader.readInt();
+                assert neighborCount <= M : "neighborCount %d > M %d".formatted(neighborCount, M);
                 return new NodesIterator(neighborCount)
                 {
                     int currentNeighborsRead = 0;
@@ -107,7 +108,9 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                     public int nextInt() {
                         currentNeighborsRead++;
                         try {
-                            return reader.readInt();
+                            int ordinal = reader.readInt();
+                            assert ordinal <= OnDiskGraphIndex.this.size : "ordinal %d > size %d".formatted(ordinal, size);
+                            return ordinal;
                         }
                         catch (IOException e) {
                             throw new UncheckedIOException(e);
