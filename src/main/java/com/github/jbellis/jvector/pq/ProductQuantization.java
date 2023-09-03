@@ -144,10 +144,17 @@ public class ProductQuantization {
     }
 
     /**
-     * The dimension of the vectors being quantized.
+     * @return The dimension of the vectors being quantized.
      */
-    public int vectorDimension() {
+    public int getOriginalDimension() {
         return originalDimension;
+    }
+
+    /**
+     * @return how many bytes we are compressing to
+     */
+    public int getSubspaceCount() {
+        return M;
     }
 
     // for testing
