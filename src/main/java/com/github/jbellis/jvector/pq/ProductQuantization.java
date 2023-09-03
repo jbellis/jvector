@@ -127,7 +127,7 @@ public class ProductQuantization {
     /**
      * Decodes the quantized representation (byte array) to its approximate original vector.
      */
-    public float[] decode(byte[] encoded, float[] target) {
+    public void decode(byte[] encoded, float[] target) {
         int offset = 0; // starting position in the target array for the current subvector
         for (int m = 0; m < M; m++) {
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
@@ -140,7 +140,6 @@ public class ProductQuantization {
             // Add back the global centroid to get the approximate original vector.
             simdAddInPlace(target, globalCentroid);
         }
-        return target;
     }
 
     /**
