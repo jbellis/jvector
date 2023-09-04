@@ -202,4 +202,8 @@ public final class VectorUtil {
   public static void addInPlace(float[] v1, float[] v2) {
     impl.addInPlace(v1, v2);
   }
+
+  public static float[] sub(float[] lhs, float[] rhs) {
+    return impl.sub(lhs, rhs);
+  }
 }

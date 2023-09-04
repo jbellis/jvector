@@ -21,8 +21,6 @@ import java.util.List;
 
 final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
-  DefaultVectorUtilSupport() {}
-
   @Override
   public float dotProduct(float[] a, float[] b) {
     float res = 0f;

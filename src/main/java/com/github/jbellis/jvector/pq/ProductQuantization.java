@@ -1,14 +1,14 @@
 package com.github.jbellis.jvector.pq;
 
-import java.io.*;
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import com.github.jbellis.jvector.disk.Io;
 import com.github.jbellis.jvector.vector.VectorUtil;
 
-import static com.github.jbellis.jvector.vector.SimdOps.*;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
@@ -38,7 +38,7 @@ public class ProductQuantization {
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
-            vectors = vectors.stream().parallel().map(v -> simdSub(v, globalCentroid)).toList();
+            vectors = vectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).toList();
         } else {
             globalCentroid = null;
         }
@@ -73,7 +73,7 @@ public class ProductQuantization {
      */
     public byte[] encode(float[] vector) {
         if (globalCentroid != null) {
-            vector = simdSub(vector, globalCentroid);
+            vector = VectorUtil.sub(vector, globalCentroid);
         }
 
         float[] finalVector = vector;
@@ -109,7 +109,7 @@ public class ProductQuantization {
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
             float[] centroidSubvector = codebooks.get(m).get(centroidIndex);
             if (centroidSubvector.length == 2) {
-                a[i++] = dot64(centroidSubvector, 0, other, offset);
+                a[i++] = VectorUtil.dot64(centroidSubvector, 0, other, offset);
             } else if (centroidSubvector.length == 3) {
                 var b = centroidSubvector;
                 var c = other;
@@ -121,7 +121,7 @@ public class ProductQuantization {
             offset += subvectorSizes[m];
         }
 
-        return simdSum(a);
+        return VectorUtil.sum(a);
     }
 
     /**
@@ -138,7 +138,7 @@ public class ProductQuantization {
 
         if (globalCentroid != null) {
             // Add back the global centroid to get the approximate original vector.
-            simdAddInPlace(target, globalCentroid);
+            VectorUtil.addInPlace(target, globalCentroid);
         }
     }
 

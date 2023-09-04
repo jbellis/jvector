@@ -7,8 +7,8 @@ import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
 
-public class SimdOps {
-    public static float simdSum(float[] vector) {
+final class SimdOps {
+    public static float sum(float[] vector) {
         float sum = 0.0f;
         int vectorizedLength = (vector.length / FloatVector.SPECIES_PREFERRED.length()) * FloatVector.SPECIES_PREFERRED.length();
 
@@ -26,7 +26,7 @@ public class SimdOps {
         return sum;
     }
 
-    public static float[] simdSum(List<float[]> vectors) {
+    public static float[] sum(List<float[]> vectors) {
         if (vectors == null || vectors.isEmpty()) {
             throw new IllegalArgumentException("Input list cannot be null or empty");
         }
@@ -36,13 +36,13 @@ public class SimdOps {
 
         // Process each vector from the list
         for (float[] vector : vectors) {
-            simdAddInPlace(sum, vector);
+            addInPlace(sum, vector);
         }
 
         return sum;
     }
 
-    public static void simdDivInPlace(float[] vector, float divisor) {
+    public static void divInPlace(float[] vector, float divisor) {
         int vectorizedLength = (vector.length / FloatVector.SPECIES_PREFERRED.length()) * FloatVector.SPECIES_PREFERRED.length();
 
         // Process the vectorized part
@@ -233,7 +233,7 @@ public class SimdOps {
         return diffSumSquared;
     }
 
-    public static void simdAddInPlace(float[] v1, float[] v2) {
+    public static void addInPlace(float[] v1, float[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -254,7 +254,7 @@ public class SimdOps {
         }
     }
 
-    public static float[] simdSub(float[] lhs, float[] rhs) {
+    public static float[] sub(float[] lhs, float[] rhs) {
         if (lhs.length != rhs.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }

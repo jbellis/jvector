@@ -1,13 +1,12 @@
 package com.github.jbellis.jvector.pq;
 
+import com.github.jbellis.jvector.vector.VectorUtil;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.function.BiFunction;
-
-import static com.github.jbellis.jvector.vector.SimdOps.simdDivInPlace;
-import static com.github.jbellis.jvector.vector.SimdOps.simdSum;
 
 /**
  * A KMeans++ implementation for float vectors.  Optimizes to use SIMD vector
@@ -217,8 +216,8 @@ public class KMeansPlusPlusClusterer {
             throw new IllegalArgumentException("Can't compute centroid of empty points list");
         }
 
-        float[] centroid = simdSum(points);
-        simdDivInPlace(centroid, points.size());
+        float[] centroid = VectorUtil.sum(points);
+        VectorUtil.divInPlace(centroid, points.size());
 
         return centroid;
     }

@@ -43,19 +43,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public float[] sum(List<float[]> vectors)
     {
-        return SimdOps.simdSum(vectors);
+        return SimdOps.sum(vectors);
     }
 
     @Override
     public float sum(float[] vector)
     {
-        return SimdOps.simdSum(vector);
+        return SimdOps.sum(vector);
     }
 
     @Override
     public void divInPlace(float[] vector, float divisor)
     {
-        SimdOps.simdDivInPlace(vector, divisor);
+        SimdOps.divInPlace(vector, divisor);
     }
 
     @Override
@@ -65,11 +65,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void addInPlace(float[] v1, float[] v2) {
-        SimdOps.simdAddInPlace(v1, v2);
+        SimdOps.addInPlace(v1, v2);
     }
 
     @Override
     public float[] sub(float[] lhs, float[] rhs) {
-        return SimdOps.simdSub(lhs, rhs);
+        return SimdOps.sub(lhs, rhs);
     }
 }
