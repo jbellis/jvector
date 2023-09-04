@@ -1,5 +1,7 @@
 package com.github.jbellis.jvector.vector;
 
+import java.util.List;
+
 final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
@@ -36,5 +38,38 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     public int squareDistance(byte[] a, byte[] b)
     {
         return SimdOps.squareDistance(a, b);
+    }
+
+    @Override
+    public float[] sum(List<float[]> vectors)
+    {
+        return SimdOps.simdSum(vectors);
+    }
+
+    @Override
+    public float sum(float[] vector)
+    {
+        return SimdOps.simdSum(vector);
+    }
+
+    @Override
+    public void divInPlace(float[] vector, float divisor)
+    {
+        SimdOps.simdDivInPlace(vector, divisor);
+    }
+
+    @Override
+    public float dot64(float[] v1, int offset1, float[] v2, int offset2) {
+        return SimdOps.dot64(v1, offset1, v2, offset2);
+    }
+
+    @Override
+    public void addInPlace(float[] v1, float[] v2) {
+        SimdOps.simdAddInPlace(v1, v2);
+    }
+
+    @Override
+    public float[] sub(float[] lhs, float[] rhs) {
+        return SimdOps.simdSub(lhs, rhs);
     }
 }

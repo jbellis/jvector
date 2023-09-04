@@ -17,6 +17,8 @@
 
 package com.github.jbellis.jvector.vector;
 
+import java.util.List;
+
 final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   DefaultVectorUtilSupport() {}
@@ -173,5 +175,55 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       squareSum += diff * diff;
     }
     return squareSum;
+  }
+
+  @Override
+  public float[] sum(List<float[]> vectors) {
+    float[] sum = new float[vectors.get(0).length];
+    for (float[] vector : vectors) {
+      for (int i = 0; i < vector.length; i++) {
+        sum[i] += vector[i];
+      }
+    }
+    return sum;
+  }
+
+  @Override
+  public float sum(float[] vector) {
+    float sum = 0;
+    for (float v : vector) {
+      sum += v;
+    }
+    return sum;
+  }
+
+  @Override
+  public void divInPlace(float[] vector, float divisor) {
+    for (int i = 0; i < vector.length; i++) {
+      vector[i] /= divisor;
+    }
+  }
+
+  @Override
+  public float dot64(float[] v1, int offset1, float[] v2, int offset2) {
+    var a = v1[offset1] * v2[offset2];
+    var b = v1[offset1 + 1] * v2[offset2 + 1];
+    return a + b;
+  }
+
+  @Override
+  public void addInPlace(float[] v1, float[] v2) {
+    for (int i = 0; i < v1.length; i++) {
+      v1[i] += v2[i];
+    }
+  }
+
+  @Override
+  public float[] sub(float[] lhs, float[] rhs) {
+    float[] result = new float[lhs.length];
+    for (int i = 0; i < lhs.length; i++) {
+      result[i] = lhs[i] - rhs[i];
+    }
+    return result;
   }
 }

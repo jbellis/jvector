@@ -17,10 +17,12 @@
 
 package com.github.jbellis.jvector.vector;
 
+import java.util.List;
+
 /** Utilities for computations with numeric arrays */
 public final class VectorUtil {
 
-  private static final VectorUtilSupport IMPL =
+  private static final VectorUtilSupport impl =
       VectorizationProvider.getInstance().getVectorUtilSupport();
 
   private VectorUtil() {}
@@ -34,7 +36,7 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
-    float r = IMPL.dotProduct(a, b);
+    float r = impl.dotProduct(a, b);
     assert Float.isFinite(r);
     return r;
   }
@@ -48,7 +50,7 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
-    float r = IMPL.cosine(a, b);
+    float r = impl.cosine(a, b);
     assert Float.isFinite(r);
     return r;
   }
@@ -58,7 +60,7 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
-    return IMPL.cosine(a, b);
+    return impl.cosine(a, b);
   }
 
   /**
@@ -70,7 +72,7 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
-    float r = IMPL.squareDistance(a, b);
+    float r = impl.squareDistance(a, b);
     assert Float.isFinite(r);
     return r;
   }
@@ -80,7 +82,7 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
-    return IMPL.squareDistance(a, b);
+    return impl.squareDistance(a, b);
   }
 
   /**
@@ -145,7 +147,7 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
-    return IMPL.dotProduct(a, b);
+    return impl.dotProduct(a, b);
   }
 
   /**
@@ -175,5 +177,29 @@ public final class VectorUtil {
       }
     }
     return v;
+  }
+
+  public static float[] sum(List<float[]> vectors) {
+    if (vectors.isEmpty()) {
+      throw new IllegalArgumentException("Input list cannot be empty");
+    }
+
+    return impl.sum(vectors);
+  }
+
+  public static float sum(float[] vector) {
+    return impl.sum(vector);
+  }
+
+  public static void divInPlace(float[] vector, float divisor) {
+    impl.divInPlace(vector, divisor);
+  }
+
+  public static float dot64(float[] v1, int offset1, float[] v2, int offset2) {
+    return impl.dot64(v1, offset1, v2, offset2);
+  }
+
+  public static void addInPlace(float[] v1, float[] v2) {
+    impl.addInPlace(v1, v2);
   }
 }
