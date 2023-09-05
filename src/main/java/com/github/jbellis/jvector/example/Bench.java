@@ -16,6 +16,7 @@
 
 package com.github.jbellis.jvector.example;
 
+import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
@@ -56,7 +57,7 @@ public class Bench {
             OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             outputStream.flush();
             var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
-            var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
 
             int queryRuns = 10;
             for (int overquery : efSearchOptions) {

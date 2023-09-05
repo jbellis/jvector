@@ -1,5 +1,6 @@
 package com.github.jbellis.jvector.example;
 
+import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
@@ -50,7 +51,7 @@ public class SiftSmall {
 
             var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
 
-            var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
             testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);

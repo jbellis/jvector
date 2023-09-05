@@ -94,7 +94,6 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
 
         public NodesIterator getNeighborsIterator(int node) {
             try {
-                // Cache full-precision coordinates per DiskANN 3.5
                 reader.seek(neighborsOffset +
                         (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) +
                         (node * (long) Integer.BYTES * (M + 1)));
@@ -163,9 +162,6 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     // takes Graph and Vectors separately since I'm reluctant to introduce a Vectors reference
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
-    /**
-     * @return the size of what was written
-     */
     public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
         assert graph.size() == vectors.size() : "graph size %d != vectors size %d".formatted(graph.size(), vectors.size());
 

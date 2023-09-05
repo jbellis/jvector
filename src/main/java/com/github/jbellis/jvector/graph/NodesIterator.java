@@ -1,5 +1,6 @@
 package com.github.jbellis.jvector.graph;
 
+import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 
 /**
@@ -22,5 +23,35 @@ public abstract class NodesIterator implements PrimitiveIterator.OfInt {
      */
     public int size() {
         return size;
+    }
+
+    public static class ArrayNodesIterator extends NodesIterator {
+        private final int[] nodes;
+        private int cur = 0;
+
+        /** Constructor for iterator based on integer array representing nodes */
+        public ArrayNodesIterator(int[] nodes, int size) {
+            super(size);
+            assert nodes != null;
+            assert size <= nodes.length;
+            this.nodes = nodes;
+        }
+
+        @Override
+        public int nextInt() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            if (nodes == null) {
+                return cur++;
+            } else {
+                return nodes[cur++];
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cur < size;
+        }
     }
 }
