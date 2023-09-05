@@ -8,6 +8,6 @@ import java.lang.annotation.*;
  */
 @Documented
 @Retention(RetentionPolicy.SOURCE)
-@Target(ElementType.TYPE_USE)
+@Target(ElementType.TYPE_USE) // TYPE_USE used instead of METHOD as the annotation travels better in some tooling
 public @interface Unshared {
 }
