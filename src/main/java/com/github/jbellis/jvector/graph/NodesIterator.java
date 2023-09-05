@@ -37,6 +37,10 @@ public abstract class NodesIterator implements PrimitiveIterator.OfInt {
             this.nodes = nodes;
         }
 
+        public ArrayNodesIterator(int[] nodes) {
+            this(nodes, nodes.length);
+        }
+
         @Override
         public int nextInt() {
             if (!hasNext()) {

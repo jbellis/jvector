@@ -62,7 +62,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     }
 
     /** return a Graph that can be safely queried concurrently */
-    public GraphIndex.View<T> getView()
+    public OnDiskGraphIndex<T>.OnDiskView getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
