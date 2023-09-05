@@ -1,5 +1,7 @@
 package com.github.jbellis.jvector.graph;
 
+import com.github.jbellis.jvector.annotations.Unshared;
+
 import java.util.List;
 
 /**
@@ -37,6 +39,7 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues<fl
     }
 
     @Override
+    @Unshared
     public float[] vectorValue(int targetOrd) {
         return vectors.get(targetOrd);
     }

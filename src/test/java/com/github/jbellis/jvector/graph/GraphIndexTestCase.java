@@ -19,6 +19,7 @@ package com.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+import com.github.jbellis.jvector.annotations.Unshared;
 import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.util.FixedBitSet;
@@ -523,6 +524,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     }
 
     @Override
+    @Unshared
     public float[] vectorValue(int ord) {
       return unitVector2d(ord / (double) size);
     }
@@ -555,6 +557,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     }
 
     @Override
+    @Unshared
     public byte[] vectorValue(int ord) {
       float[] value = unitVector2d(ord / (double) size);
       byte[] bValue = new byte[value.length];
