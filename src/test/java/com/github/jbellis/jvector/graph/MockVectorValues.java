@@ -18,6 +18,7 @@
 package com.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import com.github.jbellis.jvector.annotations.Shared;
 import com.github.jbellis.jvector.util.ArrayUtil;
 
 class MockVectorValues extends AbstractMockVectorValues<float[]> {
@@ -66,6 +67,7 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
   }
 
   @Override
+  @Shared
   public float[] vectorValue(int targetOrd) {
     float[] original = super.vectorValue(targetOrd);
     if (original == null) {
