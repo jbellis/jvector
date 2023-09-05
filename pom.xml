@@ -29,8 +29,6 @@
   <!-- Build property abstractions: versions, etc -->
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>20</maven.compiler.source>
-    <maven.compiler.target>20</maven.compiler.target>
   </properties>
 
   <dependencies>
@@ -70,12 +68,70 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.11.0</version>
         <configuration>
-          <enablePreview>true</enablePreview>
+          <source>20</source>
+          <target>20</target>
           <compilerArgs>
             <arg>--add-modules</arg>
             <arg>jdk.incubator.vector</arg>
           </compilerArgs>
         </configuration>
+        <executions>
+          <execution>
+            <id>jdk20</id>
+            <configuration>
+              <source>20</source>
+              <target>20</target>
+              <enablePreview>true</enablePreview>
+              <compilerArgs>
+                <arg>--add-modules</arg>
+                <arg>jdk.incubator.vector</arg>
+              </compilerArgs>
+              <outputDirectory>${project.build.outputDirectory}_jdk20</outputDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>jdk11</id>
+            <configuration>
+              <excludes>
+                <exclude>com/github/jbellis/jvector/example/Bench.java</exclude>
+              </excludes>
+              <source>11</source>
+              <target>11</target>
+              <compilerArgs>
+                <arg>--add-modules</arg>
+                <arg>jdk.incubator.vector</arg>
+              </compilerArgs>
+              <outputDirectory>${project.build.outputDirectory}_jdk11</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <executions>
+          <execution>
+            <id>jar-jdk11</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>jdk11</classifier>
+              <classesDirectory>${project.build.outputDirectory}_jdk11</classesDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>jar-jdk20</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>jdk20</classifier>
+              <classesDirectory>${project.build.outputDirectory}_jdk20</classesDirectory>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
