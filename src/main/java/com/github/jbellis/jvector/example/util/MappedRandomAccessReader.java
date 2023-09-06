@@ -53,7 +53,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
     @Override
     public void readFloatsAt(long offset, float[] buffer) {
         for (int i = 0; i < buffer.length; i++) {
-            buffer[i] = mbb.getFloat((int) offset + i);
+            buffer[i] = mbb.getFloat((int) offset + i * Float.BYTES);
         }
     }
 
