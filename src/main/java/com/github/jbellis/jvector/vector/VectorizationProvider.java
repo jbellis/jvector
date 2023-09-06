@@ -83,7 +83,9 @@ public abstract class VectorizationProvider {
         return new DefaultVectorizationProvider();
       }
       try {
-        return new PanamaVectorizationProvider();
+        var provider = new PanamaVectorizationProvider();
+        LOG.info("Java incubating Vector API enabled. Using PanamaVectorizationProvider.");
+        return provider;
       } catch (UnsupportedOperationException uoe) {
         // not supported because preferred vector size too small or similar
         LOG.warning("Java vector incubator API was not enabled. " + uoe.getMessage());
@@ -95,6 +97,8 @@ public abstract class VectorizationProvider {
       }
     } else if (runtimeVersion >= 22) {
       LOG.warning("You are running with Java 22 or later. To make full use of the Vector API, please update jvector.");
+    } else {
+      LOG.warning("You are running with Java 19 or earlier, which do not support the required incubating Vector API. Falling back to slower defaults.");
     }
     return new DefaultVectorizationProvider();
   }
