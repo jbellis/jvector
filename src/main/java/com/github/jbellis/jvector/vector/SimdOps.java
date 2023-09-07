@@ -7,13 +7,7 @@ import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 final class SimdOps {
-
-    private static final Logger logger = LoggerFactory.getLogger(SimdOps.class);
-
     static float sum(float[] vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length);

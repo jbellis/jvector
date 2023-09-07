@@ -22,9 +22,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Locale;
 import java.util.Objects;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.logging.Logger;
 
 /**
  * A provider of vectorization implementations. Depending on the Java version and availability of
@@ -57,7 +55,7 @@ public abstract class VectorizationProvider {
 
   // *** Lookup mechanism: ***
 
-  private static final Logger LOG = LoggerFactory.getLogger(VectorizationProvider.class.getName());
+  private static final Logger LOG = Logger.getLogger(VectorizationProvider.class.getName());
 
   /** The minimal version of Java that has the bugfix for JDK-8301190. */
   private static final Version VERSION_JDK8301190_FIXED = Version.parse("20.0.2");
@@ -68,7 +66,7 @@ public abstract class VectorizationProvider {
     if (runtimeVersion >= 20 && runtimeVersion <= 21) {
       // is locale sane (only buggy in Java 20)
       if (isAffectedByJDK8301190()) {
-        LOG.warn(
+        LOG.warning(
             "Java runtime is using a buggy default locale; Java vector incubator API can't be enabled: "
                 + Locale.getDefault());
         return new DefaultVectorizationProvider();
@@ -76,12 +74,12 @@ public abstract class VectorizationProvider {
       // is the incubator module present and readable (JVM providers may to exclude them or it is
       // build with jlink)
       if (!vectorModulePresentAndReadable()) {
-        LOG.warn(
+        LOG.warning(
             "Java vector incubator module is not readable. For optimal vector performance, pass '--add-modules jdk.incubator.vector' to enable Vector API.");
         return new DefaultVectorizationProvider();
       }
       if (!testMode && isClientVM()) {
-        LOG.warn("C2 compiler is disabled; Java vector incubator API can't be enabled");
+        LOG.warning("C2 compiler is disabled; Java vector incubator API can't be enabled");
         return new DefaultVectorizationProvider();
       }
       try {
@@ -90,7 +88,7 @@ public abstract class VectorizationProvider {
         return provider;
       } catch (UnsupportedOperationException uoe) {
         // not supported because preferred vector size too small or similar
-        LOG.warn("Java vector incubator API was not enabled. " + uoe.getMessage());
+        LOG.warning("Java vector incubator API was not enabled. " + uoe.getMessage());
         return new DefaultVectorizationProvider();
       } catch (RuntimeException | Error e) {
         throw e;
@@ -98,9 +96,9 @@ public abstract class VectorizationProvider {
         throw new AssertionError(th);
       }
     } else if (runtimeVersion >= 22) {
-      LOG.warn("You are running with Java 22 or later. To make full use of the Vector API, please update jvector.");
+      LOG.warning("You are running with Java 22 or later. To make full use of the Vector API, please update jvector.");
     } else {
-      LOG.warn("You are running with Java 19 or earlier, which do not support the required incubating Vector API. Falling back to slower defaults.");
+      LOG.warning("You are running with Java 19 or earlier, which do not support the required incubating Vector API. Falling back to slower defaults.");
     }
     return new DefaultVectorizationProvider();
   }
@@ -135,7 +133,7 @@ public abstract class VectorizationProvider {
     } catch (
         @SuppressWarnings("unused")
         SecurityException e) {
-      LOG.warn(
+      LOG.warning(
           "SecurityManager denies permission to 'java.vm.info' system property, so state of C2 compiler can't be detected. "
               + "In case of performance issues allow access to this property.");
       return false;
