@@ -8,6 +8,10 @@ import jdk.incubator.vector.VectorOperators;
 import java.util.List;
 
 final class SimdOps {
+    static {
+        System.setProperty("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", "0");
+    }
+
     static float sum(float[] vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length);
