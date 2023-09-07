@@ -123,7 +123,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
     var graph = buildInOrder(builder, vectors);
     // run some searches
-    NodeScore[] nn = GraphSearcher.search(
+    SearchResult.NodeScore[] nn = GraphSearcher.search(
             getTargetVector(),
             10,
             vectors.copy(),
@@ -131,7 +131,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             similarityFunction,
             graph,
             null
-    );
+    ).getNodes();
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
@@ -163,7 +163,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
-    NodeScore[] nn =
+    SearchResult.NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     10,
@@ -172,7 +172,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     similarityFunction,
                     graph,
                     acceptOrds
-            );
+            ).getNodes();
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
@@ -202,7 +202,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
     // Check the search finds all accepted vectors
     int numAccepted = acceptOrds.cardinality();
-    NodeScore[] nn =
+    SearchResult.NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     numAccepted,
@@ -211,7 +211,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     similarityFunction,
                     graph,
                     acceptOrds
-            );
+            ).getNodes();
 
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     for (int node : nodes) {
@@ -408,7 +408,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     int efSearch = 100;
     int totalMatches = 0;
     for (int i = 0; i < 100; i++) {
-      NodeScore[] actual;
+      SearchResult.NodeScore[] actual;
       T query = randomVector(dim);
       actual =
               GraphSearcher.search(
@@ -419,7 +419,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                       similarityFunction,
                       graph,
                       acceptOrds
-              );
+              ).getNodes();
 
       NeighborQueue expected = new NeighborQueue(topK, false);
       for (int j = 0; j < size; j++) {

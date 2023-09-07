@@ -57,7 +57,7 @@ public class GraphSearcher<T> {
    * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
    * is the unique owner of the vectors instance passed in here.
    */
-  public static <T> NodeScore[] search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
+  public static <T> SearchResult search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
     var searcher = new GraphSearcher.Builder<>(graph.getView()).build();
     NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
@@ -92,7 +92,7 @@ public class GraphSearcher<T> {
     }
   }
 
-  public NodeScore[] search(
+  public SearchResult search(
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborSimilarity.ReRanker<T> reRanker,
       int topK,
@@ -109,7 +109,7 @@ public class GraphSearcher<T> {
    * If scoreFunction is exact, then reRanker may be null.
    */
   // TODO add back ability to re-use a results structure instead of allocating a new one each time?
-  NodeScore[] searchInternal(
+  SearchResult searchInternal(
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborSimilarity.ReRanker<T> reRanker,
       int topK,
@@ -121,15 +121,17 @@ public class GraphSearcher<T> {
     }
 
     if (ep < 0) {
-      return new NodeScore[0];
+      return new SearchResult(new SearchResult.NodeScore[0], 0);
     }
 
     prepareScratchState(view.size());
     var resultsQueue = new NeighborQueue(topK, false);
     Map<Integer, T> vectorsEncountered = !scoreFunction.isExact() ? new java.util.HashMap<>() : null;
+    int numVisited = 0;
 
     float score = scoreFunction.similarityTo(ep);
     visited.set(ep);
+    numVisited++;
     candidates.add(ep, score);
     if (acceptOrds == null || acceptOrds.get(ep)) {
       resultsQueue.add(ep, score);
@@ -159,6 +161,7 @@ public class GraphSearcher<T> {
         if (visited.getAndSet(friendOrd)) {
           continue;
         }
+        numVisited++;
 
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
         if (friendSimilarity >= minAcceptedSimilarity) {
@@ -173,19 +176,20 @@ public class GraphSearcher<T> {
     }
     assert resultsQueue.size() <= topK;
 
+    SearchResult.NodeScore[] nodes;
     if (scoreFunction.isExact()) {
-      var nodes = new NodeScore[resultsQueue.size()];
+      nodes = new SearchResult.NodeScore[resultsQueue.size()];
       for (int i = nodes.length - 1; i >= 0; i--) {
           var nScore = resultsQueue.topScore();
           var n = resultsQueue.pop();
-          nodes[i] = new NodeScore(n, nScore);
+          nodes[i] = new SearchResult.NodeScore(n, nScore);
       }
-      return nodes;
     } else {
-      var nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
-      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((NodeScore nodeScore) -> nodeScore.score).reversed());
-      return nodes;
+      nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
+      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
     }
+
+    return new SearchResult(nodes, numVisited);
   }
 
   private void prepareScratchState(int capacity) {
