@@ -120,7 +120,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
             similarityFunction,
             graph,
             acceptOrds
-        );
+        ).getNodes();
 
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);

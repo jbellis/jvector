@@ -174,7 +174,7 @@ public class GraphIndexBuilder<T> {
       var candidates = gs.searchInternal(scoreFunction, null, beamWidth, ep, bits);
 
       // Update neighbors with these candidates.
-      var natural = getNaturalCandidates(candidates);
+      var natural = getNaturalCandidates(candidates.getNodes());
       var concurrent = getConcurrentCandidates(node, inProgressBefore);
       updateNeighbors(node, natural, concurrent);
       graph.markComplete(node);

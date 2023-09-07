@@ -72,12 +72,12 @@ public class SiftSmall {
             var searcher = new GraphSearcher.Builder(view).build();
             if (compressedVectors == null) {
                 NeighborSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
-                nn = searcher.search(sf, null, 100, null);
+                nn = searcher.search(sf, null, 100, null).getNodes();
             }
             else {
                 NeighborSimilarity.ApproximateScoreFunction sf = (j) -> compressedVectors.decodedSimilarity(j, queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
-                nn = searcher.search(sf, rr, 100, null);
+                nn = searcher.search(sf, rr, 100, null).getNodes();
             }
 
             var gt = groundTruth.get(i);

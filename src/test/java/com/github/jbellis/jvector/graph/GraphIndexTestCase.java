@@ -23,9 +23,7 @@ import com.github.jbellis.jvector.annotations.Unshared;
 import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.util.FixedBitSet;
-import com.github.jbellis.jvector.vector.VectorEncoding;
-import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import com.github.jbellis.jvector.vector.VectorUtil;
+import com.github.jbellis.jvector.vector.*;
 import org.junit.Test;
 
 import java.util.*;
@@ -131,7 +129,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
             similarityFunction,
             graph,
             null
-    );
+    ).getNodes();
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
@@ -172,7 +170,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     similarityFunction,
                     graph,
                     acceptOrds
-            );
+            ).getNodes();
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
     int sum = 0;
@@ -211,7 +209,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                     similarityFunction,
                     graph,
                     acceptOrds
-            );
+            ).getNodes();
 
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     for (int node : nodes) {
@@ -419,7 +417,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
                       similarityFunction,
                       graph,
                       acceptOrds
-              );
+              ).getNodes();
 
       NeighborQueue expected = new NeighborQueue(topK, false);
       for (int j = 0; j < size; j++) {
