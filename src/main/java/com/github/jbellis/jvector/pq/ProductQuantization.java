@@ -104,7 +104,7 @@ public class ProductQuantization {
         }
 
         float sum = 0.0f;
-        for (int m = 0; m < M; m++) {
+        for (int m = 0; m < M; ++m) {
             int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
             float[] centroidSubvector = codebooks[m][centroidIndex];

@@ -59,11 +59,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public float dot64(float[] v1, int offset1, float[] v2, int offset2) {
-        return SimdOps.dot64(v1, offset1, v2, offset2);
-    }
-
-    @Override
     public void addInPlace(float[] v1, float[] v2) {
         SimdOps.addInPlace(v1, v2);
     }

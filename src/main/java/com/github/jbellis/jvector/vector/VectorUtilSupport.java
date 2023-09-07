@@ -51,9 +51,6 @@ public interface VectorUtilSupport {
   /** Divide vector by divisor, in place (vector will be modified) */
   void divInPlace(float[] vector, float divisor);
 
-  /** Computes the dot product of the first two floats in each vector at the given offsets */
-  float dot64(float[] v1, int offset1, float[] v2, int offset2);
-
   /** Adds v2 into v1, in place (v1 will be modified) */
   public void addInPlace(float[] v1, float[] v2);
 

@@ -203,13 +203,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float dot64(float[] v1, int offset1, float[] v2, int offset2) {
-    var a = v1[offset1] * v2[offset2];
-    var b = v1[offset1 + 1] * v2[offset2 + 1];
-    return a + b;
-  }
-
-  @Override
   public void addInPlace(float[] v1, float[] v2) {
     for (int i = 0; i < v1.length; i++) {
       v1[i] += v2[i];

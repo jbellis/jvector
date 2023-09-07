@@ -195,9 +195,6 @@ public final class VectorUtil {
     impl.divInPlace(vector, divisor);
   }
 
-  public static float dot64(float[] v1, int offset1, float[] v2, int offset2) {
-    return impl.dot64(v1, offset1, v2, offset2);
-  }
 
   public static void addInPlace(float[] v1, float[] v2) {
     impl.addInPlace(v1, v2);
