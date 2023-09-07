@@ -3,9 +3,9 @@ package com.github.jbellis.jvector.disk;
 import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.util.Accountable;
 import com.github.jbellis.jvector.util.RamUsageEstimator;
-import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
 import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class GraphCache implements Accountable
 {
@@ -26,7 +26,7 @@ public abstract class GraphCache implements Accountable
     {
         if (distance <= 0)
             return new EmptyGraphCache();
-        return new NBHMGraphCache(graph, distance);
+        return new CHMGraphCache(graph, distance);
     }
 
     public abstract long ramBytesUsed();
@@ -45,12 +45,12 @@ public abstract class GraphCache implements Accountable
         }
     }
 
-    private static final class NBHMGraphCache extends GraphCache
+    private static final class CHMGraphCache extends GraphCache
     {
-        private final NonBlockingHashMapLong<CachedNode> cache = new NonBlockingHashMapLong<>();
+        private final ConcurrentHashMap<Integer, CachedNode> cache = new ConcurrentHashMap<>();
         private long ramBytesUsed = 0;
 
-        public NBHMGraphCache(GraphIndex<float[]> graph, int distance) {
+        public CHMGraphCache(GraphIndex<float[]> graph, int distance) {
             var view = graph.getView();
             cacheNeighborsOf(view, view.entryNode(), distance);
         }

@@ -19,8 +19,8 @@ package com.github.jbellis.jvector.graph;
 
 import com.github.jbellis.jvector.util.Accountable;
 import com.github.jbellis.jvector.util.RamUsageEstimator;
-import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
@@ -35,11 +35,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   // the current graph entry node on the top level. -1 if not set
   private final AtomicReference<Integer> entryPoint; 
 
-  // Unlike OnHeapGraphIndex (OHHG), we use the same data structure for Level 0 and higher node
-  // lists, a ConcurrentHashMap.  While the ArrayList used for L0 in OHHG is faster for
-  // single-threaded workloads, it imposes an unacceptable contention burden for concurrent
-  // graph building.
-  private final NonBlockingHashMapLong<ConcurrentNeighborSet> nodes;
+  private final ConcurrentHashMap<Integer, ConcurrentNeighborSet> nodes;
 
   // max neighbors/edges per node
   final int nsize0;
@@ -52,7 +48,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         new AtomicReference<>(-1); // Entry node should be negative until a node is added
     this.nsize0 = 2 * M;
 
-    this.nodes = new NonBlockingHashMapLong<>();
+    this.nodes = new ConcurrentHashMap<>();
   }
 
   /**
@@ -118,7 +114,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     // This is because, while L0 will contain sequential ordinals once the graph is complete,
     // and internally Lucene only calls getNodesOnLevel at that point, this is a public
     // method so we cannot assume that that is the only time it will be called by third parties.
-    var keysInts = nodes.keySet().stream().mapToInt(Long::intValue).iterator();
+    var keysInts = nodes.keySet().stream().mapToInt(Integer::intValue).iterator();
     return new NodesIterator(nodes.size()) {
       @Override
       public int nextInt() {
