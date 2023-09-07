@@ -18,8 +18,6 @@ package com.github.jbellis.jvector.util;
 
 /**
  * Interface for Bitset-like structures.
- *
- * @lucene.experimental
  */
 public interface Bits {
     /**

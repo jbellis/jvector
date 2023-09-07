@@ -30,8 +30,6 @@ import java.util.Arrays;
  *       block is non-null, and its offset in the array of longs is the number of one bits on the
  *       right of the <code>i-th</code> bit.
  * </ul>
- *
- * @lucene.internal
  */
 public class SparseFixedBitSet extends BitSet {
 

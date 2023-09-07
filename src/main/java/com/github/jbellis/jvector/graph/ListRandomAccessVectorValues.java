@@ -5,7 +5,7 @@ import com.github.jbellis.jvector.annotations.Unshared;
 import java.util.List;
 
 /**
- * An List-backed implementation of the {@link RandomAccessVectorValues} interface.
+ * A List-backed implementation of the {@link RandomAccessVectorValues} interface.
  *
  * It is acceptable to provide this class to a GraphBuilder, and then continue
  * to add vectors to it as you add to the graph.
@@ -46,9 +46,7 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues<fl
 
     @Override
     public ListRandomAccessVectorValues copy() {
-        // the copy method is called as a workaround for Lucene's implementations not being re-entrant.
-        // if you are already re-entrant, you really don't need a new copy, but HGBuilder.build
-        // explicitly checks for object identity so we'll do a shallow copy to make it happy.
-        return new ListRandomAccessVectorValues(vectors, dimension);
+        // our vectorValue is Unshared, but copy anyway in case the underlying List is not threadsafe
+        return new ListRandomAccessVectorValues(List.copyOf(vectors), dimension);
     }
 }

@@ -20,8 +20,6 @@ package com.github.jbellis.jvector.graph;
 /**
  * Provides random access to vectors by dense ordinal. This interface is used by graph-based
  * implementations of KNN search.
- *
- * @lucene.experimental
  */
 public interface RandomAccessVectorValues<T> {
 

@@ -27,16 +27,13 @@ import java.util.logging.Logger;
 /**
  * A provider of vectorization implementations. Depending on the Java version and availability of
  * vectorization modules in the Java runtime this class provides optimized implementations (using
- * SIMD) of several algorithms used throughout Apache Lucene.
+ * SIMD) of several algorithms used throughout JVector.
  */
 public abstract class VectorizationProvider {
 
   /**
    * Returns the default instance of the provider matching vectorization possibilities of actual
    * runtime.
-   *
-   * @throws UnsupportedOperationException if the singleton getter is not called from known Lucene
-   *     classes.
    */
   public static VectorizationProvider getInstance() {
     return Objects.requireNonNull(

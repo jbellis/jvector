@@ -22,12 +22,6 @@ import java.util.Arrays;
  * Represents byte[], as a slice (offset + length) into an existing byte[]. The {@link #bytes}
  * member should never be null; use {@link #EMPTY_BYTES} if necessary.
  *
- * <p><b>Important note:</b> Unless otherwise noted, Lucene uses this class to represent terms that
- * are encoded as <b>UTF8</b> bytes in the index. To convert them to a Java {@link String} (which is
- * UTF16), use {@link #utf8ToString}. Using code like {@code new String(bytes, offset, length)} to
- * do this is <b>wrong</b>, as it does not respect the correct character set and may return wrong
- * results (depending on the platform's defaults)!
- *
  * <p>{@code BytesRef} implements {@link Comparable}. The underlying byte arrays are sorted
  * lexicographically, numerically treating elements as unsigned. This is identical to Unicode
  * codepoint order.
@@ -70,7 +64,6 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
    * Expert: compares the bytes against another BytesRef, returning true if the bytes are equal.
    *
    * @param other Another BytesRef, should not be null.
-   * @lucene.internal
    */
   public boolean bytesEquals(BytesRef other) {
     return Arrays.equals(

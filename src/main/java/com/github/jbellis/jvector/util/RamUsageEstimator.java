@@ -141,11 +141,11 @@ public final class RamUsageEstimator {
         if (layer != null
             && layer.findModule("jdk.management").map(module::canRead).orElse(false) == false) {
           log.warning(
-              "Lucene cannot correctly calculate object sizes on 64bit JVMs, unless the 'jdk.management' Java module "
+              "JVector cannot correctly calculate object sizes on 64bit JVMs, unless the 'jdk.management' Java module "
                   + "is readable [please add 'jdk.management' to modular application either by command line or its module descriptor]");
         } else {
           log.warning(
-              "Lucene cannot correctly calculate object sizes on 64bit JVMs that are not based on Hotspot or a compatible implementation.");
+              "JVector cannot correctly calculate object sizes on 64bit JVMs that are not based on Hotspot or a compatible implementation.");
         }
       }
       COMPRESSED_REFS_ENABLED = compressedOops;
