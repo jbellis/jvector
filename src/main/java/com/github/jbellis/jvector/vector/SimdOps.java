@@ -4,18 +4,17 @@ import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.VectorOperators;
-import jdk.incubator.vector.VectorSpecies;
 
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SimdOps {
+final class SimdOps {
 
     private static final Logger logger = LoggerFactory.getLogger(SimdOps.class);
 
-    public static float sum(float[] vector) {
+    static float sum(float[] vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length);
 
@@ -35,7 +34,7 @@ public class SimdOps {
         return res;
     }
 
-    public static float[] sum(List<float[]> vectors) {
+    static float[] sum(List<float[]> vectors) {
         if (vectors == null || vectors.isEmpty()) {
             throw new IllegalArgumentException("Input list cannot be null or empty");
         }
@@ -51,7 +50,7 @@ public class SimdOps {
         return sum;
     }
 
-    public static void divInPlace(float[] vector, float divisor) {
+    static void divInPlace(float[] vector, float divisor) {
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length);
 
         // Process the vectorized part
@@ -91,22 +90,23 @@ public class SimdOps {
         return a.mul(b).reduceLanes(VectorOperators.ADD);
     }
 
-    public static float dotProduct(float[] v1, float[] v2) {
+    static float dotProduct(float[] v1, float[] v2) {
         return dotProduct(v1, 0, v2, 0, v1.length);
     }
 
-    public static float dotProduct(float[] v1, int v1offset, float[] v2, int v2offset, final int length)
+    static float dotProduct(float[] v1, int v1offset, float[] v2, int v2offset, final int length)
     {
-        if (length == 0)
-            return 0.0f;
-        else if (length < FloatVector.SPECIES_128.length())
+        //Common case first
+        if (length >= FloatVector.SPECIES_PREFERRED.length())
+            return dotProductPreferred(v1, v1offset, v2, v2offset, length);
+
+        if (length < FloatVector.SPECIES_128.length())
             return dotProduct64(v1, v1offset, v2, v2offset, length);
         else if (length < FloatVector.SPECIES_256.length())
             return dotProduct128(v1, v1offset, v2, v2offset, length);
-        else if (length < FloatVector.SPECIES_512.length())
+        else
             return dotProduct256(v1, v1offset, v2, v2offset, length);
 
-        return dotProductPreferred(v1, v1offset, v2, v2offset, length);
     }
 
     static float dotProduct64(float[] v1, int v1offset, float[] v2, int v2offset, int length) {
@@ -185,7 +185,7 @@ public class SimdOps {
         return res;
     }
 
-    public static float dotProductPreferred(float[] v1, int v1offset, float[] v2, int v2offset, int length) {
+    static float dotProductPreferred(float[] v1, int v1offset, float[] v2, int v2offset, int length) {
 
         if (length == FloatVector.SPECIES_PREFERRED.length())
             return dotPreferred(v1, v1offset, v2, v2offset);
@@ -210,7 +210,7 @@ public class SimdOps {
         return res;
     }
 
-    public static int dotProduct(byte[] v1, byte[] v2) {
+    static int dotProduct(byte[] v1, byte[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -234,7 +234,7 @@ public class SimdOps {
         return res;
     }
 
-    public static float cosineSimilarity(float[] v1, float[] v2) {
+    static float cosineSimilarity(float[] v1, float[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -267,7 +267,7 @@ public class SimdOps {
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
     }
 
-    public static float cosineSimilarity(byte[] v1, byte[] v2) {
+    static float cosineSimilarity(byte[] v1, byte[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -301,7 +301,7 @@ public class SimdOps {
     }
 
 
-    public static float squareDistance(float[] v1, float[] v2) {
+    static float squareDistance(float[] v1, float[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -327,7 +327,7 @@ public class SimdOps {
         return diffSumSquared;
     }
 
-    public static int squareDistance(byte[] v1, byte[] v2) {
+    static int squareDistance(byte[] v1, byte[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -354,7 +354,7 @@ public class SimdOps {
         return diffSumSquared;
     }
 
-    public static void addInPlace(float[] v1, float[] v2) {
+    static void addInPlace(float[] v1, float[] v2) {
         if (v1.length != v2.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -374,7 +374,7 @@ public class SimdOps {
         }
     }
 
-    public static float[] sub(float[] lhs, float[] rhs) {
+    static float[] sub(float[] lhs, float[] rhs) {
         if (lhs.length != rhs.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }

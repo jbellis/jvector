@@ -41,6 +41,17 @@ public final class VectorUtil {
     return r;
   }
 
+  public static float dotProduct(float[] a, int aoffset, float[] b, int boffset, int length) {
+    //This check impacts FLOPS
+    /*if ( length > Math.min(a.length - aoffset, b.length - boffset) ) {
+      throw new IllegalArgumentException("length must be less than the vectors remaining space at the given offsets: a(" +
+              (a.length - aoffset) + "), b(" + (b.length - boffset) + "), length(" + length + ")");
+    }*/
+    float r = impl.dotProduct(a, aoffset, b, boffset, length);
+    assert Float.isFinite(r);
+    return r;
+  }
+
   /**
    * Returns the cosine similarity between the two vectors.
    *

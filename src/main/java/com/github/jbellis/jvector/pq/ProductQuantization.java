@@ -10,12 +10,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import com.github.jbellis.jvector.disk.Io;
-import com.github.jbellis.jvector.vector.SimdOps;
-import com.github.jbellis.jvector.vector.VectorUtil;
-
-import static com.github.jbellis.jvector.vector.SimdOps.*;
-
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well
@@ -108,7 +102,7 @@ public class ProductQuantization {
             int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
             float[] centroidSubvector = codebooks[m][centroidIndex];
-            sum += SimdOps.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
+            sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
         }
 
         return sum;

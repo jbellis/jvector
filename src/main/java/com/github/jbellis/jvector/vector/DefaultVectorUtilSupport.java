@@ -88,6 +88,17 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public float dotProduct(float[] a, int aoffset, float[] b, int boffset, int length)
+  {
+    float sum = 0f;
+    for (int i = 0; i < length; i++) {
+      sum += a[aoffset + i] * b[aoffset + i];
+    }
+
+    return sum;
+  }
+
+  @Override
   public float cosine(float[] a, float[] b) {
     float sum = 0.0f;
     float norm1 = 0.0f;

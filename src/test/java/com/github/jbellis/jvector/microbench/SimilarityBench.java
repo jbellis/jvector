@@ -4,7 +4,7 @@ package com.github.jbellis.jvector.microbench;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
-import com.github.jbellis.jvector.vector.SimdOps;
+import com.github.jbellis.jvector.vector.VectorUtil;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -48,7 +48,7 @@ public class SimilarityBench {
     @Threads(8)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void dotProduct(Blackhole bh, Parameters p) {
-        bh.consume(SimdOps.dotProduct(q3, 0, q1, 22, q3.length));
+        bh.consume(VectorUtil.dotProduct(q3, 0, q1, 22, q3.length));
     }
 
     public static void main(String[] args) throws Exception {
