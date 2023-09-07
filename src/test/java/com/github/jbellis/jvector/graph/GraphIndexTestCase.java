@@ -23,7 +23,9 @@ import com.github.jbellis.jvector.annotations.Unshared;
 import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.util.FixedBitSet;
-import com.github.jbellis.jvector.vector.*;
+import com.github.jbellis.jvector.vector.VectorEncoding;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import com.github.jbellis.jvector.vector.VectorUtil;
 import org.junit.Test;
 
 import java.util.*;
@@ -121,7 +123,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
     var graph = buildInOrder(builder, vectors);
     // run some searches
-    NodeScore[] nn = GraphSearcher.search(
+    SearchResult.NodeScore[] nn = GraphSearcher.search(
             getTargetVector(),
             10,
             vectors.copy(),
@@ -161,7 +163,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // the first 10 docs must not be deleted to ensure the expected recall
     Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
-    NodeScore[] nn =
+    SearchResult.NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     10,
@@ -200,7 +202,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
     // Check the search finds all accepted vectors
     int numAccepted = acceptOrds.cardinality();
-    NodeScore[] nn =
+    SearchResult.NodeScore[] nn =
             GraphSearcher.search(
                     getTargetVector(),
                     numAccepted,
@@ -406,7 +408,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     int efSearch = 100;
     int totalMatches = 0;
     for (int i = 0; i < 100; i++) {
-      NodeScore[] actual;
+      SearchResult.NodeScore[] actual;
       T query = randomVector(dim);
       actual =
               GraphSearcher.search(

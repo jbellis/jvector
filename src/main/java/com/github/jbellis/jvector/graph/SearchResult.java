@@ -20,8 +20,8 @@ package com.github.jbellis.jvector.graph;
  * Container class for results of an ANN search, along with associated metrics about the behavior of the search.
  */
 public class SearchResult {
-    private NodeScore[] nodes;
-    private int visitedCount;
+    private final NodeScore[] nodes;
+    private final int visitedCount;
 
     public SearchResult(NodeScore[] nodes, int visitedCount) {
         this.nodes = nodes;
@@ -40,5 +40,15 @@ public class SearchResult {
      */
     public int getVisitedCount() {
         return visitedCount;
+    }
+
+    public static final class NodeScore {
+        public final int node;
+        public final float score;
+
+        public NodeScore(int node, float score) {
+            this.node = node;
+            this.score = score;
+        }
     }
 }

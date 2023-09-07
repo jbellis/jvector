@@ -67,7 +67,7 @@ public class SiftSmall {
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
-            NodeScore[] nn;
+            SearchResult.NodeScore[] nn;
             var view = graph.getView();
             var searcher = new GraphSearcher.Builder(view).build();
             if (compressedVectors == null) {

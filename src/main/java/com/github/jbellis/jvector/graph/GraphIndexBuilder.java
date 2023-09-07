@@ -227,10 +227,10 @@ public class GraphIndexBuilder<T> {
     neighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
 
-  private NeighborArray getNaturalCandidates(NodeScore[] candidates) {
+  private NeighborArray getNaturalCandidates(SearchResult.NodeScore[] candidates) {
     NeighborArray scratch = this.naturalScratch.get();
     scratch.clear();
-    for (NodeScore candidate : candidates) {
+    for (SearchResult.NodeScore candidate : candidates) {
       scratch.addInOrder(candidate.node, candidate.score);
     }
     return scratch;

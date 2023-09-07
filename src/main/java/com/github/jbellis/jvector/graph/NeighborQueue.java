@@ -138,12 +138,12 @@ public class NeighborQueue {
     return nodes;
   }
 
-  public NodeScore[] nodesCopy(NeighborSimilarity.ExactScoreFunction sf) {
+  public SearchResult.NodeScore[] nodesCopy(NeighborSimilarity.ExactScoreFunction sf) {
     int size = size();
-    NodeScore[] ns = new NodeScore[size];
+    SearchResult.NodeScore[] ns = new SearchResult.NodeScore[size];
     for (int i = 0; i < size; i++) {
       var node = decodeNodeId(heap.get(i + 1));
-      ns[i] = new NodeScore(node, sf.similarityTo(node));
+      ns[i] = new SearchResult.NodeScore(node, sf.similarityTo(node));
     }
     return ns;
   }

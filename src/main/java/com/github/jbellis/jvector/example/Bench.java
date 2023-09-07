@@ -95,7 +95,7 @@ public class Bench {
         return resultSet.stream().filter(gt::contains).count();
     }
 
-    private static long topKCorrect(int topK, NodeScore[] nn, Set<Integer> gt) {
+    private static long topKCorrect(int topK, SearchResult.NodeScore[] nn, Set<Integer> gt) {
         var a = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
         return topKCorrect(topK, a, gt);
     }

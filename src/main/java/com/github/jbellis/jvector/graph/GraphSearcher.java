@@ -121,7 +121,7 @@ public class GraphSearcher<T> {
     }
 
     if (ep < 0) {
-      return new SearchResult(new NodeScore[0], 0);
+      return new SearchResult(new SearchResult.NodeScore[0], 0);
     }
 
     prepareScratchState(view.size());
@@ -176,17 +176,17 @@ public class GraphSearcher<T> {
     }
     assert resultsQueue.size() <= topK;
 
-    NodeScore[] nodes;
+    SearchResult.NodeScore[] nodes;
     if (scoreFunction.isExact()) {
-      nodes = new NodeScore[resultsQueue.size()];
+      nodes = new SearchResult.NodeScore[resultsQueue.size()];
       for (int i = nodes.length - 1; i >= 0; i--) {
           var nScore = resultsQueue.topScore();
           var n = resultsQueue.pop();
-          nodes[i] = new NodeScore(n, nScore);
+          nodes[i] = new SearchResult.NodeScore(n, nScore);
       }
     } else {
       nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
-      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((NodeScore nodeScore) -> nodeScore.score).reversed());
+      Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
     }
 
     return new SearchResult(nodes, numVisited);
