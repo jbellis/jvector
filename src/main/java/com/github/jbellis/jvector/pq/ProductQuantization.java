@@ -14,14 +14,11 @@ public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well
 
-    private final List<List<float[]>> codebooks;
+    private final float[][][] codebooks;
     private final int M;
     private final int originalDimension;
     private final float[] globalCentroid;
-    private final int[] subvectorSizes;
-
-    // so that decodedDotProduct doesn't have to allocate a new temporary array every call
-    private final ThreadLocal<float[]> dotScratch;
+    private final int[][] subvectorSizesAndOffsets;
 
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
@@ -34,7 +31,7 @@ public class ProductQuantization {
     public ProductQuantization(List<float[]> vectors, int M, boolean globallyCenter) {
         this.M = M;
         originalDimension = vectors.get(0).length;
-        subvectorSizes = getSubvectorSizes(originalDimension, M);
+        subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(originalDimension, M);
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
@@ -42,21 +39,22 @@ public class ProductQuantization {
         } else {
             globalCentroid = null;
         }
-        codebooks = createCodebooks(vectors, M, subvectorSizes);
-        dotScratch = ThreadLocal.withInitial(() -> new float[this.M]);
+        codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets);
     }
 
-    public ProductQuantization(List<List<float[]>> codebooks, float[] globalCentroid)
+    public ProductQuantization(float[][][] codebooks, float[] globalCentroid)
     {
         this.codebooks = codebooks;
         this.globalCentroid = globalCentroid;
-        this.M = codebooks.size();
-        this.subvectorSizes = new int[M];
+        this.M = codebooks.length;
+        this.subvectorSizesAndOffsets = new int[M][];
+        int offset = 0;
         for (int i = 0; i < M; i++) {
-            this.subvectorSizes[i] = codebooks.get(i).get(0).length;
+            int size = codebooks[i][0].length;
+            this.subvectorSizesAndOffsets[i] = new int[]{size, offset};
+            offset += size;
         }
-        this.originalDimension = Arrays.stream(subvectorSizes).sum();
-        this.dotScratch = ThreadLocal.withInitial(() -> new float[this.M]);
+        this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
     }
 
     /**
@@ -77,14 +75,11 @@ public class ProductQuantization {
         }
 
         float[] finalVector = vector;
-        List<Integer> indices = IntStream.range(0, M)
-                .mapToObj(m -> {
-                    // the closest centroid in the corresponding codebook to each subvector
-                    return closetCentroidIndex(getSubVector(finalVector, m, subvectorSizes), codebooks.get(m));
-                })
-                .toList();
-
-        return toBytes(indices, M);
+        byte[] encoded = new byte[M];
+        for (int m = 0; m < M; m++) {
+            encoded[m] = (byte) closetCentroidIndex(getSubVector(finalVector, m, subvectorSizesAndOffsets), codebooks[m]);
+        }
+        return encoded;
     }
 
     /**
@@ -102,38 +97,25 @@ public class ProductQuantization {
             return VectorUtil.dotProduct(target, other);
         }
 
-        var a = dotScratch.get();
-        int offset = 0; // starting position in the target array for the current subvector
-        int i = 0;
-        for (int m = 0; m < M; m++) {
+        float sum = 0.0f;
+        for (int m = 0; m < M; ++m) {
+            int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks.get(m).get(centroidIndex);
-            if (centroidSubvector.length == 2) {
-                a[i++] = VectorUtil.dot64(centroidSubvector, 0, other, offset);
-            } else if (centroidSubvector.length == 3) {
-                var b = centroidSubvector;
-                var c = other;
-                a[i++] = b[0] * c[offset] + b[1] * c[offset + 1] + b[2] * c[offset + 2];
-            } else {
-                // TODO support other M / subvectorSizes
-                throw new UnsupportedOperationException("Only 2- and 3-dimensional subvectors are currently supported by decodedDotProduct");
-            }
-            offset += subvectorSizes[m];
+            float[] centroidSubvector = codebooks[m][centroidIndex];
+            sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
         }
 
-        return VectorUtil.sum(a);
+        return sum;
     }
 
     /**
      * Decodes the quantized representation (byte array) to its approximate original vector.
      */
     public void decode(byte[] encoded, float[] target) {
-        int offset = 0; // starting position in the target array for the current subvector
         for (int m = 0; m < M; m++) {
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks.get(m).get(centroidIndex);
-            System.arraycopy(centroidSubvector, 0, target, offset, subvectorSizes[m]);
-            offset += subvectorSizes[m];
+            float[] centroidSubvector = codebooks[m][centroidIndex];
+            System.arraycopy(centroidSubvector, 0, target, subvectorSizesAndOffsets[m][1], subvectorSizesAndOffsets[m][0]);
         }
 
         if (globalCentroid != null) {
@@ -178,54 +160,53 @@ public class ProductQuantization {
         return "[" + String.join(", ", b) + "]";
     }
 
-    static List<List<float[]>> createCodebooks(List<float[]> vectors, int M, int[] subvectorSizes) {
+    static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset) {
         return IntStream.range(0, M).parallel()
                 .mapToObj(m -> {
-                    List<float[]> subvectors = vectors.stream().parallel()
-                            .map(vector -> getSubVector(vector, m, subvectorSizes))
-                            .toList();
+                    float[][] subvectors = vectors.stream().parallel()
+                            .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
+                            .toArray(s -> new float[s][]);
                     var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::squareDistance);
                     return clusterer.cluster(K_MEANS_ITERATIONS);
                 })
-                .toList();
+                .toArray(s -> new float[s][][]);
     }
     
-    static int closetCentroidIndex(float[] subvector, List<float[]> codebook) {
-        return IntStream.range(0, codebook.size())
-                .mapToObj(i -> new AbstractMap.SimpleEntry<>(i, VectorUtil.squareDistance(subvector, codebook.get(i))))
-                .min(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .get();
-    }
-
-    static byte[] toBytes(List<Integer> indices, int M) {
-        byte[] q = new byte[M];
-        for (int m = 0; m < M; m++) {
-            q[m] = (byte) (int) indices.get(m);
+    static int closetCentroidIndex(float[] subvector, float[][] codebook) {
+        int index = 0;
+        float minDist = Integer.MAX_VALUE;
+        for (int i = 0; i < codebook.length; i++) {
+            float dist = VectorUtil.squareDistance(subvector, codebook[i]);
+            if (dist < minDist) {
+                minDist = dist;
+                index = i;
+            }
         }
-        return q;
+        return index;
     }
 
     /**
      * Extracts the m-th subvector from a single vector.
      */
-    static float[] getSubVector(float[] vector, int m, int[] subvectorSizes) {
-        float[] subvector = new float[subvectorSizes[m]];
-        int offset = Arrays.stream(subvectorSizes, 0, m).sum();
-        System.arraycopy(vector, offset, subvector, 0, subvectorSizes[m]);
+    static float[] getSubVector(float[] vector, int m, int[][] subvectorSizeAndOffset) {
+        float[] subvector = new float[subvectorSizeAndOffset[m][0]];
+        System.arraycopy(vector, subvectorSizeAndOffset[m][1], subvector, 0, subvectorSizeAndOffset[m][0]);
         return subvector;
     }
 
     /**
      * Splits the vector dimension into M subvectors of roughly equal size.
      */
-    static int[] getSubvectorSizes(int dimensions, int M) {
-        int[] sizes = new int[M];
+    static int[][] getSubvectorSizesAndOffsets(int dimensions, int M) {
+        int[][] sizes = new int[M][];
         int baseSize = dimensions / M;
         int remainder = dimensions % M;
         // distribute the remainder among the subvectors
+        int offset = 0;
         for (int i = 0; i < M; i++) {
-            sizes[i] = baseSize + (i < remainder ? 1 : 0);
+            int size = baseSize + (i < remainder ? 1 : 0);
+            sizes[i] = new int[]{size, offset};
+            offset += size;
         }
         return sizes;
     }
@@ -240,15 +221,15 @@ public class ProductQuantization {
         }
 
         out.writeInt(M);
-        assert Arrays.stream(subvectorSizes).sum() == originalDimension;
-        assert M == subvectorSizes.length;
-        for (var a : subvectorSizes) {
-            out.writeInt(a);
+        assert Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum() == originalDimension;
+        assert M == subvectorSizesAndOffsets.length;
+        for (var a : subvectorSizesAndOffsets) {
+            out.writeInt(a[0]);
         }
 
-        assert codebooks.size() == M;
-        assert codebooks.get(0).size() == CLUSTERS;
-        out.writeInt(codebooks.get(0).size());
+        assert codebooks.length == M;
+        assert codebooks[0].length == CLUSTERS;
+        out.writeInt(codebooks[0].length);
         for (var codebook : codebooks) {
             for (var centroid : codebook) {
                 Io.writeFloats(out, centroid);
@@ -264,21 +245,25 @@ public class ProductQuantization {
         }
 
         int M = in.readInt();
-        int[] subvectorSizes = new int[M];
+        int[][] subvectorSizes = new int[M][];
+        int offset = 0;
         for (int i = 0; i < M; i++) {
-            subvectorSizes[i] = in.readInt();
+            int size = in.readInt();
+            subvectorSizes[i][0] = size;
+            offset += size;
+            subvectorSizes[i][1] = offset;
         }
 
         int clusters = in.readInt();
-        List<List<float[]>> codebooks = new ArrayList<>();
+        float[][][] codebooks = new float[M][][];
         for (int m = 0; m < M; m++) {
-            List<float[]> codebook = new ArrayList<>();
+            float[][] codebook = new float[clusters][];
             for (int i = 0; i < clusters; i++) {
-                int n = subvectorSizes[m];
+                int n = subvectorSizes[m][0];
                 float[] centroid = Io.readFloats(in, n);
-                codebook.add(centroid);
+                codebook[i] = centroid;
             }
-            codebooks.add(codebook);
+            codebooks[m] = codebook;
         }
 
         return new ProductQuantization(codebooks, globalCentroid);
