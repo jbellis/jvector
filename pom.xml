@@ -33,11 +33,6 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.boundary</groupId>
-      <artifactId>high-scale-lib</artifactId>
-      <version>1.0.6</version>
-    </dependency>
-    <dependency>
       <groupId>io.jhdf</groupId>
       <artifactId>jhdf</artifactId>
       <version>0.6.10</version>
