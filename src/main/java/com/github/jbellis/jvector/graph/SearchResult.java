@@ -19,7 +19,7 @@ package com.github.jbellis.jvector.graph;
 /**
  * Container class for results of an ANN search, along with associated metrics about the behavior of the search.
  */
-public class SearchResult {
+public final class SearchResult {
     private final NodeScore[] nodes;
     private final int visitedCount;
 
