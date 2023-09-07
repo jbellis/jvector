@@ -58,7 +58,7 @@ public class ProductQuantization {
     }
 
     /**
-     * Encodes the given vectors using the PQ codebooks.
+     * Encodes the given vectors in parallel using the PQ codebooks.
      */
     public List<byte[]> encodeAll(List<float[]> vectors) {
         return vectors.stream().parallel().map(this::encode).toList();
