@@ -166,7 +166,7 @@ public class GraphIndexBuilder<T> {
     try {
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
-      var gs = new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build(); // TODO cache these (but not with the same View)
+      var gs = graphSearcher.get();
       NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vectorsCopy.get().vectorValue(i), value);
 
       var bits = new ExcludingBits(node);
