@@ -24,4 +24,4 @@ jobs:
           distribution: corretto
           cache: maven
       - name: Compile and run tests
-        run: mvn -b -Pjdk${{ matrix.jdk }} package --file pom.xml
+        run: mvn -B -Pjdk${{ matrix.jdk }} package --file pom.xml
