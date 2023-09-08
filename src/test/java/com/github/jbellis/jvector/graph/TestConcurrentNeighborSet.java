@@ -17,17 +17,14 @@
 
 package com.github.jbellis.jvector.graph;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.stream.IntStream;
-
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.github.jbellis.jvector.graph.ConcurrentNeighborSet.ConcurrentNeighborArray;
 import com.github.jbellis.jvector.util.ArrayUtil;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import org.junit.Test;
 
-import org.junit.jupiter.api.Test;
+import java.util.Arrays;
+import java.util.stream.IntStream;
 
 import static com.github.jbellis.jvector.graph.ConcurrentNeighborSet.mergeNeighbors;
 import static org.junit.Assert.*;
