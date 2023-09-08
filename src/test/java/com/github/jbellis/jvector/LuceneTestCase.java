@@ -11,7 +11,11 @@ public class LuceneTestCase extends RandomizedTest {
         return getRandom();
     }
 
-    protected static int atLeast(Random random, int n) {
+    public static int atLeast(Random random, int n) {
         return n + random.nextInt(n / 2);
+    }
+
+    public static int atLeast(int n) {
+        return n + getRandom().nextInt(n / 2);
     }
 }
