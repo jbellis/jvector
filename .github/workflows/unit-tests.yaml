@@ -14,14 +14,14 @@ jobs:
       matrix:
         jdk: [ 11, 20 ]
         os: [ ubuntu-latest, windows-latest, mac-latest ]
-      build:
-        runs-on: ${{ matrix.os }}
-        steps:
-          - uses: actions/checkout@v3
-          - name: Set up JDK
-            uses: actions/setup-java@v3
-            with:
-              java-version: ${{ jdk }}
-              cache: maven
-          - name: Compile and run tests
-            run: mvn -b -Pjdk${{ jdk }} package --file pom.xml
+    build:
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v3
+        - name: Set up JDK
+          uses: actions/setup-java@v3
+          with:
+            java-version: ${{ jdk }}
+            cache: maven
+        - name: Compile and run tests
+          run: mvn -b -Pjdk${{ jdk }} package --file pom.xml
