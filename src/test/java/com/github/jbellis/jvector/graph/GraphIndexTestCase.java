@@ -19,6 +19,7 @@ package com.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+import com.github.jbellis.jvector.LuceneTestCase;
 import com.github.jbellis.jvector.annotations.Unshared;
 import com.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import com.github.jbellis.jvector.util.Bits;
@@ -35,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Tests KNN graphs */
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
-public abstract class GraphIndexTestCase<T> extends RandomizedTest {
+public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
   VectorSimilarityFunction similarityFunction;
 
@@ -196,7 +197,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
-    for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
+    for (int i = 0; i < nDoc; i += nextInt(15, 20)) {
       acceptOrds.set(i);
     }
 

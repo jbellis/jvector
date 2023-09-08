@@ -18,4 +18,8 @@ public class LuceneTestCase extends RandomizedTest {
     public static int atLeast(int n) {
         return n + getRandom().nextInt(n / 2);
     }
+
+    public static int nextInt(int from, int to) {
+        return getRandom().nextInt(to - from) + from;
+    }
 }
