@@ -78,18 +78,15 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
-    private static OnDiskGraphIndex<float[]> createOnDiskGraph(Path graphPath) throws IOException {
-        var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
-        return new OnDiskGraphIndex<>(marr::duplicate, 0);
-    }
-
     @Test
     public void testSimpleGraphs() throws Exception {
         for (var g : List.of(fullyConnectedGraph, randomlyConnectedGraph))
         {
             var outputPath = testDirectory.resolve("test_graph_" + g.getClass().getSimpleName());
             writeGraph(g, new GraphIndexTestCase.CircularFloatVectorValues(g.size()), outputPath);
-            try (var onDiskGraph = createOnDiskGraph(outputPath); var onDiskView = onDiskGraph.getView())
+            try (var marr = new MappedRandomAccessReader(outputPath.toAbsolutePath().toString());
+                 var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+                 var onDiskView = onDiskGraph.getView())
             {
                 validateGraph(g.getView(), onDiskView);
             }
@@ -103,7 +100,9 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("large_graph");
         writeGraph(graph, new GraphIndexTestCase.CircularFloatVectorValues(graph.size()), outputPath);
 
-        try (var onDiskGraph = createOnDiskGraph(outputPath); var onDiskView = onDiskGraph.getView())
+        try (var marr = new MappedRandomAccessReader(outputPath.toAbsolutePath().toString());
+             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskView = onDiskGraph.getView())
         {
             validateGraph(graph.getView(), onDiskView);
             validateGraph(graph.getView(), new CachingGraphIndex(onDiskGraph).getView());
