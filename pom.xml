@@ -98,6 +98,9 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-jar-plugin</artifactId>
             <version>3.3.0</version>
+            <configuration>
+              <classifier>jdk20</classifier>
+            </configuration>
           </plugin>
           <plugin>
             <artifactId>maven-surefire-plugin</artifactId>
@@ -173,7 +176,6 @@
               <target>11</target>
               <excludes>
                 <exclude>**/jdk20/*.java</exclude>
-                <exclude>com/github/jbellis/jvector/example/Bench.java</exclude>
               </excludes>
             </configuration>
           </plugin>
@@ -181,6 +183,9 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-jar-plugin</artifactId>
             <version>3.3.0</version>
+            <configuration>
+              <classifier>jdk11</classifier>
+            </configuration>
           </plugin>
           <plugin>
             <artifactId>maven-surefire-plugin</artifactId>
@@ -210,6 +215,22 @@
                     <classpath/>
                     <argument>-ea</argument>
                     <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+              <execution>
+                <id>bench</id>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${java.home}/bin/java</executable>
+                  <arguments>
+                    <argument>-classpath</argument>
+                    <classpath/>
+                    <argument>-Xmx32G</argument>
+                    <argument>-ea</argument>
+                    <argument>com.github.jbellis.jvector.example.Bench</argument>
                   </arguments>
                 </configuration>
               </execution>
