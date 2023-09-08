@@ -248,6 +248,7 @@ public class ProductQuantization {
         int[][] subvectorSizes = new int[M][];
         int offset = 0;
         for (int i = 0; i < M; i++) {
+            subvectorSizes[i] = new int[2];
             int size = in.readInt();
             subvectorSizes[i][0] = size;
             offset += size;
