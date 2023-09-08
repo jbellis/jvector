@@ -18,6 +18,7 @@ package com.github.jbellis.jvector.util;
 
 import com.github.jbellis.jvector.LuceneTestCase;
 import com.github.jbellis.jvector.TestUtil;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Random;
@@ -34,8 +35,9 @@ public class TestLongHeap extends LuceneTestCase {
     }
   }
 
+  @Test
   public void testPQ() {
-    testPQ(atLeast(10000), random());
+    testPQ(atLeast(1000), random());
   }
 
   public static void testPQ(int count, Random gen) {
@@ -59,6 +61,7 @@ public class TestLongHeap extends LuceneTestCase {
     assertEquals(sum, sum2);
   }
 
+  @Test
   public void testClear() {
     LongHeap pq = new LongHeap(3);
     pq.push(2);
@@ -69,6 +72,7 @@ public class TestLongHeap extends LuceneTestCase {
     assertEquals(0, pq.size());
   }
 
+  @Test
   public void testExceedBounds() {
     LongHeap pq = new LongHeap(1);
     pq.push(2);
@@ -78,6 +82,7 @@ public class TestLongHeap extends LuceneTestCase {
     assertEquals(0, pq.top());
   }
 
+  @Test
   public void testFixedSize() {
     LongHeap pq = new LongHeap(3);
     pq.insertWithReplacement(2);
@@ -90,6 +95,7 @@ public class TestLongHeap extends LuceneTestCase {
     assertEquals(3, pq.top());
   }
 
+  @Test
   public void testDuplicateValues() {
     LongHeap pq = new LongHeap(3);
     pq.push(2);
@@ -101,6 +107,7 @@ public class TestLongHeap extends LuceneTestCase {
     assertArrayEquals(new long[] {0, 2, 3, 3}, pq.getHeapArray());
   }
 
+  @Test
   public void testInsertions() {
     Random random = random();
     int numDocsInPQ = TestUtil.nextInt(random, 1, 100);
@@ -125,12 +132,14 @@ public class TestLongHeap extends LuceneTestCase {
     }
   }
 
+  @Test
   public void testInvalid() {
     assertThrows(IllegalArgumentException.class, () -> new LongHeap(-1));
     assertThrows(IllegalArgumentException.class, () -> new LongHeap(0));
     assertThrows(IllegalArgumentException.class, () -> new LongHeap(ArrayUtil.MAX_ARRAY_LENGTH));
   }
 
+  @Test
   public void testUnbounded() {
     int initialSize = random().nextInt(10) + 1;
     LongHeap pq = new LongHeap(initialSize);

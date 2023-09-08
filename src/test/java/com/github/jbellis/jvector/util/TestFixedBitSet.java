@@ -18,6 +18,7 @@ package com.github.jbellis.jvector.util;
 
 import com.github.jbellis.jvector.TestUtil;
 import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -39,6 +40,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
   }
 
   @SuppressWarnings("NarrowCalculation")
+  @Test
   public void testApproximateCardinality() {
     // The approximate cardinality works in such a way that it should be pretty accurate on a bitset
     // whose bits are uniformly distributed.
@@ -212,6 +214,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
 
   // large enough to flush obvious bugs, small enough to run in <.5 sec as part of a
   // larger testsuite.
+  @Test
   public void testSmall() throws IOException {
     final int iters = 100;
     doRandomSets(atLeast(1200), iters, 1);
@@ -226,6 +229,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
   }
   */
 
+  @Test
   public void testEquals() {
     // This test can't handle numBits==0:
     final int numBits = random().nextInt(2000) + 1;
@@ -249,6 +253,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
     assertFalse(b1.equals(new Object()));
   }
 
+  @Test
   public void testHashCodeEquals() {
     // This test can't handle numBits==0:
     final int numBits = random().nextInt(2000) + 1;
@@ -269,6 +274,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
     }
   }
 
+  @Test
   public void testSmallBitSets() {
     // Make sure size 0-10 bit sets are OK:
     for (int numBits = 0; numBits < 10; numBits++) {
@@ -316,6 +322,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
   }
 
   @Override
+  @Test
   public void testPrevSetBit() {
     checkPrevSetBitArray(new int[] {}, 0);
     checkPrevSetBitArray(new int[] {0}, 1);
@@ -328,6 +335,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
     doNextSetBit(bs, obs);
   }
 
+  @Test
   public void testNextBitSet() {
     int[] setBits = new int[0 + random().nextInt(1000)];
     for (int i = 0; i < setBits.length; i++) {
@@ -338,6 +346,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
     checkNextSetBitArray(new int[0], setBits.length + random().nextInt(10));
   }
 
+  @Test
   public void testEnsureCapacity() {
     FixedBitSet bits = new FixedBitSet(5);
     bits.set(1);
@@ -365,6 +374,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
     assertFalse(newBits.get(1));
   }
 
+  @Test
   public void testBits2Words() {
     Assert.assertEquals(0, FixedBitSet.bits2words(0));
     Assert.assertEquals(1, FixedBitSet.bits2words(1));
@@ -392,6 +402,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
   }
 
   // Demonstrates that the presence of ghost bits in the last used word can cause spurious failures
+  @Test
   public void testIntersectionCount() {
     Random random = random();
 
@@ -428,6 +439,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
   }
 
   // Demonstrates that the presence of ghost bits in the last used word can cause spurious failures
+  @Test
   public void testUnionCount() {
     Random random = random();
 
@@ -464,6 +476,7 @@ public class TestFixedBitSet extends BaseBitSetTestCase<FixedBitSet> {
   }
 
   // Demonstrates that the presence of ghost bits in the last used word can cause spurious failures
+  @Test
   public void testAndNotCount() {
     Random random = random();
 

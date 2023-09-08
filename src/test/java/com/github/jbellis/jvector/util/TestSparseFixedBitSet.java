@@ -18,6 +18,7 @@ package com.github.jbellis.jvector.util;
 
 import com.github.jbellis.jvector.TestUtil;
 import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.IOException;
 
@@ -53,6 +54,7 @@ public class TestSparseFixedBitSet extends BaseBitSetTestCase<SparseFixedBitSet>
     Assert.assertEquals(nonZeroLongCount, set2.nonZeroLongCount);
   }
 
+  @Test
   public void testApproximateCardinality() {
     final SparseFixedBitSet set = new SparseFixedBitSet(10000);
     final int first = random().nextInt(1000);
@@ -63,6 +65,7 @@ public class TestSparseFixedBitSet extends BaseBitSetTestCase<SparseFixedBitSet>
     Assert.assertEquals(set.cardinality(), set.approximateCardinality(), 20);
   }
 
+  @Test
   public void testApproximateCardinalityOnDenseSet() {
     // this tests that things work as expected in approximateCardinality when
     // all longs are different than 0, in which case we divide by zero

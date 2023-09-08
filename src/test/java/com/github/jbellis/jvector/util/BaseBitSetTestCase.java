@@ -20,6 +20,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.github.jbellis.jvector.LuceneTestCase;
 import org.junit.Assert;
 import org.junit.Ignore;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Random;
@@ -66,6 +67,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test the {@link BitSet#cardinality()} method. */
+  @Test
   public void testCardinality() throws IOException {
     final int numBits = 1 + random().nextInt(100000);
     for (float percentSet : new float[] {0, 0.01f, 0.1f, 0.5f, 0.9f, 0.99f, 1f}) {
@@ -76,6 +78,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test {@link BitSet#prevSetBit(int)}. */
+  @Test
   public void testPrevSetBit() throws IOException {
     final int numBits = 1 + random().nextInt(100000);
     for (float percentSet : new float[] {0, 0.01f, 0.1f, 0.5f, 0.9f, 0.99f, 1f}) {
@@ -88,6 +91,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test {@link BitSet#nextSetBit(int)}. */
+  @Test
   public void testNextSetBit() throws IOException {
     final int numBits = 1 + random().nextInt(100000);
     for (float percentSet : new float[] {0, 0.01f, 0.1f, 0.5f, 0.9f, 0.99f, 1f}) {
@@ -102,6 +106,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test the {@link BitSet#set} method. */
+  @Test
   public void testSet() throws IOException {
     Random random = random();
     final int numBits = 1 + random.nextInt(100000);
@@ -117,6 +122,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test the {@link BitSet#getAndSet} method. */
+  @Test
   public void testGetAndSet() throws IOException {
     Random random = random();
     final int numBits = 1 + random.nextInt(100000);
@@ -131,6 +137,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test the {@link BitSet#clear(int)} method. */
+  @Test
   public void testClear() throws IOException {
     Random random = random();
     final int numBits = 1 + random.nextInt(100000);
@@ -148,6 +155,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test the {@link BitSet#clear(int,int)} method. */
+  @Test
   public void testClearRange() throws IOException {
     Random random = random();
     final int numBits = 1 + random.nextInt(100000);
@@ -166,6 +174,7 @@ public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCas
   }
 
   /** Test the {@link BitSet#clear()} method. */
+  @Test
   public void testClearAll() throws IOException {
     Random random = random();
     final int numBits = 1 + random.nextInt(100000);
