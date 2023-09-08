@@ -27,8 +27,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 public class TestUtil {
+    /** min .. max inclusive on both ends, to match Lucene's */
     public static int nextInt(Random random, int min, int max) {
-        return min + random.nextInt(max - min);
+        return min + random.nextInt(1 + max - min);
     }
 
     public static DataOutputStream openFileForWriting(Path outputPath) throws IOException {

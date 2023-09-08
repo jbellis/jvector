@@ -119,7 +119,7 @@ public class TestLongHeap extends LuceneTestCase {
     for (int i = 0; i < numDocsInPQ * 10; i++) {
       long newEntry = Math.abs(random.nextLong());
       sds.add(newEntry);
-      pq.insertWithReplacement((int) newEntry);
+      pq.insertWithReplacement(newEntry);
       checkValidity(pq);
       long newLeast = pq.top();
       if ((lastLeast != null) && (newLeast != newEntry) && (newLeast != lastLeast)) {
@@ -153,7 +153,11 @@ public class TestLongHeap extends LuceneTestCase {
         count++;
       } else {
         boolean full = pq.size() >= initialSize;
-        pq.insertWithReplacement((int) value);
+        if (pq.insertWithReplacement(value)) {
+          if (!full) {
+            count++;
+          }
+        }
       }
       maxValue = Math.max(maxValue, value);
     }
