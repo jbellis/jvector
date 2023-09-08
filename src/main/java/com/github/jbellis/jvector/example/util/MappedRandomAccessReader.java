@@ -17,11 +17,14 @@
 package com.github.jbellis.jvector.example.util;
 
 import com.github.jbellis.jvector.disk.RandomAccessReader;
+import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Field;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.logging.Logger;
 
 /**
  * DO NOT use this for anything you care about.
@@ -29,7 +32,21 @@ import java.nio.channels.FileChannel;
  * against disk in reasonable time. Does not handle files above 2 GB.
  */
 public class MappedRandomAccessReader implements RandomAccessReader {
+    private static final Logger LOG = Logger.getLogger(MappedRandomAccessReader.class.getName());
+
     private final MappedByteBuffer mbb;
+    private static final Unsafe unsafe = getUnsafe();
+
+    private static Unsafe getUnsafe() {
+        try {
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            return (Unsafe) f.get(null);
+        } catch (Exception e) {
+            LOG.warning("MappedRandomAccessReader can't acquire needed Unsafe access");
+            return null;
+        }
+    }
 
     public MappedRandomAccessReader(String name) throws IOException {
         var raf = new RandomAccessFile(name, "r");
@@ -138,7 +155,14 @@ public class MappedRandomAccessReader implements RandomAccessReader {
 
     @Override
     public void close() {
-
+        if (unsafe != null) {
+            try {
+                unsafe.invokeCleaner(mbb);
+            } catch (IllegalArgumentException e) {
+                // empty catch, this was a duplicated/indirect buffer or
+                // otherwise not cleanable
+            }
+        }
     }
 
     public MappedRandomAccessReader duplicate() {
