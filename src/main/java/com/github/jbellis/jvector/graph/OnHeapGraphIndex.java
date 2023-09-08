@@ -203,7 +203,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   @Override
   public String toString() {
-    return "OnHeapGraphIndex(size=%d, entryPoint=%d)".formatted(size(), entryPoint.get());
+    return String.format("OnHeapGraphIndex(size=%d, entryPoint=%d)", size(), entryPoint.get());
   }
 
   /**

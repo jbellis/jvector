@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Logger;
 
+
 /**
  * A provider of vectorization implementations. Depending on the Java version and availability of
  * vectorization modules in the Java runtime this class provides optimized implementations (using
@@ -40,8 +41,8 @@ public abstract class VectorizationProvider {
         Holder.INSTANCE, "call to getInstance() from subclass of VectorizationProvider");
   }
 
-  VectorizationProvider() {
-    // no instance/subclass except from this package
+  protected VectorizationProvider() {
+
   }
 
   /**
@@ -80,12 +81,15 @@ public abstract class VectorizationProvider {
         return new DefaultVectorizationProvider();
       }
       try {
-        var provider = new PanamaVectorizationProvider();
+        var provider = (VectorizationProvider) Class.forName("com.github.jbellis.jvector.vector.jdk20.PanamaVectorizationProvider").getConstructor().newInstance();
         LOG.info("Java incubating Vector API enabled. Using PanamaVectorizationProvider.");
         return provider;
       } catch (UnsupportedOperationException uoe) {
         // not supported because preferred vector size too small or similar
-        LOG.warning("Java vector incubator API was not enabled. " + uoe.getMessage());
+        LOG.warning("Java vector API was not enabled. " + uoe.getMessage());
+        return new DefaultVectorizationProvider();
+      } catch (ClassNotFoundException e) {
+        LOG.warning("Java version does not support vector API");
         return new DefaultVectorizationProvider();
       } catch (RuntimeException | Error e) {
         throw e;

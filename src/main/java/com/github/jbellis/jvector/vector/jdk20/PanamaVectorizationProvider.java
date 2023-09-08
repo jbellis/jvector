@@ -1,6 +1,10 @@
-package com.github.jbellis.jvector.vector;
+package com.github.jbellis.jvector.vector.jdk20;
 
-public class PanamaVectorizationProvider extends VectorizationProvider {
+import com.github.jbellis.jvector.vector.VectorUtilSupport;
+import com.github.jbellis.jvector.vector.VectorizationProvider;
+
+public class PanamaVectorizationProvider extends VectorizationProvider
+{
 
     private final VectorUtilSupport vectorUtilSupport;
 

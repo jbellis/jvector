@@ -76,12 +76,6 @@ To run either class, you can use the Maven exec-plugin via the following incanta
 or for Sift:
 ```mvn clean install exec:exec@sift```
 
-To compile for a specific JDK, you can use the targeted execution defined in the pom:
-- `mvn clean compiler:compile@jdk11` for JDK 11
-- `mvn clean compiler:compile@jdk20` for JDK 20
-
-Similar to the compile executions, a JAR file can be generated via:
-- `mvn jar:jar@jar-jdk11` for JDK 11
-- `mvn jar:jar@jar-jdk20` for JDK 20
-
-In both cases, you must have invoked the compile target for that specific JDK, or the resulting jar file will be empty.  
+To package for a specific JDK, you can use the targeted execution defined in the pom:
+- `mvn -Pjdk11 clean package` for JDK 11
+- `mvn clean package` for JDK 20 (default) or specify `-Pjdk20`

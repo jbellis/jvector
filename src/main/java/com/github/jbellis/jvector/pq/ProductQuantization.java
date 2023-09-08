@@ -35,7 +35,7 @@ public class ProductQuantization {
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
-            vectors = vectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).toList();
+            vectors = vectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList());
         } else {
             globalCentroid = null;
         }
@@ -61,7 +61,7 @@ public class ProductQuantization {
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
     public List<byte[]> encodeAll(List<float[]> vectors) {
-        return vectors.stream().parallel().map(this::encode).toList();
+        return vectors.stream().parallel().map(this::encode).collect(Collectors.toList());
     }
 
     /**
@@ -144,10 +144,10 @@ public class ProductQuantization {
                 .map(L -> L.stream()
                         .map(ProductQuantization::arraySummary)
                         .collect(Collectors.toList()))
-                .toList();
+                .collect(Collectors.toList());
         System.out.printf("Codebooks: [%s]%n", String.join("\n ", strings.stream()
                 .map(L -> "[" + String.join(", ", L) + "]")
-                .toList()));
+                .collect(Collectors.toList())));
     }
     private static String arraySummary(float[] a) {
         List<String> b = new ArrayList<>();

@@ -16,7 +16,7 @@ public class TestVectorizationProvider {
         Assume.assumeTrue(hasSimd);
 
         VectorizationProvider a = new DefaultVectorizationProvider();
-        VectorizationProvider b = new PanamaVectorizationProvider();
+        VectorizationProvider b = VectorizationProvider.getInstance();
 
         for (int i = 0; i < 1000; i++) {
             float[] v1 = GraphIndexTestCase.randomVector(ThreadLocalRandom.current(), 1021); //prime numbers
@@ -33,7 +33,7 @@ public class TestVectorizationProvider {
         Assume.assumeTrue(hasSimd);
 
         VectorizationProvider a = new DefaultVectorizationProvider();
-        VectorizationProvider b = new PanamaVectorizationProvider();
+        VectorizationProvider b = VectorizationProvider.getInstance();
 
         for (int i = 0; i < 1000; i++) {
             byte[] v1 = GraphIndexTestCase.randomVector8(ThreadLocalRandom.current(), 1021); //prime numbers
