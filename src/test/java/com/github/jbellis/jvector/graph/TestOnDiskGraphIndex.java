@@ -21,7 +21,9 @@ import com.github.jbellis.jvector.TestUtil;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
-import org.junit.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -83,9 +85,9 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     @Test
     public void testSimpleGraphs() throws Exception {
-        var outputPath = testDirectory.resolve("test_graph");
         for (var g : List.of(fullyConnectedGraph, randomlyConnectedGraph))
         {
+            var outputPath = testDirectory.resolve("test_graph_" + g.getClass().getSimpleName());
             writeGraph(g, new GraphIndexTestCase.CircularFloatVectorValues(g.size()), outputPath);
             try (var onDiskGraph = createOnDiskGraph(outputPath); var onDiskView = onDiskGraph.getView())
             {
