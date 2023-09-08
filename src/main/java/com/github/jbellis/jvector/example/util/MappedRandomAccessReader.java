@@ -142,6 +142,6 @@ public class MappedRandomAccessReader implements RandomAccessReader {
     }
 
     public MappedRandomAccessReader duplicate() {
-        return new MappedRandomAccessReader(mbb.duplicate());
+        return new MappedRandomAccessReader((MappedByteBuffer) mbb.duplicate());
     }
 }

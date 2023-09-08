@@ -29,6 +29,7 @@ import com.github.jbellis.jvector.vector.VectorUtil;
 import org.junit.Test;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -196,7 +197,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
-    for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
+    for (int i = 0; i < nDoc; i += ThreadLocalRandom.current().nextInt(15, 20)) {
       acceptOrds.set(i);
     }
 
@@ -215,13 +216,13 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
 
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     for (int node : nodes) {
-      assertTrue("the results include a deleted document: %d for %s".formatted(
+      assertTrue(String.format("the results include a deleted document: %d for %s",
               node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
     }
     for (int i = 0; i < acceptOrds.length(); i++) {
       if (acceptOrds.get(i)) {
         int finalI = i;
-        assertTrue("the results do not include an accepted document: %d for %s".formatted(
+        assertTrue(String.format("the results do not include an accepted document: %d for %s",
                 i, GraphIndex.prettyPrint(builder.graph)), Arrays.stream(nodes).anyMatch(j -> j == finalI));
       }
     }

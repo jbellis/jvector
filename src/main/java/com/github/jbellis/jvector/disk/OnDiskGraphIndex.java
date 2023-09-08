@@ -98,7 +98,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                         (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) +
                         (node * (long) Integer.BYTES * (M + 1)));
                 int neighborCount = reader.readInt();
-                assert neighborCount <= M : "neighborCount %d > M %d".formatted(neighborCount, M);
+                assert neighborCount <= M : String.format("neighborCount %d > M %d", neighborCount, M);
                 return new NodesIterator(neighborCount)
                 {
                     int currentNeighborsRead = 0;
@@ -108,7 +108,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                         currentNeighborsRead++;
                         try {
                             int ordinal = reader.readInt();
-                            assert ordinal <= OnDiskGraphIndex.this.size : "ordinal %d > size %d".formatted(ordinal, size);
+                            assert ordinal <= OnDiskGraphIndex.this.size : String.format("ordinal %d > size %d", ordinal, size);
                             return ordinal;
                         }
                         catch (IOException e) {
@@ -163,7 +163,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
     public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
-        assert graph.size() == vectors.size() : "graph size %d != vectors size %d".formatted(graph.size(), vectors.size());
+        assert graph.size() == vectors.size() : String.format("graph size %d != vectors size %d", graph.size(), vectors.size());
 
         var view = graph.getView();
 

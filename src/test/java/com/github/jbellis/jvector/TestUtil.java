@@ -24,6 +24,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class TestUtil {
@@ -144,7 +145,7 @@ public class TestUtil {
             this.nodes = new ConcurrentHashMap<>();
 
             var maxNeighbors = Math.min(M, size - 1);
-            var nodeIds = new ArrayList<>(IntStream.range(0, size).boxed().toList());
+            var nodeIds = new ArrayList<>(IntStream.range(0, size).boxed().collect(Collectors.toList()));
             Collections.shuffle(nodeIds, random);
 
             for (int i = 0; i < size; i++) {

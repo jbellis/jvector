@@ -83,7 +83,15 @@ public class Bench {
         return (float) Math.sqrt(norm);
     }
 
-    private record ResultSummary(int topKFound, long nodesVisited) { }
+    static class ResultSummary {
+        final int topKFound;
+        final long nodesVisited;
+
+        ResultSummary(int topKFound, long nodesVisited) {
+            this.topKFound = topKFound;
+            this.nodesVisited = nodesVisited;
+        }
+    }
 
     private static long topKCorrect(int topK, int[] resultNodes, Set<Integer> gt) {
         int count = Math.min(resultNodes.length, topK);
@@ -128,8 +136,22 @@ public class Bench {
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum()); // TODO do we care enough about visited count to hack it back into searcher?
     }
 
-    record DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<Set<Integer>> groundTruth) { }
+    static class DataSet {
+        final String name;
+        final VectorSimilarityFunction similarityFunction;
+        final List<float[]> baseVectors;
+        final List<float[]> queryVectors;
+        final List<Set<Integer>> groundTruth;
 
+        DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<Set<Integer>> groundTruth) {
+            this.name = name;
+            this.similarityFunction = similarityFunction;
+            this.baseVectors = baseVectors;
+            this.queryVectors = queryVectors;
+            this.groundTruth = groundTruth;
+        }
+
+    }
     private static DataSet load(String pathStr) {
         // infer the similarity
         VectorSimilarityFunction similarityFunction;
