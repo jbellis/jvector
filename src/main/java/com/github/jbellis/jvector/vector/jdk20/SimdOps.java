@@ -1,4 +1,4 @@
-package com.github.jbellis.jvector.vector;
+package com.github.jbellis.jvector.vector.jdk20;
 
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;

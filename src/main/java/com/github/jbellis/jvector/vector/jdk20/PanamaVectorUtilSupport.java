@@ -1,8 +1,12 @@
-package com.github.jbellis.jvector.vector;
+package com.github.jbellis.jvector.vector.jdk20;
 
 import java.util.List;
 
-final class PanamaVectorUtilSupport implements VectorUtilSupport {
+import com.github.jbellis.jvector.vector.VectorUtilSupport;
+import com.github.jbellis.jvector.vector.jdk20.SimdOps;
+
+final class PanamaVectorUtilSupport implements VectorUtilSupport
+{
 
     @Override
     public float dotProduct(float[] a, float[] b) {
