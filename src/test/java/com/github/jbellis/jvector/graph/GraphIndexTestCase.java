@@ -29,7 +29,6 @@ import com.github.jbellis.jvector.vector.VectorUtil;
 import org.junit.Test;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -197,7 +196,7 @@ public abstract class GraphIndexTestCase<T> extends RandomizedTest {
     var graph = buildInOrder(builder, vectors);
     // Only mark a few vectors as accepted
     var acceptOrds = new FixedBitSet(nDoc);
-    for (int i = 0; i < nDoc; i += ThreadLocalRandom.current().nextInt(15, 20)) {
+    for (int i = 0; i < nDoc; i += getRandom().nextInt(15, 20)) {
       acceptOrds.set(i);
     }
 
