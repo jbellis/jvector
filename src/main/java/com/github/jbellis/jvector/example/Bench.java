@@ -247,7 +247,7 @@ public class Bench {
                 "hdf5/sift-128-euclidean.hdf5");
         var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchFactor = List.of(1, 2, 4);
+        var efSearchFactor = List.of(1, 2);
         var diskOptions = List.of(false, true);
         // large files not yet supported
 //                "hdf5/deep-image-96-angular.hdf5",
