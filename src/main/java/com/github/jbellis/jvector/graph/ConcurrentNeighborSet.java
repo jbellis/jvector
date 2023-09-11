@@ -46,6 +46,9 @@ public class ConcurrentNeighborSet {
   /** the maximum number of neighbors we can store */
   private final int maxConnections;
 
+  /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
+  private float shortEdges = Float.NaN;
+
   public ConcurrentNeighborSet(
       int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
     this.nodeId = nodeId;
@@ -66,6 +69,10 @@ public class ConcurrentNeighborSet {
     this.alpha = old.alpha;
     neighborsRef = new AtomicReference<>(old.neighborsRef.get());
   }
+  
+  public float getShortEdges() {
+      return shortEdges;
+  }
 
   public NodesIterator nodeIterator() {
     return new NeighborIterator(neighborsRef.get());
@@ -81,6 +88,11 @@ public class ConcurrentNeighborSet {
     }
   }
 
+  /**
+   * Enforce maxConnections as a hard cap, since we allow it to be exceeded temporarily during construction
+   * for efficiency.  This method is threadsafe, but if you call it concurrently with other inserts,
+   * the limit may end up being exceeded again.
+   */
   public void cleanup() {
     neighborsRef.getAndUpdate(this::removeAllNonDiverse);
   }
@@ -176,6 +188,12 @@ public class ConcurrentNeighborSet {
           selected.set(i);
           nSelected++;
         }
+      }
+      
+      if (a == 1.0f) {
+        // this isn't threadsafe, but (for now) we only care about the result after calling cleanup(),
+        // when we don't have to worry about concurrent changes
+        shortEdges = nSelected / (float) maxConnections;
       }
     }
 

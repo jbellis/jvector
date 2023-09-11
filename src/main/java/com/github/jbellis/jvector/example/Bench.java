@@ -49,7 +49,9 @@ public class Bench {
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
-        long buildNanos = System.nanoTime() - start;
+        var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
+        System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
+                M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         try {
@@ -65,8 +67,8 @@ public class Bench {
                     start = System.nanoTime();
                     var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
                     var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                    System.out.format("Index   M=%d ef=%d PQ=%b: top %d/%d recall %.4f, build %.2fs, query %.2fs. %s nodes visited%n",
-                            M, efConstruction, useDisk, topK, overquery, recall, buildNanos / 1_000_000_000.0, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                    System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                            useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                 }
             }
         }
