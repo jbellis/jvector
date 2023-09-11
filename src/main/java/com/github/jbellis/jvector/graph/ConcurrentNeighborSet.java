@@ -74,10 +74,14 @@ public class ConcurrentNeighborSet {
       return shortEdges;
   }
 
-  public NodesIterator nodeIterator() {
+  public NodesIterator iterator() {
     return new NeighborIterator(neighborsRef.get());
   }
 
+  /**
+   * For every neighbor X that this node Y connects to, add a reciprocal link from X to Y.
+   * If overflow is > 1.0, allow the number of neighbors to exceed maxConnections temporarily.
+   */
   public void backlink(Function<Integer, ConcurrentNeighborSet> neighborhoodOf, float overflow) {
     NeighborArray neighbors = neighborsRef.get();
     for (int i = 0; i < neighbors.size(); i++) {
@@ -317,7 +321,7 @@ public class ConcurrentNeighborSet {
 
   /** Only for testing; this is a linear search */
   boolean contains(int i) {
-    var it = this.nodeIterator();
+    var it = this.iterator();
     while (it.hasNext()) {
       if (it.nextInt() == i) {
         return true;

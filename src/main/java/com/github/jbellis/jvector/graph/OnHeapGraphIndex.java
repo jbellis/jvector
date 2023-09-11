@@ -234,7 +234,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     }
 
     public NodesIterator getNeighborsIterator(int node) {
-      return getNeighbors(node).nodeIterator();
+      return getNeighbors(node).iterator();
     }
 
     @Override

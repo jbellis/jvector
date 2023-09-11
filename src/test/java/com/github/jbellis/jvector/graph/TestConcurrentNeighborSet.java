@@ -54,7 +54,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     neighbors.insert(3, baseScore(3));
     // going past the max size results in evicting ALL non-diverse neighbors which leave us at 1
     assertEquals(1, neighbors.size());
-    assertEquals(1, neighbors.nodeIterator().nextInt());
+    assertEquals(1, neighbors.iterator().nextInt());
     validateSortedByScore(neighbors.getCurrent());
   }
 

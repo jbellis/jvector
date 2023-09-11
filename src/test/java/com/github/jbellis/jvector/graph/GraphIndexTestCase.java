@@ -17,7 +17,6 @@
 
 package com.github.jbellis.jvector.graph;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import com.github.jbellis.jvector.LuceneTestCase;
 import com.github.jbellis.jvector.annotations.Unshared;
@@ -145,7 +144,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
     for (int i = 0; i < nDoc; i++) {
       ConcurrentNeighborSet neighbors = graph.getNeighbors(i);
-      Iterator<Integer> it = neighbors.nodeIterator();
+      Iterator<Integer> it = neighbors.iterator();
       while (it.hasNext()) {
         // all neighbors should be valid node ids.
         assertTrue(it.next() < nDoc);
@@ -381,7 +380,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   private void assertLevel0Neighbors(OnHeapGraphIndex<T> graph, int node, int... expected) {
     Arrays.sort(expected);
     ConcurrentNeighborSet nn = graph.getNeighbors(node);
-    Iterator<Integer> it = nn.nodeIterator();
+    Iterator<Integer> it = nn.iterator();
     int[] actual = new int[nn.size()];
     for (int i = 0; i < actual.length; i++) {
       actual[i] = it.next();
