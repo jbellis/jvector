@@ -92,7 +92,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   {
     float sum = 0f;
     for (int i = 0; i < length; i++) {
-      sum += a[aoffset + i] * b[aoffset + i];
+      sum += a[aoffset + i] * b[boffset + i];
     }
 
     return sum;
