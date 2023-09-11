@@ -21,9 +21,8 @@ public class SiftLoader {
                 var byteBuffer = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN);
 
                 var vector = new float[dimension];
-                for (var i = 0; i < dimension; i++) {
-                    vector[i] = byteBuffer.getFloat();
-                }
+                var floatBuffer = byteBuffer.asFloatBuffer();
+                floatBuffer.get(vector);
                 vectors.add(vector);
             }
         }
