@@ -11,27 +11,30 @@ What is JVector?
 - Easy to embed. API designed for easy embedding, by people using it in production.
 
 ## JVector basics
-- Add io.github.jbellis / jvector as a dependency.
+Building the index:
 - GraphIndexBuilder is the entry point for building a graph.  You will need to implement 
   RandomAccessVectorValues to provide vectors to the builder;  
-  ListRandomAccessVectorValues is a good starting point.  If all your vectors
+  ListRandomAccessVectorValues is a good starting point.
+- If all your vectors
   are in the provider
   up front, you can just call build() and it will parallelize the build across
   all available cores.  Otherwise you can call addGraphNode as you add vectors; 
   this is non-blocking and can be called concurrently from multiple threads.
-  Call GraphIndexBuilder.complete when you are done adding vectors.  This will
+- Call GraphIndexBuilder.complete when you are done adding vectors.  This will
   optimize the index and make it ready to write to disk.  (Graphs that are
   in the process of being built can be searched at any time; you do not have to call
   complete first.)
-- JVector represents vectors in the index as the ordinal (int) corresponding to their
-  index in the RandomAccessVectorValues you provided.  You can get the original vector
-  back with GraphIndex.getVector, if necessary, but since this is a disk-backed index
-  you should design your application to avoid doing so if possible.
+Searching the index:
 - GraphSearcher is the entry point for searching.  Results come back as a SearchResult object that contains node IDs and scores, in 
   descending order of similarity to the query vector.  GraphSearcher objects are re-usable,
   so unless you have a very simple use case you should use GraphSearcher.Builder to
   create them; GraphSearcher::search is also available with simple defaults, but calling it
   will instantiate a new GraphSearcher every time so performance will be worse.
+- JVector represents vectors in the index as the ordinal (int) corresponding to their
+  index in the RandomAccessVectorValues you provided.  You can get the original vector
+  back with GraphIndex.getVector, if necessary, but since this is a disk-backed index
+  you should design your application to avoid doing so if possible.
+
 ## DiskANN and Product Quantization 
 JVector implements [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf)-style 
 search, meaning that vectors can be compressed using product quantization so that searches
@@ -46,20 +49,18 @@ this with the following steps:
   to the GraphSearcher.search method.
 
 ## Saving and loading indexes
-
 - OnDiskGraphIndex and CompressedVectors have write() methods to save state to disk.
   They initialize from disk using their constructor and load() methods, respectively.
   Writing just requires a DataOutput, but reading requires an 
   implementation of RandomAccessReader to wrap your
-  preferred i/o class for best performance. 
+  preferred i/o class for best performance. See MappedRandomAccessReader for an example.
 - Building a graph does not technically require your RandomAccessVectorValues object
   to live in memory, but it will perform much better if it does.  OnDiskGraphIndex,
   by contrast, is designed to live on disk and use minimal memory otherwise.
 - You can optionally wrap OnDiskGraphIndex in a CachingGraphIndex to keep the most commonly accessed
-  nodes in memory.
+  nodes (the ones nearest to the graph entry point) in memory.
 
 ## Sample code
-  
 - The SiftSmall class demonstrates how to put all of the above together to index and search the
   "small" SIFT dataset of 10,000 vectors.
 - The Bench class performs grid search across the GraphIndexBuilder parameter space to find
@@ -67,15 +68,25 @@ this with the following steps:
   points found by Bench.
 
 # Developing and Testing
+This project is organized as a multi-module Maven build. The intent is to produce a multirelease jar suitable for use as
+a dependency from any Java 11 code. When run on a Java 20+ JVM with the Vector module enabled, optimized vector 
+providers will be used. In general, the project is structured to be built with JDK 20+, but when JAVA_HOME is set to 
+Java 11 -> Java 19, certain build features will still be available.
+
+Base code is in jvector-base and will be built for Java 11 releases, restricting language features and APIs 
+appropriately. Code in jvector-twenty will be compiled for Java 20 language features/APIs and included in the final 
+multirelease jar targetting supported JVMs.
 
 You can run SiftSmall and Bench directly to get an idea of what all is going on here. Bench 
 requires some datasets to be downloaded from https://github.com/erikbern/ann-benchmarks. The files used by SiftSmall can be found in the siftsmall directory in the project root. 
 
 To run either class, you can use the Maven exec-plugin via the following incantations:
-```mvn clean install exec:exec@bench``` 
+```mvn clean compile exec:exec@bench``` 
 or for Sift:
-```mvn clean install exec:exec@sift```
+```mvn clean compile exec:exec@sift```
 
-To package for a specific JDK, you can use the targeted execution defined in the pom:
-- `mvn -Pjdk11 clean package` for JDK 11
-- `mvn clean package` for JDK 20 (default) or specify `-Pjdk20`
+To run Sift/Bench without the JVM vector module available, you can use the following invocations:
+```mvn -Pjdk11 -am -pl jvector-base exec:exec@bench```
+```mvn -Pjdk11 -am -pl jvector-base exec:exec@sift```
+
+The `... -Pjdk11 -am -pl ...` invocations will also work with JAVA_HOME pointing at a Java 11 installation.
