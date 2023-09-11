@@ -241,10 +241,10 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
         var files = List.of(
-                "hdf5/nytimes-256-angular.hdf5",
-                "hdf5/glove-100-angular.hdf5",
-                "hdf5/glove-200-angular.hdf5",
-                "hdf5/sift-128-euclidean.hdf5");
+                "../hdf5/nytimes-256-angular.hdf5",
+                "../hdf5/glove-100-angular.hdf5",
+                "../hdf5/glove-200-angular.hdf5",
+                "../hdf5/sift-128-euclidean.hdf5");
         var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchFactor = List.of(1, 2, 4);
@@ -257,7 +257,7 @@ public class Bench {
         }
 
         // tiny dataset, don't waste time building a huge index
-        files = List.of("hdf5/fashion-mnist-784-euclidean.hdf5");
+        files = List.of("../hdf5/fashion-mnist-784-euclidean.hdf5");
         mGrid = List.of(8, 12, 16, 24);
         efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
         for (var f : files) {

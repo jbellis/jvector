@@ -1,9 +1,9 @@
-package com.github.jbellis.jvector.vector.jdk20;
+package com.github.jbellis.jvector.vector;
 
 import java.util.List;
 
 import com.github.jbellis.jvector.vector.VectorUtilSupport;
-import com.github.jbellis.jvector.vector.jdk20.SimdOps;
+import com.github.jbellis.jvector.vector.SimdOps;
 
 final class PanamaVectorUtilSupport implements VectorUtilSupport
 {
