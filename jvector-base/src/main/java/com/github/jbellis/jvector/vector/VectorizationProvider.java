@@ -81,7 +81,7 @@ public abstract class VectorizationProvider {
         return new DefaultVectorizationProvider();
       }
       try {
-        var provider = (VectorizationProvider) Class.forName("com.github.jbellis.jvector.vector.jdk20.PanamaVectorizationProvider").getConstructor().newInstance();
+        var provider = (VectorizationProvider) Class.forName("com.github.jbellis.jvector.vector.PanamaVectorizationProvider").getConstructor().newInstance();
         LOG.info("Java incubating Vector API enabled. Using PanamaVectorizationProvider.");
         return provider;
       } catch (UnsupportedOperationException uoe) {

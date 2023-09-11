@@ -68,14 +68,25 @@ this with the following steps:
   points found by Bench.
 
 # Developing and Testing
+This project is organized as a multi-module Maven build. The intent is to produce a multirelease jar suitable for use as
+a dependency from any Java 11 code. When run on a Java 20+ JVM with the Vector module enabled, optimized vector 
+providers will be used. In general, the project is structured to be built with JDK 20+, but when JAVA_HOME is set to 
+Java 11 -> Java 19, certain build features will still be available.
+
+Base code is in jvector-base and will be built for Java 11 releases, restricting language features and APIs 
+appropriately. Code in jvector-twenty will be compiled for Java 20 language features/APIs and included in the final 
+multirelease jar targetting supported JVMs.
+
 You can run SiftSmall and Bench directly to get an idea of what all is going on here. Bench 
 requires some datasets to be downloaded from https://github.com/erikbern/ann-benchmarks. The files used by SiftSmall can be found in the siftsmall directory in the project root. 
 
 To run either class, you can use the Maven exec-plugin via the following incantations:
-```mvn clean install exec:exec@bench``` 
+```mvn clean compile exec:exec@bench``` 
 or for Sift:
-```mvn clean install exec:exec@sift```
+```mvn clean compile exec:exec@sift```
 
-To package for a specific JDK, you can use the targeted execution defined in the pom:
-- `mvn -Pjdk11 clean package` for JDK 11
-- `mvn clean package` for JDK 20 (default) or specify `-Pjdk20`
+To run Sift/Bench without the JVM vector module available, you can use the following invocations:
+```mvn -Pjdk11 -am -pl jvector-base exec:exec@bench```
+```mvn -Pjdk11 -am -pl jvector-base exec:exec@sift```
+
+The `... -Pjdk11 -am -pl ...` invocations will also work with JAVA_HOME pointing at a Java 11 installation.

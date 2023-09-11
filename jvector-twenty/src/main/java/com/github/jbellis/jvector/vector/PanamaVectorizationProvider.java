@@ -1,4 +1,4 @@
-package com.github.jbellis.jvector.vector.jdk20;
+package com.github.jbellis.jvector.vector;
 
 import com.github.jbellis.jvector.vector.VectorUtilSupport;
 import com.github.jbellis.jvector.vector.VectorizationProvider;
