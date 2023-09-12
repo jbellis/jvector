@@ -66,6 +66,7 @@ public class KMeansPlusPlusClusterer {
             if (changedCount <= 0.01 * points.length) {
                 break;
             }
+            System.out.println("Iteration " + i + " of " + maxIterations + " changed " + changedCount + " points");
         }
         return centroids;
     }
