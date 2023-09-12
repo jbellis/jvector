@@ -45,6 +45,10 @@ public class SiftLoader {
         return vectors;
     }
 
+    public static float[][] readFvecsAsArray(String filePath) throws IOException {
+        return readFvecs(filePath).toArray(float[][]::new);
+    }
+
     public static ArrayList<HashSet<Integer>> readIvecs(String filename) {
         var groundTruthTopK = new ArrayList<HashSet<Integer>>();
 
@@ -66,4 +70,9 @@ public class SiftLoader {
 
         return groundTruthTopK;
     }
+
+    public static int[][] readIvecsAsArray(String filename) {
+        return readIvecs(filename).toArray(int[][]::new);
+    }
+
 }
