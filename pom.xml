@@ -55,6 +55,7 @@
                         </goals>
                         <configuration>
                             <executable>${java.home}/bin/java</executable>
+                            <workingDirectory>${project.parent.basedir}</workingDirectory>
                         </configuration>
                     </execution>
                     <execution>
@@ -64,6 +65,7 @@
                         </goals>
                         <configuration>
                             <executable>${java.home}/bin/java</executable>
+                            <workingDirectory>${project.parent.basedir}</workingDirectory>
                         </configuration>
                     </execution>
                 </executions>
