@@ -36,7 +36,7 @@ public interface NeighborSimilarity {
    * Provides an API for encapsulating similarity to another node or vector.  Used both for
    * building the graph (as part of NeighborSimilarity) or for searching it (used standalone,
    * with a reference to the query vector).
-   * <p/>
+   * <p>
    * ExactScoreFunction and ApproximateScoreFunction are provided for convenience so they
    * can be defined as a simple lambda.
    */

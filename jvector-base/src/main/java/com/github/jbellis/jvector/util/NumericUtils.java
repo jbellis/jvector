@@ -16,14 +16,11 @@
  */
 package com.github.jbellis.jvector.util;
 
-import java.math.BigInteger;
-import java.util.Arrays;
-
 /**
  * Helper APIs to encode numeric values as sortable bytes and vice-versa.
  *
- * <p>To also index floating point numbers, this class supplies two methods to convert them to
- * integer values by changing their bit layout: {@link #doubleToSortableLong}, {@link
+ * <p>To also index floating point numbers, this class supplies a method to convert them to
+ * integer values by changing their bit layout: {@link
  * #floatToSortableInt}. You will have no precision loss by converting floating point numbers to
  * integers and back (only that the integer form is not usable). Other data types like dates can
  * easily converted to longs or ints (e.g. date to long: {@link java.util.Date#getTime}).
@@ -54,26 +51,8 @@ public final class NumericUtils {
     return Float.intBitsToFloat(sortableFloatBits(encoded));
   }
 
-  /** Converts IEEE 754 representation of a double to sortable order (or back to the original) */
-  public static long sortableDoubleBits(long bits) {
-    return bits ^ (bits >> 63) & 0x7fffffffffffffffL;
-  }
-
   /** Converts IEEE 754 representation of a float to sortable order (or back to the original) */
   public static int sortableFloatBits(int bits) {
     return bits ^ (bits >> 31) & 0x7fffffff;
-  }
-
-    /**
-   * Decodes a BigInteger value previously written with {@link #bigIntToSortableBytes}
-   *
-   * @see #bigIntToSortableBytes(BigInteger, int, byte[], int)
-   */
-  public static BigInteger sortableBytesToBigInt(byte[] encoded, int offset, int length) {
-    byte[] bigIntBytes = new byte[length];
-    System.arraycopy(encoded, offset, bigIntBytes, 0, length);
-    // Flip the sign bit back to the original
-    bigIntBytes[0] ^= 0x80;
-    return new BigInteger(bigIntBytes);
   }
 }
