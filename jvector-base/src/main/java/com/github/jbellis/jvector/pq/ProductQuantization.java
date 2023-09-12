@@ -7,6 +7,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -164,7 +165,8 @@ public class ProductQuantization {
         return IntStream.range(0, M).parallel()
                 .mapToObj(m -> {
                     float[][] subvectors = vectors.stream().parallel()
-                            .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
+                            .filter(v -> ThreadLocalRandom.current().nextFloat() < 0.1f)
+                            .map(v -> getSubVector(v, m, subvectorSizeAndOffset))
                             .toArray(s -> new float[s][]);
                     var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::squareDistance);
                     return clusterer.cluster(K_MEANS_ITERATIONS);
