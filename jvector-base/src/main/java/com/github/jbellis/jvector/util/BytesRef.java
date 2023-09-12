@@ -78,8 +78,6 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
   /**
    * Returns a shallow clone of this instance (the underlying bytes are <b>not</b> copied and will
    * be shared by both the returned object and this object.
-   *
-   * @see #deepCopyOf
    */
   @Override
   public BytesRef clone() {

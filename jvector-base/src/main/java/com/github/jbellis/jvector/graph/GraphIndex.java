@@ -57,7 +57,7 @@ public interface GraphIndex<T> {
 
     /**
      * Retrieve the vector associated with a given node.
-     * <p/>
+     * <p>
      * This will only be called when a search is performed using approximate similarities.
      * In that situation, we will want to reorder the results by the exact similarity
      * at the end of the search.
