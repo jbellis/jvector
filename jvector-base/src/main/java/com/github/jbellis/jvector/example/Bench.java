@@ -19,20 +19,20 @@ package com.github.jbellis.jvector.example;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import com.github.jbellis.jvector.example.util.DataSet;
+import com.github.jbellis.jvector.example.util.Hdf5Loader;
 import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import com.github.jbellis.jvector.vector.VectorUtil;
-import io.jhdf.HdfFile;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
@@ -75,14 +75,6 @@ public class Bench {
         finally {
             Files.deleteIfExists(graphPath);
         }
-    }
-
-    private static float normOf(float[] baseVector) {
-        float norm = 0;
-        for (float v : baseVector) {
-            norm += v * v;
-        }
-        return (float) Math.sqrt(norm);
     }
 
     static class ResultSummary {
@@ -138,109 +130,13 @@ public class Bench {
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum()); // TODO do we care enough about visited count to hack it back into searcher?
     }
 
-    static class DataSet {
-        final String name;
-        final VectorSimilarityFunction similarityFunction;
-        final List<float[]> baseVectors;
-        final List<float[]> queryVectors;
-        final List<Set<Integer>> groundTruth;
-
-        DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<Set<Integer>> groundTruth) {
-            this.name = name;
-            this.similarityFunction = similarityFunction;
-            this.baseVectors = baseVectors;
-            this.queryVectors = queryVectors;
-            this.groundTruth = groundTruth;
-        }
-
-    }
-    private static DataSet load(String pathStr) {
-        // infer the similarity
-        VectorSimilarityFunction similarityFunction;
-        if (pathStr.contains("angular")) {
-            similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-        } else if (pathStr.contains("euclidean")) {
-            similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
-        } else {
-            throw new IllegalArgumentException("Unknown similarity function -- expected angular or euclidean for " + pathStr);
-        }
-
-        // read the data
-        float[][] baseVectors;
-        float[][] queryVectors;
-        int[][] groundTruth;
-        Path path = Paths.get(pathStr);
-        try (HdfFile hdf = new HdfFile(path)) {
-            baseVectors = (float[][]) hdf.getDatasetByPath("train").getData();
-            queryVectors = (float[][]) hdf.getDatasetByPath("test").getData();
-            groundTruth = (int[][]) hdf.getDatasetByPath("neighbors").getData();
-        }
-
-        List<float[]> scrubbedBaseVectors;
-        List<float[]> scrubbedQueryVectors;
-        List<Set<Integer>> gtSet;
-        if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
-            // verify that vectors are normalized and sane
-            scrubbedBaseVectors = new ArrayList<>(baseVectors.length);
-            scrubbedQueryVectors = new ArrayList<>(queryVectors.length);
-            gtSet = new ArrayList<>(groundTruth.length);
-            // remove zero vectors, noting that this will change the indexes of the ground truth answers
-            Map<Integer, Integer> rawToScrubbed = new HashMap<>();
-            {
-                int j = 0;
-                for (int i = 0; i < baseVectors.length; i++) {
-                    float[] v = baseVectors[i];
-                    if (Math.abs(normOf(v)) > 1e-5) {
-                        scrubbedBaseVectors.add(v);
-                        rawToScrubbed.put(i, j++);
-                    }
-                }
-            }
-            for (int i = 0; i < queryVectors.length; i++) {
-                float[] v = queryVectors[i];
-                if (Math.abs(normOf(v)) > 1e-5) {
-                    scrubbedQueryVectors.add(v);
-                    var gt = new HashSet<Integer>();
-                    for (int j = 0; j < groundTruth[i].length; j++) {
-                        gt.add(rawToScrubbed.get(groundTruth[i][j]));
-                    }
-                    gtSet.add(gt);
-                }
-            }
-            // now that the zero vectors are removed, we can normalize
-            if (Math.abs(normOf(baseVectors[0]) - 1.0) > 1e-5) {
-                normalizeAll(scrubbedBaseVectors);
-                normalizeAll(scrubbedQueryVectors);
-            }
-            assert scrubbedQueryVectors.size() == gtSet.size();
-        } else {
-            scrubbedBaseVectors = Arrays.asList(baseVectors);
-            scrubbedQueryVectors = Arrays.asList(queryVectors);
-            gtSet = new ArrayList<>(groundTruth.length);
-            for (int[] gt : groundTruth) {
-                var gtSetForQuery = new HashSet<Integer>();
-                for (int i : gt) {
-                    gtSetForQuery.add(i);
-                }
-                gtSet.add(gtSetForQuery);
-            }
-        }
-
-        System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
-                pathStr, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
-
-        return new DataSet(path.getFileName().toString(), similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
-    }
-
-    private static void normalizeAll(Iterable<float[]> vectors) {
-        for (float[] v : vectors) {
-            VectorUtil.l2normalize(v);
-        }
-    }
-
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
+
         var files = List.of(
+                // large files not yet supported
+                // "hdf5/deep-image-96-angular.hdf5",
+                // "hdf5/gist-960-euclidean.hdf5",
                 "hdf5/nytimes-256-angular.hdf5",
                 "hdf5/glove-100-angular.hdf5",
                 "hdf5/glove-200-angular.hdf5",
@@ -249,11 +145,8 @@ public class Bench {
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchFactor = List.of(1, 2);
         var diskOptions = List.of(false, true);
-        // large files not yet supported
-//                "hdf5/deep-image-96-angular.hdf5",
-//                "hdf5/gist-960-euclidean.hdf5");
         for (var f : files) {
-            gridSearch(f, mGrid, efConstructionGrid, diskOptions, efSearchFactor);
+            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskOptions, efSearchFactor);
         }
 
         // tiny dataset, don't waste time building a huge index
@@ -261,13 +154,11 @@ public class Bench {
         mGrid = List.of(8, 12, 16, 24);
         efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
         for (var f : files) {
-            gridSearch(f, mGrid, efConstructionGrid, diskOptions, efSearchFactor);
+            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskOptions, efSearchFactor);
         }
     }
 
-    private static void gridSearch(String f, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
-        var ds = load(f);
-
+    private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
         var start = System.nanoTime();
         var pqDims = ds.baseVectors.get(0).length / 2;
         ProductQuantization pq = new ProductQuantization(ds.baseVectors, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
