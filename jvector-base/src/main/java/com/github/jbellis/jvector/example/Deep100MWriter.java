@@ -36,7 +36,7 @@ import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.example.util.DataSet;
 import com.github.jbellis.jvector.example.util.Deep1BLoader;
-import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
+import com.github.jbellis.jvector.example.util.SimpleMappedReader;
 import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.graph.GraphIndexBuilder;
 import com.github.jbellis.jvector.graph.GraphSearcher;
@@ -86,7 +86,7 @@ public class Deep100MWriter {
         DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
         OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
         outputStream.flush();
-        var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
+        var marr = new SimpleMappedReader(graphPath.toAbsolutePath().toString());
         var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
 
         int queryRuns = 2;
