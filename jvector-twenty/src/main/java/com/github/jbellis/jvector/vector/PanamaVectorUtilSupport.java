@@ -5,7 +5,8 @@ import java.util.List;
 import com.github.jbellis.jvector.vector.VectorUtilSupport;
 import com.github.jbellis.jvector.vector.SimdOps;
 
-final class PanamaVectorUtilSupport implements VectorUtilSupport
+final class
+PanamaVectorUtilSupport implements VectorUtilSupport
 {
 
     @Override

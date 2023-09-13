@@ -4,6 +4,8 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 
 import java.util.Random;
 
+// Not actually derived from Lucene, but provides a random() method like LuceneTestCase does
+// for easier porting of Lucene tests
 public class LuceneTestCase extends RandomizedTest {
     public static int RANDOM_MULTIPLIER = 2;
 
