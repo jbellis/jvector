@@ -93,7 +93,7 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>-Xmx32G</argument>
+                                        <argument>-Xmx256G</argument>
                                         <argument>-ea</argument>
                                         <argument>com.github.jbellis.jvector.example.Deep100MWriter</argument>
                                     </arguments>
