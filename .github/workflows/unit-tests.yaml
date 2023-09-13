@@ -2,6 +2,7 @@ name: Unit Test CI
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     paths:
       - .github/workflows/unit-tests.yaml
@@ -27,5 +28,5 @@ jobs:
         run: mvn -B package
         if: matrix.jdk == '20'
       - name: Compile and run tests (JDK 11)
-        run: mvn -B -am -pl jvector-base package
+        run: mvn -B -am -pl jvector-base test
         if: matrix.jdk == '11'
