@@ -70,7 +70,7 @@ public class SimpleMappedReader implements RandomAccessReader {
     @Override
     public void readFully(float[] buffer) {
         for (int i = 0; i < buffer.length; i++) {
-            buffer[i] = mbb.getFloat(i * Float.BYTES);
+            buffer[i] = mbb.getFloat();
         }
     }
 

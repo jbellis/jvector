@@ -280,7 +280,11 @@ public class ProductQuantization {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ProductQuantization that = (ProductQuantization) o;
-        return M == that.M && originalDimension == that.originalDimension && Arrays.deepEquals(codebooks, that.codebooks) && Arrays.equals(globalCentroid, that.globalCentroid) && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets);
+        return M == that.M
+               && originalDimension == that.originalDimension
+               && Arrays.deepEquals(codebooks, that.codebooks)
+               && Arrays.equals(globalCentroid, that.globalCentroid)
+               && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets);
     }
 
     @Override
