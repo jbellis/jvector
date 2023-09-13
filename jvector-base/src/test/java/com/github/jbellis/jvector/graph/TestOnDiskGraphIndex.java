@@ -20,7 +20,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.github.jbellis.jvector.TestUtil;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.example.util.SimpleMappedReader;
+import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -84,7 +84,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         {
             var outputPath = testDirectory.resolve("test_graph_" + g.getClass().getSimpleName());
             writeGraph(g, new GraphIndexTestCase.CircularFloatVectorValues(g.size()), outputPath);
-            try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+            try (var marr = new MappedRandomAccessReader(outputPath.toAbsolutePath().toString());
                  var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
                  var onDiskView = onDiskGraph.getView())
             {
@@ -100,7 +100,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("large_graph");
         writeGraph(graph, new GraphIndexTestCase.CircularFloatVectorValues(graph.size()), outputPath);
 
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+        try (var marr = new MappedRandomAccessReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {

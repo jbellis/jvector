@@ -31,8 +31,8 @@ import java.util.logging.Logger;
  * Lies about implementing interfaces. Bare minimum I/O to run Bench/SiftSmall
  * against disk in reasonable time. Does not handle files above 2 GB.
  */
-public class SimpleMappedReader implements RandomAccessReader {
-    private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
+public class MappedRandomAccessReader implements RandomAccessReader {
+    private static final Logger LOG = Logger.getLogger(MappedRandomAccessReader.class.getName());
 
     private final MappedByteBuffer mbb;
     private static final Unsafe unsafe = getUnsafe();
@@ -48,7 +48,7 @@ public class SimpleMappedReader implements RandomAccessReader {
         }
     }
 
-    public SimpleMappedReader(String name) throws IOException {
+    public MappedRandomAccessReader(String name) throws IOException {
         var raf = new RandomAccessFile(name, "r");
         if (raf.length() > Integer.MAX_VALUE) {
             throw new RuntimeException("MappedRandomAccessReader doesn't support large files");
@@ -58,7 +58,7 @@ public class SimpleMappedReader implements RandomAccessReader {
         raf.close();
     }
 
-    private SimpleMappedReader(MappedByteBuffer sourceMbb) {
+    private MappedRandomAccessReader(MappedByteBuffer sourceMbb) {
         mbb = sourceMbb;
     }
 
@@ -70,7 +70,7 @@ public class SimpleMappedReader implements RandomAccessReader {
     @Override
     public void readFully(float[] buffer) {
         for (int i = 0; i < buffer.length; i++) {
-            buffer[i] = mbb.getFloat();
+            buffer[i] = mbb.getFloat(i * Float.BYTES);
         }
     }
 
@@ -96,7 +96,7 @@ public class SimpleMappedReader implements RandomAccessReader {
         }
     }
 
-    public SimpleMappedReader duplicate() {
-        return new SimpleMappedReader((MappedByteBuffer) mbb.duplicate());
+    public MappedRandomAccessReader duplicate() {
+        return new MappedRandomAccessReader((MappedByteBuffer) mbb.duplicate());
     }
 }

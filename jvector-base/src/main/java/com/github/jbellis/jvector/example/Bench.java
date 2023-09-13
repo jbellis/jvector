@@ -16,34 +16,27 @@
 
 package com.github.jbellis.jvector.example;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.example.util.DataSet;
 import com.github.jbellis.jvector.example.util.Hdf5Loader;
-import com.github.jbellis.jvector.example.util.ReaderFactory;
-import com.github.jbellis.jvector.graph.GraphIndex;
-import com.github.jbellis.jvector.graph.GraphIndexBuilder;
-import com.github.jbellis.jvector.graph.GraphSearcher;
-import com.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import com.github.jbellis.jvector.graph.NeighborSimilarity;
-import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import com.github.jbellis.jvector.graph.SearchResult;
+import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
+import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
@@ -65,15 +58,8 @@ public class Bench {
             DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
             OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             outputStream.flush();
-            var marr = ReaderFactory.open(graphPath);
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(() -> {
-                try {
-                    return ReaderFactory.duplicate(marr);
-                }
-                catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }, 0));
+            var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
+            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
 
             int queryRuns = 10;
             for (int overquery : efSearchOptions) {
