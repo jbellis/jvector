@@ -1,4 +1,11 @@
 /*
+ * All changes to the original code are Copyright DataStax, Inc.
+ *
+ * Please see the included license file for details.
+ */
+
+/*
+ * Original license:
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -15,10 +22,6 @@
  * limitations under the License.
  */
 
-/*
- * This file has been modified by the JVector developers in compliance
- * with the Apache License, section 4.
- */
 package com.github.jbellis.jvector.util;
 
 public class DocIdSetIterator {
