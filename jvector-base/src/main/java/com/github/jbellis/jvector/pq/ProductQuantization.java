@@ -1,14 +1,17 @@
 package com.github.jbellis.jvector.pq;
 
-import com.github.jbellis.jvector.disk.Io;
-import com.github.jbellis.jvector.vector.VectorUtil;
-
-import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import com.github.jbellis.jvector.disk.Io;
+import com.github.jbellis.jvector.disk.RandomAccessReader;
+import com.github.jbellis.jvector.vector.VectorUtil;
 
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
@@ -237,11 +240,12 @@ public class ProductQuantization {
         }
     }
 
-    public static ProductQuantization load(DataInput in) throws IOException {
+    public static ProductQuantization load(RandomAccessReader in) throws IOException {
         int globalCentroidLength = in.readInt();
         float[] globalCentroid = null;
         if (globalCentroidLength > 0) {
-            globalCentroid = Io.readFloats(in, globalCentroidLength);
+            globalCentroid = new float[globalCentroidLength];
+            in.readFully(globalCentroid);
         }
 
         int M = in.readInt();
@@ -261,7 +265,8 @@ public class ProductQuantization {
             float[][] codebook = new float[clusters][];
             for (int i = 0; i < clusters; i++) {
                 int n = subvectorSizes[m][0];
-                float[] centroid = Io.readFloats(in, n);
+                float[] centroid = new float[n];
+                in.readFully(centroid);
                 codebook[i] = centroid;
             }
             codebooks[m] = codebook;

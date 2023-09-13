@@ -84,7 +84,8 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                         node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (M + 1)) // earlier entries
                         + Integer.BYTES; // skip the ID
                 float[] vector = new float[dimension];
-                reader.readFloatsAt(offset, vector);
+                reader.seek(offset);
+                reader.readFully(vector);
                 return (T) vector;
             }
             catch (IOException e) {
