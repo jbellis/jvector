@@ -65,6 +65,18 @@
                                     </arguments>
                                 </configuration>
                             </execution>
+                            <execution>
+                                <id>deep100m</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>-Xmx32G</argument>
+                                        <argument>-ea</argument>
+                                        <argument>com.github.jbellis.jvector.example.Deep100MWriter</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                 </plugins>
