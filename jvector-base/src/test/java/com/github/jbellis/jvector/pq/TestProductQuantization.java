@@ -2,7 +2,7 @@ package com.github.jbellis.jvector.pq;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
-import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
+import com.github.jbellis.jvector.example.util.SimpleMappedReader;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
@@ -30,7 +30,7 @@ public class TestProductQuantization extends RandomizedTest {
         }
 
         // Read the pq object
-        try (var in = new MappedRandomAccessReader(tempFile.getAbsolutePath())) {
+        try (var in = new SimpleMappedReader(tempFile.getAbsolutePath())) {
             var pq2 = ProductQuantization.load(in);
             assertEquals(pq, pq2);
         }

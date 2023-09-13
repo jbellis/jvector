@@ -31,8 +31,8 @@ import java.util.logging.Logger;
  * Lies about implementing interfaces. Bare minimum I/O to run Bench/SiftSmall
  * against disk in reasonable time. Does not handle files above 2 GB.
  */
-public class MappedRandomAccessReader implements RandomAccessReader {
-    private static final Logger LOG = Logger.getLogger(MappedRandomAccessReader.class.getName());
+public class SimpleMappedReader implements RandomAccessReader {
+    private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
 
     private final MappedByteBuffer mbb;
     private static final Unsafe unsafe = getUnsafe();
@@ -48,7 +48,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
         }
     }
 
-    public MappedRandomAccessReader(String name) throws IOException {
+    public SimpleMappedReader(String name) throws IOException {
         var raf = new RandomAccessFile(name, "r");
         if (raf.length() > Integer.MAX_VALUE) {
             throw new RuntimeException("MappedRandomAccessReader doesn't support large files");
@@ -58,7 +58,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
         raf.close();
     }
 
-    private MappedRandomAccessReader(MappedByteBuffer sourceMbb) {
+    private SimpleMappedReader(MappedByteBuffer sourceMbb) {
         mbb = sourceMbb;
     }
 
@@ -96,7 +96,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
         }
     }
 
-    public MappedRandomAccessReader duplicate() {
-        return new MappedRandomAccessReader((MappedByteBuffer) mbb.duplicate());
+    public SimpleMappedReader duplicate() {
+        return new SimpleMappedReader((MappedByteBuffer) mbb.duplicate());
     }
 }

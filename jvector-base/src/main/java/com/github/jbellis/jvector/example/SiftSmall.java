@@ -3,7 +3,7 @@ package com.github.jbellis.jvector.example;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.example.util.MappedRandomAccessReader;
+import com.github.jbellis.jvector.example.util.SimpleMappedReader;
 import com.github.jbellis.jvector.example.util.SiftLoader;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
@@ -49,7 +49,7 @@ public class SiftSmall {
             DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
             OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
-            var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
+            var marr = new SimpleMappedReader(graphPath.toAbsolutePath().toString());
 
             var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
 
