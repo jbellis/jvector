@@ -18,6 +18,7 @@ package com.github.jbellis.jvector.example;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -79,26 +80,24 @@ public class Deep100MWriter {
                 M, efConstruction, (System.nanoTime() - startBuild) / 1_000_000_000.0, avgShortEdges);
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
-        try {
-            DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
-            OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
-            outputStream.flush();
-            var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
-
-            int queryRuns = 2;
-            for (int overquery : efSearchOptions) {
-                for (boolean useDisk : diskOptions) {
-                    var start = System.nanoTime();
-                    var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
-                    var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                    System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                            useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-                }
-            }
+        if (!Files.exists(graphPath.getParent())) {
+            Files.createDirectories(graphPath.getParent());
         }
-        finally {
-            Files.deleteIfExists(graphPath);
+        DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
+        OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+        outputStream.flush();
+        var marr = new MappedRandomAccessReader(graphPath.toAbsolutePath().toString());
+        var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
+
+        int queryRuns = 2;
+        for (int overquery : efSearchOptions) {
+            for (boolean useDisk : diskOptions) {
+                var start = System.nanoTime();
+                var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
+                var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
+                System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                        useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+            }
         }
     }
 
@@ -183,7 +182,7 @@ public class Deep100MWriter {
 
         var compressedVectors = new CompressedVectors(pq, quantizedVectors);
 
-        var testDirectory = Files.createTempDirectory("jvectorindex");
+        var testDirectory = new File("jvectorindex").toPath();
 
         for (int M : mGrid) {
             for (int beamWidth : efConstructionGrid) {
