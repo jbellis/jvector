@@ -27,10 +27,10 @@ import java.util.Arrays;
 /**
  * Represents a graph-based vector index.  Nodes are represented as ints, and edges are
  * represented as adjacency lists.
- * <p/>
+ * <p>
  * Mostly this applies to any graph index, but a few methods (e.g. getVector()) are
  * specifically included to support the DiskANN-based design of OnDiskGraphIndex.
- * <p/>
+ * <p>
  * All methods are threadsafe.  Operations that require persistent state are wrapped
  * in a View that should be created per accessing thread.
  */

@@ -377,9 +377,9 @@ public class ConcurrentNeighborSet {
     /**
      * Retains only the elements in the current ConcurrentNeighborArray whose corresponding index
      * is set in the given BitSet.
-     * <p/>
+     * <p>
      * This modifies the array in place, preserving the relative order of the elements retained.
-     * <p/>
+     * <p>
      * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
      */
     public void retain(BitSet selected) {

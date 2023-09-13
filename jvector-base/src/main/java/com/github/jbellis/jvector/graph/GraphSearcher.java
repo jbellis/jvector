@@ -110,7 +110,7 @@ public class GraphSearcher<T> {
    * Add the closest neighbors found to a priority queue (heap). These are returned in
    * proximity order -- the closest neighbor of the topK found, i.e. the one with the highest
    * score/comparison value, will be at the front of the array.
-   * <p/>
+   * <p>
    * If scoreFunction is exact, then reRanker may be null.
    */
   // TODO add back ability to re-use a results structure instead of allocating a new one each time?
