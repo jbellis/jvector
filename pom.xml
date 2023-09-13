@@ -4,7 +4,7 @@
 
     <groupId>io.github.jbellis</groupId>
     <artifactId>jvector-parent</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <version>dev</version>
     <packaging>pom</packaging>
     <!-- Project Metadata setup -->
     <name>JVector parent</name>
@@ -26,11 +26,25 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+    <developers>
+        <developer>
+            <name>Jonathan Ellis</name>
+            <email>jbellis@gmail.com</email>
+            <organization>JVector</organization>
+            <organizationUrl>https://github.com/jbellis/jvector</organizationUrl>
+        </developer>
+    </developers>
     <!-- Build property abstractions: versions, etc -->
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.install.skip>true</maven.install.skip>
+        <jvector.version>0.9-SNAPSHOT</jvector.version>
     </properties>
+    <modules>
+        <module>jvector-base</module>
+        <module>jvector-twenty</module>
+        <module>jvector-multirelease</module>
+    </modules>
     <build>
         <resources>
             <resource>
@@ -105,7 +119,7 @@
                 <executions>
                     <execution>
                         <id>attach-javadocs</id>
-                        <phase>prepare-package</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>aggregate-jar</goal>
                         </goals>
@@ -119,63 +133,66 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.6.0</version>
-                <inherited>false</inherited>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>1.5.0</version>
+                <configuration>
+                    <flattenMode>ossrh</flattenMode>
+                    <pomElements>
+                        <dependencies>resolve</dependencies>
+                    </pomElements>
+                </configuration>
                 <executions>
+                    <!-- enable flattening -->
                     <execution>
-                        <phase>package</phase>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
                         <goals>
-                            <goal>copy</goal>
+                            <goal>flatten</goal>
                         </goals>
-                        <configuration>
-                            <artifactItems>
-                                <artifactItem>
-                                    <groupId>${project.groupId}</groupId>
-                                    <artifactId>${project.artifactId}</artifactId>
-                                    <version>${project.version}</version>
-                                    <type>jar</type>
-                                    <classifier>javadoc</classifier>
-                                    <outputDirectory>jvector-multirelease/target</outputDirectory>
-                                    <destFileName>jvector-${project.version}-javadoc.jar</destFileName>
-                                </artifactItem>
-                            </artifactItems>
-                        </configuration>
+                    </execution>
+                    <!-- ensure proper cleanup -->
+                    <execution>
+                        <id>flatten.clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+    <!-- Only include dependencies that are needed for the multirelease jar to run -->
     <dependencies>
         <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.9.1</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.carrotsearch.randomizedtesting</groupId>
-            <artifactId>randomizedtesting-runner</artifactId>
-            <version>2.8.1</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-core</artifactId>
-            <version>1.35</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-generator-annprocess</artifactId>
-            <version>1.35</version>
-            <scope>test</scope>
+            <groupId>io.jhdf</groupId>
+            <artifactId>jhdf</artifactId>
+            <version>0.6.10</version>
         </dependency>
     </dependencies>
-    <modules>
-        <module>jvector-base</module>
-        <module>jvector-twenty</module>
-        <module>jvector-multirelease</module>
-    </modules>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>5.9.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.carrotsearch.randomizedtesting</groupId>
+                <artifactId>randomizedtesting-runner</artifactId>
+                <version>2.8.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-core</artifactId>
+                <version>1.35</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-generator-annprocess</artifactId>
+                <version>1.35</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>

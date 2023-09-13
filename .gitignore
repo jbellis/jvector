@@ -12,3 +12,5 @@ target/
 
 ### Mac OS ###
 .DS_Store
+
+**/.flattened-pom.xml
