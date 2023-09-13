@@ -34,7 +34,7 @@ import java.util.Arrays;
  * false)
  */
 public class NeighborArray {
-  protected final boolean scoresDescOrder;
+  protected final boolean scoresDescOrder; // TODO we actually don't use desc=false anymore
   protected int size;
 
   float[] score;

@@ -145,7 +145,7 @@ public class GraphIndexBuilder<T> {
   }
 
   /**
-   * Inserts a doc with vector value to the graph.
+   * Inserts a node with the given vector value to the graph.
    *
    * <p>To allow correctness under concurrency, we track in-progress updates in a
    * ConcurrentSkipListSet. After adding ourselves, we take a snapshot of this set, and consider all

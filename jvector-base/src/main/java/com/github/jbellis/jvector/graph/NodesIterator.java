@@ -26,7 +26,7 @@ import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 
 /**
- * Iterator over the graph nodes on a certain level, Iterator also provides the size – the total
+ * Iterator over the graph nodes on a certain level that includes the size – the total
  * number of nodes to be iterated over. The nodes are NOT guaranteed to be presented in any
  * particular order.
  */

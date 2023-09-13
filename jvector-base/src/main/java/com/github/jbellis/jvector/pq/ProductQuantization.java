@@ -29,6 +29,9 @@ import com.github.jbellis.jvector.disk.Io;
 import com.github.jbellis.jvector.disk.RandomAccessReader;
 import com.github.jbellis.jvector.vector.VectorUtil;
 
+/**
+ * A Product Quantization implementation for float vectors.
+ */
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well

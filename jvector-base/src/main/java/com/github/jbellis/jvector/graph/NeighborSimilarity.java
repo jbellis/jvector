@@ -18,7 +18,7 @@ package com.github.jbellis.jvector.graph;
 
 import java.util.Map;
 
-/** Encapsulates comparing node distances for diversity checks. */
+/** Encapsulates comparing node distances. */
 public interface NeighborSimilarity {
   /** for one-off comparisons between nodes */
   default float score(int node1, int node2) {

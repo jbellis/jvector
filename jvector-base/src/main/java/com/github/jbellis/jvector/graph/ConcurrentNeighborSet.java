@@ -24,7 +24,7 @@ import com.github.jbellis.jvector.util.FixedBitSet;
 
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
-/** A concurrent set of neighbors. */
+/** A concurrent set of neighbors that encapsulates diversity/pruning mechanics. */
 public class ConcurrentNeighborSet {
   /** the node id whose neighbors we are storing */
   private final int nodeId;
