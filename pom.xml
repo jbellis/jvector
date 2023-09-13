@@ -82,6 +82,16 @@
                             <workingDirectory>${project.parent.basedir}</workingDirectory>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>deep100</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <workingDirectory>${project.parent.basedir}</workingDirectory>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>
