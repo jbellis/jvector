@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.vector;
 
 import java.util.List;
@@ -205,7 +210,6 @@ public final class VectorUtil {
   public static void divInPlace(float[] vector, float divisor) {
     impl.divInPlace(vector, divisor);
   }
-
 
   public static void addInPlace(float[] v1, float[] v2) {
     impl.addInPlace(v1, v2);

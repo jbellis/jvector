@@ -1,16 +1,38 @@
+/*
+ * Copyright DataStax, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.github.jbellis.jvector.pq;
 
-import com.github.jbellis.jvector.disk.Io;
-import com.github.jbellis.jvector.vector.VectorUtil;
-
-import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.github.jbellis.jvector.disk.Io;
+import com.github.jbellis.jvector.disk.RandomAccessReader;
+import com.github.jbellis.jvector.vector.VectorUtil;
+
+/**
+ * A Product Quantization implementation for float vectors.
+ */
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well
@@ -239,11 +261,12 @@ public class ProductQuantization {
         }
     }
 
-    public static ProductQuantization load(DataInput in) throws IOException {
+    public static ProductQuantization load(RandomAccessReader in) throws IOException {
         int globalCentroidLength = in.readInt();
         float[] globalCentroid = null;
         if (globalCentroidLength > 0) {
-            globalCentroid = Io.readFloats(in, globalCentroidLength);
+            globalCentroid = new float[globalCentroidLength];
+            in.readFully(globalCentroid);
         }
 
         int M = in.readInt();
@@ -263,7 +286,8 @@ public class ProductQuantization {
             float[][] codebook = new float[clusters][];
             for (int i = 0; i < clusters; i++) {
                 int n = subvectorSizes[m][0];
-                float[] centroid = Io.readFloats(in, n);
+                float[] centroid = new float[n];
+                in.readFully(centroid);
                 codebook[i] = centroid;
             }
             codebooks[m] = codebook;
@@ -277,7 +301,11 @@ public class ProductQuantization {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ProductQuantization that = (ProductQuantization) o;
-        return M == that.M && originalDimension == that.originalDimension && Arrays.deepEquals(codebooks, that.codebooks) && Arrays.equals(globalCentroid, that.globalCentroid) && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets);
+        return M == that.M
+               && originalDimension == that.originalDimension
+               && Arrays.deepEquals(codebooks, that.codebooks)
+               && Arrays.equals(globalCentroid, that.globalCentroid)
+               && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets);
     }
 
     @Override

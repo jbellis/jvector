@@ -14,6 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.util;
 
 import java.util.Arrays;
@@ -78,8 +84,6 @@ public final class BytesRef implements Comparable<BytesRef>, Cloneable {
   /**
    * Returns a shallow clone of this instance (the underlying bytes are <b>not</b> copied and will
    * be shared by both the returned object and this object.
-   *
-   * @see #deepCopyOf
    */
   @Override
   public BytesRef clone() {

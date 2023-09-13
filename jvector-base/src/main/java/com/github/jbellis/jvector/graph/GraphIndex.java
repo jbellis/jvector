@@ -15,12 +15,24 @@
  * limitations under the License.
  */
 
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.graph;
 
 import java.util.Arrays;
 
 /**
- * TODO: add javadoc
+ * Represents a graph-based vector index.  Nodes are represented as ints, and edges are
+ * represented as adjacency lists.
+ * <p>
+ * Mostly this applies to any graph index, but a few methods (e.g. getVector()) are
+ * specifically included to support the DiskANN-based design of OnDiskGraphIndex.
+ * <p>
+ * All methods are threadsafe.  Operations that require persistent state are wrapped
+ * in a View that should be created per accessing thread.
  */
 public interface GraphIndex<T> {
   /** Returns the number of nodes in the graph */
@@ -57,7 +69,7 @@ public interface GraphIndex<T> {
 
     /**
      * Retrieve the vector associated with a given node.
-     * <p/>
+     * <p>
      * This will only be called when a search is performed using approximate similarities.
      * In that situation, we will want to reorder the results by the exact similarity
      * at the end of the search.

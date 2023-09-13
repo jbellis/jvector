@@ -1,12 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright DataStax, Inc.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,7 +24,7 @@ import com.github.jbellis.jvector.util.FixedBitSet;
 
 import static com.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
-/** A concurrent set of neighbors. */
+/** A concurrent set of neighbors that encapsulates diversity/pruning mechanics. */
 public class ConcurrentNeighborSet {
   /** the node id whose neighbors we are storing */
   private final int nodeId;
@@ -378,9 +377,9 @@ public class ConcurrentNeighborSet {
     /**
      * Retains only the elements in the current ConcurrentNeighborArray whose corresponding index
      * is set in the given BitSet.
-     * <p/>
+     * <p>
      * This modifies the array in place, preserving the relative order of the elements retained.
-     * <p/>
+     * <p>
      * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
      */
     public void retain(BitSet selected) {

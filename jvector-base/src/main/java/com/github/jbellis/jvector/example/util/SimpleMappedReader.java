@@ -31,8 +31,8 @@ import java.util.logging.Logger;
  * Lies about implementing interfaces. Bare minimum I/O to run Bench/SiftSmall
  * against disk in reasonable time. Does not handle files above 2 GB.
  */
-public class MappedRandomAccessReader implements RandomAccessReader {
-    private static final Logger LOG = Logger.getLogger(MappedRandomAccessReader.class.getName());
+public class SimpleMappedReader implements RandomAccessReader {
+    private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
 
     private final MappedByteBuffer mbb;
     private static final Unsafe unsafe = getUnsafe();
@@ -48,7 +48,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
         }
     }
 
-    public MappedRandomAccessReader(String name) throws IOException {
+    public SimpleMappedReader(String name) throws IOException {
         var raf = new RandomAccessFile(name, "r");
         if (raf.length() > Integer.MAX_VALUE) {
             throw new RuntimeException("MappedRandomAccessReader doesn't support large files");
@@ -58,7 +58,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
         raf.close();
     }
 
-    private MappedRandomAccessReader(MappedByteBuffer sourceMbb) {
+    private SimpleMappedReader(MappedByteBuffer sourceMbb) {
         mbb = sourceMbb;
     }
 
@@ -68,9 +68,9 @@ public class MappedRandomAccessReader implements RandomAccessReader {
     }
 
     @Override
-    public void readFloatsAt(long offset, float[] buffer) {
+    public void readFully(float[] buffer) {
         for (int i = 0; i < buffer.length; i++) {
-            buffer[i] = mbb.getFloat((int) offset + i * Float.BYTES);
+            buffer[i] = mbb.getFloat();
         }
     }
 
@@ -80,77 +80,8 @@ public class MappedRandomAccessReader implements RandomAccessReader {
     }
 
     @Override
-    public void readFully(byte[] b, int off, int len) {
-        mbb.get(b, off, len);
-    }
-
-    @Override
-    public int skipBytes(int n) {
-        var position = mbb.position();
-        var limit = mbb.limit();
-        var skip = position + n > limit ? limit - position : n;
-        mbb.position(mbb.position() + skip);
-        return skip;
-    }
-
-    @Override
-    public boolean readBoolean() {
-        return mbb.get() != 0;
-    }
-
-    @Override
-    public byte readByte() {
-        return mbb.get();
-    }
-
-    @Override
-    public int readUnsignedByte() {
-        return mbb.get() & 0xFF;
-    }
-
-    @Override
-    public short readShort() {
-        return mbb.getShort();
-    }
-
-    @Override
-    public int readUnsignedShort() {
-        return mbb.getShort() & 0xFFFF;
-    }
-
-    @Override
-    public char readChar() {
-        return mbb.getChar();
-    }
-
-    @Override
     public int readInt() {
         return mbb.getInt();
-    }
-
-    @Override
-    public long readLong() {
-        return mbb.getLong();
-    }
-
-    @Override
-    public float readFloat() {
-        return mbb.getFloat();
-    }
-
-    @Override
-    public double readDouble() {
-        return mbb.getDouble();
-    }
-
-    @Override
-    public String readLine() {
-        throw new UnsupportedOperationException("This hack job doesn't support this");
-    }
-
-    @Override
-    public String readUTF() {
-        throw new UnsupportedOperationException("This hack job doesn't support this");
     }
 
     @Override
@@ -165,7 +96,7 @@ public class MappedRandomAccessReader implements RandomAccessReader {
         }
     }
 
-    public MappedRandomAccessReader duplicate() {
-        return new MappedRandomAccessReader((MappedByteBuffer) mbb.duplicate());
+    public SimpleMappedReader duplicate() {
+        return new SimpleMappedReader((MappedByteBuffer) mbb.duplicate());
     }
 }

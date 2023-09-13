@@ -14,6 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.util;
 
 import com.github.jbellis.jvector.TestUtil;
@@ -21,8 +27,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
-
-import static org.junit.Assert.assertTrue;
 
 public class TestSparseFixedBitSet extends BaseBitSetTestCase<SparseFixedBitSet> {
 

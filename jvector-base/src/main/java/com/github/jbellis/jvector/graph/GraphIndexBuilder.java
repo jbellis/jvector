@@ -1,12 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright DataStax, Inc.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -146,7 +145,7 @@ public class GraphIndexBuilder<T> {
   }
 
   /**
-   * Inserts a doc with vector value to the graph.
+   * Inserts a node with the given vector value to the graph.
    *
    * <p>To allow correctness under concurrency, we track in-progress updates in a
    * ConcurrentSkipListSet. After adding ourselves, we take a snapshot of this set, and consider all

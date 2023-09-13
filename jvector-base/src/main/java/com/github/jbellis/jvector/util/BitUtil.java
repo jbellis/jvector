@@ -14,7 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.jbellis.jvector.util; // from org.apache.solr.util rev 555343
+
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
+package com.github.jbellis.jvector.util;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

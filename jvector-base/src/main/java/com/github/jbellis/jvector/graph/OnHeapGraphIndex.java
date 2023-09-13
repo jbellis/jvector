@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.graph;
 
 import com.github.jbellis.jvector.util.Accountable;

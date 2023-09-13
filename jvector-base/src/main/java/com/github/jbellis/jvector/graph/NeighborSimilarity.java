@@ -1,12 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright DataStax, Inc.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +18,7 @@ package com.github.jbellis.jvector.graph;
 
 import java.util.Map;
 
-/** Encapsulates comparing node distances for diversity checks. */
+/** Encapsulates comparing node distances. */
 public interface NeighborSimilarity {
   /** for one-off comparisons between nodes */
   default float score(int node1, int node2) {
@@ -36,7 +35,7 @@ public interface NeighborSimilarity {
    * Provides an API for encapsulating similarity to another node or vector.  Used both for
    * building the graph (as part of NeighborSimilarity) or for searching it (used standalone,
    * with a reference to the query vector).
-   * <p/>
+   * <p>
    * ExactScoreFunction and ApproximateScoreFunction are provided for convenience so they
    * can be defined as a simple lambda.
    */

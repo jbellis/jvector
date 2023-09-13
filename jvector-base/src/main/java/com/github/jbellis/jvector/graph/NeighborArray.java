@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.graph;
 
 import com.github.jbellis.jvector.annotations.VisibleForTesting;
@@ -29,7 +34,7 @@ import java.util.Arrays;
  * false)
  */
 public class NeighborArray {
-  protected final boolean scoresDescOrder;
+  protected final boolean scoresDescOrder; // TODO we actually don't use desc=false anymore
   protected int size;
 
   float[] score;
