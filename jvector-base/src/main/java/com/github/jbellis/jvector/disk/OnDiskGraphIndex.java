@@ -155,7 +155,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     }
 
     public void close() {
-        readerSupplier.close();
+        try {
+            readerSupplier.close();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     // takes Graph and Vectors separately since I'm reluctant to introduce a Vectors reference

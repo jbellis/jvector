@@ -16,9 +16,11 @@
 
 package com.github.jbellis.jvector.disk;
 
+import java.io.IOException;
+
 public interface ReaderSupplier extends AutoCloseable {
     RandomAccessReader get();
 
-    default void close() {
+    default void close() throws IOException {
     }
 }
