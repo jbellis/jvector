@@ -14,6 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/*
+ * This file has been modified by the JVector developers in compliance
+ * with the Apache License, section 4.
+ */
+
 package com.github.jbellis.jvector.vector;
 
 import static com.github.jbellis.jvector.vector.VectorUtil.cosine;
