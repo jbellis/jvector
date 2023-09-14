@@ -18,8 +18,8 @@ package com.github.jbellis.jvector.example;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
-import java.io.IOException;
 import java.io.File;
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
