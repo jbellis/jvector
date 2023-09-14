@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package com.github.jbellis.jvector.example.util;
+package com.github.jbellis.jvector.disk;
 
-import com.github.jbellis.jvector.disk.RandomAccessReader;
 import sun.misc.Unsafe;
 
 import java.io.IOException;
@@ -29,8 +28,8 @@ import java.util.logging.Logger;
 
 /**
  * DO NOT use this for anything you care about.
- * Lies about implementing interfaces. Bare minimum I/O to run Bench/SiftSmall
- * against disk in reasonable time. Does not handle files above 2 GB.
+ * Lies about implementing interfaces. Bare minimum I/O to run against disk in reasonable time.
+ * Does not handle files above 2 GB.
  */
 public class SimpleMappedReader implements RandomAccessReader {
     private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());

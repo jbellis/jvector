@@ -19,8 +19,13 @@ package com.github.jbellis.jvector;
 import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.graph.NodesIterator;
 
-import java.io.*;
-import java.nio.file.*;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

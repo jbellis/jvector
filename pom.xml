@@ -44,6 +44,7 @@
         <module>jvector-base</module>
         <module>jvector-twenty</module>
         <module>jvector-multirelease</module>
+        <module>jvector-examples</module>
     </modules>
     <build>
         <resources>
@@ -61,28 +62,6 @@
                     <skip>true</skip>
                     <executable>${java.home}/bin/java</executable>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>sift</id>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>${java.home}/bin/java</executable>
-                            <workingDirectory>${project.parent.basedir}</workingDirectory>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>bench</id>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>${java.home}/bin/java</executable>
-                            <workingDirectory>${project.parent.basedir}</workingDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -124,6 +103,7 @@
                             <goal>aggregate-jar</goal>
                         </goals>
                         <configuration>
+                            <skippedModules>jvector-examples</skippedModules>
                             <additionalJOptions>
                                 <additionalJOption>--add-modules=jdk.incubator.vector</additionalJOption>
                             </additionalJOptions>
@@ -165,16 +145,6 @@
     </build>
     <!-- Only include dependencies that are needed for the multirelease jar to run -->
     <dependencies>
-        <dependency>
-            <groupId>io.jhdf</groupId>
-            <artifactId>jhdf</artifactId>
-            <version>0.6.10</version>
-        </dependency>
-        <dependency>
-            <groupId>com.indeed</groupId>
-            <artifactId>util-mmap</artifactId>
-            <version>1.0.52-3042601</version>
-        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>

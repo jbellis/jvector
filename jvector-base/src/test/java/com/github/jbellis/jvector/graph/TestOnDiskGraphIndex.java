@@ -20,7 +20,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.github.jbellis.jvector.TestUtil;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.example.util.SimpleMappedReader;
+import com.github.jbellis.jvector.disk.SimpleMappedReader;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
