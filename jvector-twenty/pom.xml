@@ -7,9 +7,10 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>0.9-SNAPSHOT</version>
+        <version>dev</version>
     </parent>
     <artifactId>jvector-twenty</artifactId>
+    <version>${jvector.version}</version>
     <name>Twenty</name>
     <build>
         <testSourceDirectory>../jvector-base/src/test</testSourceDirectory>
@@ -76,7 +77,27 @@
         <dependency>
             <groupId>io.github.jbellis</groupId>
             <artifactId>jvector-base</artifactId>
-            <version>${project.version}</version>
+            <version>${jvector.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.carrotsearch.randomizedtesting</groupId>
+            <artifactId>randomizedtesting-runner</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
