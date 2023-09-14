@@ -93,3 +93,5 @@ To run Sift/Bench without the JVM vector module available, you can use the follo
 ```mvn -Pjdk11 compile exec:exec@sift```
 
 The `... -Pjdk11` invocations will also work with JAVA_HOME pointing at a Java 11 installation.
+
+To release, configure ~/.m2/settings.xml to point to OSSRH and run `mvn -Prelease clean deploy`.
