@@ -19,7 +19,7 @@ package com.github.jbellis.jvector.example;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.example.util.SimpleMappedReader;
+import com.github.jbellis.jvector.disk.ReaderSupplierFactory;
 import com.github.jbellis.jvector.example.util.SiftLoader;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;
@@ -29,12 +29,10 @@ import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -65,9 +63,7 @@ public class SiftSmall {
             DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
             OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
-            var marr = new SimpleMappedReader(graphPath.toAbsolutePath().toString());
-
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(marr::duplicate, 0));
+            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
             testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
@@ -105,8 +101,7 @@ public class SiftSmall {
     }
 
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
-        var props = loadProperties("project.properties");
-        var siftPath = props.getProperty("sift.path");
+        var siftPath = "siftsmall";
         var baseVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_base.fvecs", siftPath));
         var queryVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_query.fvecs", siftPath));
         var groundTruth = SiftLoader.readIvecs(String.format("%s/siftsmall_groundtruth.ivecs", siftPath));
@@ -119,17 +114,5 @@ public class SiftSmall {
         } finally {
             Files.delete(testDirectory);
         }
-    }
-
-    private static Properties loadProperties(String resourceName) throws IOException {
-        Properties properties = new Properties();
-
-        try (InputStream input = SiftSmall.class.getClassLoader().getResourceAsStream(resourceName)) {
-            if (input == null) {
-                throw new IOException("Resource not found: " + resourceName);
-            }
-            properties.load(input);
-        }
-        return properties;
     }
 }

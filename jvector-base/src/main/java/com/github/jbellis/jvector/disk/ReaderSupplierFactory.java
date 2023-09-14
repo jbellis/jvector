@@ -1,11 +1,8 @@
-package com.github.jbellis.jvector.example.util;
+package com.github.jbellis.jvector.disk;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
-import com.github.jbellis.jvector.disk.RandomAccessReader;
-import com.github.jbellis.jvector.disk.ReaderSupplier;
 
 public class ReaderSupplierFactory {
     public static ReaderSupplier open(Path path) throws IOException {

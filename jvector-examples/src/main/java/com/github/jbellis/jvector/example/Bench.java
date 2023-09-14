@@ -16,6 +16,17 @@
 
 package com.github.jbellis.jvector.example;
 
+import com.github.jbellis.jvector.disk.CachingGraphIndex;
+import com.github.jbellis.jvector.disk.CompressedVectors;
+import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import com.github.jbellis.jvector.disk.ReaderSupplierFactory;
+import com.github.jbellis.jvector.example.util.DataSet;
+import com.github.jbellis.jvector.example.util.Hdf5Loader;
+import com.github.jbellis.jvector.graph.*;
+import com.github.jbellis.jvector.pq.ProductQuantization;
+import com.github.jbellis.jvector.vector.VectorEncoding;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -27,23 +38,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import com.github.jbellis.jvector.disk.CachingGraphIndex;
-import com.github.jbellis.jvector.disk.CompressedVectors;
-import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.example.util.DataSet;
-import com.github.jbellis.jvector.example.util.Hdf5Loader;
-import com.github.jbellis.jvector.example.util.ReaderSupplierFactory;
-import com.github.jbellis.jvector.graph.GraphIndex;
-import com.github.jbellis.jvector.graph.GraphIndexBuilder;
-import com.github.jbellis.jvector.graph.GraphSearcher;
-import com.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import com.github.jbellis.jvector.graph.NeighborSimilarity;
-import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import com.github.jbellis.jvector.graph.SearchResult;
-import com.github.jbellis.jvector.pq.ProductQuantization;
-import com.github.jbellis.jvector.vector.VectorEncoding;
-import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 /**
  * Tests GraphIndexes against vectors from various datasets

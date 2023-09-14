@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package com.github.jbellis.jvector.example.util;
+package com.github.jbellis.jvector.disk;
 
-import com.github.jbellis.jvector.disk.RandomAccessReader;
 import sun.misc.Unsafe;
 
 import java.io.IOException;

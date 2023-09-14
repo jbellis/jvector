@@ -13,7 +13,6 @@
     <version>${jvector.version}</version>
     <name>Twenty</name>
     <build>
-        <testSourceDirectory>../jvector-base/src/test</testSourceDirectory>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -36,40 +35,6 @@
                         --add-modules=jdk.incubator.vector
                     </argLine>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <configuration>
-                    <skip>false</skip>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>sift</id>
-                        <configuration>
-                            <arguments>
-                                <argument>-classpath</argument>
-                                <classpath/>
-                                <argument>--add-modules=jdk.incubator.vector</argument>
-                                <argument>-ea</argument>
-                                <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>bench</id>
-                        <configuration>
-                            <arguments>
-                                <argument>-classpath</argument>
-                                <classpath/>
-                                <argument>--add-modules=jdk.incubator.vector</argument>
-                                <argument>-Xmx32G</argument>
-                                <argument>-ea</argument>
-                                <argument>com.github.jbellis.jvector.example.Bench</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

@@ -21,13 +21,6 @@
                     <skip>false</skip>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <configuration>
-                    <skip>true</skip>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
     <dependencies>
@@ -52,45 +45,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-    <profiles>
-        <profile>
-            <id>jdk11</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <configuration>
-                            <skip>false</skip>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>sift</id>
-                                <configuration>
-                                    <arguments>
-                                        <argument>-classpath</argument>
-                                        <classpath/>
-                                        <argument>-ea</argument>
-                                        <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
-                                    </arguments>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>bench</id>
-                                <configuration>
-                                    <arguments>
-                                        <argument>-classpath</argument>
-                                        <classpath/>
-                                        <argument>-Xmx32G</argument>
-                                        <argument>-ea</argument>
-                                        <argument>com.github.jbellis.jvector.example.Bench</argument>
-                                    </arguments>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

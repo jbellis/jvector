@@ -1,13 +1,9 @@
-package com.github.jbellis.jvector.example.util;
+package com.github.jbellis.jvector.disk;
 
-import java.io.IOException;
+import com.indeed.util.mmap.MMapBuffer;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-
-import com.github.jbellis.jvector.disk.RandomAccessReader;
-import com.indeed.util.mmap.MMapBuffer;
 
 public class MMapReader implements RandomAccessReader {
     private final MMapBuffer buffer;
