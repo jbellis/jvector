@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -29,12 +30,15 @@ import com.github.jbellis.jvector.disk.Io;
 import com.github.jbellis.jvector.disk.RandomAccessReader;
 import com.github.jbellis.jvector.vector.VectorUtil;
 
+import static java.lang.Math.min;
+
 /**
  * A Product Quantization implementation for float vectors.
  */
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well
+    private static int MAX_PQ_TRAINING_SET_SIZE = 256000;
 
     private final float[][][] codebooks;
     private final int M;
@@ -173,7 +177,7 @@ public class ProductQuantization {
     }
     private static String arraySummary(float[] a) {
         List<String> b = new ArrayList<>();
-        for (int i = 0; i < Math.min(4, a.length); i++) {
+        for (int i = 0; i < min(4, a.length); i++) {
             b.add(String.valueOf(a[i]));
         }
         if (a.length > 4) {
@@ -183,9 +187,11 @@ public class ProductQuantization {
     }
 
     static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset) {
+        var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) vectors.size());
         return IntStream.range(0, M).parallel()
                 .mapToObj(m -> {
                     float[][] subvectors = vectors.stream().parallel()
+                            .filter(v -> ThreadLocalRandom.current().nextFloat() < P)
                             .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
                             .toArray(s -> new float[s][]);
                     var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::squareDistance);
