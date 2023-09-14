@@ -46,7 +46,7 @@ public class MMapReader implements RandomAccessReader {
             scratch = new byte[bytesToRead];
         }
         readFully(scratch);
-        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.LITTLE_ENDIAN);
         byteBuffer.asFloatBuffer().get(floats);
     }
 

@@ -166,6 +166,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
     public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
+        out = new LittleEndianDataOutput(out);
         assert graph.size() == vectors.size() : String.format("graph size %d != vectors size %d", graph.size(), vectors.size());
 
         var view = graph.getView();

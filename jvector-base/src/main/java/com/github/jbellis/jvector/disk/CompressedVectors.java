@@ -37,6 +37,8 @@ public class CompressedVectors
 
     public void write(DataOutput out) throws IOException
     {
+        out = new LittleEndianDataOutput(out);
+
         // pq codebooks
         pq.write(out);
 

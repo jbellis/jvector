@@ -21,6 +21,8 @@ import java.io.IOException;
 /**
  * This is a subset of DataInput, plus seek and readFully(float[]), which allows implementations
  * to use a more efficient option like FloatBuffer.
+ * <p>
+ * ALL DATA IS EXPECTED TO BE WRITTEN AND READ IN LITTLE-ENDIAN ORDER.
  */
 public interface RandomAccessReader extends AutoCloseable {
     public void seek(long offset) throws IOException;

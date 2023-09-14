@@ -13,7 +13,7 @@ public class MMapReaderSupplier implements ReaderSupplier {
     private final MMapBuffer buffer;
 
     public MMapReaderSupplier(Path path) throws IOException {
-        buffer = new MMapBuffer(path, FileChannel.MapMode.READ_ONLY, ByteOrder.BIG_ENDIAN);
+        buffer = new MMapBuffer(path, FileChannel.MapMode.READ_ONLY, ByteOrder.LITTLE_ENDIAN);
     }
 
     @Override

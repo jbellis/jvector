@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.github.jbellis.jvector.disk.Io;
+import com.github.jbellis.jvector.disk.LittleEndianDataOutput;
 import com.github.jbellis.jvector.disk.RandomAccessReader;
 import com.github.jbellis.jvector.vector.VectorUtil;
 
@@ -241,6 +242,7 @@ public class ProductQuantization {
 
     public void write(DataOutput out) throws IOException
     {
+        out = new LittleEndianDataOutput(out);
         if (globalCentroid == null) {
             out.writeInt(0);
         } else {
