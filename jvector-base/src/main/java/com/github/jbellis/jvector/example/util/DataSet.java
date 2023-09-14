@@ -29,6 +29,16 @@ public class DataSet {
     public final List<? extends Set<Integer>> groundTruth;
 
     public DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<? extends Set<Integer>> groundTruth) {
+        if (baseVectors.isEmpty() || queryVectors.isEmpty() || groundTruth.isEmpty()) {
+            throw new IllegalArgumentException("Base, query, and groundTruth vectors must not be empty");
+        }
+        if (baseVectors.get(0).length != queryVectors.get(0).length) {
+            throw new IllegalArgumentException("Base and query vectors must have the same dimensionality");
+        }
+        if (queryVectors.size() != groundTruth.size()) {
+            throw new IllegalArgumentException("Query and ground truth lists must be the same size");
+        }
+
         this.name = name;
         this.similarityFunction = similarityFunction;
         this.baseVectors = baseVectors;
