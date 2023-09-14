@@ -181,6 +181,9 @@ public class Deep100MWriter {
         System.out.format("PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var compressedVectors = new CompressedVectors(pq, quantizedVectors);
+        try (var out = new BufferedOutputStream(Files.newOutputStream(new File("jvectorindex/compressedVectors").toPath()))) {
+            compressedVectors.write(new DataOutputStream(out));
+        }
 
         var testDirectory = new File("jvectorindex").toPath();
 
