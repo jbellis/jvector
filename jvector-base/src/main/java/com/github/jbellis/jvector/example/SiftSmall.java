@@ -46,7 +46,7 @@ public class SiftSmall {
 
         var start = System.nanoTime();
         var pqDims = baseVectors.get(0).length / 2;
-        ProductQuantization pq = new ProductQuantization(baseVectors, pqDims, false);
+        ProductQuantization pq = ProductQuantization.compute(baseVectors, pqDims, false);
         System.out.format("  PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();

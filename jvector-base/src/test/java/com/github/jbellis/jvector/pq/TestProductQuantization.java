@@ -36,7 +36,7 @@ public class TestProductQuantization extends RandomizedTest {
     public void testSaveLoad() throws IOException {
         // Generate a PQ for random 2D vectors
         var vectors = IntStream.range(0, 512).mapToObj(i -> new float[]{getRandom().nextFloat(), getRandom().nextFloat()}).collect(Collectors.toList());
-        var pq = new ProductQuantization(vectors, 1, false);
+        var pq = ProductQuantization.compute(vectors, 1, false);
 
         // Write the pq object
         File tempFile = File.createTempFile("pqtest", ".bin");

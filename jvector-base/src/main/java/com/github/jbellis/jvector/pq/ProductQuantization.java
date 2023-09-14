@@ -50,10 +50,9 @@ public class ProductQuantization {
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
      */
-    public ProductQuantization(List<float[]> vectors, int M, boolean globallyCenter) {
-        this.M = M;
-        originalDimension = vectors.get(0).length;
-        subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(originalDimension, M);
+    public static ProductQuantization compute(List<float[]> vectors, int M, boolean globallyCenter) {
+        var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(vectors.get(0).length, M);
+        float[] globalCentroid;
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
@@ -61,10 +60,11 @@ public class ProductQuantization {
         } else {
             globalCentroid = null;
         }
-        codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets);
+        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets);
+        return new ProductQuantization(codebooks, globalCentroid);
     }
 
-    public ProductQuantization(float[][][] codebooks, float[] globalCentroid)
+    ProductQuantization(float[][][] codebooks, float[] globalCentroid)
     {
         this.codebooks = codebooks;
         this.globalCentroid = globalCentroid;
