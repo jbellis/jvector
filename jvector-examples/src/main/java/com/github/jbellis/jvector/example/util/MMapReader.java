@@ -1,5 +1,6 @@
-package com.github.jbellis.jvector.disk;
+package com.github.jbellis.jvector.example.util;
 
+import com.github.jbellis.jvector.disk.RandomAccessReader;
 import com.indeed.util.mmap.MMapBuffer;
 
 import java.nio.ByteBuffer;

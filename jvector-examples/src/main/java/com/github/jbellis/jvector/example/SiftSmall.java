@@ -19,7 +19,7 @@ package com.github.jbellis.jvector.example;
 import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.disk.ReaderSupplierFactory;
+import com.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import com.github.jbellis.jvector.example.util.SiftLoader;
 import com.github.jbellis.jvector.graph.*;
 import com.github.jbellis.jvector.pq.ProductQuantization;

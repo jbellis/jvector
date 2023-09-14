@@ -1,4 +1,7 @@
-package com.github.jbellis.jvector.disk;
+package com.github.jbellis.jvector.example.util;
+
+import com.github.jbellis.jvector.disk.ReaderSupplier;
+import com.github.jbellis.jvector.disk.SimpleMappedReaderSupplier;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,19 +16,7 @@ public class ReaderSupplierFactory {
                 throw new RuntimeException("File sizes greater than 2GB are not supported on Windows--contributions welcome");
             }
 
-            return new ReaderSupplier() {
-                private final SimpleMappedReader smr = new SimpleMappedReader(path);
-
-                @Override
-                public RandomAccessReader get() {
-                    return smr.duplicate();
-                }
-
-                @Override
-                public void close() {
-                    smr.close();
-                }
-            };
+            return new SimpleMappedReaderSupplier(path);
         }
     }
 }
