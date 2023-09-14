@@ -66,7 +66,8 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     private SimpleMappedReader(MappedByteBuffer sourceMbb) {
-        mbb = sourceMbb;
+        mbb = (MappedByteBuffer) sourceMbb.duplicate();
+        mbb.order(ByteOrder.LITTLE_ENDIAN);
     }
 
     @Override
@@ -104,6 +105,6 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     public SimpleMappedReader duplicate() {
-        return new SimpleMappedReader((MappedByteBuffer) mbb.duplicate());
+        return new SimpleMappedReader(mbb);
     }
 }
