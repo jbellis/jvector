@@ -60,7 +60,7 @@
                                         <argument>-classpath</argument>
                                         <classpath/>
                                         <argument>-ea</argument>
-                                        <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
+                                        <argument>io.github.jbellis.jvector.example.SiftSmall</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
@@ -72,7 +72,7 @@
                                         <classpath/>
                                         <argument>-Xmx32G</argument>
                                         <argument>-ea</argument>
-                                        <argument>com.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>io.github.jbellis.jvector.example.Bench</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
@@ -111,7 +111,7 @@
                                         <classpath/>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-ea</argument>
-                                        <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
+                                        <argument>io.github.jbellis.jvector.example.SiftSmall</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
@@ -124,7 +124,7 @@
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-Xmx32G</argument>
                                         <argument>-ea</argument>
-                                        <argument>com.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>io.github.jbellis.jvector.example.Bench</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
