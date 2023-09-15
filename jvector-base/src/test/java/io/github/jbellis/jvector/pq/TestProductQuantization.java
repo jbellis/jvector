@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import org.junit.Test;
 
@@ -36,18 +37,30 @@ public class TestProductQuantization extends RandomizedTest {
         // Generate a PQ for random 2D vectors
         var vectors = IntStream.range(0, 512).mapToObj(i -> new float[]{getRandom().nextFloat(), getRandom().nextFloat()}).collect(Collectors.toList());
         var pq = ProductQuantization.compute(vectors, 1, false);
-
         // Write the pq object
-        File tempFile = File.createTempFile("pqtest", ".bin");
-        tempFile.deleteOnExit();
-        try (var out = new DataOutputStream(new FileOutputStream(tempFile))) {
+        File pqFile = File.createTempFile("pqtest", ".pq");
+        pqFile.deleteOnExit();
+        try (var out = new DataOutputStream(new FileOutputStream(pqFile))) {
             pq.write(out);
         }
-
         // Read the pq object
-        try (var in = new SimpleMappedReader(tempFile.getAbsolutePath())) {
+        try (var in = new SimpleMappedReader(pqFile.getAbsolutePath())) {
             var pq2 = ProductQuantization.load(in);
             assertEquals(pq, pq2);
+        }
+
+        // Compress the vectors and read and write those
+        var compressed = pq.encodeAll(vectors);
+        var cv = new CompressedVectors(pq, compressed);
+        // Write compressed vectors
+        File cvFile = File.createTempFile("pqtest", ".cv");
+        try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+            cv.write(out);
+        }
+        // Read compressed vectors
+        try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+            var cv2 = CompressedVectors.load(in, 0);
+            assertEquals(cv, cv2);
         }
     }
 }

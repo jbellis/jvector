@@ -22,7 +22,10 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.IntStream;
 
 public class CompressedVectors
 {
@@ -81,5 +84,23 @@ public class CompressedVectors
                 pq.decode(compressedVectors.get(ordinal), decoded);
                 return similarityFunction.compare(decoded, v);
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        CompressedVectors that = (CompressedVectors) o;
+        if (!Objects.equals(pq, that.pq)) return false;
+        if (compressedVectors.size() != that.compressedVectors.size()) return false;
+        return IntStream.range(0, compressedVectors.size()).allMatch((i) -> {
+            return Arrays.equals(compressedVectors.get(i), that.compressedVectors.get(i));
+        });
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(pq, compressedVectors);
     }
 }
