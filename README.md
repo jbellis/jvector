@@ -24,7 +24,7 @@ Adding to your project:
 <dependency>        
     <groupId>io.github.jbellis</groupId>          
     <artifactId>jvector</artifactId>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
 </dependency>
 ```
 Building the index:
