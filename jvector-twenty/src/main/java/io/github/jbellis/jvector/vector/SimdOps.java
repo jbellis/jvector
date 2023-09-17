@@ -128,6 +128,8 @@ final class SimdOps {
         if (length == FloatVector.SPECIES_64.length())
             return dot64(v1, v1offset, v2, v2offset);
 
+        assert length == 3; // or we should be calling dot 128
+
         final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
 

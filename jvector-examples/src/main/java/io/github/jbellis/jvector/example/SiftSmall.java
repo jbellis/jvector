@@ -40,11 +40,12 @@ import java.util.stream.IntStream;
 public class SiftSmall {
 
     public static void testRecall(ArrayList<float[]> baseVectors, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, Path testDirectory) throws IOException, InterruptedException, ExecutionException {
-        var ravv = new ListRandomAccessVectorValues(baseVectors, baseVectors.get(0).length);
+        int originalDimension = baseVectors.get(0).length;
+        var ravv = new ListRandomAccessVectorValues(baseVectors, originalDimension);
 
         var start = System.nanoTime();
-        var pqDims = baseVectors.get(0).length / 2;
-        ProductQuantization pq = ProductQuantization.compute(baseVectors, pqDims, false);
+        var pqDims = originalDimension / 2;
+        ProductQuantization pq = ProductQuantization.compute(new ListRandomAccessVectorValues(baseVectors, originalDimension), pqDims, false);
         System.out.format("  PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();

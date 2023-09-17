@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
@@ -38,7 +39,7 @@ import static java.lang.Math.min;
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well
-    private static int MAX_PQ_TRAINING_SET_SIZE = 256000;
+    private static final int MAX_PQ_TRAINING_SET_SIZE = 256000;
 
     private final float[][][] codebooks;
     private final int M;
@@ -54,8 +55,13 @@ public class ProductQuantization {
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
      */
-    public static ProductQuantization compute(List<float[]> vectors, int M, boolean globallyCenter) {
-        var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(vectors.get(0).length, M);
+    public static ProductQuantization compute(RandomAccessVectorValues<float[]> ravv, int M, boolean globallyCenter) {
+        var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
+        var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
+        var vectors = IntStream.range(0, ravv.size()).parallel()
+                .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
+                .mapToObj(ravv::vectorValue)
+                .collect(Collectors.toList());
         float[] globalCentroid;
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
@@ -187,11 +193,9 @@ public class ProductQuantization {
     }
 
     static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset) {
-        var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) vectors.size());
         return IntStream.range(0, M).parallel()
                 .mapToObj(m -> {
                     float[][] subvectors = vectors.stream().parallel()
-                            .filter(v -> ThreadLocalRandom.current().nextFloat() < P)
                             .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
                             .toArray(s -> new float[s][]);
                     var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::squareDistance);

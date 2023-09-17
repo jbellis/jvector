@@ -20,6 +20,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
@@ -36,7 +37,7 @@ public class TestProductQuantization extends RandomizedTest {
     public void testSaveLoad() throws Exception {
         // Generate a PQ for random 2D vectors
         var vectors = IntStream.range(0, 512).mapToObj(i -> new float[]{getRandom().nextFloat(), getRandom().nextFloat()}).collect(Collectors.toList());
-        var pq = ProductQuantization.compute(vectors, 1, false);
+        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, false);
         // Write the pq object
         File pqFile = File.createTempFile("pqtest", ".pq");
         pqFile.deleteOnExit();
