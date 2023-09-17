@@ -112,7 +112,7 @@ public class Bench {
                 SearchResult sr;
                 if (cv != null) {
                     var view = index.getView();
-                    NeighborSimilarity.ApproximateScoreFunction sf = (other) -> cv.decodedSimilarity(other, queryVector, ds.similarityFunction);
+                    NeighborSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                     NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
                     sr = new GraphSearcher.Builder(view)
                             .build()
@@ -162,7 +162,8 @@ public class Bench {
         var start = System.nanoTime();
         int originalDimension = ds.baseVectors.get(0).length;
         var pqDims = originalDimension / 2;
-        ProductQuantization pq = ProductQuantization.compute(new ListRandomAccessVectorValues(ds.baseVectors, originalDimension), pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
+        ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
+        ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
         System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();

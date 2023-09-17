@@ -50,18 +50,21 @@ public class ProductQuantization {
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
      *
-     * @param vectors the points to quantize
+     * @param ravv the vectors to quantize
      * @param M number of subspaces
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
      */
     public static ProductQuantization compute(RandomAccessVectorValues<float[]> ravv, int M, boolean globallyCenter) {
+        // limit the number of vectors we train on
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
         var vectors = IntStream.range(0, ravv.size()).parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(ravv::vectorValue)
                 .collect(Collectors.toList());
+
+        // subtract the centroid from each training vector
         float[] globalCentroid;
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
@@ -70,6 +73,8 @@ public class ProductQuantization {
         } else {
             globalCentroid = null;
         }
+
+        // derive the codebooks
         var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets);
         return new ProductQuantization(codebooks, globalCentroid);
     }
@@ -117,18 +122,14 @@ public class ProductQuantization {
     /**
      * Computes the dot product of the (approximate) original decoded vector with
      * another vector.
-     *
-     * If the PQ does not require centering, this method can compute the dot
-     * product without materializing the decoded vector as a new float[], and will be
-     * roughly 2x as fast as decode() + dot().
+     * <p>
+     * This method can compute the dot product without materializing the decoded vector as a new float[],
+     * which will be roughly 2x as fast as decode() + dot().
+     * <p>
+     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
+     * before calling this method.
      */
     public float decodedDotProduct(byte[] encoded, float[] other) {
-        if (globalCentroid != null) {
-            float[] target = new float[originalDimension];
-            decode(encoded, target);
-            return VectorUtil.dotProduct(target, other);
-        }
-
         float sum = 0.0f;
         for (int m = 0; m < M; ++m) {
             int offset = subvectorSizesAndOffsets[m][1];
@@ -136,7 +137,6 @@ public class ProductQuantization {
             float[] centroidSubvector = codebooks[m][centroidIndex];
             sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
         }
-
         return sum;
     }
 
@@ -323,5 +323,9 @@ public class ProductQuantization {
         result = 31 * result + Arrays.hashCode(globalCentroid);
         result = 31 * result + Arrays.deepHashCode(subvectorSizesAndOffsets);
         return result;
+    }
+
+    public float[] getCenter() {
+        return globalCentroid;
     }
 }

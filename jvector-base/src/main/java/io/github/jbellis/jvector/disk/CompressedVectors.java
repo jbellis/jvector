@@ -16,8 +16,10 @@
 
 package io.github.jbellis.jvector.disk;
 
+import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -72,7 +74,10 @@ public class CompressedVectors
         return new CompressedVectors(pq, compressedVectors);
     }
 
-    public float decodedSimilarity(int ordinal, float[] v, VectorSimilarityFunction similarityFunction)
+    /**
+     * It is the caller's responsibility to center the comparison vector v before calling this method
+     */
+    float decodedSimilarity(int ordinal, float[] v, VectorSimilarityFunction similarityFunction)
     {
         switch (similarityFunction)
         {
@@ -102,5 +107,11 @@ public class CompressedVectors
     @Override
     public int hashCode() {
         return Objects.hash(pq, compressedVectors);
+    }
+
+    public NeighborSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
+        float[] centroid = pq.getCenter();
+        var centeredQuery = centroid == null ? q : VectorUtil.sub(q, centroid);
+        return (other) -> decodedSimilarity(other, centeredQuery, similarityFunction);
     }
 }
