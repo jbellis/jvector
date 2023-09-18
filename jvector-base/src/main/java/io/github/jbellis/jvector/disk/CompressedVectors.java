@@ -86,7 +86,7 @@ public class CompressedVectors
             default:
                 // TODO implement other similarity functions efficiently
                 var decoded = new float[pq.getOriginalDimension()];
-                pq.decode(compressedVectors.get(ordinal), decoded);
+                pq.decodeCentered(compressedVectors.get(ordinal), decoded);
                 return similarityFunction.compare(decoded, v);
         }
     }
