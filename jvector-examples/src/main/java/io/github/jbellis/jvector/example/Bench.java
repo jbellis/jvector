@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
+import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorEncoding;
@@ -61,7 +62,7 @@ public class Bench {
             outputStream.flush();
             var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 
-            int queryRuns = 10;
+            int queryRuns = 2;
             for (int overquery : efSearchOptions) {
                 for (boolean useDisk : diskOptions) {
                     start = System.nanoTime();
@@ -133,6 +134,19 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
+        var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
+        var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var efSearchGrid = List.of(1, 2);
+        var diskGrid = List.of(false, true);
+
+        // this dataset contains more than 10k query vectors, so we limit it with .subList
+        var adaSet = new DataSet("wikipedia",
+                                 VectorSimilarityFunction.DOT_PRODUCT,
+                                 SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec"),
+                                 SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000),
+                                 SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000));
+        gridSearch(adaSet, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+
         var files = List.of(
                 // large files not yet supported
                 // "hdf5/deep-image-96-angular.hdf5",
@@ -141,12 +155,8 @@ public class Bench {
                 "hdf5/glove-100-angular.hdf5",
                 "hdf5/glove-200-angular.hdf5",
                 "hdf5/sift-128-euclidean.hdf5");
-        var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
-        var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchFactor = List.of(1, 2);
-        var diskOptions = List.of(false, true);
         for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskOptions, efSearchFactor);
+            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
         }
 
         // tiny dataset, don't waste time building a huge index
@@ -154,7 +164,7 @@ public class Bench {
         mGrid = List.of(8, 12, 16, 24);
         efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
         for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskOptions, efSearchFactor);
+            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
         }
     }
 

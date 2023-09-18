@@ -53,7 +53,8 @@ public class Hdf5Loader {
         List<float[]> scrubbedQueryVectors;
         List<Set<Integer>> gtSet;
         if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
-            // verify that vectors are normalized and sane
+            // verify that vectors are normalized and sane.
+            // this is necessary b/c NYT dataset contains zero vectors (!)
             scrubbedBaseVectors = new ArrayList<>(baseVectors.length);
             scrubbedQueryVectors = new ArrayList<>(queryVectors.length);
             gtSet = new ArrayList<>(groundTruth.length);
