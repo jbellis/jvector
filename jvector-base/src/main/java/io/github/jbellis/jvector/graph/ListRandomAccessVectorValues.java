@@ -16,8 +16,6 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.annotations.Unshared;
-
 import java.util.List;
 
 /**
@@ -55,9 +53,13 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues<fl
     }
 
     @Override
-    @Unshared
     public float[] vectorValue(int targetOrd) {
         return vectors.get(targetOrd);
+    }
+
+    @Override
+    public boolean isValueShared() {
+        return false;
     }
 
     @Override

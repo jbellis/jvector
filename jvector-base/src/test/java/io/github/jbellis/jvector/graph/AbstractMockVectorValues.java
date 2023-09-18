@@ -24,7 +24,6 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.annotations.Unshared;
 import io.github.jbellis.jvector.util.BytesRef;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 
@@ -60,7 +59,11 @@ abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T
   }
 
   @Override
-  @Unshared
+  public boolean isValueShared() {
+    return false;
+  }
+
+  @Override
   public T vectorValue(int targetOrd) {
     if (callingThreadID < 0) {
       callingThreadID = Thread.currentThread().getId();

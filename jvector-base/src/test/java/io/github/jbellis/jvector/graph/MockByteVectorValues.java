@@ -25,7 +25,6 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
-import io.github.jbellis.jvector.annotations.Shared;
 import io.github.jbellis.jvector.util.ArrayUtil;
 
 class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
@@ -75,7 +74,11 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
   }
 
   @Override
-  @Shared
+  public boolean isValueShared() {
+    return true;
+  }
+
+  @Override
   public byte[] vectorValue(int targetOrd) {
     byte[] original = super.vectorValue(targetOrd);
     if (original == null) {
