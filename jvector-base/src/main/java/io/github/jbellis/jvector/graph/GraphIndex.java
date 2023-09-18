@@ -58,7 +58,7 @@ public interface GraphIndex<T> {
    */
   int maxEdgesPerNode();
 
-  interface View<T> {
+  interface View<T> extends AutoCloseable {
     /**
      * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
      * is guaranteed to be valid.

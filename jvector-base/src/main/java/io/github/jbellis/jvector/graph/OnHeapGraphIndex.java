@@ -258,5 +258,10 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     public String toString() {
       return "OnHeapGraphIndexView(size=" + size() + ", entryPoint=" + entryPoint.get();
     }
+
+    @Override
+    public void close() {
+      // no-op
+    }
   }
 }

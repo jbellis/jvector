@@ -114,5 +114,10 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
         public int getNeighborCount(int node) {
             return View.super.getNeighborCount(node);
         }
+
+        @Override
+        public void close() throws Exception {
+            view.close();
+        }
     }
 }

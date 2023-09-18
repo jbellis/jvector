@@ -116,7 +116,6 @@ public class TestUtil {
         }
 
         private class FullyConnectedGraphIndexView implements View<T> {
-
             @Override
             public NodesIterator getNeighborsIterator(int node) {
                 return new NodesIterator.ArrayNodesIterator(IntStream.range(0, size).filter(i -> i != node).toArray() , size - 1);
@@ -136,6 +135,9 @@ public class TestUtil {
             public T getVector(int node) {
                 throw new UnsupportedOperationException("No vectors associated with FullyConnectedGraphIndex");
             }
+
+            @Override
+            public void close() { }
         }
     }
 
@@ -189,7 +191,6 @@ public class TestUtil {
         }
 
         private class RandomlyConnectedGraphIndexView implements View<T> {
-
             @Override
             public NodesIterator getNeighborsIterator(int node) {
                 return new NodesIterator.ArrayNodesIterator(nodes.get(node));
@@ -209,6 +210,9 @@ public class TestUtil {
             public T getVector(int node) {
                 throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
             }
+
+            @Override
+            public void close() { }
         }
     }
 }
