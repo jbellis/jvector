@@ -137,7 +137,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         }
 
         @Override
-        public void close() throws Exception
+        public void close()
         {
             reader.close();
         }

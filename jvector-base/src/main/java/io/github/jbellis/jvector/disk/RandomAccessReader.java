@@ -30,4 +30,7 @@ public interface RandomAccessReader extends AutoCloseable {
     public void readFully(byte[] bytes) throws IOException;
 
     public void readFully(float[] floats) throws IOException;
+
+    @Override
+    void close();
 }

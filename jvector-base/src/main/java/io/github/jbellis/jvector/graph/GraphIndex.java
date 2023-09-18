@@ -36,7 +36,7 @@ import java.util.Arrays;
  * All methods are threadsafe.  Operations that require persistent state are wrapped
  * in a View that should be created per accessing thread.
  */
-public interface GraphIndex<T> {
+public interface GraphIndex<T> extends AutoCloseable {
   /** Returns the number of nodes in the graph */
   int size();
 
@@ -58,7 +58,10 @@ public interface GraphIndex<T> {
    */
   int maxEdgesPerNode();
 
-  interface View<T> {
+  @Override
+  default void close() {}
+
+  interface View<T> extends AutoCloseable {
     /**
      * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
      * is guaranteed to be valid.
@@ -77,6 +80,9 @@ public interface GraphIndex<T> {
      * at the end of the search.
      */
     T getVector(int node);
+
+    @Override
+    default void close() {}
 
     // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
     default int[] getSortedNodes() {
