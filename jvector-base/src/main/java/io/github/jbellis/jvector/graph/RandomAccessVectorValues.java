@@ -24,8 +24,6 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.annotations.Shared;
-
 /**
  * Provides random access to vectors by dense ordinal. This interface is used by graph-based
  * implementations of KNN search.
@@ -41,8 +39,8 @@ public interface RandomAccessVectorValues<T> {
   /**
    * Return the vector value indexed at the given ordinal.
    *
-   * <p>For performance, implementations annotated with {@link Shared}
-   * will usually re-use the same object across invocations, that is, you will get back the same float[]
+   * <p>For performance, implementations are free to re-use the same object across invocations.
+   * That is, you will get back the same float[]
    * reference (for instance) for every requested ordinal. If you want to use those values across
    * calls, you should make a copy.
    *
@@ -51,9 +49,15 @@ public interface RandomAccessVectorValues<T> {
   T vectorValue(int targetOrd);
 
   /**
+   * @return true iff the vector returned is shared.  A shared vector will
+   * only be valid until the next call to vectorValue overwrites it.
+   */
+  boolean isValueShared();
+
+  /**
    * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
    * access different values at once, to avoid overwriting the underlying float vector returned by
-   * a {@link Shared} {@link RandomAccessVectorValues#vectorValue}.
+   * a shared {@link RandomAccessVectorValues#vectorValue}.
    */
   RandomAccessVectorValues<T> copy();
 }

@@ -25,7 +25,6 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
-import io.github.jbellis.jvector.annotations.Shared;
 import io.github.jbellis.jvector.util.ArrayUtil;
 
 class MockVectorValues extends AbstractMockVectorValues<float[]> {
@@ -74,7 +73,11 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
   }
 
   @Override
-  @Shared
+  public boolean isValueShared() {
+    return true;
+  }
+
+  @Override
   public float[] vectorValue(int targetOrd) {
     float[] original = super.vectorValue(targetOrd);
     if (original == null) {

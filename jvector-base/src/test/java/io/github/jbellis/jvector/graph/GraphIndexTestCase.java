@@ -26,7 +26,6 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
-import io.github.jbellis.jvector.annotations.Unshared;
 import io.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.FixedBitSet;
@@ -531,9 +530,13 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
 
     @Override
-    @Unshared
     public float[] vectorValue(int ord) {
       return unitVector2d(ord / (double) size);
+    }
+
+    @Override
+    public boolean isValueShared() {
+      return false;
     }
   }
 
@@ -564,7 +567,6 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
 
     @Override
-    @Unshared
     public byte[] vectorValue(int ord) {
       float[] value = unitVector2d(ord / (double) size);
       byte[] bValue = new byte[value.length];
@@ -572,6 +574,11 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         bValue[i] = (byte) (value[i] * 127);
       }
       return bValue;
+    }
+
+    @Override
+    public boolean isValueShared() {
+      return false;
     }
   }
 

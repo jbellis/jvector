@@ -61,7 +61,10 @@ public class ProductQuantization {
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
         var vectors = IntStream.range(0, ravv.size()).parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
-                .mapToObj(ravv::vectorValue)
+                .mapToObj(targetOrd -> {
+                    float[] v = ravv.vectorValue(targetOrd);
+                    return ravv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
+                })
                 .collect(Collectors.toList());
 
         // subtract the centroid from each training vector
