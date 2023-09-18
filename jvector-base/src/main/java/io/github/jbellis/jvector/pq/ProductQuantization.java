@@ -147,15 +147,22 @@ public class ProductQuantization {
      * Decodes the quantized representation (byte array) to its approximate original vector.
      */
     public void decode(byte[] encoded, float[] target) {
-        for (int m = 0; m < M; m++) {
-            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks[m][centroidIndex];
-            System.arraycopy(centroidSubvector, 0, target, subvectorSizesAndOffsets[m][1], subvectorSizesAndOffsets[m][0]);
-        }
+        decodeCentered(encoded, target);
 
         if (globalCentroid != null) {
             // Add back the global centroid to get the approximate original vector.
             VectorUtil.addInPlace(target, globalCentroid);
+        }
+    }
+
+    /**
+     * Decodes the quantized representation (byte array) to its approximate original vector, relative to the global centroid.
+     */
+    public void decodeCentered(byte[] encoded, float[] target) {
+        for (int m = 0; m < M; m++) {
+            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
+            float[] centroidSubvector = codebooks[m][centroidIndex];
+            System.arraycopy(centroidSubvector, 0, target, subvectorSizesAndOffsets[m][1], subvectorSizesAndOffsets[m][0]);
         }
     }
 
