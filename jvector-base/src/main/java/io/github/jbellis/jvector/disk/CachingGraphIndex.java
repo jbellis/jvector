@@ -66,7 +66,7 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
         graph.close();
     }
 

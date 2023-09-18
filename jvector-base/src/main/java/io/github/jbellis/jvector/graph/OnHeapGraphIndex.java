@@ -213,6 +213,11 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return String.format("OnHeapGraphIndex(size=%d, entryPoint=%d)", size(), entryPoint.get());
   }
 
+  @Override
+  public void close() {
+    // no-op
+  }
+
   /**
    * Returns a view of the graph that is safe to use concurrently with updates performed on the
    * underlying graph.

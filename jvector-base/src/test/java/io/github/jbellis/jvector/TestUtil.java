@@ -85,7 +85,6 @@ public class TestUtil {
     }
 
     public static class FullyConnectedGraphIndex<T> implements GraphIndex<T> {
-
         private final int entryNode;
         private final int size;
 
@@ -115,6 +114,9 @@ public class TestUtil {
             return size;
         }
 
+        @Override
+        public void close() { }
+
         private class FullyConnectedGraphIndexView implements View<T> {
             @Override
             public NodesIterator getNeighborsIterator(int node) {
@@ -142,7 +144,6 @@ public class TestUtil {
     }
 
     public static class RandomlyConnectedGraphIndex<T> implements GraphIndex<T> {
-
         private final int size;
         private final Map<Integer, int[]> nodes;
         private final int entryNode;
@@ -189,6 +190,9 @@ public class TestUtil {
         public int maxEdgesPerNode() {
             return nodes.get(0).length;
         }
+
+        @Override
+        public void close() { }
 
         private class RandomlyConnectedGraphIndexView implements View<T> {
             @Override
