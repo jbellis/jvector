@@ -120,10 +120,12 @@ public class GraphIndexBuilder<T> {
   }
 
   public void complete() {
+    graph.validateEntryNode(); // sanity check before we start
     IntStream.range(0, graph.size()).parallel().forEach(i -> {
       graph.getNeighbors(i).cleanup();
     });
     graph.updateEntryNode(approximateMedioid());
+    graph.validateEntryNode(); // check again after updating
   }
 
   /**
