@@ -83,7 +83,7 @@
             <groupId>io.github.jbellis</groupId>
             <artifactId>jvector-base</artifactId>
             <version>${project.version}</version>
-            <scope>test</scope>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
     <profiles>
@@ -97,7 +97,7 @@
                     <groupId>io.github.jbellis</groupId>
                     <artifactId>jvector-twenty</artifactId>
                     <version>${jvector.version}</version>
-                    <scope>test</scope>
+                    <scope>compile</scope>
                 </dependency>
             </dependencies>
             <properties>
