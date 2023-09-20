@@ -46,6 +46,7 @@ public class ProductQuantization {
     private final int originalDimension;
     private final float[] globalCentroid;
     private final int[][] subvectorSizesAndOffsets;
+    private final ThreadLocal<float[]> scratch;
 
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
@@ -95,6 +96,7 @@ public class ProductQuantization {
             offset += size;
         }
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
+        this.scratch = ThreadLocal.withInitial(() -> new float[subvectorSizesAndOffsets.length]);
     }
 
     /**
@@ -133,14 +135,14 @@ public class ProductQuantization {
      * before calling this method.
      */
     public float decodedDotProduct(byte[] encoded, float[] other) {
-        float sum = 0.0f;
+        var a = scratch.get();
         for (int m = 0; m < M; ++m) {
             int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
             float[] centroidSubvector = codebooks[m][centroidIndex];
-            sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
+            a[m] = VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
         }
-        return sum;
+        return VectorUtil.sum(a);
     }
 
     /**
