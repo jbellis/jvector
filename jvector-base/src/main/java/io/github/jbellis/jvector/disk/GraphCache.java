@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.disk;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,10 +27,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public abstract class GraphCache implements Accountable
 {
     public static final class CachedNode {
-        public final float[] vector;
+        public final VectorFloat<?> vector;
         public final int[] neighbors;
 
-        public CachedNode(float[] vector, int[] neighbors) {
+        public CachedNode(VectorFloat<?> vector, int[] neighbors) {
             this.vector = vector;
             this.neighbors = neighbors;
         }
@@ -38,7 +39,7 @@ public abstract class GraphCache implements Accountable
     /** return the cached node if present, or null if not */
     public abstract CachedNode getNode(int ordinal);
 
-    public static GraphCache load(GraphIndex<float[]> graph, int distance) throws IOException
+    public static GraphCache load(GraphIndex<VectorFloat<?>> graph, int distance) throws IOException
     {
         if (distance <= 0)
             return new EmptyGraphCache();
@@ -66,12 +67,12 @@ public abstract class GraphCache implements Accountable
         private final ConcurrentHashMap<Integer, CachedNode> cache = new ConcurrentHashMap<>();
         private long ramBytesUsed = 0;
 
-        public CHMGraphCache(GraphIndex<float[]> graph, int distance) {
+        public CHMGraphCache(GraphIndex<VectorFloat<?>> graph, int distance) {
             var view = graph.getView();
             cacheNeighborsOf(view, view.entryNode(), distance);
         }
 
-        private void cacheNeighborsOf(GraphIndex.View<float[]> view, int ordinal, int distance) {
+        private void cacheNeighborsOf(GraphIndex.View<VectorFloat<?>> view, int ordinal, int distance) {
             // cache this node
             var it = view.getNeighborsIterator(ordinal);
             int[] neighbors = new int[it.size()];

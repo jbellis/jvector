@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.example.util;
 
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.List;
 import java.util.Set;
@@ -24,15 +25,15 @@ import java.util.Set;
 public class DataSet {
     public final String name;
     public final VectorSimilarityFunction similarityFunction;
-    public final List<float[]> baseVectors;
-    public final List<float[]> queryVectors;
+    public final List<VectorFloat<?>> baseVectors;
+    public final List<VectorFloat<?>> queryVectors;
     public final List<? extends Set<Integer>> groundTruth;
 
-    public DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<? extends Set<Integer>> groundTruth) {
+    public DataSet(String name, VectorSimilarityFunction similarityFunction, List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<? extends Set<Integer>> groundTruth) {
         if (baseVectors.isEmpty() || queryVectors.isEmpty() || groundTruth.isEmpty()) {
             throw new IllegalArgumentException("Base, query, and groundTruth vectors must not be empty");
         }
-        if (baseVectors.get(0).length != queryVectors.get(0).length) {
+        if (baseVectors.get(0).length() != queryVectors.get(0).length()) {
             throw new IllegalArgumentException("Base and query vectors must have the same dimensionality");
         }
         if (queryVectors.size() != groundTruth.size()) {

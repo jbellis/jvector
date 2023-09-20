@@ -24,6 +24,9 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.VectorByte;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 /**
  * Vector similarity function; used in search to return top K most similar vectors to a target
  * vector. This is a label describing the method used during indexing and searching of the vectors
@@ -34,12 +37,12 @@ public enum VectorSimilarityFunction {
   /** Euclidean distance */
   EUCLIDEAN {
     @Override
-    public float compare(float[] v1, float[] v2) {
+    public float compare(VectorFloat<?> v1, VectorFloat<?> v2) {
       return 1 / (1 + VectorUtil.squareDistance(v1, v2));
     }
 
     @Override
-    public float compare(byte[] v1, byte[] v2) {
+    public float compare(VectorByte<?> v1, VectorByte<?> v2) {
       return 1 / (1f + VectorUtil.squareDistance(v1, v2));
     }
   },
@@ -53,12 +56,12 @@ public enum VectorSimilarityFunction {
    */
   DOT_PRODUCT {
     @Override
-    public float compare(float[] v1, float[] v2) {
+    public float compare(VectorFloat<?> v1, VectorFloat<?> v2) {
       return (1 + VectorUtil.dotProduct(v1, v2)) / 2;
     }
 
     @Override
-    public float compare(byte[] v1, byte[] v2) {
+    public float compare(VectorByte<?> v1, VectorByte<?> v2) {
       return VectorUtil.dotProductScore(v1, v2);
     }
   },
@@ -71,12 +74,12 @@ public enum VectorSimilarityFunction {
    */
   COSINE {
     @Override
-    public float compare(float[] v1, float[] v2) {
+    public float compare(VectorFloat<?> v1, VectorFloat<?> v2) {
       return (1 + VectorUtil.cosine(v1, v2)) / 2;
     }
 
     @Override
-    public float compare(byte[] v1, byte[] v2) {
+    public float compare(VectorByte<?> v1, VectorByte<?> v2) {
       return (1 + VectorUtil.cosine(v1, v2)) / 2;
     }
   };
@@ -89,7 +92,7 @@ public enum VectorSimilarityFunction {
    * @param v2 another vector, of the same dimension
    * @return the value of the similarity function applied to the two vectors
    */
-  public abstract float compare(float[] v1, float[] v2);
+  public abstract float compare(VectorFloat<?> v1, VectorFloat<?> v2);
 
   /**
    * Calculates a similarity score between the two vectors with a specified function. Higher
@@ -100,5 +103,5 @@ public enum VectorSimilarityFunction {
    * @param v2 another vector, of the same dimension
    * @return the value of the similarity function applied to the two vectors
    */
-  public abstract float compare(byte[] v1, byte[] v2);
+  public abstract float compare(VectorByte<?> v1, VectorByte<?> v2);
 }

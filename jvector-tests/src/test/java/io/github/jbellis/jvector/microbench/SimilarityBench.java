@@ -18,6 +18,9 @@ package io.github.jbellis.jvector.microbench;
 
 
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -28,21 +31,22 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 3, time = 10)
 @Fork(warmups = 1, value = 1)
 public class SimilarityBench {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     static int SIZE = 256;
-    static final float[] q1 = new float[SIZE];
-    static final float[] q2 = new float[SIZE];
+    static final VectorFloat<?> q1 = vectorTypeSupport.createFloatType(SIZE);
+    static final VectorFloat<?> q2 = vectorTypeSupport.createFloatType(SIZE);
 
-    static final float[] q3 = new float[2];
+    static final VectorFloat<?> q3 = vectorTypeSupport.createFloatType(SIZE);
 
     static {
-        for (int i = 0; i < q1.length; i++) {
-            q1[i] = ThreadLocalRandom.current().nextFloat();
-            q2[i] = ThreadLocalRandom.current().nextFloat();
+        for (int i = 0; i < q1.length(); i++) {
+            q1.set(i, ThreadLocalRandom.current().nextFloat());
+            q2.set(i, ThreadLocalRandom.current().nextFloat());
         }
 
-        q3[0] = ThreadLocalRandom.current().nextFloat();
-        q3[1] = ThreadLocalRandom.current().nextFloat();
+        q3.set(0, ThreadLocalRandom.current().nextFloat());
+        q3.set(1, ThreadLocalRandom.current().nextFloat());
     }
 
     @State(Scope.Benchmark)
@@ -55,7 +59,7 @@ public class SimilarityBench {
     @Threads(8)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void dotProduct(Blackhole bh, Parameters p) {
-        bh.consume(VectorUtil.dotProduct(q3, 0, q1, 22, q3.length));
+        bh.consume(VectorUtil.dotProduct(q3, 0, q1, 22, q3.length()));
     }
 
     public static void main(String[] args) throws Exception {

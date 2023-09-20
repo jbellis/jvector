@@ -32,6 +32,12 @@ import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorByte;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import jdk.incubator.vector.FloatVector;
+
 import org.junit.Test;
 
 import java.util.*;
@@ -43,6 +49,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
+  private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
+
   VectorSimilarityFunction similarityFunction;
 
   abstract VectorEncoding getVectorEncoding();
@@ -51,7 +60,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
   abstract AbstractMockVectorValues<T> vectorValues(int size, int dimension);
 
-  abstract AbstractMockVectorValues<T> vectorValues(float[][] values);
+  abstract AbstractMockVectorValues<T> vectorValues(VectorFloat<?>[] values);
 
   abstract AbstractMockVectorValues<T> vectorValues(
       int size,
@@ -264,7 +273,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   public void testDiversity() {
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     // Some carefully checked test cases with simple 2d vectors on the unit circle:
-    float[][] values = {
+    VectorFloat<?>[] values = {
       unitVector2d(0.5),
       unitVector2d(0.75),
       unitVector2d(0.2),
@@ -322,13 +331,14 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     // in particular if a new neighbor displaces an existing neighbor
     // by being closer to the target, yet none of the existing neighbors is closer to the new vector
     // than to the target -- ie they all remain diverse, so we simply drop the farthest one.
-    float[][] values = {
-      {0, 0, 0},
-      {0, 10, 0},
-      {0, 0, 20},
-      {10, 0, 0},
-      {0, 4, 0}
+    VectorFloat<?>[] values = {
+            vectorTypeSupport.createFloatType(new float[]{0, 0, 0}),
+            vectorTypeSupport.createFloatType(new float[]{0, 10, 0}),
+            vectorTypeSupport.createFloatType(new float[]{0, 0, 20}),
+            vectorTypeSupport.createFloatType(new float[]{10, 0, 0}),
+            vectorTypeSupport.createFloatType(new float[]{0, 4, 0})
     };
+
     AbstractMockVectorValues<T> vectors = vectorValues(values);
     // First add nodes until everybody gets a full neighbor list
     VectorEncoding vectorEncoding = getVectorEncoding();
@@ -355,11 +365,11 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   public void testDiversity3d() {
     similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
     // test the case when a neighbor *becomes* non-diverse when a newer better neighbor arrives
-    float[][] values = {
-      {0, 0, 0},
-      {0, 10, 0},
-      {0, 0, 20},
-      {0, 9, 0}
+    VectorFloat<?>[] values = {
+            vectorTypeSupport.createFloatType(new float[]{0, 0, 0}),
+            vectorTypeSupport.createFloatType(new float[]{0, 10, 0}),
+            vectorTypeSupport.createFloatType(new float[]{0, 0, 20}),
+            vectorTypeSupport.createFloatType(new float[]{0, 9, 0})
     };
     AbstractMockVectorValues<T> vectors = vectorValues(values);
     // First add nodes until everybody gets a full neighbor list
@@ -431,13 +441,13 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
       for (int j = 0; j < size; j++) {
         if (vectors.vectorValue(j) != null && (acceptOrds == null || acceptOrds.get(j))) {
           if (getVectorEncoding() == VectorEncoding.BYTE) {
-            assert query instanceof byte[];
+            assert query instanceof VectorByte<?>;
             expected.add(
-                j, similarityFunction.compare((byte[]) query, (byte[]) vectors.vectorValue(j)));
+                j, similarityFunction.compare((VectorByte<?>) query, (VectorByte<?>) vectors.vectorValue(j)));
           } else {
-            assert query instanceof float[];
+            assert query instanceof VectorFloat<?>;
             expected.add(
-                j, similarityFunction.compare((float[]) query, (float[]) vectors.vectorValue(j)));
+                j, similarityFunction.compare((VectorFloat<?>) query, (VectorFloat<?>) vectors.vectorValue(j)));
           }
           if (expected.size() > topK) {
             expected.pop();
@@ -504,7 +514,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
   }
   static class CircularFloatVectorValues
-      implements RandomAccessVectorValues<float[]> {
+      implements RandomAccessVectorValues<VectorFloat<?>> {
 
     private final int size;
 
@@ -530,7 +540,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
 
     @Override
-    public float[] vectorValue(int ord) {
+    public VectorFloat<?> vectorValue(int ord) {
       return unitVector2d(ord / (double) size);
     }
 
@@ -542,7 +552,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
   /** Returns vectors evenly distributed around the upper unit semicircle. */
   static class CircularByteVectorValues
-      implements RandomAccessVectorValues<byte[]> {
+      implements RandomAccessVectorValues<VectorByte<?>> {
     private final int size;
 
     int doc = -1;
@@ -567,13 +577,13 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
 
     @Override
-    public byte[] vectorValue(int ord) {
-      float[] value = unitVector2d(ord / (double) size);
-      byte[] bValue = new byte[value.length];
-      for (int i = 0; i < value.length; i++) {
-        bValue[i] = (byte) (value[i] * 127);
+    public VectorByte<?> vectorValue(int ord) {
+      VectorFloat<?> value = unitVector2d(ord / (double) size);
+      byte[] bValue = new byte[value.length()];
+      for (int i = 0; i < value.length(); i++) {
+        bValue[i] = (byte) (value.get(i) * 127);
       }
-      return bValue;
+      return vectorTypeSupport.createByteType(bValue);
     }
 
     @Override
@@ -582,14 +592,10 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
   }
 
-  private static float[] unitVector2d(double piRadians) {
-    return unitVector2d(piRadians, new float[2]);
-  }
-
-  private static float[] unitVector2d(double piRadians, float[] value) {
-    return new float[] {
+  private static VectorFloat<?> unitVector2d(double piRadians) {
+    return vectorTypeSupport.createFloatType(new float[] {
       (float) Math.cos(Math.PI * piRadians), (float) Math.sin(Math.PI * piRadians)
-    };
+    });
   }
 
   private Set<Integer> getNeighborNodes(GraphIndex.View g, int node) {
@@ -637,15 +643,15 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   }
 
   public static float[] randomVector(Random random, int dim) {
-    float[] vec = new float[dim];
+    VectorFloat<?> vec = vectorTypeSupport.createFloatType(dim);
     for (int i = 0; i < dim; i++) {
-      vec[i] = random.nextFloat();
+      vec.set(i, random.nextFloat());
       if (random.nextBoolean()) {
-        vec[i] = -vec[i];
+        vec.set(i, -vec.get(i));
       }
     }
     VectorUtil.l2normalize(vec);
-    return vec;
+    return vec.array();
   }
 
   public static byte[] randomVector8(Random random, int dim) {

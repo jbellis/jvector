@@ -25,9 +25,15 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashSet;
 
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+
 public class SiftLoader {
-    public static ArrayList<float[]> readFvecs(String filePath) throws IOException {
-        var vectors = new ArrayList<float[]>();
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
+    public static ArrayList<VectorFloat<?>> readFvecs(String filePath) throws IOException {
+        var vectors = new ArrayList<VectorFloat<?>>();
         try (var dis = new DataInputStream(new BufferedInputStream(new FileInputStream(filePath)))) {
             while (dis.available() > 0) {
                 var dimension = Integer.reverseBytes(dis.readInt());
@@ -39,7 +45,7 @@ public class SiftLoader {
                 var vector = new float[dimension];
                 var floatBuffer = byteBuffer.asFloatBuffer();
                 floatBuffer.get(vector);
-                vectors.add(vector);
+                vectors.add(vectorTypeSupport.createFloatType(vector));
             }
         }
         return vectors;

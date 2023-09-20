@@ -18,13 +18,19 @@ package io.github.jbellis.jvector.example.util;
 
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import io.jhdf.HdfFile;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Hdf5Loader {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     public static DataSet load(String pathStr) {
         // infer the similarity
         VectorSimilarityFunction similarityFunction;
@@ -49,8 +55,8 @@ public class Hdf5Loader {
             groundTruth = (int[][]) hdf.getDatasetByPath("neighbors").getData();
         }
 
-        List<float[]> scrubbedBaseVectors;
-        List<float[]> scrubbedQueryVectors;
+        List<VectorFloat<?>> scrubbedBaseVectors;
+        List<VectorFloat<?>> scrubbedQueryVectors;
         List<Set<Integer>> gtSet;
         if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
             // verify that vectors are normalized and sane.
@@ -65,7 +71,7 @@ public class Hdf5Loader {
                 for (int i = 0; i < baseVectors.length; i++) {
                     float[] v = baseVectors[i];
                     if (Math.abs(normOf(v)) > 1e-5) {
-                        scrubbedBaseVectors.add(v);
+                        scrubbedBaseVectors.add(vectorTypeSupport.createFloatType(v));
                         rawToScrubbed.put(i, j++);
                     }
                 }
@@ -73,7 +79,7 @@ public class Hdf5Loader {
             for (int i = 0; i < queryVectors.length; i++) {
                 float[] v = queryVectors[i];
                 if (Math.abs(normOf(v)) > 1e-5) {
-                    scrubbedQueryVectors.add(v);
+                    scrubbedQueryVectors.add(vectorTypeSupport.createFloatType(v));
                     var gt = new HashSet<Integer>();
                     for (int j = 0; j < groundTruth[i].length; j++) {
                         gt.add(rawToScrubbed.get(groundTruth[i][j]));
@@ -89,8 +95,8 @@ public class Hdf5Loader {
             assert scrubbedQueryVectors.size() == gtSet.size();
         }
         else {
-            scrubbedBaseVectors = Arrays.asList(baseVectors);
-            scrubbedQueryVectors = Arrays.asList(queryVectors);
+            scrubbedBaseVectors = Arrays.stream(baseVectors).map(vectorTypeSupport::createFloatType).collect(Collectors.toList());
+            scrubbedQueryVectors = Arrays.stream(queryVectors).map(vectorTypeSupport::createFloatType).collect(Collectors.toList());
             gtSet = new ArrayList<>(groundTruth.length);
             for (int[] gt : groundTruth) {
                 var gtSetForQuery = new HashSet<Integer>();
@@ -102,13 +108,13 @@ public class Hdf5Loader {
         }
 
         System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
-                          pathStr, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
+                          pathStr, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length());
 
         return new DataSet(path.getFileName().toString(), similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
 
-    private static void normalizeAll(Iterable<float[]> vectors) {
-        for (float[] v : vectors) {
+    private static void normalizeAll(Iterable<VectorFloat<?>> vectors) {
+        for (VectorFloat<?> v : vectors) {
             VectorUtil.l2normalize(v);
         }
     }

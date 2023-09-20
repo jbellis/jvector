@@ -261,6 +261,10 @@ public final class RamUsageEstimator {
     return size;
   }
 
+  public static long sizeOf(Accountable a) {
+    return a.ramBytesUsed();
+  }
+
   /** Recurse only into immediate descendants. */
   public static final int MAX_DEPTH = 1;
 

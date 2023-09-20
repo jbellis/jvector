@@ -21,11 +21,15 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import org.junit.Test;
 
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -33,10 +37,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestProductQuantization extends RandomizedTest {
+    private static final ArrayVectorProvider typeProvider = new ArrayVectorProvider();
     @Test
     public void testSaveLoad() throws Exception {
         // Generate a PQ for random 2D vectors
-        var vectors = IntStream.range(0, 512).mapToObj(i -> new float[]{getRandom().nextFloat(), getRandom().nextFloat()}).collect(Collectors.toList());
+        List<VectorFloat<?>> vectors = IntStream.range(0, 512).mapToObj(i -> typeProvider.createFloatType(new float[]{getRandom().nextFloat(), getRandom().nextFloat()})).collect(Collectors.toList());
         var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, false);
         // Write the pq object
         File pqFile = File.createTempFile("pqtest", ".pq");

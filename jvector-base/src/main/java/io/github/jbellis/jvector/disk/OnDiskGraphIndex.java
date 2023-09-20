@@ -20,6 +20,9 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -27,6 +30,7 @@ import java.io.UncheckedIOException;
 
 public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
 {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ReaderSupplier readerSupplier;
     private final long neighborsOffset;
     private final int size;
@@ -81,10 +85,8 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                 long offset = neighborsOffset +
                         node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (M + 1)) // earlier entries
                         + Integer.BYTES; // skip the ID
-                float[] vector = new float[dimension];
                 reader.seek(offset);
-                reader.readFully(vector);
-                return (T) vector;
+                return (T) vectorTypeSupport.readFloatType(reader, dimension);
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -174,7 +176,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         // for each graph node, write the associated vector and its neighbors
         for (int node = 0; node < graph.size(); node++) {
             out.writeInt(node); // unnecessary, but a reasonable sanity check
-            Io.writeFloats(out, (float[]) vectors.vectorValue(node));
+            vectorTypeSupport.writeFloatType(out, (VectorFloat<?>) vectors.vectorValue(node));
 
             var neighbors = view.getNeighborsIterator(node);
             out.writeInt(neighbors.size());

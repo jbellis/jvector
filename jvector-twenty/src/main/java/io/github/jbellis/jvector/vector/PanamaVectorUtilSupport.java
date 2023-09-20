@@ -18,67 +18,70 @@ package io.github.jbellis.jvector.vector;
 
 import java.util.List;
 
+import io.github.jbellis.jvector.vector.types.VectorByte;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 final class
 PanamaVectorUtilSupport implements VectorUtilSupport
 {
 
     @Override
-    public float dotProduct(float[] a, float[] b) {
+    public float dotProduct(VectorFloat<?> a, VectorFloat<?> b) {
         return SimdOps.dotProduct(a, b);
     }
 
     @Override
-    public float cosine(float[] v1, float[] v2) {
+    public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
         return SimdOps.cosineSimilarity(v1, v2);
     }
 
     @Override
-    public float squareDistance(float[] a, float[] b) {
+    public float squareDistance(VectorFloat<?> a, VectorFloat<?> b) {
         return SimdOps.squareDistance(a, b);
     }
 
     @Override
-    public int dotProduct(byte[] a, byte[] b) {
+    public int dotProduct(VectorByte<?> a, VectorByte<?> b) {
         return SimdOps.dotProduct(a, b);
     }
 
     @Override
-    public float dotProduct(float[] a, int aoffset, float[] b, int boffset, int length) {
+    public float dotProduct(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
         return SimdOps.dotProduct(a, aoffset, b, boffset, length);
     }
 
     @Override
-    public float cosine(byte[] a, byte[] b) {
+    public float cosine(VectorByte<?> a, VectorByte<?> b) {
         return SimdOps.cosineSimilarity(a, b);
     }
 
     @Override
-    public int squareDistance(byte[] a, byte[] b) {
+    public int squareDistance(VectorByte<?> a, VectorByte<?> b) {
         return SimdOps.squareDistance(a, b);
     }
 
     @Override
-    public float[] sum(List<float[]> vectors) {
+    public VectorFloat<?> sum(List<VectorFloat<?>> vectors) {
         return SimdOps.sum(vectors);
     }
 
     @Override
-    public float sum(float[] vector) {
+    public float sum(VectorFloat<?> vector) {
         return SimdOps.sum(vector);
     }
 
     @Override
-    public void divInPlace(float[] vector, float divisor) {
+    public void divInPlace(VectorFloat<?> vector, float divisor) {
         SimdOps.divInPlace(vector, divisor);
     }
 
     @Override
-    public void addInPlace(float[] v1, float[] v2) {
+    public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         SimdOps.addInPlace(v1, v2);
     }
 
     @Override
-    public float[] sub(float[] lhs, float[] rhs) {
+    public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
         return SimdOps.sub(lhs, rhs);
     }
 }

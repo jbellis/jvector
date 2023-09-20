@@ -27,6 +27,7 @@ import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -45,7 +46,7 @@ import java.util.stream.IntStream;
  */
 public class Bench {
     private static void testRecall(int M, int efConstruction, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv, Path testDirectory) throws IOException {
-        var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
+        var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
         var topK = ds.groundTruth.get(0).size();
 
         var start = System.nanoTime();
@@ -103,7 +104,7 @@ public class Bench {
         return topKCorrect(topK, a, gt);
     }
 
-    private static ResultSummary performQueries(DataSet ds, RandomAccessVectorValues<float[]> exactVv, CompressedVectors cv, GraphIndex<float[]> index, int topK, int efSearch, int queryRuns) {
+    private static ResultSummary performQueries(DataSet ds, RandomAccessVectorValues<VectorFloat<?>> exactVv, CompressedVectors cv, GraphIndex<VectorFloat<?>> index, int topK, int efSearch, int queryRuns) {
         assert efSearch >= topK;
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
@@ -114,7 +115,7 @@ public class Bench {
                 if (cv != null) {
                     var view = index.getView();
                     NeighborSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-                    NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
+                    NeighborSimilarity.ReRanker<VectorFloat<?>> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
                     sr = new GraphSearcher.Builder(view)
                             .build()
                             .search(sf, rr, efSearch, null);
@@ -170,7 +171,7 @@ public class Bench {
 
     private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
         var start = System.nanoTime();
-        int originalDimension = ds.baseVectors.get(0).length;
+        int originalDimension = ds.baseVectors.get(0).length();
         var pqDims = originalDimension / 2;
         ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
         ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);

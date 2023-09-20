@@ -31,6 +31,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Logger;
 
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+
 
 /**
  * A provider of vectorization implementations. Depending on the Java version and availability of
@@ -57,6 +59,8 @@ public abstract class VectorizationProvider {
    * VectorUtil}.
    */
   public abstract VectorUtilSupport getVectorUtilSupport();
+
+  public abstract VectorTypeSupport getVectorTypeSupport();
 
   // *** Lookup mechanism: ***
 

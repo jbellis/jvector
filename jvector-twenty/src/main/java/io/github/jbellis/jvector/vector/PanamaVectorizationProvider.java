@@ -16,6 +16,9 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+
 public class PanamaVectorizationProvider extends VectorizationProvider
 {
     private final VectorUtilSupport vectorUtilSupport;
@@ -28,5 +31,12 @@ public class PanamaVectorizationProvider extends VectorizationProvider
     public VectorUtilSupport getVectorUtilSupport()
     {
         return vectorUtilSupport;
+    }
+
+    @Override
+    public VectorTypeSupport getVectorTypeSupport()
+    {
+        //Hack till new provider is added
+        return new ArrayVectorProvider();
     }
 }

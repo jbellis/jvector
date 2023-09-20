@@ -19,6 +19,8 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorByte;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -258,9 +260,9 @@ public class GraphIndexBuilder<T> {
           VectorEncoding encoding, VectorSimilarityFunction similarityFunction, T v1, T v2) {
     switch (encoding) {
       case BYTE:
-        return similarityFunction.compare((byte[]) v1, (byte[]) v2);
+        return similarityFunction.compare((VectorByte<?>) v1, (VectorByte<?>) v2);
       case FLOAT32:
-        return similarityFunction.compare((float[]) v1, (float[]) v2);
+        return similarityFunction.compare((VectorFloat<?>) v1, (VectorFloat<?>) v2);
       default:
         throw new IllegalArgumentException();
     }

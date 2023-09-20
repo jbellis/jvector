@@ -18,6 +18,8 @@ package io.github.jbellis.jvector.graph;
 
 import java.util.List;
 
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 /**
  * A List-backed implementation of the {@link RandomAccessVectorValues} interface.
  * <p>
@@ -26,9 +28,9 @@ import java.util.List;
  * <p>
  * This will be as threadsafe as the provided List.
  */
-public class ListRandomAccessVectorValues implements RandomAccessVectorValues<float[]> {
+public class ListRandomAccessVectorValues implements RandomAccessVectorValues<VectorFloat<?>> {
 
-    private final List<float[]> vectors;
+    private final List<VectorFloat<?>> vectors;
     private final int dimension;
 
     /**
@@ -37,7 +39,7 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues<fl
      * @param vectors   a (potentially mutable) list of float vectors.
      * @param dimension the dimension of the vectors.
      */
-    public ListRandomAccessVectorValues(List<float[]> vectors, int dimension) {
+    public ListRandomAccessVectorValues(List<VectorFloat<?>> vectors, int dimension) {
         this.vectors = vectors;
         this.dimension = dimension;
     }
@@ -53,7 +55,7 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues<fl
     }
 
     @Override
-    public float[] vectorValue(int targetOrd) {
+    public VectorFloat<?> vectorValue(int targetOrd) {
         return vectors.get(targetOrd);
     }
 

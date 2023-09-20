@@ -25,6 +25,7 @@ import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
@@ -39,8 +40,8 @@ import java.util.stream.IntStream;
 
 public class SiftSmall {
 
-    public static void testRecall(ArrayList<float[]> baseVectors, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, Path testDirectory) throws IOException, InterruptedException, ExecutionException {
-        int originalDimension = baseVectors.get(0).length;
+    public static void testRecall(ArrayList<VectorFloat<?>> baseVectors, ArrayList<VectorFloat<?>> queryVectors, ArrayList<HashSet<Integer>> groundTruth, Path testDirectory) throws IOException, InterruptedException, ExecutionException {
+        int originalDimension = baseVectors.get(0).length();
         var ravv = new ListRandomAccessVectorValues(baseVectors, originalDimension);
 
         var start = System.nanoTime();
@@ -73,7 +74,7 @@ public class SiftSmall {
         }
     }
 
-    private static void testRecallInternal(GraphIndex<float[]> graph, RandomAccessVectorValues<float[]> ravv, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, CompressedVectors compressedVectors) {
+    private static void testRecallInternal(GraphIndex<VectorFloat<?>> graph, RandomAccessVectorValues<VectorFloat<?>> ravv, ArrayList<VectorFloat<?>> queryVectors, ArrayList<HashSet<Integer>> groundTruth, CompressedVectors compressedVectors) {
         var topKfound = new AtomicInteger(0);
         var topK = 100;
         var graphType = graph.getClass().getSimpleName();
@@ -89,7 +90,7 @@ public class SiftSmall {
             }
             else {
                 NeighborSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
+                NeighborSimilarity.ReRanker<VectorFloat<?>> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
                 nn = searcher.search(sf, rr, 100, null).getNodes();
             }
 
@@ -107,7 +108,7 @@ public class SiftSmall {
         var queryVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_query.fvecs", siftPath));
         var groundTruth = SiftLoader.readIvecs(String.format("%s/siftsmall_groundtruth.ivecs", siftPath));
         System.out.format("%d base and %d query vectors loaded, dimensions %d%n",
-                baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
+                baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
 
         var testDirectory = Files.createTempDirectory("SiftSmallGraphDir");
         try {

@@ -21,6 +21,8 @@ import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,8 +38,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     private Path testDirectory;
 
-    private TestUtil.FullyConnectedGraphIndex<float[]> fullyConnectedGraph;
-    private TestUtil.RandomlyConnectedGraphIndex<float[]> randomlyConnectedGraph;
+    private TestUtil.FullyConnectedGraphIndex<VectorFloat<?>> fullyConnectedGraph;
+    private TestUtil.RandomlyConnectedGraphIndex<VectorFloat<?>> randomlyConnectedGraph;
 
     @Before
     public void setup() throws IOException {
@@ -85,7 +87,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             var outputPath = testDirectory.resolve("test_graph_" + g.getClass().getSimpleName());
             writeGraph(g, new GraphIndexTestCase.CircularFloatVectorValues(g.size()), outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-                 var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+                 var onDiskGraph = new OnDiskGraphIndex<VectorFloat<?>>(marr::duplicate, 0);
                  var onDiskView = onDiskGraph.getView())
             {
                 validateGraph(g.getView(), onDiskView);
@@ -96,12 +98,12 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     @Test
     public void testLargeGraph() throws Exception
     {
-        var graph = new TestUtil.RandomlyConnectedGraphIndex<float[]>(100_000, 16, getRandom());
+        var graph = new TestUtil.RandomlyConnectedGraphIndex<VectorFloat<?>>(100_000, 16, getRandom());
         var outputPath = testDirectory.resolve("large_graph");
         writeGraph(graph, new GraphIndexTestCase.CircularFloatVectorValues(graph.size()), outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskGraph = new OnDiskGraphIndex<VectorFloat<?>>(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             validateGraph(graph.getView(), onDiskView);
