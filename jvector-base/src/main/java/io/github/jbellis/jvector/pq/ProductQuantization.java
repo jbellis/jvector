@@ -157,13 +157,14 @@ public class ProductQuantization {
      */
     public float decodedSquareDistance(byte[] encoded, float[] other) {
         float sum = 0.0f;
+        var a = scratch.get();
         for (int m = 0; m < M; ++m) {
             int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
             float[] centroidSubvector = codebooks[m][centroidIndex];
-            sum += VectorUtil.squareDistance(centroidSubvector, 0, other, offset, centroidSubvector.length);
+            a[m] = VectorUtil.squareDistance(centroidSubvector, 0, other, offset, centroidSubvector.length);
         }
-        return sum;
+        return VectorUtil.sum(a);
     }
 
     /**
