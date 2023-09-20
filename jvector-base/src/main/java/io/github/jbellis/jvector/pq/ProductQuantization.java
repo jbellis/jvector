@@ -146,6 +146,28 @@ public class ProductQuantization {
     }
 
     /**
+     * Computes the square distance of the (approximate) original decoded vector with
+     * another vector.
+     * <p>
+     * This method can compute the square distance without materializing the decoded vector as a new float[],
+     * which will be roughly 2x as fast as decode() + squaredistance().
+     * <p>
+     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
+     * before calling this method.
+     */
+    public float decodedSquareDistance(byte[] encoded, float[] other) {
+        float sum = 0.0f;
+        var a = scratch.get();
+        for (int m = 0; m < M; ++m) {
+            int offset = subvectorSizesAndOffsets[m][1];
+            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
+            float[] centroidSubvector = codebooks[m][centroidIndex];
+            a[m] = VectorUtil.squareDistance(centroidSubvector, 0, other, offset, centroidSubvector.length);
+        }
+        return VectorUtil.sum(a);
+    }
+
+    /**
      * Decodes the quantized representation (byte array) to its approximate original vector.
      */
     public void decode(byte[] encoded, float[] target) {

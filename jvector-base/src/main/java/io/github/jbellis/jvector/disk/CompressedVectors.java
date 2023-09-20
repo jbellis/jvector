@@ -83,6 +83,8 @@ public class CompressedVectors
         {
             case DOT_PRODUCT:
                 return (1 + pq.decodedDotProduct(compressedVectors.get(ordinal), v)) / 2;
+            case EUCLIDEAN:
+                return 1 / (1 + pq.decodedSquareDistance(compressedVectors.get(ordinal), v));
             default:
                 // TODO implement other similarity functions efficiently
                 var decoded = new float[pq.getOriginalDimension()];

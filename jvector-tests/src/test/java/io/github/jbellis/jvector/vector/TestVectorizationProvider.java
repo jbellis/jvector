@@ -26,7 +26,7 @@ public class TestVectorizationProvider extends RandomizedTest {
     static boolean hasSimd = VectorizationProvider.vectorModulePresentAndReadable();
 
     @Test
-    public void testDotProductFloat() {
+    public void testSimilarityMetricsFloat() {
         Assume.assumeTrue(hasSimd);
 
         VectorizationProvider a = new DefaultVectorizationProvider();
@@ -36,14 +36,14 @@ public class TestVectorizationProvider extends RandomizedTest {
             float[] v1 = GraphIndexTestCase.randomVector(getRandom(), 1021); //prime numbers
             float[] v2 = GraphIndexTestCase.randomVector(getRandom(), 1021); //prime numbers
 
-            Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1,v2), b.getVectorUtilSupport().dotProduct(v1, v2), 0.00001f);
-            Assert.assertEquals(a.getVectorUtilSupport().cosine(v1,v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
-            Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1,v2), b.getVectorUtilSupport().squareDistance(v1, v2), 0.00001f);
+            Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1, v2), b.getVectorUtilSupport().dotProduct(v1, v2), 0.00001f);
+            Assert.assertEquals(a.getVectorUtilSupport().cosine(v1, v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
+            Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1, v2), b.getVectorUtilSupport().squareDistance(v1, v2), 0.00001f);
         }
     }
 
     @Test
-    public void testDotProductByte() {
+    public void testSimilarityMetricsByte() {
         Assume.assumeTrue(hasSimd);
 
         VectorizationProvider a = new DefaultVectorizationProvider();
@@ -53,9 +53,9 @@ public class TestVectorizationProvider extends RandomizedTest {
             byte[] v1 = GraphIndexTestCase.randomVector8(getRandom(), 1021); //prime numbers
             byte[] v2 = GraphIndexTestCase.randomVector8(getRandom(), 1021); //prime numbers
 
-            Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1,v2), b.getVectorUtilSupport().dotProduct(v1, v2));
-            Assert.assertEquals(a.getVectorUtilSupport().cosine(v1,v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
-            Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1,v2), b.getVectorUtilSupport().squareDistance(v1, v2));
+            Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1, v2), b.getVectorUtilSupport().dotProduct(v1, v2));
+            Assert.assertEquals(a.getVectorUtilSupport().cosine(v1, v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
+            Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1, v2), b.getVectorUtilSupport().squareDistance(v1, v2));
         }
     }
 }
