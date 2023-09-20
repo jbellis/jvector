@@ -60,6 +60,10 @@ public abstract class VectorizationProvider {
    */
   public abstract VectorUtilSupport getVectorUtilSupport();
 
+  /**
+   * Returns a singleton (stateless) {@link VectorTypeSupport} which works with the corresponding {@link VectorUtilSupport}
+   * implementation
+   */
   public abstract VectorTypeSupport getVectorTypeSupport();
 
   // *** Lookup mechanism: ***

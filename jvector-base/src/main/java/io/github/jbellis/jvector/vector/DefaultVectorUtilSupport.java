@@ -25,15 +25,17 @@
 package io.github.jbellis.jvector.vector;
 
 import java.util.List;
-import java.util.Vector;
 
-import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
 import io.github.jbellis.jvector.vector.types.VectorByte;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 final class DefaultVectorUtilSupport implements VectorUtilSupport {
-  private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+  private final VectorTypeSupport vectorTypeSupport;
+
+  DefaultVectorUtilSupport(VectorTypeSupport vectorTypeSupport) {
+    this.vectorTypeSupport = vectorTypeSupport;
+  }
 
   @Override
   public float dotProduct(VectorFloat<?> av, VectorFloat<?> bv) {

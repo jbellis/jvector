@@ -34,8 +34,8 @@ final class DefaultVectorizationProvider extends VectorizationProvider {
 
 
   DefaultVectorizationProvider() {
-    vectorUtilSupport = new DefaultVectorUtilSupport();
     vectorTypes = new ArrayVectorProvider();
+    vectorUtilSupport = new DefaultVectorUtilSupport(vectorTypes);
   }
 
   @Override
