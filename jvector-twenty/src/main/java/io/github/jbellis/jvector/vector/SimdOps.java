@@ -335,7 +335,7 @@ final class SimdOps {
         return diff.mul(diff).reduceLanes(VectorOperators.ADD);
     }
 
-    static float squareDistance512(float[] v1, int offset1, float[] v2, int offset2) {
+    static float squareDistancePreferred(float[] v1, int offset1, float[] v2, int offset2) {
         var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, offset1);
         var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, offset2);
         var diff = a.sub(b);
@@ -445,7 +445,7 @@ final class SimdOps {
     static float squareDistancePreferred(float[] v1, int v1offset, float[] v2, int v2offset, int length) {
 
         if (length == FloatVector.SPECIES_PREFERRED.length())
-            return squareDistance512(v1, v1offset, v2, v2offset);
+            return squareDistancePreferred(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
