@@ -26,15 +26,16 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
+import io.github.jbellis.jvector.vector.types.VectorByte;
 
-class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
-  private final byte[] scratch;
-  private final byte[] denseScratch;
+class MockByteVectorValues extends AbstractMockVectorValues<VectorByte<?>> {
+  private final VectorByte<?> scratch;
+  private final VectorByte<?> denseScratch;
 
-  static MockByteVectorValues fromValues(byte[][] values) {
-    int dimension = values[0].length;
+  static MockByteVectorValues fromValues(VectorByte<?>[] values) {
+    int dimension = values[0].length();
     int maxDoc = values.length;
-    byte[][] denseValues = new byte[maxDoc][];
+    VectorByte<?>[] denseValues = new VectorByte<?>[maxDoc];
     int count = 0;
     for (int i = 0; i < maxDoc; i++) {
       if (values[i] != null) {
@@ -44,10 +45,10 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
     return new MockByteVectorValues(values, dimension, denseValues, count);
   }
 
-  MockByteVectorValues(byte[][] values, int dimension, byte[][] denseValues, int numVectors) {
+  MockByteVectorValues(VectorByte<?>[] values, int dimension, VectorByte<?>[] denseValues, int numVectors) {
     super(values, dimension, denseValues, numVectors);
-    scratch = new byte[dimension];
-    denseScratch = new byte[dimension];
+    scratch = vectorTypeSupport.createByteType(dimension);
+    denseScratch = vectorTypeSupport.createByteType(dimension);
   }
 
   @Override
@@ -60,7 +61,7 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
   }
 
   @Override
-  public byte[] vectorValue() {
+  public VectorByte<?> vectorValue() {
     if (RandomizedTest.getRandom().nextBoolean()) {
       return values[pos];
     } else {
@@ -68,7 +69,7 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
       // This should help us catch cases of aliasing where the same ByteVectorValues source is used
       // twice in a
       // single computation.
-      System.arraycopy(values[pos], 0, scratch, 0, dimension);
+      scratch.copyFrom(values[pos], 0, 0, dimension);
       return scratch;
     }
   }
@@ -79,14 +80,14 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
   }
 
   @Override
-  public byte[] vectorValue(int targetOrd) {
-    byte[] original = super.vectorValue(targetOrd);
+  public VectorByte<?> vectorValue(int targetOrd) {
+    VectorByte<?> original = super.vectorValue(targetOrd);
     if (original == null) {
       return null;
     }
     // present a single vector reference to callers like the disk-backed RAVV implmentations,
     // to catch cases where they are not making a copy
-    System.arraycopy(original, 0, denseScratch, 0, dimension);
+    denseScratch.copyFrom(original, 0, 0, dimension);
     return denseScratch;
   }
 }

@@ -8,6 +8,7 @@ public interface VectorFloat<T> extends VectorType<Float, T>
 
     void copyFrom(VectorFloat<?> src, int srcOffset, int destOffset, int length);
 
+    //Hack till non-array support is added
     float[] array();
 
 }

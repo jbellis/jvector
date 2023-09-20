@@ -28,10 +28,13 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorByte;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import org.junit.Before;
 
 /** Tests KNN graphs */
-public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
+public class TestByteVectorGraph extends GraphIndexTestCase<VectorByte<?>> {
 
   @Before
   public void setup() {
@@ -44,12 +47,12 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
   }
 
   @Override
-  byte[] randomVector(int dim) {
+  VectorByte<?> randomVector(int dim) {
     return randomVector8(getRandom(), dim);
   }
 
   @Override
-  AbstractMockVectorValues<byte[]> vectorValues(int size, int dimension) {
+  AbstractMockVectorValues<VectorByte<?>> vectorValues(int size, int dimension) {
     return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, getRandom()));
   }
 
@@ -58,34 +61,34 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
   }
 
   @Override
-  AbstractMockVectorValues<byte[]> vectorValues(float[][] values) {
-    byte[][] bValues = new byte[values.length][];
+  AbstractMockVectorValues<VectorByte<?>> vectorValues(VectorFloat<?>[] values) {
+    VectorByte<?>[] bValues = new VectorByte<?>[values.length];
     // The case when all floats fit within a byte already.
-    boolean scaleSimple = fitsInByte(values[0][0]);
+    boolean scaleSimple = fitsInByte(values[0].get(0));
     for (int i = 0; i < values.length; i++) {
-      bValues[i] = new byte[values[i].length];
-      for (int j = 0; j < values[i].length; j++) {
+      bValues[i] = vectorTypeSupport.createByteType(values[i].length());
+      for (int j = 0; j < values[i].length(); j++) {
         final float v;
         if (scaleSimple) {
-          assert fitsInByte(values[i][j]);
-          v = values[i][j];
+          assert fitsInByte(values[i].get(j));
+          v = values[i].get(j);
         } else {
-          v = values[i][j] * 127;
+          v = values[i].get(j) * 127;
         }
-        bValues[i][j] = (byte) v;
+        bValues[i].set(j, (byte) v);
       }
     }
     return MockByteVectorValues.fromValues(bValues);
   }
 
   @Override
-  AbstractMockVectorValues<byte[]> vectorValues(
+  AbstractMockVectorValues<VectorByte<?>> vectorValues(
       int size,
       int dimension,
-      AbstractMockVectorValues<byte[]> pregeneratedVectorValues,
+      AbstractMockVectorValues<VectorByte<?>> pregeneratedVectorValues,
       int pregeneratedOffset) {
-    byte[][] vectors = new byte[size][];
-    byte[][] randomVectors =
+    VectorByte<?>[] vectors = new VectorByte<?>[size];
+    VectorByte<?>[] randomVectors =
         createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
     for (int i = 0; i < pregeneratedOffset; i++) {
@@ -107,12 +110,12 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
   }
 
   @Override
-  RandomAccessVectorValues<byte[]> circularVectorValues(int nDoc) {
+  RandomAccessVectorValues<VectorByte<?>> circularVectorValues(int nDoc) {
     return new CircularByteVectorValues(nDoc);
   }
 
   @Override
-  byte[] getTargetVector() {
-    return new byte[] {1, 0};
+  VectorByte<?> getTargetVector() {
+    return vectorTypeSupport.createByteType(new byte[] {1, 0});
   }
 }

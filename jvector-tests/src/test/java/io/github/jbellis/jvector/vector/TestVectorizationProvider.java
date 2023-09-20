@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.vector;
 
+import java.util.Random;
+
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.graph.GraphIndexTestCase;
 import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
@@ -27,9 +29,10 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
-public class TestVectorizationProvider extends RandomizedTest {
-    static boolean hasSimd = VectorizationProvider.vectorModulePresentAndReadable();
 
+public class TestVectorizationProvider {
+    static boolean hasSimd = VectorizationProvider.vectorModulePresentAndReadable();
+    static final Random r = new Random();
     @Test
     public void testDotProductFloat() {
         Assume.assumeTrue(hasSimd);
@@ -41,14 +44,14 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorTypeSupport bTypes = VectorizationProvider.getInstance().getVectorTypeSupport();
 
         for (int i = 0; i < 1000; i++) {
-            float[] v1 = GraphIndexTestCase.randomVector(getRandom(), 1021); //prime numbers
-            float[] v2 = GraphIndexTestCase.randomVector(getRandom(), 1021); //prime numbers
+            long seed = System.nanoTime();
+            r.setSeed(seed);
+            VectorFloat<?> v1a = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers so we test tail
+            VectorFloat<?> v2a = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
 
-            VectorFloat<?> v1a = aTypes.createFloatType(v1);
-            VectorFloat<?> v2a = aTypes.createFloatType(v2);
-
-            VectorFloat<?> v1b = bTypes.createFloatType(v1);
-            VectorFloat<?> v2b = bTypes.createFloatType(v2);
+            r.setSeed(seed);
+            VectorFloat<?> v1b = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers
+            VectorFloat<?> v2b = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1a,v2a), b.getVectorUtilSupport().dotProduct(v1b, v2b), 0.00001f);
             Assert.assertEquals(a.getVectorUtilSupport().cosine(v1a,v2a), b.getVectorUtilSupport().cosine(v1b, v2b), 0.00001f);
@@ -67,14 +70,14 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorTypeSupport bTypes = VectorizationProvider.getInstance().getVectorTypeSupport();
 
         for (int i = 0; i < 1000; i++) {
-            byte[] v1 = GraphIndexTestCase.randomVector8(getRandom(), 1021); //prime numbers
-            byte[] v2 = GraphIndexTestCase.randomVector8(getRandom(), 1021); //prime numbers
+            long seed = System.nanoTime();
+            r.setSeed(seed);
+            VectorByte<?> v1a = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers so we test tail
+            VectorByte<?> v2a = GraphIndexTestCase.randomVector8(bTypes, r, 1021); //prime numbers
 
-            VectorByte<?> v1a = aTypes.createByteType(v1);
-            VectorByte<?> v2a = aTypes.createByteType(v2);
-
-            VectorByte<?> v1b = bTypes.createByteType(v1);
-            VectorByte<?> v2b = bTypes.createByteType(v2);
+            r.setSeed(seed);
+            VectorByte<?> v1b = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers
+            VectorByte<?> v2b = GraphIndexTestCase.randomVector8(bTypes, r, 1021); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1a,v2a), b.getVectorUtilSupport().dotProduct(v1b, v2b));
             Assert.assertEquals(a.getVectorUtilSupport().cosine(v1a,v2a), b.getVectorUtilSupport().cosine(v1b, v2b), 0.00001f);

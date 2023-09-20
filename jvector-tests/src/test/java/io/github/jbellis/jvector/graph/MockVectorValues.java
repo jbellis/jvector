@@ -26,15 +26,18 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
-class MockVectorValues extends AbstractMockVectorValues<float[]> {
-  private final float[] scratch;
-  private final float[] denseScratch;
+class MockVectorValues extends AbstractMockVectorValues<VectorFloat<?>> {
+  private final VectorFloat<?> scratch;
+  private final VectorFloat<?> denseScratch;
 
-  static MockVectorValues fromValues(float[][] values) {
-    int dimension = values[0].length;
+  static MockVectorValues fromValues(VectorFloat<?>[] values) {
+    int dimension = values[0].length();
     int maxDoc = values.length;
-    float[][] denseValues = new float[maxDoc][];
+    VectorFloat<?>[] denseValues = new VectorFloat<?>[maxDoc];
     int count = 0;
     for (int i = 0; i < maxDoc; i++) {
       if (values[i] != null) {
@@ -44,10 +47,10 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
     return new MockVectorValues(values, dimension, denseValues, count);
   }
 
-  MockVectorValues(float[][] values, int dimension, float[][] denseValues, int numVectors) {
+  MockVectorValues(VectorFloat<?>[] values, int dimension, VectorFloat<?>[] denseValues, int numVectors) {
     super(values, dimension, denseValues, numVectors);
-    this.scratch = new float[dimension];
-    this.denseScratch = new float[dimension];
+    this.scratch = vectorTypeSupport.createFloatType(dimension);
+    this.denseScratch = vectorTypeSupport.createFloatType(dimension);
   }
 
   @Override
@@ -60,14 +63,14 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
   }
 
   @Override
-  public float[] vectorValue() {
+  public VectorFloat<?> vectorValue() {
     if (RandomizedTest.getRandom().nextBoolean()) {
       return values[pos];
     } else {
       // Sometimes use the same scratch array repeatedly, mimicing what the codec will do.
       // This should help us catch cases of aliasing where the same vector values source is used
       // twice in a single computation.
-      System.arraycopy(values[pos], 0, scratch, 0, dimension);
+      scratch.copyFrom(values[pos], 0, 0, dimension);
       return scratch;
     }
   }
@@ -78,14 +81,14 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
   }
 
   @Override
-  public float[] vectorValue(int targetOrd) {
-    float[] original = super.vectorValue(targetOrd);
+  public VectorFloat<?> vectorValue(int targetOrd) {
+    VectorFloat<?> original = super.vectorValue(targetOrd);
     if (original == null) {
       return null;
     }
     // present a single vector reference to callers like the disk-backed RAVV implmentations,
     // to catch cases where they are not making a copy
-    System.arraycopy(original, 0, denseScratch, 0, dimension);
+    denseScratch.copyFrom(original, 0, 0, dimension);
     return denseScratch;
   }
 }

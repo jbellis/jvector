@@ -19,6 +19,9 @@ package io.github.jbellis.jvector.graph;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -28,8 +31,10 @@ import java.util.stream.IntStream;
 import static org.junit.Assert.*;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
+  protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
   private static final NeighborSimilarity simpleScore = a -> {
-    return (NeighborSimilarity.ExactScoreFunction) b -> VectorSimilarityFunction.EUCLIDEAN.compare(new float[] { a }, new float[] { b });
+    return (NeighborSimilarity.ExactScoreFunction) b -> VectorSimilarityFunction.EUCLIDEAN.compare(vectorTypeSupport.createFloatType(new float[] { a }), vectorTypeSupport.createFloatType(new float[] { b }));
   };
 
   private static float baseScore(int neighbor) {

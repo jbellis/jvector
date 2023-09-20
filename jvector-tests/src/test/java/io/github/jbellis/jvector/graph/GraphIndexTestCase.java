@@ -36,7 +36,6 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorByte;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import jdk.incubator.vector.FloatVector;
 
 import org.junit.Test;
 
@@ -49,8 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
-  private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
+  protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
   VectorSimilarityFunction similarityFunction;
 
@@ -607,16 +605,16 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     return neighbors;
   }
 
-  static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
-    float[][] vectors = new float[size][];
+  static VectorFloat<?>[] createRandomFloatVectors(int size, int dimension, Random random) {
+    VectorFloat<?>[] vectors = new VectorFloat<?>[size];
     for (int offset = 0; offset < size; offset += random.nextInt(3) + 1) {
       vectors[offset] = randomVector(random, dimension);
     }
     return vectors;
   }
 
-  static byte[][] createRandomByteVectors(int size, int dimension, Random random) {
-    byte[][] vectors = new byte[size][];
+  static VectorByte<?>[] createRandomByteVectors(int size, int dimension, Random random) {
+    VectorByte<?>[] vectors = new VectorByte<?>[size];
     for (int offset = 0; offset < size; offset += random.nextInt(3) + 1) {
       vectors[offset] = randomVector8(random, dimension);
     }
@@ -642,8 +640,12 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     return bits;
   }
 
-  public static float[] randomVector(Random random, int dim) {
-    VectorFloat<?> vec = vectorTypeSupport.createFloatType(dim);
+  public static VectorFloat<?> randomVector(Random random, int dim) {
+    return randomVector(vectorTypeSupport, random, dim);
+  }
+
+  public static VectorFloat<?> randomVector(VectorTypeSupport typeSupport, Random random, int dim) {
+    VectorFloat<?> vec = typeSupport.createFloatType(dim);
     for (int i = 0; i < dim; i++) {
       vec.set(i, random.nextFloat());
       if (random.nextBoolean()) {
@@ -651,14 +653,18 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
       }
     }
     VectorUtil.l2normalize(vec);
-    return vec.array();
+    return vec;
   }
 
-  public static byte[] randomVector8(Random random, int dim) {
-    float[] fvec = randomVector(random, dim);
-    byte[] bvec = new byte[dim];
+  public static VectorByte<?> randomVector8(Random random, int dim) {
+    return randomVector8(vectorTypeSupport, random, dim);
+  }
+
+  public static VectorByte<?> randomVector8(VectorTypeSupport typeSupport, Random random, int dim) {
+    VectorFloat<?> fvec = randomVector(random, dim);
+    VectorByte<?> bvec = typeSupport.createByteType(dim);
     for (int i = 0; i < dim; i++) {
-      bvec[i] = (byte) (fvec[i] * 127);
+      bvec.set(i, (byte) (fvec.get(i) * 127));
     }
     return bvec;
   }

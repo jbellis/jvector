@@ -62,4 +62,25 @@ final public class ArrayVectorByte implements VectorByte<byte[]>
     {
         return data;
     }
+
+    @Override
+    public void copyFrom(VectorByte<?> src, int srcOffset, int destOffset, int length) {
+        ArrayVectorByte csrc = (ArrayVectorByte) src;
+        System.arraycopy(csrc.data, srcOffset, data, destOffset, length);
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ArrayVectorByte that = (ArrayVectorByte) o;
+        return Arrays.equals(data, that.data);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Arrays.hashCode(data);
+    }
 }

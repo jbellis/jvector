@@ -29,6 +29,8 @@ import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import org.junit.Before;
 
 import java.io.IOException;
@@ -38,8 +40,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /** Tests KNN graphs */
-public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
-
+public class TestFloatVectorGraph extends GraphIndexTestCase<VectorFloat<?>> {
   @Before
   public void setup() {
     similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
@@ -51,28 +52,28 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
   }
 
   @Override
-  float[] randomVector(int dim) {
+  VectorFloat<?> randomVector(int dim) {
     return randomVector(getRandom(), dim);
   }
 
   @Override
-  AbstractMockVectorValues<float[]> vectorValues(int size, int dimension) {
+  AbstractMockVectorValues<VectorFloat<?>> vectorValues(int size, int dimension) {
     return MockVectorValues.fromValues(createRandomFloatVectors(size, dimension, getRandom()));
   }
 
   @Override
-  AbstractMockVectorValues<float[]> vectorValues(float[][] values) {
+  AbstractMockVectorValues<VectorFloat<?>> vectorValues(VectorFloat<?>[] values) {
     return MockVectorValues.fromValues(values);
   }
 
   @Override
-  AbstractMockVectorValues<float[]> vectorValues(
+  AbstractMockVectorValues<VectorFloat<?>> vectorValues(
       int size,
       int dimension,
-      AbstractMockVectorValues<float[]> pregeneratedVectorValues,
+      AbstractMockVectorValues<VectorFloat<?>> pregeneratedVectorValues,
       int pregeneratedOffset) {
-    float[][] vectors = new float[size][];
-    float[][] randomVectors =
+    VectorFloat<?>[] vectors = new VectorFloat<?>[size];
+    VectorFloat<?>[] randomVectors =
         createRandomFloatVectors(
             size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
@@ -95,22 +96,22 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
   }
 
   @Override
-  RandomAccessVectorValues<float[]> circularVectorValues(int nDoc) {
+  RandomAccessVectorValues<VectorFloat<?>> circularVectorValues(int nDoc) {
     return new CircularFloatVectorValues(nDoc);
   }
 
   @Override
-  float[] getTargetVector() {
-    return new float[] {1f, 0f};
+  VectorFloat<?> getTargetVector() {
+    return vectorTypeSupport.createFloatType(new float[] {1f, 0f});
   }
 
   public void testSearchWithSkewedAcceptOrds() throws IOException {
     int nDoc = 1000;
     similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
-    RandomAccessVectorValues<float[]> vectors = circularVectorValues(nDoc);
+    RandomAccessVectorValues<VectorFloat<?>> vectors = circularVectorValues(nDoc);
     VectorEncoding vectorEncoding = getVectorEncoding();
     getRandom().nextInt();
-    GraphIndexBuilder<float[]> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
+    GraphIndexBuilder<VectorFloat<?>> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
     OnHeapGraphIndex graph = buildInOrder(builder, vectors);
 
     // Skip over half of the documents that are closest to the query vector
