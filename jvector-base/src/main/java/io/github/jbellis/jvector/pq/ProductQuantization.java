@@ -38,7 +38,7 @@ import static java.lang.Math.min;
  */
 public class ProductQuantization {
     private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
-    private static final int K_MEANS_ITERATIONS = 15; // VSTODO try 20 as well
+    private static final int K_MEANS_ITERATIONS = 12;
     private static final int MAX_PQ_TRAINING_SET_SIZE = 256000;
 
     private final float[][][] codebooks;
