@@ -41,6 +41,11 @@ PanamaVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
+        return SimdOps.squareDistance((OffHeapVectorFloat) a, aoffset, (OffHeapVectorFloat) b, boffset, length);
+    }
+
+    @Override
     public int dotProduct(VectorByte<?> a, VectorByte<?> b) {
         return SimdOps.dotProduct((OffHeapVectorByte)a, (OffHeapVectorByte)b);
     }

@@ -12,10 +12,6 @@ public interface VectorType<T extends Number, D> extends Accountable {
      */
     D get();
 
-    T get(int n);
-
-    void set(int n, T value);
-
     int length();
 
     default int offset(int i) {

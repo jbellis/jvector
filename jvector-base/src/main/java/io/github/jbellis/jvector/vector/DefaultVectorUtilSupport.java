@@ -173,6 +173,21 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public float squareDistance(VectorFloat<?> av, int aoffset, VectorFloat<?> bv, int boffset, int length)
+  {
+    float[] a = av.array();
+    float[] b = bv.array();
+
+    float squareSum = 0f;
+    for (int i = 0; i < length; i++) {
+      float diff = a[aoffset + i] - b[boffset + i];
+      squareSum += diff * diff;
+    }
+
+    return squareSum;
+  }
+
+  @Override
   public int dotProduct(VectorByte<?> av, VectorByte<?> bv) {
     byte[] a = av.array();
     byte[] b = bv.array();

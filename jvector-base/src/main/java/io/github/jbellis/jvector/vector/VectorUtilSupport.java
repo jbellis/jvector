@@ -46,6 +46,9 @@ public interface VectorUtilSupport {
   /** Returns the sum of squared differences of the two vectors. */
   float squareDistance(VectorFloat<?> a, VectorFloat<?> b);
 
+  /** Calculates the sum of squared differences of float arrays of differing sizes, or a subset of the data */
+  float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length);
+
   /** Returns the dot product computed over signed bytes. */
   int dotProduct(VectorByte<?> a, VectorByte<?> b);
 

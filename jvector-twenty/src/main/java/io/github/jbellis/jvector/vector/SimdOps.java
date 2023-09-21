@@ -26,10 +26,6 @@ import java.nio.ByteOrder;
 import java.util.List;
 
 final class SimdOps {
-    static {
-        System.setProperty("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", "0");
-    }
-
     static float sum(OffHeapVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
@@ -129,8 +125,6 @@ final class SimdOps {
 
         if (length == FloatVector.SPECIES_64.length())
             return dot64(v1, v1offset, v2, v2offset);
-
-        assert length == 3; // or we should be calling dot 128
 
         final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
@@ -318,31 +312,160 @@ final class SimdOps {
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
     }
 
+    static float squareDistance64(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
+        var diff = a.sub(b);
+        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+    }
+
+    static float squareDistance128(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
+        var diff = a.sub(b);
+        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+    }
+
+    static float squareDistance256(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
+        var diff = a.sub(b);
+        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+    }
+
+    static float squareDistancePreferred(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
+        var diff = a.sub(b);
+        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+    }
 
     static float squareDistance(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
-        if (v1.length() != v2.length()) {
-            throw new IllegalArgumentException("Vectors must have the same length");
-        }
-        var vdiffSumSquared = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        return squareDistance(v1, 0, v2, 0, v1.length());
+    }
 
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+    static float squareDistance(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, final int length)
+    {
+        //Common case first
+        if (length >= FloatVector.SPECIES_PREFERRED.length())
+            return squareDistancePreferred(v1, v1offset, v2, v2offset, length);
+
+        if (length < FloatVector.SPECIES_128.length())
+            return squareDistance64(v1, v1offset, v2, v2offset, length);
+        else if (length < FloatVector.SPECIES_256.length())
+            return squareDistance128(v1, v1offset, v2, v2offset, length);
+        else
+            return squareDistance256(v1, v1offset, v2, v2offset, length);
+    }
+
+    static float squareDistance64(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
+        if (length == FloatVector.SPECIES_64.length())
+            return squareDistance64(v1, v1offset, v2, v2offset);
+
+        final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
+
+        int i = 0;
         // Process the vectorized part
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
-            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
-
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
             var diff = a.sub(b);
-            vdiffSumSquared = vdiffSumSquared.add(diff.mul(diff));
+            sum = sum.add(diff.mul(diff));
         }
 
-        float diffSumSquared = vdiffSumSquared.reduceLanes(VectorOperators.ADD);
+        float res = sum.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
-        for (int i = vectorizedLength; i < v1.length(); i++) {
-            diffSumSquared += (v1.get(i) - v2.get(i)) * (v1.get(i) - v2.get(i));
+        for (; i < length; ++i) {
+            var diff = v1.get(v1offset + i) - v2.get(v2offset + i);
+            res += diff * diff;
         }
 
-        return diffSumSquared;
+        return res;
+    }
+
+    static float squareDistance128(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
+        if (length == FloatVector.SPECIES_128.length())
+            return squareDistance128(v1, v1offset, v2, v2offset);
+
+        final int vectorizedLength = FloatVector.SPECIES_128.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_128);
+
+        int i = 0;
+        // Process the vectorized part
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
+            var diff = a.sub(b);
+            sum = sum.add(diff.mul(diff));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = v1.get(v1offset + i) - v2.get(v2offset + i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+
+    static float squareDistance256(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
+        if (length == FloatVector.SPECIES_256.length())
+            return squareDistance256(v1, v1offset, v2, v2offset);
+
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+
+        int i = 0;
+        // Process the vectorized part
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
+            var diff = a.sub(b);
+            sum = sum.add(diff.mul(diff));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = v1.get(v1offset + i) - v2.get(v2offset + i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+    static float squareDistancePreferred(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
+
+        if (length == FloatVector.SPECIES_PREFERRED.length())
+            return squareDistancePreferred(v1, v1offset, v2, v2offset);
+
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int i = 0;
+        // Process the vectorized part
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
+            var diff = a.sub(b);
+            sum = sum.add(diff.mul(diff));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = v1.get(v1offset + i) - v2.get(v2offset + i);
+            res += diff * diff;
+        }
+
+        return res;
     }
 
     static int squareDistance(OffHeapVectorByte v1, OffHeapVectorByte v2) {
@@ -372,9 +495,20 @@ final class SimdOps {
         return diffSumSquared;
     }
 
+    static void addInPlace64(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), 0, ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), 0, ByteOrder.LITTLE_ENDIAN);
+        a.add(b).intoMemorySegment(v1.get(), v1.offset(0), ByteOrder.LITTLE_ENDIAN);
+    }
+
     static void addInPlace(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        if (v1.length() == 2) {
+            addInPlace64(v1, v2);
+            return;
         }
 
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
@@ -382,7 +516,7 @@ final class SimdOps {
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
-            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(i), ByteOrder.LITTLE_ENDIAN);
             a.add(b).intoMemorySegment(v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
         }
 

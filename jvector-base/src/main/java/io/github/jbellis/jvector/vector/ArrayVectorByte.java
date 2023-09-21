@@ -28,12 +28,12 @@ final public class ArrayVectorByte implements VectorByte<byte[]>
     }
 
     @Override
-    public Byte get(int n) {
+    public byte get(int n) {
         return data[n];
     }
 
     @Override
-    public void set(int n, Byte value) {
+    public void set(int n, byte value) {
         data[n] = value;
     }
 

@@ -32,7 +32,7 @@ public class TestVectorizationProvider {
     static boolean hasSimd = VectorizationProvider.vectorModulePresentAndReadable();
     static final Random r = new Random();
     @Test
-    public void testDotProductFloat() {
+    public void testSimilarityMetricsFloat() {
         Assume.assumeTrue(hasSimd);
 
         VectorizationProvider a = new DefaultVectorizationProvider();
@@ -58,7 +58,7 @@ public class TestVectorizationProvider {
     }
 
     @Test
-    public void testDotProductByte() {
+    public void testSimilarityMetricsByte() {
         Assume.assumeTrue(hasSimd);
 
         VectorizationProvider a = new DefaultVectorizationProvider();

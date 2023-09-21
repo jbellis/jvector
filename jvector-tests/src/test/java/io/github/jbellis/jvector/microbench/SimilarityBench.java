@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 @Warmup(iterations = 2, time = 5)
 @Measurement(iterations = 3, time = 10)
-@Fork(warmups = 1, value = 1)
+@Fork(warmups = 1, value = 1, jvmArgsPrepend = {"--add-modules", "jdk.incubator.vector"})
 public class SimilarityBench {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
@@ -59,7 +59,7 @@ public class SimilarityBench {
     @Threads(8)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void dotProduct(Blackhole bh, Parameters p) {
-        bh.consume(VectorUtil.dotProduct(q3, 0, q1, 22, q3.length()));
+        bh.consume(VectorUtil.dotProduct(q1, 0, q2, 0, q2.length()));
     }
 
     public static void main(String[] args) throws Exception {

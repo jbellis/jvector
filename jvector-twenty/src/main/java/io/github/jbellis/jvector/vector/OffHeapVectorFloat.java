@@ -1,8 +1,8 @@
 package io.github.jbellis.jvector.vector;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentScope;
 import java.lang.foreign.ValueLayout;
 import java.nio.FloatBuffer;
 import java.util.Objects;
@@ -12,14 +12,17 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
 {
     private final MemorySegment segment;
+    private final FloatBuffer buffer;
     private final int length;
 
     OffHeapVectorFloat(int length) {
-        this.segment = MemorySegment.allocateNative(MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_FLOAT), SegmentScope.auto());
+        this.segment = Arena.global().allocate(MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_FLOAT));
+        this.buffer = segment.asByteBuffer().asFloatBuffer();
         this.length = length;
     }
 
     OffHeapVectorFloat(FloatBuffer buffer) {
+        this.buffer = buffer;
         this.segment = MemorySegment.ofBuffer(buffer);
         this.length = buffer.remaining();
     }
@@ -32,7 +35,7 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
     @Override
     public long ramBytesUsed()
     {
-        return 0;
+        return MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_FLOAT).byteSize();
     }
 
     @Override
@@ -48,15 +51,15 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
     }
 
     @Override
-    public Float get(int n)
+    public float get(int n)
     {
-        return segment.get(ValueLayout.JAVA_FLOAT, offset(n));
+        return segment.getAtIndex(ValueLayout.JAVA_FLOAT, n);
     }
 
     @Override
-    public void set(int n, Float value)
+    public void set(int n, float value)
     {
-        segment.set(ValueLayout.JAVA_FLOAT, offset(n), value);
+        segment.setAtIndex(ValueLayout.JAVA_FLOAT, n, value);
     }
 
     @Override
@@ -98,12 +101,12 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         OffHeapVectorFloat that = (OffHeapVectorFloat) o;
-        return Objects.equals(segment.asByteBuffer(), that.segment.asByteBuffer());
+        return Objects.equals(buffer, that.buffer);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(segment.asByteBuffer());
+        return Objects.hash(buffer);
     }
 }

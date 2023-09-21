@@ -19,6 +19,10 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 public class PanamaVectorizationProvider extends VectorizationProvider {
+    static {
+        System.setProperty("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", "0");
+    }
+
     private final VectorUtilSupport vectorUtilSupport;
     private final VectorTypeSupport vectorTypeSupport;
 

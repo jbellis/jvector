@@ -98,6 +98,15 @@ public final class VectorUtil {
     return r;
   }
 
+  /**
+   * Returns the sum of squared differences of the two vectors, or subvectors, of the given length.
+   */
+  public static float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
+    float r = impl.squareDistance(a, aoffset, b, boffset, length);
+    assert Float.isFinite(r);
+    return r;
+  }
+
   /** Returns the sum of squared differences of the two vectors. */
   public static int squareDistance(VectorByte<?> a, VectorByte<?> b) {
     if (a.length() != b.length()) {

@@ -119,7 +119,7 @@
                                 <additionalJOption>--add-modules=jdk.incubator.vector</additionalJOption>
                                 <additionalJOption>--enable-preview</additionalJOption>
                             </additionalJOptions>
-                            <release>20</release>
+                            <release>21</release>
                         </configuration>
                     </execution>
                 </executions>

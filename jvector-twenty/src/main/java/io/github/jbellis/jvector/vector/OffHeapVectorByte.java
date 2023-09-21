@@ -1,11 +1,11 @@
 package io.github.jbellis.jvector.vector;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentScope;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.nio.ByteOrder;
 import java.util.Objects;
 
 import io.github.jbellis.jvector.vector.types.VectorByte;
@@ -13,13 +13,16 @@ import io.github.jbellis.jvector.vector.types.VectorType;
 
 public class OffHeapVectorByte implements VectorByte<MemorySegment>
 {
+    private final ByteBuffer buffer;
     private final MemorySegment segment;
 
     OffHeapVectorByte(int length) {
-        this.segment = MemorySegment.allocateNative(MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_BYTE), SegmentScope.auto());
+        this.segment = Arena.global().allocate(MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_BYTE));
+        this.buffer = segment.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     OffHeapVectorByte(ByteBuffer data) {
+        this.buffer = data;
         this.segment = MemorySegment.ofBuffer(data);
     }
 
@@ -31,13 +34,13 @@ public class OffHeapVectorByte implements VectorByte<MemorySegment>
     @Override
     public long ramBytesUsed()
     {
-        return 0;
+         return MemoryLayout.sequenceLayout(buffer.remaining(), ValueLayout.JAVA_BYTE).byteSize();
     }
 
     @Override
     public byte[] array()
     {
-        return new byte[0];
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -58,12 +61,12 @@ public class OffHeapVectorByte implements VectorByte<MemorySegment>
     }
 
     @Override
-    public Byte get(int n) {
+    public byte get(int n) {
         return segment.get(ValueLayout.JAVA_BYTE, n);
     }
 
     @Override
-    public void set(int n, Byte value) {
+    public void set(int n, byte value) {
         segment.set(ValueLayout.JAVA_BYTE, n, value);
     }
 
@@ -85,12 +88,12 @@ public class OffHeapVectorByte implements VectorByte<MemorySegment>
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         OffHeapVectorByte that = (OffHeapVectorByte) o;
-        return Objects.equals(segment.asByteBuffer(), that.segment.asByteBuffer());
+        return Objects.equals(buffer, that.buffer);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(segment.asByteBuffer());
+        return Objects.hash(buffer);
     }
 }

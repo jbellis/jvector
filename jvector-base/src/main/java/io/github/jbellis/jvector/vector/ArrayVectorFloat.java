@@ -32,12 +32,12 @@ final public class ArrayVectorFloat implements VectorFloat<float[]>
     }
 
     @Override
-    public Float get(int n) {
+    public float get(int n) {
         return data[n];
     }
 
     @Override
-    public void set(int n, Float value) {
+    public void set(int n, float value) {
         data[n] = value;
     }
 

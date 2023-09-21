@@ -51,6 +51,8 @@ public class ProductQuantization {
     private final VectorFloat<?> globalCentroid;
     private final int[][] subvectorSizesAndOffsets;
 
+    private final ThreadLocal<byte[]> scratch;
+
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
      *
@@ -99,6 +101,8 @@ public class ProductQuantization {
             offset += size;
         }
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
+        this.scratch = ThreadLocal.withInitial(() -> new byte[M]);
+
     }
 
     /**
@@ -145,6 +149,54 @@ public class ProductQuantization {
             sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length());
         }
         return sum;
+    }
+
+    /**
+     * Computes the square distance of the (approximate) original decoded vector with
+     * another vector.
+     * <p>
+     * This method can compute the square distance without materializing the decoded vector as a new float[],
+     * which will be roughly 2x as fast as decode() + squaredistance().
+     * <p>
+     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
+     * before calling this method.
+     */
+    public float decodedSquareDistance(VectorByte<?> encoded, VectorFloat<?> other) {
+        float sum = 0.0f;
+        for (int m = 0; m < M; ++m) {
+            int offset = subvectorSizesAndOffsets[m][1];
+            int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+            VectorFloat<?> centroidSubvector = codebooks[m][centroidIndex];
+            sum += VectorUtil.squareDistance(centroidSubvector, 0, other, offset, centroidSubvector.length());
+        }
+        return sum;
+    }
+
+    /**
+     * Computes the cosine of the (approximate) original decoded vector with
+     * another vector.
+     * <p>
+     * This method can compute the cosine without materializing the decoded vector as a new float[],
+     * which will be roughly 1.5x as fast as decode() + dot().
+     * <p>
+     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
+     * before calling this method.
+     */
+    public float decodedCosine(VectorByte<?> encoded, VectorFloat<?> other) {
+        float sum = 0.0f;
+        float aMagnitude = 0.0f;
+        float bMagnitude = 0.0f;
+        for (int m = 0; m < M; ++m) {
+            int offset = subvectorSizesAndOffsets[m][1];
+            int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+            VectorFloat<?> centroidSubvector = codebooks[m][centroidIndex];
+            var length = centroidSubvector.length();
+            sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, length);
+            aMagnitude += VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, length);
+            bMagnitude +=  VectorUtil.dotProduct(other, offset, other, offset, length);
+        }
+
+        return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
     }
 
     /**
