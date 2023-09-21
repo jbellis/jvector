@@ -141,12 +141,12 @@ public class Bench {
         var diskGrid = List.of(false, true);
 
         // this dataset contains more than 10k query vectors, so we limit it with .subList
-        var adaSet = new DataSet("wikipedia",
+        /*var adaSet = new DataSet("wikipedia",
                                  VectorSimilarityFunction.DOT_PRODUCT,
                                  SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec"),
                                  SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000),
                                  SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000));
-        gridSearch(adaSet, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+        gridSearch(adaSet, mGrid, efConstructionGrid, diskGrid, efSearchGrid);*/
 
         var files = List.of(
                 // large files not yet supported

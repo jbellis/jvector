@@ -160,6 +160,6 @@ public abstract class VectorizationProvider {
   private static final class Holder {
     private Holder() {}
 
-    static final VectorizationProvider INSTANCE = lookup(false);
+    static final VectorizationProvider INSTANCE = lookup(true);
   }
 }

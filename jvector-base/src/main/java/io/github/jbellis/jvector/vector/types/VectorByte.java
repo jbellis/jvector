@@ -6,5 +6,4 @@ public interface VectorByte<T> extends VectorType<Byte, T>
     byte[] array();
 
     void copyFrom(VectorByte<?> src, int srcOffset, int destOffset, int length);
-
 }

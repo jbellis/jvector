@@ -16,27 +16,24 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
-public class PanamaVectorizationProvider extends VectorizationProvider
-{
+public class PanamaVectorizationProvider extends VectorizationProvider {
     private final VectorUtilSupport vectorUtilSupport;
+    private final VectorTypeSupport vectorTypeSupport;
 
     public PanamaVectorizationProvider() {
         this.vectorUtilSupport = new PanamaVectorUtilSupport();
+        this.vectorTypeSupport = new OffHeapVectorProvider();
     }
 
     @Override
-    public VectorUtilSupport getVectorUtilSupport()
-    {
+    public VectorUtilSupport getVectorUtilSupport() {
         return vectorUtilSupport;
     }
 
     @Override
-    public VectorTypeSupport getVectorTypeSupport()
-    {
-        //Hack till new provider is added
-        return new ArrayVectorProvider();
+    public VectorTypeSupport getVectorTypeSupport() {
+        return vectorTypeSupport;
     }
 }

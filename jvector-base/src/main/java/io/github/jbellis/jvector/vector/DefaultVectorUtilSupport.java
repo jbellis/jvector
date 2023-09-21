@@ -31,11 +31,6 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 final class DefaultVectorUtilSupport implements VectorUtilSupport {
-  private final VectorTypeSupport vectorTypeSupport;
-
-  DefaultVectorUtilSupport(VectorTypeSupport vectorTypeSupport) {
-    this.vectorTypeSupport = vectorTypeSupport;
-  }
 
   @Override
   public float dotProduct(VectorFloat<?> av, VectorFloat<?> bv) {
@@ -226,7 +221,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public VectorFloat<?> sum(List<VectorFloat<?>> vectors) {
 
-    VectorFloat<?> sum = vectorTypeSupport.createFloatType(vectors.get(0).length());
+    VectorFloat<?> sum = new ArrayVectorFloat(vectors.get(0).length());
     for (VectorFloat<?> vector : vectors) {
       for (int i = 0; i < vector.length(); i++) {
         sum.set(i, sum.get(i) + vector.get(i));
@@ -261,7 +256,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
-    VectorFloat<?> result = vectorTypeSupport.createFloatType(lhs.length());
+    VectorFloat<?> result = new ArrayVectorFloat(lhs.length());
     for (int i = 0; i < lhs.length(); i++) {
       result.set(i, lhs.get(i) - rhs.get(i));
     }

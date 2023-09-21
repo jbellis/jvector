@@ -21,8 +21,10 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
+import io.github.jbellis.jvector.vector.ArrayVectorProvider;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import org.junit.Test;
 
@@ -37,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestProductQuantization extends RandomizedTest {
-    private static final ArrayVectorProvider typeProvider = new ArrayVectorProvider();
+    private static final VectorTypeSupport typeProvider = VectorizationProvider.getInstance().getVectorTypeSupport();
     @Test
     public void testSaveLoad() throws Exception {
         // Generate a PQ for random 2D vectors

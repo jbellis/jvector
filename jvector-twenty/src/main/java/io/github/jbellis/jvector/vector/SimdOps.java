@@ -16,31 +16,27 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.vector.types.ArrayVectorFloat;
-import io.github.jbellis.jvector.vector.types.VectorByte;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.VectorOperators;
 
+import java.nio.ByteOrder;
 import java.util.List;
-import java.util.Vector;
 
 final class SimdOps {
     static {
         System.setProperty("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", "0");
     }
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
-    static float sum(VectorFloat<?> vector) {
+    static float sum(OffHeapVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.array(), i);
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             sum = sum.add(a);
         }
 
@@ -60,24 +56,24 @@ final class SimdOps {
         }
 
         int dimension = vectors.get(0).length();
-        VectorFloat<?> sum = vectorTypeSupport.createFloatType(dimension);
+        OffHeapVectorFloat sum = new OffHeapVectorFloat(dimension);
 
         // Process each vector from the list
         for (VectorFloat<?> vector : vectors) {
-            addInPlace(sum, vector);
+            addInPlace(sum, (OffHeapVectorFloat) vector);
         }
 
         return sum;
     }
 
-    static void divInPlace(VectorFloat<?> vector, float divisor) {
+    static void divInPlace(OffHeapVectorFloat vector, float divisor) {
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.array(), i);
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             var divResult = a.div(divisor);
-            divResult.intoArray(vector.array(), i);
+            divResult.intoMemorySegment(vector.get(), i, ByteOrder.LITTLE_ENDIAN);
         }
 
         // Process the tail
@@ -86,35 +82,35 @@ final class SimdOps {
         }
     }
 
-    static float dot64(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.array(), offset1);
-        var b = FloatVector.fromArray(FloatVector.SPECIES_64, v2.array(), offset2);
+    static float dot64(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), v1.offset(offset2), ByteOrder.LITTLE_ENDIAN);
         return a.mul(b).reduceLanes(VectorOperators.ADD);
     }
 
-    static float dot128(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = FloatVector.fromArray(FloatVector.SPECIES_128, v1.array(), offset1);
-        var b = FloatVector.fromArray(FloatVector.SPECIES_128, v2.array(), offset2);
+    static float dot128(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
         return a.mul(b).reduceLanes(VectorOperators.ADD);
     }
 
-    static float dot256(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = FloatVector.fromArray(FloatVector.SPECIES_256, v1.array(), offset1);
-        var b = FloatVector.fromArray(FloatVector.SPECIES_256, v2.array(), offset2);
+    static float dot256(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
         return a.mul(b).reduceLanes(VectorOperators.ADD);
     }
 
-    static float dotPreferred(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.array(), offset1);
-        var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.array(), offset2);
+    static float dotPreferred(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
+        var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
         return a.mul(b).reduceLanes(VectorOperators.ADD);
     }
 
-    static float dotProduct(VectorFloat<?> v1, VectorFloat<?> v2) {
+    static float dotProduct(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
         return dotProduct(v1, 0, v2, 0, v1.length());
     }
 
-    static float dotProduct(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, final int length)
+    static float dotProduct(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, final int length)
     {
         //Common case first
         if (length >= FloatVector.SPECIES_PREFERRED.length())
@@ -129,7 +125,7 @@ final class SimdOps {
 
     }
 
-    static float dotProduct64(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+    static float dotProduct64(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
 
         if (length == FloatVector.SPECIES_64.length())
             return dot64(v1, v1offset, v2, v2offset);
@@ -142,8 +138,8 @@ final class SimdOps {
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
-            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.array(), v1offset + i);
-            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2.array(), v2offset + i);
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
             sum = sum.add(a.mul(b));
         }
 
@@ -156,7 +152,7 @@ final class SimdOps {
         return res;
     }
 
-    static float dotProduct128(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+    static float dotProduct128(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
 
         if (length == FloatVector.SPECIES_128.length())
             return dot128(v1, v1offset, v2, v2offset);
@@ -167,8 +163,8 @@ final class SimdOps {
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
-            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1.array(), v1offset + i);
-            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2.array(), v2offset + i);
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_128, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
             sum = sum.add(a.mul(b));
         }
 
@@ -182,7 +178,7 @@ final class SimdOps {
     }
 
 
-    static float dotProduct256(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+    static float dotProduct256(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
 
         if (length == FloatVector.SPECIES_256.length())
             return dot256(v1, v1offset, v2, v2offset);
@@ -193,8 +189,8 @@ final class SimdOps {
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1.array(), v1offset + i);
-            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2.array(), v2offset + i);
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, v2.get(), v1.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
             sum = sum.add(a.mul(b));
         }
 
@@ -207,7 +203,7 @@ final class SimdOps {
         return res;
     }
 
-    static float dotProductPreferred(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+    static float dotProductPreferred(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
 
         if (length == FloatVector.SPECIES_PREFERRED.length())
             return dotPreferred(v1, v1offset, v2, v2offset);
@@ -218,8 +214,8 @@ final class SimdOps {
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.array(), v1offset + i);
-            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.array(), v2offset + i);
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
             sum = sum.add(a.mul(b));
         }
 
@@ -232,7 +228,7 @@ final class SimdOps {
         return res;
     }
 
-    static int dotProduct(VectorByte<?> v1, VectorByte<?> v2) {
+    static int dotProduct(OffHeapVectorByte v1, OffHeapVectorByte v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -241,8 +237,8 @@ final class SimdOps {
 
         // Process the vectorized part, convert from 8 bytes to 8 ints
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var a = ByteVector.fromArray(ByteVector.SPECIES_64, v1.array(), i).castShape(IntVector.SPECIES_256, 0);
-            var b = ByteVector.fromArray(ByteVector.SPECIES_64, v2.array(), i).castShape(IntVector.SPECIES_256, 0);
+            var a = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN).castShape(IntVector.SPECIES_256, 0);
+            var b = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, v2.get(), v2.offset(i), ByteOrder.LITTLE_ENDIAN).castShape(IntVector.SPECIES_256, 0);
             sum = sum.add(a.mul(b));
         }
 
@@ -256,7 +252,7 @@ final class SimdOps {
         return res;
     }
 
-    static float cosineSimilarity(VectorFloat<?> v1, VectorFloat<?> v2) {
+    static float cosineSimilarity(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -268,8 +264,8 @@ final class SimdOps {
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
         // Process the vectorized part, convert from 8 bytes to 8 ints
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.array(), i);
-            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.array(), i);
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(i), ByteOrder.LITTLE_ENDIAN);
             vsum = vsum.add(a.mul(b));
             vaMagnitude = vaMagnitude.add(a.mul(a));
             vbMagnitude = vbMagnitude.add(b.mul(b));
@@ -289,7 +285,7 @@ final class SimdOps {
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
     }
 
-    static float cosineSimilarity(VectorByte<?> v1, VectorByte<?> v2) {
+    static float cosineSimilarity(OffHeapVectorByte v1, OffHeapVectorByte v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -301,8 +297,8 @@ final class SimdOps {
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(v1.length());
         // Process the vectorized part, convert from 8 bytes to 8 ints
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var a = ByteVector.fromArray(ByteVector.SPECIES_64, v1.array(), i).castShape(IntVector.SPECIES_256, 0);
-            var b = ByteVector.fromArray(ByteVector.SPECIES_64, v2.array(), i).castShape(IntVector.SPECIES_256, 0);
+            var a = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN).castShape(IntVector.SPECIES_256, 0);
+            var b = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, v2.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN).castShape(IntVector.SPECIES_256, 0);
             vsum = vsum.add(a.mul(b));
             vaMagnitude = vaMagnitude.add(a.mul(a));
             vbMagnitude = vbMagnitude.add(b.mul(b));
@@ -323,7 +319,7 @@ final class SimdOps {
     }
 
 
-    static float squareDistance(VectorFloat<?> v1, VectorFloat<?> v2) {
+    static float squareDistance(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -332,8 +328,8 @@ final class SimdOps {
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.array(), i);
-            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.array(), i);
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
 
             var diff = a.sub(b);
             vdiffSumSquared = vdiffSumSquared.add(diff.mul(diff));
@@ -349,7 +345,7 @@ final class SimdOps {
         return diffSumSquared;
     }
 
-    static int squareDistance(VectorByte<?> v1, VectorByte<?> v2) {
+    static int squareDistance(OffHeapVectorByte v1, OffHeapVectorByte v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -359,8 +355,8 @@ final class SimdOps {
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(v1.length());
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var a = ByteVector.fromArray(ByteVector.SPECIES_64, v1.array(), i).castShape(IntVector.SPECIES_256, 0);
-            var b = ByteVector.fromArray(ByteVector.SPECIES_64, v2.array(), i).castShape(IntVector.SPECIES_256, 0);
+            var a = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN).castShape(IntVector.SPECIES_256, 0);
+            var b = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, v2.get(), v2.offset(i), ByteOrder.LITTLE_ENDIAN).castShape(IntVector.SPECIES_256, 0);
 
             var diff = a.sub(b);
             vdiffSumSquared = vdiffSumSquared.add(diff.mul(diff));
@@ -376,7 +372,7 @@ final class SimdOps {
         return diffSumSquared;
     }
 
-    static void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+    static void addInPlace(OffHeapVectorFloat v1, OffHeapVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -385,9 +381,9 @@ final class SimdOps {
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.array(), i);
-            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.array(), i);
-            a.add(b).intoArray(v1.array(), i);
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            a.add(b).intoMemorySegment(v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
         }
 
         // Process the tail
@@ -396,28 +392,27 @@ final class SimdOps {
         }
     }
 
-    static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
+    static VectorFloat<?> sub(OffHeapVectorFloat lhs, OffHeapVectorFloat rhs) {
         if (lhs.length() != rhs.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        float[] result = new float[lhs.length()];
+        OffHeapVectorFloat result = new OffHeapVectorFloat(lhs.length());
         int vectorizedLength = (lhs.length() / FloatVector.SPECIES_PREFERRED.length()) * FloatVector.SPECIES_PREFERRED.length();
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, lhs.array(), i);
-            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, rhs.array(), i);
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, lhs.get(), lhs.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, rhs.get(), rhs.offset(i), ByteOrder.LITTLE_ENDIAN);
             var subResult = a.sub(b);
-            subResult.intoArray(result, i);
+            subResult.intoMemorySegment(result.get(), result.offset(i), ByteOrder.LITTLE_ENDIAN);
         }
 
         // Process the tail
         for (int i = vectorizedLength; i < lhs.length(); i++) {
-            result[i] = lhs.get(i) - rhs.get(i);
+            result.set(i, lhs.get(i) - rhs.get(i));
         }
 
-        //HACK Till MemorySegment support is added
-        return vectorTypeSupport.createFloatType(result);
+        return result;
     }
 }

@@ -18,9 +18,9 @@ public interface VectorType<T extends Number, D> extends Accountable {
 
     int length();
 
-    int offset();
+    default int offset(int i) {
+        return i;
+    }
 
     VectorType<T, D> copy();
-
-
 }

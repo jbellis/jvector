@@ -18,9 +18,7 @@ package io.github.jbellis.jvector.vector;
 
 import java.util.Random;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.graph.GraphIndexTestCase;
-import io.github.jbellis.jvector.vector.types.ArrayVectorProvider;
 import io.github.jbellis.jvector.vector.types.VectorByte;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -47,10 +45,10 @@ public class TestVectorizationProvider {
             long seed = System.nanoTime();
             r.setSeed(seed);
             VectorFloat<?> v1a = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers so we test tail
-            VectorFloat<?> v2a = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
+            VectorFloat<?> v2a = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers
 
             r.setSeed(seed);
-            VectorFloat<?> v1b = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers
+            VectorFloat<?> v1b = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
             VectorFloat<?> v2b = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1a,v2a), b.getVectorUtilSupport().dotProduct(v1b, v2b), 0.00001f);
@@ -73,10 +71,10 @@ public class TestVectorizationProvider {
             long seed = System.nanoTime();
             r.setSeed(seed);
             VectorByte<?> v1a = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers so we test tail
-            VectorByte<?> v2a = GraphIndexTestCase.randomVector8(bTypes, r, 1021); //prime numbers
+            VectorByte<?> v2a = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers
 
             r.setSeed(seed);
-            VectorByte<?> v1b = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers
+            VectorByte<?> v1b = GraphIndexTestCase.randomVector8(bTypes, r, 1021); //prime numbers
             VectorByte<?> v2b = GraphIndexTestCase.randomVector8(bTypes, r, 1021); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1a,v2a), b.getVectorUtilSupport().dotProduct(v1b, v2b));

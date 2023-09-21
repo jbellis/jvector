@@ -20,44 +20,44 @@ import java.util.List;
 
 import io.github.jbellis.jvector.vector.types.VectorByte;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 final class
 PanamaVectorUtilSupport implements VectorUtilSupport
 {
-
     @Override
     public float dotProduct(VectorFloat<?> a, VectorFloat<?> b) {
-        return SimdOps.dotProduct(a, b);
+        return SimdOps.dotProduct((OffHeapVectorFloat)a, (OffHeapVectorFloat)b);
     }
 
     @Override
     public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
-        return SimdOps.cosineSimilarity(v1, v2);
+        return SimdOps.cosineSimilarity((OffHeapVectorFloat)v1, (OffHeapVectorFloat)v2);
     }
 
     @Override
     public float squareDistance(VectorFloat<?> a, VectorFloat<?> b) {
-        return SimdOps.squareDistance(a, b);
+        return SimdOps.squareDistance((OffHeapVectorFloat)a, (OffHeapVectorFloat)b);
     }
 
     @Override
     public int dotProduct(VectorByte<?> a, VectorByte<?> b) {
-        return SimdOps.dotProduct(a, b);
+        return SimdOps.dotProduct((OffHeapVectorByte)a, (OffHeapVectorByte)b);
     }
 
     @Override
     public float dotProduct(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
-        return SimdOps.dotProduct(a, aoffset, b, boffset, length);
+        return SimdOps.dotProduct((OffHeapVectorFloat)a, aoffset, (OffHeapVectorFloat)b, boffset, length);
     }
 
     @Override
     public float cosine(VectorByte<?> a, VectorByte<?> b) {
-        return SimdOps.cosineSimilarity(a, b);
+        return SimdOps.cosineSimilarity((OffHeapVectorByte)a, (OffHeapVectorByte)b);
     }
 
     @Override
     public int squareDistance(VectorByte<?> a, VectorByte<?> b) {
-        return SimdOps.squareDistance(a, b);
+        return SimdOps.squareDistance((OffHeapVectorByte)a, (OffHeapVectorByte)b);
     }
 
     @Override
@@ -67,21 +67,21 @@ PanamaVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float sum(VectorFloat<?> vector) {
-        return SimdOps.sum(vector);
+        return SimdOps.sum((OffHeapVectorFloat) vector);
     }
 
     @Override
     public void divInPlace(VectorFloat<?> vector, float divisor) {
-        SimdOps.divInPlace(vector, divisor);
+        SimdOps.divInPlace((OffHeapVectorFloat)vector, divisor);
     }
 
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
-        SimdOps.addInPlace(v1, v2);
+        SimdOps.addInPlace((OffHeapVectorFloat)v1, (OffHeapVectorFloat)v2);
     }
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
-        return SimdOps.sub(lhs, rhs);
+        return SimdOps.sub((OffHeapVectorFloat)lhs, (OffHeapVectorFloat)rhs);
     }
 }

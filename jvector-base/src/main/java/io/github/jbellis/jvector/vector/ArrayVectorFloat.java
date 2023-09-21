@@ -1,9 +1,9 @@
-package io.github.jbellis.jvector.vector.types;
+package io.github.jbellis.jvector.vector;
 
 import java.util.Arrays;
 
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import io.github.jbellis.jvector.vector.VectorEncoding;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 final public class ArrayVectorFloat implements VectorFloat<float[]>
 {
@@ -45,12 +45,6 @@ final public class ArrayVectorFloat implements VectorFloat<float[]>
     public int length()
     {
         return data.length;
-    }
-
-    @Override
-    public int offset()
-    {
-        return 0;
     }
 
     @Override

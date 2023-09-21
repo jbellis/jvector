@@ -1,4 +1,4 @@
-package io.github.jbellis.jvector.vector.types;
+package io.github.jbellis.jvector.vector;
 
 
 import java.io.DataOutput;
@@ -6,6 +6,9 @@ import java.io.IOException;
 
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.vector.types.VectorByte;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 public class ArrayVectorProvider implements VectorTypeSupport
 {
