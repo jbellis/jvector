@@ -28,7 +28,7 @@ public class PanamaVectorizationProvider extends VectorizationProvider {
 
     public PanamaVectorizationProvider() {
         this.vectorUtilSupport = new PanamaVectorUtilSupport();
-        this.vectorTypeSupport = new OffHeapVectorProvider();
+        this.vectorTypeSupport = new ArrayVectorProvider();
     }
 
     @Override
