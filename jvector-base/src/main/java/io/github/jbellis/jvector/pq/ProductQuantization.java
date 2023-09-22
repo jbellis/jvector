@@ -28,7 +28,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -38,18 +37,16 @@ import static java.lang.Math.min;
  * A Product Quantization implementation for float vectors.
  */
 public class ProductQuantization {
-    private static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
+    static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     private static final int K_MEANS_ITERATIONS = 12;
     private static final int MAX_PQ_TRAINING_SET_SIZE = 256000;
 
-    public final float[][][] codebooks;
-    private final int M;
+    final float[][][] codebooks;
+    final int M;
     private final int originalDimension;
     private final float[] globalCentroid;
-    public final int[][] subvectorSizesAndOffsets;
+    final int[][] subvectorSizesAndOffsets;
 
-    public final LongAdder searches;
-    public final LongAdder misses;
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
      *
@@ -98,8 +95,6 @@ public class ProductQuantization {
             offset += size;
         }
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
-        this.searches = new LongAdder();
-        this.misses = new LongAdder();
     }
 
     /**
@@ -128,46 +123,6 @@ public class ProductQuantization {
     }
 
     /**
-     * Computes the dot product of the (approximate) original decoded vector with
-     * another vector.
-     * <p>
-     * This method can compute the dot product without materializing the decoded vector as a new float[],
-     * which will be roughly 2x as fast as decode() + dot().
-     * <p>
-     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
-     * before calling this method.
-     */
-    public float decodedDotProduct(byte[] encoded, float[] other, float[][] cache) {
-        float sum = 0.0f;
-        for (int m = 0; m < M; ++m) {
-            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            var cachedValue = cache[m][centroidIndex];
-            sum += cachedValue;
-        }
-        return sum;
-    }
-
-    /**
-     * Computes the square distance of the (approximate) original decoded vector with
-     * another vector.
-     * <p>
-     * This method can compute the square distance without materializing the decoded vector as a new float[],
-     * which will be roughly 2x as fast as decode() + squaredistance().
-     * <p>
-     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
-     * before calling this method.
-     */
-    public float decodedSquareDistance(byte[] encoded, float[] other, float[][] cache) {
-        float sum = 0.0f;
-        for (int m = 0; m < M; ++m) {
-            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            var cachedValue = cache[m][centroidIndex];
-            sum += cachedValue;
-        }
-        return sum;
-    }
-
-    /**
      * Computes the cosine of the (approximate) original decoded vector with
      * another vector.
      * <p>
@@ -177,7 +132,7 @@ public class ProductQuantization {
      * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
      * before calling this method.
      */
-    public float decodedCosine(byte[] encoded, float[] other, float[][] cache) {
+    public float decodedCosine(byte[] encoded, float[] other) {
         float sum = 0.0f;
         float aMagnitude = 0.0f;
         float bMagnitude = 0.0f;

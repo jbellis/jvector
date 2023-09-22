@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -31,24 +30,13 @@ import java.util.stream.IntStream;
 
 public class CompressedVectors
 {
-    private final ProductQuantization pq;
+    final ProductQuantization pq;
     private final List<byte[]> compressedVectors;
-
-    private final ThreadLocal<float[][]> cache;
-    private static final float[] empty = new float[256];
-    static {
-        for (var i = 0; i < 256; i++) {
-            empty[i] = Float.NEGATIVE_INFINITY;
-        }
-    }
 
     public CompressedVectors(ProductQuantization pq, List<byte[]> compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
-        this.cache =
-                ThreadLocal.withInitial(
-                        () -> { System.out.println("Building new floats"); return new float[pq.getSubspaceCount()][256];});
     }
 
     public void write(DataOutput out) throws IOException
@@ -85,27 +73,6 @@ public class CompressedVectors
         return new CompressedVectors(pq, compressedVectors);
     }
 
-    /**
-     * It is the caller's responsibility to center the comparison vector v before calling this method
-     */
-    float decodedSimilarity(int ordinal, float[] v, VectorSimilarityFunction similarityFunction, float[][] cache)
-    {
-        switch (similarityFunction)
-        {
-            case DOT_PRODUCT:
-                return (1 + pq.decodedDotProduct(compressedVectors.get(ordinal), v, cache)) / 2;
-            case EUCLIDEAN:
-                return 1 / (1 + pq.decodedSquareDistance(compressedVectors.get(ordinal), v, cache));
-            case COSINE:
-                return (1 + pq.decodedCosine(compressedVectors.get(ordinal), v, cache)) / 2;
-            default:
-                // Fallback in case other similarity functions added
-                var decoded = new float[pq.getOriginalDimension()];
-                pq.decodeCentered(compressedVectors.get(ordinal), decoded);
-                return similarityFunction.compare(decoded, v);
-        }
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -125,16 +92,19 @@ public class CompressedVectors
     }
 
     public NeighborSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
-        float[] centroid = pq.getCenter();
-        var centeredQuery = centroid == null ? q : VectorUtil.sub(q, centroid);
-        var tlCache = cache.get();
-        for (var i = 0; i < pq.getSubspaceCount(); i++) {
-            for (var j = 0; j < 256; j++) {
-                int offset = pq.subvectorSizesAndOffsets[i][1];
-                float[] centroidSubvector = pq.codebooks[i][j];
-                tlCache[i][j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
-            }
+        switch (similarityFunction) {
+            case DOT_PRODUCT:
+                return new CompressedDecoder.DotProductDecoder(this, q);
+            case EUCLIDEAN:
+                return new CompressedDecoder.EuclideanDecoder(this, q);
+            case COSINE:
+                return new CompressedDecoder.CosineDecoder(this, q);
+            default:
+                throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
         }
-        return (other) -> decodedSimilarity(other, centeredQuery, similarityFunction, tlCache);
+    }
+
+    public byte[] get(int ordinal) {
+        return compressedVectors.get(ordinal);
     }
 }
