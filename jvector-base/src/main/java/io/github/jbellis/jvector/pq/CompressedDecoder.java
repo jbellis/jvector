@@ -14,8 +14,8 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
         this.cv = cv;
     }
 
-    protected static class CachingDecoder extends CompressedDecoder {
-        private final float[][] cache;
+    protected static abstract class CachingDecoder extends CompressedDecoder {
+        protected final float[][] cache;
 
         protected CachingDecoder(CompressedVectors cv, float[] query, VectorSimilarityFunction vsf) {
             super(cv);
@@ -47,12 +47,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
             return cache;
         }
 
-        @Override
-        public float similarityTo(int node2) {
-            return (1 + decodedSimilarity(cv.get(node2), cache)) / 2;
-        }
-
-        private static float decodedSimilarity(byte[] encoded, float[][] cache) {
+        protected static float decodedSimilarity(byte[] encoded, float[][] cache) {
             // combining cached fragments is the same for dot product and euclidean; cosine is not supported
             float sum = 0.0f;
             for (int m = 0; m < cache.length; ++m) {
@@ -68,11 +63,21 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
         public DotProductDecoder(CompressedVectors cv, float[] query) {
             super(cv, query, VectorSimilarityFunction.DOT_PRODUCT);
         }
+
+        @Override
+        public float similarityTo(int node2) {
+            return (1 + decodedSimilarity(cv.get(node2), cache)) / 2;
+        }
     }
 
     static class EuclideanDecoder extends CachingDecoder {
         public EuclideanDecoder(CompressedVectors cv, float[] query) {
             super(cv, query, VectorSimilarityFunction.EUCLIDEAN);
+        }
+
+        @Override
+        public float similarityTo(int node2) {
+            return 1 / (1 + decodedSimilarity(cv.get(node2), cache));
         }
     }
 
