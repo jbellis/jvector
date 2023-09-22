@@ -32,11 +32,23 @@ public class CompressedVectors
 {
     final ProductQuantization pq;
     private final List<byte[]> compressedVectors;
+    private final ThreadLocal<float[][]> partialSums; // for dot product, euclidean, and cosine
+    private final ThreadLocal<float[][]> partialMagnitudes; // for cosine
 
     public CompressedVectors(ProductQuantization pq, List<byte[]> compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
+        this.partialSums = ThreadLocal.withInitial(() -> initFloatFragments(pq));
+        this.partialMagnitudes = ThreadLocal.withInitial(() -> initFloatFragments(pq));
+    }
+
+    private static float[][] initFloatFragments(ProductQuantization pq) {
+        float[][] a = new float[pq.getSubspaceCount()][];
+        for (int i = 0; i < a.length; i++) {
+            a[i] = new float[ProductQuantization.CLUSTERS];
+        }
+        return a;
     }
 
     public void write(DataOutput out) throws IOException
@@ -106,5 +118,13 @@ public class CompressedVectors
 
     public byte[] get(int ordinal) {
         return compressedVectors.get(ordinal);
+    }
+
+    float[][] reusablePartialSums() {
+        return partialSums.get();
+    }
+
+    float[][] reusablePartialMagnitudes() {
+        return partialMagnitudes.get();
     }
 }

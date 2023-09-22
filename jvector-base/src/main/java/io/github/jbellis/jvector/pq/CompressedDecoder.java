@@ -20,12 +20,11 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
         protected CachingDecoder(CompressedVectors cv, float[] query, VectorSimilarityFunction vsf) {
             super(cv);
             var pq = this.cv.pq;
-            partialSums = new float[pq.getSubspaceCount()][];
+            partialSums = cv.reusablePartialSums();
 
             float[] center = pq.getCenter();
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
             for (var i = 0; i < partialSums.length; i++) {
-                partialSums[i] = new float[ProductQuantization.CLUSTERS];
                 for (var j = 0; j < ProductQuantization.CLUSTERS; j++) {
                     int offset = pq.subvectorSizesAndOffsets[i][1];
                     float[] centroidSubvector = pq.codebooks[i][j];
@@ -87,8 +86,8 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
             var pq = this.cv.pq;
 
             // Compute and cache partial sums and magnitudes for query vector
-            partialSums = new float[pq.getSubspaceCount()][];
-            aMagnitude = new float[pq.getSubspaceCount()][];
+            partialSums = cv.reusablePartialSums();
+            aMagnitude = cv.reusablePartialMagnitudes();
             float bMagSum = 0.0f;
 
             float[] center = pq.getCenter();
@@ -96,8 +95,6 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
             for (int m = 0; m < pq.getSubspaceCount(); ++m) {
                 int offset = pq.subvectorSizesAndOffsets[m][1];
-                partialSums[m] = new float[ProductQuantization.CLUSTERS];
-                aMagnitude[m] = new float[ProductQuantization.CLUSTERS];
 
                 for (int j = 0; j < ProductQuantization.CLUSTERS; ++j) {
                     float[] centroidSubvector = pq.codebooks[m][j];
