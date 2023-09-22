@@ -82,7 +82,7 @@ public class SiftSmall {
             var queryVector = queryVectors.get(i);
             SearchResult.NodeScore[] nn;
             var view = graph.getView();
-            var searcher = new GraphSearcher.Builder(view).build();
+            var searcher = new GraphSearcher.Builder<>(view).build();
             if (compressedVectors == null) {
                 NeighborSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
                 nn = searcher.search(sf, null, 100, null).getNodes();
