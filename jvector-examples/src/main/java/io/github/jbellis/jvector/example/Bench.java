@@ -169,7 +169,7 @@ public class Bench {
         var queryVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000);
         var gt = SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000);
         var ds = new DataSet("wikipedia",
-                             VectorSimilarityFunction.COSINE,
+                             VectorSimilarityFunction.DOT_PRODUCT,
                              baseVectors,
                              queryVectors,
                              gt);
