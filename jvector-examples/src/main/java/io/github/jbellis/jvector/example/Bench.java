@@ -140,11 +140,7 @@ public class Bench {
         var diskGrid = List.of(false, true);
 
         // this dataset contains more than 10k query vectors, so we limit it with .subList
-        var adaSet = new DataSet("wikipedia",
-                                 VectorSimilarityFunction.DOT_PRODUCT,
-                                 SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec"),
-                                 SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000),
-                                 SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000));
+        var adaSet = loadWikipediaData();
         gridSearch(adaSet, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
 
         var files = List.of(
@@ -168,10 +164,24 @@ public class Bench {
         }
     }
 
+    private static DataSet loadWikipediaData() throws IOException {
+        var baseVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec");
+        var queryVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000);
+        var gt = SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000);
+        var ds = new DataSet("wikipedia",
+                             VectorSimilarityFunction.DOT_PRODUCT,
+                             baseVectors,
+                             queryVectors,
+                             gt);
+        System.out.format("%nWikipedia: %d base and %d query vectors loaded, dimensions %d%n",
+                          baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
+        return ds;
+    }
+
     private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
         var start = System.nanoTime();
         int originalDimension = ds.baseVectors.get(0).length;
-        var pqDims = originalDimension / 2;
+        var pqDims = originalDimension / 4;
         ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
         ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
         System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
