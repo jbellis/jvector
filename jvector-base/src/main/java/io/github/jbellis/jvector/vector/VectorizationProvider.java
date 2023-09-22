@@ -95,6 +95,21 @@ public abstract class VectorizationProvider {
         LOG.warning("C2 compiler is disabled; Java vector incubator API can't be enabled");
         return new DefaultVectorizationProvider();
       }
+
+      try {
+        var provider = (VectorizationProvider) Class.forName("io.github.jbellis.jvector.vector.NativeVectorizationProvider").getConstructor().newInstance();
+        LOG.info("Native Vector API enabled. Using NativeVectorizationProvider.");
+        return provider;
+      } catch (UnsupportedOperationException uoe) {
+        // not supported because preferred vector size too small or similar
+        LOG.warning("Java vector API was not enabled. " + uoe.getMessage());
+        return new DefaultVectorizationProvider();
+      } catch (ClassNotFoundException e) {
+        LOG.warning("Java version does not support vector API");
+      } catch (Throwable th) {
+        throw new AssertionError(th);
+      }
+
       try {
         var provider = (VectorizationProvider) Class.forName("io.github.jbellis.jvector.vector.PanamaVectorizationProvider").getConstructor().newInstance();
         LOG.info("Java incubating Vector API enabled. Using PanamaVectorizationProvider.");

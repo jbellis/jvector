@@ -16,24 +16,15 @@
 
 package microbench;
 
-import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorOperators;
 import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.infra.Blackhole;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 
 @Warmup(iterations = 2, time = 5)
 @Measurement(iterations = 3, time = 10)
 @Fork(warmups = 1, value = 1, jvmArgsPrepend = {"--add-modules", "jdk.incubator.vector", "--enable-preview" ,"-XX:+AlignVector"})
 public class SimilarityBench {
 
-    private static final int SIZE = 1024;
+/*    private static final int SIZE = 1024;
     @State(Scope.Benchmark)
     public static class Parameters {
         MemorySegment fm0 = Arena.global().allocateArray(ValueLayout.JAVA_FLOAT, SIZE);
@@ -93,5 +84,5 @@ public class SimilarityBench {
 
     public static void main(String[] args) throws Exception {
         org.openjdk.jmh.Main.main(args);
-    }
+    }*/
 }

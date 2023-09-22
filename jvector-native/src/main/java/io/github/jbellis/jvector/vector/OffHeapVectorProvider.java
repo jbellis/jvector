@@ -16,7 +16,7 @@ public class OffHeapVectorProvider implements VectorTypeSupport
     public VectorFloat<?> createFloatType(Object data)
     {
         if (data instanceof FloatBuffer)
-            return new OffHeapVectorFloat((FloatBuffer) data);
+            return new OffHeapVectorFloat((ByteBuffer) data);
 
         return new OffHeapVectorFloat((float[]) data);
     }
@@ -48,13 +48,13 @@ public class OffHeapVectorProvider implements VectorTypeSupport
         if (data instanceof ByteBuffer)
             return new OffHeapVectorByte((ByteBuffer) data);
 
-        return new OffHeapVectorByte((byte[]) data);
+        return new ArrayVectorByte((byte[]) data);
     }
 
     @Override
     public VectorByte<?> createByteType(int length)
     {
-        return new OffHeapVectorByte(length);
+        return new ArrayVectorByte(length);
     }
 
     @Override
@@ -62,7 +62,7 @@ public class OffHeapVectorProvider implements VectorTypeSupport
     {
         byte[] d = new byte[size];
         r.readFully(d);
-        return new OffHeapVectorByte(d);
+        return new ArrayVectorByte(d);
     }
 
     @Override

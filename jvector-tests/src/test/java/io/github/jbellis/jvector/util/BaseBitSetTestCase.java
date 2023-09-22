@@ -32,7 +32,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.Random;
 
-/** Base test case for BitSets. */
+/** Base benchmark case for BitSets. */
 @Ignore
 public abstract class BaseBitSetTestCase<T extends BitSet> extends LuceneTestCase {
 

@@ -9,9 +9,9 @@
         <artifactId>jvector-parent</artifactId>
         <version>dev</version>
     </parent>
-    <artifactId>jvector-twenty</artifactId>
+    <artifactId>jvector-native</artifactId>
     <version>${jvector.version}</version>
-    <name>Twenty</name>
+    <name>Native</name>
     <build>
         <plugins>
             <plugin>
@@ -19,10 +19,11 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <release>20</release>
+                    <release>21</release>
                     <compilerArgs>
                         <arg>--add-modules</arg>
                         <arg>jdk.incubator.vector</arg>
+                        <arg>--enable-preview</arg>
                     </compilerArgs>
                 </configuration>
             </plugin>

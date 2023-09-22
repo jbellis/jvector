@@ -1,6 +1,5 @@
 package io.github.jbellis.jvector.vector;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -17,8 +16,8 @@ public class OffHeapVectorByte implements VectorByte<MemorySegment>
     private final MemorySegment segment;
 
     OffHeapVectorByte(int length) {
-        this.segment = Arena.global().allocate(MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_BYTE));
-        this.buffer = segment.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        this.buffer = ByteBuffer.allocateDirect(length).order(ByteOrder.LITTLE_ENDIAN);
+        this.segment = MemorySegment.ofBuffer(buffer);
     }
 
     OffHeapVectorByte(ByteBuffer data) {

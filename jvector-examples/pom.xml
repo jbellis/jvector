@@ -93,6 +93,12 @@
                     <version>${jvector.version}</version>
                     <scope>compile</scope>
                 </dependency>
+                <dependency>
+                    <groupId>io.github.jbellis</groupId>
+                    <artifactId>jvector-native</artifactId>
+                    <version>${jvector.version}</version>
+                    <scope>compile</scope>
+                </dependency>
             </dependencies>
             <build>
                 <plugins>

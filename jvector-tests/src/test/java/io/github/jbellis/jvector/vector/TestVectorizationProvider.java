@@ -44,12 +44,12 @@ public class TestVectorizationProvider {
         for (int i = 0; i < 1000; i++) {
             long seed = System.nanoTime();
             r.setSeed(seed);
-            VectorFloat<?> v1a = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers so we test tail
-            VectorFloat<?> v2a = GraphIndexTestCase.randomVector(aTypes, r, 1021); //prime numbers
+            VectorFloat<?> v1a = GraphIndexTestCase.randomVector(aTypes, r, 2); //prime numbers so we benchmark tail
+            VectorFloat<?> v2a = GraphIndexTestCase.randomVector(aTypes, r, 2); //prime numbers
 
             r.setSeed(seed);
-            VectorFloat<?> v1b = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
-            VectorFloat<?> v2b = GraphIndexTestCase.randomVector(bTypes, r, 1021); //prime numbers
+            VectorFloat<?> v1b = GraphIndexTestCase.randomVector(bTypes, r, 2); //prime numbers
+            VectorFloat<?> v2b = GraphIndexTestCase.randomVector(bTypes, r, 2); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1a,v2a), b.getVectorUtilSupport().dotProduct(v1b, v2b), 0.00001f);
             Assert.assertEquals(a.getVectorUtilSupport().cosine(v1a,v2a), b.getVectorUtilSupport().cosine(v1b, v2b), 0.00001f);
@@ -70,7 +70,7 @@ public class TestVectorizationProvider {
         for (int i = 0; i < 1000; i++) {
             long seed = System.nanoTime();
             r.setSeed(seed);
-            VectorByte<?> v1a = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers so we test tail
+            VectorByte<?> v1a = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers so we benchmark tail
             VectorByte<?> v2a = GraphIndexTestCase.randomVector8(aTypes, r, 1021); //prime numbers
 
             r.setSeed(seed);

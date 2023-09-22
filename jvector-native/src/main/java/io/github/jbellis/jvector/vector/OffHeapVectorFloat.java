@@ -1,10 +1,10 @@
 package io.github.jbellis.jvector.vector;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.FloatBuffer;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Objects;
 
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -12,16 +12,16 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
 {
     private final MemorySegment segment;
-    private final FloatBuffer buffer;
+    private final ByteBuffer buffer;
     private final int length;
 
     OffHeapVectorFloat(int length) {
-        this.segment = Arena.global().allocate(MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_FLOAT));
-        this.buffer = segment.asByteBuffer().asFloatBuffer();
+        this.buffer = ByteBuffer.allocateDirect(length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        this.segment = MemorySegment.ofBuffer(buffer);
         this.length = length;
     }
 
-    OffHeapVectorFloat(FloatBuffer buffer) {
+    OffHeapVectorFloat(ByteBuffer buffer) {
         this.buffer = buffer;
         this.segment = MemorySegment.ofBuffer(buffer);
         this.length = buffer.remaining();

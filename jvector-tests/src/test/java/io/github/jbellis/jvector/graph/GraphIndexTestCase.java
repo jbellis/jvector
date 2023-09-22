@@ -81,7 +81,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   }
 
   void assertGraphEqual(GraphIndex<T> g, GraphIndex<T> h) {
-    // construct these up front since they call seek which will mess up our test loop
+    // construct these up front since they call seek which will mess up our benchmark loop
     String prettyG = GraphIndex.prettyPrint(g);
     String prettyH = GraphIndex.prettyPrint(h);
     assertEquals(
@@ -270,7 +270,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   @Test
   public void testDiversity() {
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    // Some carefully checked test cases with simple 2d vectors on the unit circle:
+    // Some carefully checked benchmark cases with simple 2d vectors on the unit circle:
     VectorFloat<?>[] values = {
       unitVector2d(0.5),
       unitVector2d(0.75),
@@ -325,7 +325,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   @Test
   public void testDiversityFallback() {
     similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
-    // Some test cases can't be exercised in two dimensions;
+    // Some benchmark cases can't be exercised in two dimensions;
     // in particular if a new neighbor displaces an existing neighbor
     // by being closer to the target, yet none of the existing neighbors is closer to the new vector
     // than to the target -- ie they all remain diverse, so we simply drop the farthest one.
@@ -362,7 +362,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   @Test
   public void testDiversity3d() {
     similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
-    // test the case when a neighbor *becomes* non-diverse when a newer better neighbor arrives
+    // benchmark the case when a neighbor *becomes* non-diverse when a newer better neighbor arrives
     VectorFloat<?>[] values = {
             vectorTypeSupport.createFloatType(new float[]{0, 0, 0}),
             vectorTypeSupport.createFloatType(new float[]{0, 10, 0}),
