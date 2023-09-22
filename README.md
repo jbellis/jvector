@@ -84,6 +84,22 @@ this with the following steps:
   the best tradeoffs between recall and throughput.  You can use [`plot_output.py`](./plot_output.py) to graph the [pareto-optimal
   points](https://en.wikipedia.org/wiki/Pareto_efficiency) found by `Bench`.
 
+Some sample KNN datasets for testing based on ada-002 embeddings generated on wikipedia data are available in ivec/fvec format for testing at:
+
+```
+aws s3 ls s3://astra-vector/wikipedia/ --no-sign-request 
+                           PRE 100k/
+                           PRE 1M/
+                           PRE 4M/
+```
+
+download them with the aws s3 cli as follows:
+
+```
+aws s3 sync s3://astra-vector/wikipedia/100k ./ --no-sign-request
+```
+
+
 ## Developing and Testing
 This project is organized as a [multimodule Maven build](https://maven.apache.org/guides/mini/guide-multiple-modules.html). The intent is to produce a multirelease jar suitable for use as
 a dependency from any Java 11 code. When run on a Java 20+ JVM with the Vector module enabled, optimized vector 
