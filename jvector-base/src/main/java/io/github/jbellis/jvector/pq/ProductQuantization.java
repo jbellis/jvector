@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -41,13 +42,14 @@ public class ProductQuantization {
     private static final int K_MEANS_ITERATIONS = 12;
     private static final int MAX_PQ_TRAINING_SET_SIZE = 256000;
 
-    private final float[][][] codebooks;
+    public final float[][][] codebooks;
     private final int M;
     private final int originalDimension;
     private final float[] globalCentroid;
-    private final int[][] subvectorSizesAndOffsets;
-    private final ThreadLocal<float[]> scratch;
+    public final int[][] subvectorSizesAndOffsets;
 
+    public final LongAdder searches;
+    public final LongAdder misses;
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
      *
@@ -96,7 +98,8 @@ public class ProductQuantization {
             offset += size;
         }
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
-        this.scratch = ThreadLocal.withInitial(() -> new float[subvectorSizesAndOffsets.length]);
+        this.searches = new LongAdder();
+        this.misses = new LongAdder();
     }
 
     /**
@@ -134,15 +137,14 @@ public class ProductQuantization {
      * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
      * before calling this method.
      */
-    public float decodedDotProduct(byte[] encoded, float[] other) {
-        var a = scratch.get();
+    public float decodedDotProduct(byte[] encoded, float[] other, float[][] cache) {
+        float sum = 0.0f;
         for (int m = 0; m < M; ++m) {
-            int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks[m][centroidIndex];
-            a[m] = VectorUtil.dotProduct(centroidSubvector, 0, other, offset, centroidSubvector.length);
+            var cachedValue = cache[m][centroidIndex];
+            sum += cachedValue;
         }
-        return VectorUtil.sum(a);
+        return sum;
     }
 
     /**
@@ -155,16 +157,14 @@ public class ProductQuantization {
      * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
      * before calling this method.
      */
-    public float decodedSquareDistance(byte[] encoded, float[] other) {
+    public float decodedSquareDistance(byte[] encoded, float[] other, float[][] cache) {
         float sum = 0.0f;
-        var a = scratch.get();
         for (int m = 0; m < M; ++m) {
-            int offset = subvectorSizesAndOffsets[m][1];
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks[m][centroidIndex];
-            a[m] = VectorUtil.squareDistance(centroidSubvector, 0, other, offset, centroidSubvector.length);
+            var cachedValue = cache[m][centroidIndex];
+            sum += cachedValue;
         }
-        return VectorUtil.sum(a);
+        return sum;
     }
 
     /**
@@ -177,7 +177,7 @@ public class ProductQuantization {
      * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
      * before calling this method.
      */
-    public float decodedCosine(byte[] encoded, float[] other) {
+    public float decodedCosine(byte[] encoded, float[] other, float[][] cache) {
         float sum = 0.0f;
         float aMagnitude = 0.0f;
         float bMagnitude = 0.0f;
@@ -209,7 +209,7 @@ public class ProductQuantization {
     /**
      * Decodes the quantized representation (byte array) to its approximate original vector, relative to the global centroid.
      */
-    public void decodeCentered(byte[] encoded, float[] target) {
+    void decodeCentered(byte[] encoded, float[] target) {
         for (int m = 0; m < M; m++) {
             int centroidIndex = Byte.toUnsignedInt(encoded[m]);
             float[] centroidSubvector = codebooks[m][centroidIndex];
