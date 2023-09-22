@@ -15,44 +15,40 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
     }
 
     protected static abstract class CachingDecoder extends CompressedDecoder {
-        protected final float[][] cache;
+        protected final float[][] partialSums;
 
         protected CachingDecoder(CompressedVectors cv, float[] query, VectorSimilarityFunction vsf) {
             super(cv);
-            cache = computeQueryFragments(query, vsf);
-        }
+            var pq = this.cv.pq;
+            partialSums = new float[pq.getSubspaceCount()][];
 
-        public float[][] computeQueryFragments(float[] query, VectorSimilarityFunction vsf) {
-            var pq = cv.pq;
-            float[][] cache = new float[pq.getSubspaceCount()][];
-            float[] centroid = pq.getCenter();
-            var centeredQuery = centroid == null ? query : VectorUtil.sub(query, centroid);
-            for (var i = 0; i < cache.length; i++) {
-                cache[i] = new float[ProductQuantization.CLUSTERS];
+            float[] center = pq.getCenter();
+            var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
+            for (var i = 0; i < partialSums.length; i++) {
+                partialSums[i] = new float[ProductQuantization.CLUSTERS];
                 for (var j = 0; j < ProductQuantization.CLUSTERS; j++) {
                     int offset = pq.subvectorSizesAndOffsets[i][1];
                     float[] centroidSubvector = pq.codebooks[i][j];
                     switch (vsf) {
                         case DOT_PRODUCT:
-                            cache[i][j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
+                            partialSums[i][j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
                             break;
                         case EUCLIDEAN:
-                            cache[i][j] = VectorUtil.squareDistance(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
+                            partialSums[i][j] = VectorUtil.squareDistance(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
                             break;
                         default:
                             throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
                     }
                 }
             }
-            return cache;
         }
 
-        protected static float decodedSimilarity(byte[] encoded, float[][] cache) {
-            // combining cached fragments is the same for dot product and euclidean; cosine is not supported
+        protected float decodedSimilarity(byte[] encoded) {
+            // combining cached fragments is the same for dot product and euclidean; cosine is handled separately
             float sum = 0.0f;
-            for (int m = 0; m < cache.length; ++m) {
+            for (int m = 0; m < partialSums.length; ++m) {
                 int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-                var cachedValue = cache[m][centroidIndex];
+                var cachedValue = partialSums[m][centroidIndex];
                 sum += cachedValue;
             }
             return sum;
@@ -66,7 +62,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
         @Override
         public float similarityTo(int node2) {
-            return (1 + decodedSimilarity(cv.get(node2), cache)) / 2;
+            return (1 + decodedSimilarity(cv.get(node2))) / 2;
         }
     }
 
@@ -77,16 +73,42 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
         @Override
         public float similarityTo(int node2) {
-            return 1 / (1 + decodedSimilarity(cv.get(node2), cache));
+            return 1 / (1 + decodedSimilarity(cv.get(node2)));
         }
     }
 
     static class CosineDecoder extends CompressedDecoder {
-        private final float[] query;
+        protected final float[][] partialSums;
+        protected final float[][] aMagnitude;
+        protected final float bMagnitude;
 
         public CosineDecoder(CompressedVectors cv, float[] query) {
             super(cv);
-            this.query = query;
+            var pq = this.cv.pq;
+
+            // Compute and cache partial sums and magnitudes for query vector
+            partialSums = new float[pq.getSubspaceCount()][];
+            aMagnitude = new float[pq.getSubspaceCount()][];
+            float bMagSum = 0.0f;
+
+            float[] center = pq.getCenter();
+            float[] centeredQuery = center == null ? query : VectorUtil.sub(query, center);
+
+            for (int m = 0; m < pq.getSubspaceCount(); ++m) {
+                int offset = pq.subvectorSizesAndOffsets[m][1];
+                partialSums[m] = new float[ProductQuantization.CLUSTERS];
+                aMagnitude[m] = new float[ProductQuantization.CLUSTERS];
+
+                for (int j = 0; j < ProductQuantization.CLUSTERS; ++j) {
+                    float[] centroidSubvector = pq.codebooks[m][j];
+                    partialSums[m][j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
+                    aMagnitude[m][j] = VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, centroidSubvector.length);
+                }
+
+                bMagSum += VectorUtil.dotProduct(centeredQuery, offset, centeredQuery, offset, pq.subvectorSizesAndOffsets[m][0]);
+            }
+
+            this.bMagnitude = bMagSum;
         }
 
         @Override
@@ -94,21 +116,19 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
             return (1 + decodedCosine(node2)) / 2;
         }
 
-        private float decodedCosine(int node2) {
-            byte[] encoded = cv.get(node2);
+        protected float decodedCosine(int node2) {
             float sum = 0.0f;
-            float aMagnitude = 0.0f;
-            float bMagnitude = 0.0f;
-            for (int m = 0; m < cv.pq.M; ++m) {
-                int offset = cv.pq.subvectorSizesAndOffsets[m][1];
+            float aMag = 0.0f;
+
+            byte[] encoded = cv.get(node2);
+
+            for (int m = 0; m < partialSums.length; ++m) {
                 int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-                float[] centroidSubvector = cv.pq.codebooks[m][centroidIndex];
-                var length = centroidSubvector.length;
-                sum += VectorUtil.dotProduct(centroidSubvector, 0, query, offset, length);
-                aMagnitude += VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, length);
-                bMagnitude +=  VectorUtil.dotProduct(query, offset, query, offset, length);
+                sum += partialSums[m][centroidIndex];
+                aMag += aMagnitude[m][centroidIndex];
             }
-            return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
+
+            return (float) (sum / Math.sqrt(aMag * bMagnitude));
         }
     }
 }
