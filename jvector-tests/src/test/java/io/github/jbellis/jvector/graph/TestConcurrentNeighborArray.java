@@ -25,7 +25,7 @@ import static org.junit.Assert.assertTrue;
 public class TestConcurrentNeighborArray {
     @Test
     public void testRetainNoneSelected() {
-        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10, true);
+        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10);
         for (int i = 1; i <= 10; i++) {
             array.addInOrder(i, 11 - i);
         }
@@ -36,7 +36,7 @@ public class TestConcurrentNeighborArray {
 
     @Test
     public void testRetainAllSelected() {
-        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10, true);
+        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10);
         for (int i = 1; i <= 10; i++) {
             array.addInOrder(i, 11 - i);
         }
@@ -48,7 +48,7 @@ public class TestConcurrentNeighborArray {
 
     @Test
     public void testRetainSomeSelectedNotFront() {
-        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10, true);
+        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10);
         for (int i = 1; i <= 10; i++) {
             array.addInOrder(i, 11 - i);
         }
@@ -63,7 +63,7 @@ public class TestConcurrentNeighborArray {
 
     @Test
     public void testRetainSomeSelectedAtFront() {
-        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10, true);
+        var array = new ConcurrentNeighborSet.ConcurrentNeighborArray(10);
         for (int i = 1; i <= 10; i++) {
             array.addInOrder(i, 11 - i);
         }

@@ -99,9 +99,9 @@ public class GraphIndexBuilder<T> {
                     () -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
     // in scratch we store candidates in reverse order: worse candidates are first
     this.naturalScratch =
-            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
+            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
     this.concurrentScratch =
-            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
+            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
   }
 
   public OnHeapGraphIndex<T> build() {

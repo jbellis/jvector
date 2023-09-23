@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestNeighborArray extends RandomizedTest {
   @Test
   public void testScoresDescOrder() {
-    NeighborArray neighbors = new NeighborArray(10, true);
+    NeighborArray neighbors = new NeighborArray(10);
     neighbors.addInOrder(0, 1);
     neighbors.addInOrder(1, 0.8f);
 
@@ -79,56 +79,6 @@ public class TestNeighborArray extends RandomizedTest {
     neighbors.insertSorted(8, 0.9f);
     assertScoresEqual(new float[] {1, 0.9f, 0.9f, 0.8f}, neighbors);
     assertNodesEqual(new int[] {0, 3, 8, 1}, neighbors);
-  }
-
-  @Test
-  public void testScoresAscOrder() {
-    NeighborArray neighbors = new NeighborArray(10, false);
-    neighbors.addInOrder(0, 0.1f);
-    neighbors.addInOrder(1, 0.3f);
-
-    AssertionError ex = assertThrows(AssertionError.class, () -> neighbors.addInOrder(2, 0.15f));
-    assert ex.getMessage().startsWith("Nodes are added in the incorrect order!") : ex.getMessage();
-
-    neighbors.insertSorted(3, 0.3f);
-    assertScoresEqual(new float[] {0.1f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {0, 1, 3}, neighbors);
-
-    neighbors.insertSorted(4, 0.2f);
-    assertScoresEqual(new float[] {0.1f, 0.2f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {0, 4, 1, 3}, neighbors);
-
-    neighbors.insertSorted(5, 0.05f);
-    assertScoresEqual(new float[] {0.05f, 0.1f, 0.2f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {5, 0, 4, 1, 3}, neighbors);
-
-    neighbors.insertSorted(6, 0.2f);
-    assertScoresEqual(new float[] {0.05f, 0.1f, 0.2f, 0.2f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {5, 0, 4, 6, 1, 3}, neighbors);
-
-    neighbors.insertSorted(7, 0.2f);
-    assertScoresEqual(new float[] {0.05f, 0.1f, 0.2f, 0.2f, 0.2f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {5, 0, 4, 6, 7, 1, 3}, neighbors);
-
-    neighbors.removeIndex(2);
-    assertScoresEqual(new float[] {0.05f, 0.1f, 0.2f, 0.2f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {5, 0, 6, 7, 1, 3}, neighbors);
-
-    neighbors.removeIndex(0);
-    assertScoresEqual(new float[] {0.1f, 0.2f, 0.2f, 0.3f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {0, 6, 7, 1, 3}, neighbors);
-
-    neighbors.removeIndex(4);
-    assertScoresEqual(new float[] {0.1f, 0.2f, 0.2f, 0.3f}, neighbors);
-    assertNodesEqual(new int[] {0, 6, 7, 1}, neighbors);
-
-    neighbors.removeLast();
-    assertScoresEqual(new float[] {0.1f, 0.2f, 0.2f}, neighbors);
-    assertNodesEqual(new int[] {0, 6, 7}, neighbors);
-
-    neighbors.insertSorted(8, 0.01f);
-    assertScoresEqual(new float[] {0.01f, 0.1f, 0.2f, 0.2f}, neighbors);
-    assertNodesEqual(new int[] {8, 0, 6, 7}, neighbors);
   }
 
   private void assertScoresEqual(float[] scores, NeighborArray neighbors) {
