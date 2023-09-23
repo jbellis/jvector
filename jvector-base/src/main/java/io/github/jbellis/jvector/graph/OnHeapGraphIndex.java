@@ -228,7 +228,6 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return new ConcurrentGraphIndexView();
   }
 
-  // TODO should call this when build is complete
   void validateEntryNode() {
     if (size() == 0) {
       return;

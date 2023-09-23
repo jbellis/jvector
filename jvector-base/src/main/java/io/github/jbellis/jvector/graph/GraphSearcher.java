@@ -168,8 +168,6 @@ public class GraphSearcher<T> {
         break;
       }
 
-      // TODO should we merge getVector and getNeighborsIterator into a single method to
-      // be more aligned with how it works under the hood?
       int topCandidateNode = candidates.pop();
       if (!scoreFunction.isExact()) {
         vectorsEncountered.put(topCandidateNode, view.getVector(topCandidateNode));
