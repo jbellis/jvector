@@ -31,13 +31,6 @@ import java.util.stream.IntStream;
  * @param <T> the type of vector
  */
 public class GraphIndexBuilder<T> {
-  /** Default number of maximum connections per node */
-  public static final int DEFAULT_MAX_CONN = 16;
-
-  /**
-   * Default number of the size of the queue maintained while searching during a graph construction.
-   */
-  public static final int DEFAULT_BEAM_WIDTH = 100;
 
   private final int beamWidth;
   private final ThreadLocal<NeighborArray> naturalScratch;
@@ -46,7 +39,7 @@ public class GraphIndexBuilder<T> {
   private final VectorSimilarityFunction similarityFunction;
   private final float neighborOverflow;
   private final VectorEncoding vectorEncoding;
-  private final ThreadLocal<GraphSearcher> graphSearcher;
+  private final ThreadLocal<GraphSearcher<?>> graphSearcher;
 
   final OnHeapGraphIndex<T> graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
@@ -103,12 +96,12 @@ public class GraphIndexBuilder<T> {
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
     this.graphSearcher =
             ThreadLocal.withInitial(
-                    () -> new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build());
+                    () -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
     // in scratch we store candidates in reverse order: worse candidates are first
     this.naturalScratch =
-            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
+            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
     this.concurrentScratch =
-            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1), true));
+            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
   }
 
   public OnHeapGraphIndex<T> build() {
@@ -121,9 +114,7 @@ public class GraphIndexBuilder<T> {
 
   public void complete() {
     graph.validateEntryNode(); // sanity check before we start
-    IntStream.range(0, graph.size()).parallel().forEach(i -> {
-      graph.getNeighbors(i).cleanup();
-    });
+    IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup());
     graph.updateEntryNode(approximateMedioid());
     graph.validateEntryNode(); // check again after updating
   }
