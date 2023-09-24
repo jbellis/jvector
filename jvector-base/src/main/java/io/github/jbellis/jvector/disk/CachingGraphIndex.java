@@ -25,7 +25,7 @@ import java.io.UncheckedIOException;
 
 public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Accountable
 {
-    private static final int BFS_DISTANCE = 3;
+    private static final int CACHE_DISTANCE = 3;
 
     private final GraphCache cache;
     private final OnDiskGraphIndex<float[]> graph;
@@ -34,7 +34,7 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
     {
         this.graph = graph;
         try {
-            this.cache = GraphCache.load(graph, BFS_DISTANCE);
+            this.cache = GraphCache.load(graph, CACHE_DISTANCE);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
