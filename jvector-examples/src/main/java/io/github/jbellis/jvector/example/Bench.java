@@ -16,119 +16,69 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
-import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
+import java.util.Random;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static io.github.jbellis.jvector.vector.VectorEncoding.FLOAT32;
+import static io.github.jbellis.jvector.vector.VectorSimilarityFunction.EUCLIDEAN;
+import static java.lang.Math.max;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-    private static void testRecall(int M, int efConstruction, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv, Path testDirectory) throws IOException {
-        var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
-        var topK = ds.groundTruth.get(0).size();
+    private static void testOneGraph(int nVectors, int M, int efConstruction, DataSet ds) throws IOException {
+        var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors.subList(0, nVectors), ds.baseVectors.get(0).length);
 
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
         var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
-        System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
-                M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
+        System.out.format("Build N=%d M=%d ef=%d in %.2fs with %.2f short edges%n",
+                floatVectors.size(), M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
 
-        var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
-        try {
-            DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
-            OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
-            outputStream.flush();
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
-
-            int queryRuns = 2;
-            for (int overquery : efSearchOptions) {
-                for (boolean useDisk : diskOptions) {
-                    start = System.nanoTime();
-                    var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
-                    var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                    System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                            useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+        var queryCount = 1000;
+        var bits = new FixedBitSet(nVectors);
+        var R = new Random();
+        for (int i = (int) max(8, nVectors * 0.001); i <= nVectors / 2; i *= 2) {
+            while (bits.cardinality() < i) {
+                bits.set(R.nextInt(nVectors));
+            }
+            for (var topK : List.of(5, 10, 20, 30, 50, 75, 100)) {
+                if (topK >= i) {
+                    break;
                 }
+                runQueries(ds.queryVectors.subList(0, queryCount), topK, floatVectors, onHeapGraph, bits);
             }
         }
-        finally {
-            Files.deleteIfExists(graphPath);
+        runQueries(ds.queryVectors.subList(0, queryCount), 100, floatVectors, onHeapGraph, null);
+    }
+
+    private static void runQueries(List<float[]> queries, int topK, ListRandomAccessVectorValues floatVectors, OnHeapGraphIndex<float[]> onHeapGraph, FixedBitSet bits) {
+        int nBitsSet = bits == null ? onHeapGraph.size() : bits.cardinality();
+        LongAdder visited = new LongAdder();
+        queries.stream().parallel().forEach(queryVector -> {
+            SearchResult sr = GraphSearcher.search(queryVector, topK, floatVectors, FLOAT32, EUCLIDEAN, onHeapGraph, bits);
+            visited.add(sr.getVisitedCount());
+        });
+        if (bits == null) {
+            System.out.printf("Looking for top %d of %d ordinals required visiting %d nodes%n", topK, onHeapGraph.size(), visited.sum() / queries.size());
+        } else {
+            System.out.printf("Looking for top %d of %d ordinals required visiting %d nodes%n", topK, nBitsSet, visited.sum() / queries.size());
         }
-    }
-
-    static class ResultSummary {
-        final int topKFound;
-        final long nodesVisited;
-
-        ResultSummary(int topKFound, long nodesVisited) {
-            this.topKFound = topKFound;
-            this.nodesVisited = nodesVisited;
-        }
-    }
-
-    private static long topKCorrect(int topK, int[] resultNodes, Set<Integer> gt) {
-        int count = Math.min(resultNodes.length, topK);
-        // stream the first count results into a Set
-        var resultSet = Arrays.stream(resultNodes, 0, count)
-                .boxed()
-                .collect(Collectors.toSet());
-        assert resultSet.size() == count : String.format("%s duplicate results out of %s", count - resultSet.size(), count);
-        return resultSet.stream().filter(gt::contains).count();
-    }
-
-    private static long topKCorrect(int topK, SearchResult.NodeScore[] nn, Set<Integer> gt) {
-        var a = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
-        return topKCorrect(topK, a, gt);
-    }
-
-    private static ResultSummary performQueries(DataSet ds, RandomAccessVectorValues<float[]> exactVv, CompressedVectors cv, GraphIndex<float[]> index, int topK, int efSearch, int queryRuns) {
-        assert efSearch >= topK;
-        LongAdder topKfound = new LongAdder();
-        LongAdder nodesVisited = new LongAdder();
-        for (int k = 0; k < queryRuns; k++) {
-            IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
-                var queryVector = ds.queryVectors.get(i);
-                SearchResult sr;
-                if (cv != null) {
-                    var view = index.getView();
-                    NeighborSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-                    NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
-                    sr = new GraphSearcher.Builder(view)
-                            .build()
-                            .search(sf, rr, efSearch, null);
-                } else {
-                    sr = GraphSearcher.search(queryVector, efSearch, exactVv, VectorEncoding.FLOAT32, ds.similarityFunction, index, null);
-                }
-
-                var gt = ds.groundTruth.get(i);
-                var n = topKCorrect(topK, sr.getNodes(), gt);
-                topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
-            });
-        }
-        return new ResultSummary((int) topKfound.sum(), nodesVisited.sum()); // TODO do we care enough about visited count to hack it back into searcher?
     }
 
     public static void main(String[] args) throws IOException {
@@ -179,29 +129,9 @@ public class Bench {
     }
 
     private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
-        var start = System.nanoTime();
-        int originalDimension = ds.baseVectors.get(0).length;
-        var pqDims = originalDimension / 4;
-        ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
-        ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
-        System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
-
-        start = System.nanoTime();
-        var quantizedVectors = pq.encodeAll(ds.baseVectors);
-        System.out.format("PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
-
-        var compressedVectors = new CompressedVectors(pq, quantizedVectors);
-
-        var testDirectory = Files.createTempDirectory("BenchGraphDir");
-
-        try {
-            for (int M : mGrid) {
-                for (int beamWidth : efConstructionGrid) {
-                    testRecall(M, beamWidth, diskOptions, efSearchFactor, ds, compressedVectors, testDirectory);
-                }
-            }
-        } finally {
-            Files.delete(testDirectory);
+        for (int i = 1024; i < ds.baseVectors.size(); i *= 2) {
+            testOneGraph(i, 16, 100, ds);
         }
+        testOneGraph(ds.baseVectors.size(), 16, 100, ds);
     }
 }

@@ -28,7 +28,6 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.FixedBitSet;
 
 import static io.github.jbellis.jvector.vector.VectorEncoding.FLOAT32;
@@ -39,7 +38,7 @@ import static java.lang.Math.min;
 /**
  * Tests GraphIndexes against vectors from various datasets
  */
-public class Haystack {
+public class Haystack2D {
     private static void testOneGraph(int nVectors, int M, int efConstruction) throws IOException {
         var R = new Random();
         var L = IntStream.range(0, nVectors).parallel()
