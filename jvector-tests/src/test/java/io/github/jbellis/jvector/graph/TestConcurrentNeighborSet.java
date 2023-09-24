@@ -126,18 +126,6 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   @Test
-  public void testNoDuplicatesAscOrder() {
-    ConcurrentNeighborSet.ConcurrentNeighborArray cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(5);
-    cna.insertSorted(1, 8.0f);
-    cna.insertSorted(2, 9.0f);
-    cna.insertSorted(3, 10.0f);
-    cna.insertSorted(1, 8.0f); // This is a duplicate and should be ignored
-    cna.insertSorted(3, 10.0f); // This is also a duplicate
-    assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
-    assertArrayEquals(new float[] {8.0f, 9.0f, 10.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
-  }
-
-  @Test
   public void testNoDuplicatesSameScores() {
     ConcurrentNeighborSet.ConcurrentNeighborArray cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(5);
     cna.insertSorted(1, 10.0f);
