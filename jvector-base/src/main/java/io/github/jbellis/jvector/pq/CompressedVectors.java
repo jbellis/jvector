@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
-import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -31,13 +30,25 @@ import java.util.stream.IntStream;
 
 public class CompressedVectors
 {
-    private final ProductQuantization pq;
+    final ProductQuantization pq;
     private final List<byte[]> compressedVectors;
+    private final ThreadLocal<float[][]> partialSums; // for dot product, euclidean, and cosine
+    private final ThreadLocal<float[][]> partialMagnitudes; // for cosine
 
     public CompressedVectors(ProductQuantization pq, List<byte[]> compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
+        this.partialSums = ThreadLocal.withInitial(() -> initFloatFragments(pq));
+        this.partialMagnitudes = ThreadLocal.withInitial(() -> initFloatFragments(pq));
+    }
+
+    private static float[][] initFloatFragments(ProductQuantization pq) {
+        float[][] a = new float[pq.getSubspaceCount()][];
+        for (int i = 0; i < a.length; i++) {
+            a[i] = new float[ProductQuantization.CLUSTERS];
+        }
+        return a;
     }
 
     public void write(DataOutput out) throws IOException
@@ -74,27 +85,6 @@ public class CompressedVectors
         return new CompressedVectors(pq, compressedVectors);
     }
 
-    /**
-     * It is the caller's responsibility to center the comparison vector v before calling this method
-     */
-    float decodedSimilarity(int ordinal, float[] v, VectorSimilarityFunction similarityFunction)
-    {
-        switch (similarityFunction)
-        {
-            case DOT_PRODUCT:
-                return (1 + pq.decodedDotProduct(compressedVectors.get(ordinal), v)) / 2;
-            case EUCLIDEAN:
-                return 1 / (1 + pq.decodedSquareDistance(compressedVectors.get(ordinal), v));
-            case COSINE:
-                return (1 + pq.decodedCosine(compressedVectors.get(ordinal), v)) / 2;
-            default:
-                // Fallback in case other similarity functions added
-                var decoded = new float[pq.getOriginalDimension()];
-                pq.decodeCentered(compressedVectors.get(ordinal), decoded);
-                return similarityFunction.compare(decoded, v);
-        }
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -114,8 +104,27 @@ public class CompressedVectors
     }
 
     public NeighborSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
-        float[] centroid = pq.getCenter();
-        var centeredQuery = centroid == null ? q : VectorUtil.sub(q, centroid);
-        return (other) -> decodedSimilarity(other, centeredQuery, similarityFunction);
+        switch (similarityFunction) {
+            case DOT_PRODUCT:
+                return new CompressedDecoder.DotProductDecoder(this, q);
+            case EUCLIDEAN:
+                return new CompressedDecoder.EuclideanDecoder(this, q);
+            case COSINE:
+                return new CompressedDecoder.CosineDecoder(this, q);
+            default:
+                throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
+        }
+    }
+
+    public byte[] get(int ordinal) {
+        return compressedVectors.get(ordinal);
+    }
+
+    float[][] reusablePartialSums() {
+        return partialSums.get();
+    }
+
+    float[][] reusablePartialMagnitudes() {
+        return partialMagnitudes.get();
     }
 }
