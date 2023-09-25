@@ -5,7 +5,7 @@
 
     <groupId>io.github.jbellis</groupId>
     <artifactId>jvector-parent</artifactId>
-    <version>dev</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
     <!-- Project Metadata setup -->
     <name>JVector parent</name>
@@ -41,7 +41,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.install.skip>true</maven.install.skip>
-        <jvector.version>0.9.3-SNAPSHOT</jvector.version>
+        <revision>0.9.3-SNAPSHOT</revision>
     </properties>
     <modules>
         <module>jvector-base</module>
@@ -61,6 +61,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.1</version>
                 <configuration>
                     <skip>true</skip>
                 </configuration>
