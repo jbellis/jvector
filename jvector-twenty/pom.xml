@@ -7,10 +7,9 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector-twenty</artifactId>
-    <version>${jvector.version}</version>
     <name>Twenty</name>
     <build>
         <plugins>
@@ -42,7 +41,7 @@
         <dependency>
             <groupId>io.github.jbellis</groupId>
             <artifactId>jvector-base</artifactId>
-            <version>${jvector.version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -7,10 +7,9 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector</artifactId>
-    <version>${jvector.version}</version>
     <name>JVector</name>
     <properties>
         <maven.install.skip>false</maven.install.skip>
@@ -95,7 +94,7 @@
                                     <type>jar</type>
                                     <classifier>javadoc</classifier>
                                     <outputDirectory>target</outputDirectory>
-                                    <destFileName>jvector-${jvector.version}-javadoc.jar</destFileName>
+                                    <destFileName>jvector-${project.version}-javadoc.jar</destFileName>
                                 </artifactItem>
                             </artifactItems>
                         </configuration>
