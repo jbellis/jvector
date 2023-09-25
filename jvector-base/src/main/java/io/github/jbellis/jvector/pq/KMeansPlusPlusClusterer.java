@@ -25,10 +25,7 @@ import java.util.Random;
 import java.util.function.BiFunction;
 
 /**
- * A KMeans++ implementation for float vectors.  Optimizes to use SIMD vector
- * instructions, and to use the triangle inequality to skip distance calculations.
- * Roughly 3x faster than using the apache commons math implementation (with
- * conversions to double[]).
+ * A KMeans++ implementation for float vectors.  Optimizes to use SIMD vector instructions if available.
  */
 public class KMeansPlusPlusClusterer {
     private final int k;
@@ -206,14 +203,6 @@ public class KMeansPlusPlusClusterer {
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            if (i != nearestCluster) {
-                // Using triangle inequality to potentially skip the computation
-                float potentialMinDistance = Math.abs(minDistance - centroidDistances[nearestCluster][i]);
-                if (potentialMinDistance >= minDistance) {
-                    continue;
-                }
-            }
-
             float distance = distanceFunction.apply(point, centroids[i]);
             if (distance < minDistance) {
                 minDistance = distance;
