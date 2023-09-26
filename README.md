@@ -2,7 +2,7 @@
 JVector is a pure Java, zero dependency, embedded vector search engine, used by DataStax Astra DB and (soon) Apache Cassandra.
 
 What is JVector?
-- Algorithmic-fast. JVector uses dstate of the art graph algorithms inspired by DiskANN and related research that offer high recall and low latency.
+- Algorithmic-fast. JVector uses state of the art graph algorithms inspired by DiskANN and related research that offer high recall and low latency.
 - Implementation-fast. JVector uses the Panama SIMD API to accelerate index build and queries.
 - Memory efficient. JVector compresses vectors using product quantization so they can stay in memory during searches.  (As part of our PQ implementation, our SIMD-accelerated kmeans implementation is 3x faster than Apache Commons Math.)
 - Disk-aware. JVector’s disk layout is designed to do the minimum necessary iops at query time.
@@ -20,6 +20,7 @@ JVector scales updates linearly to at least 32 threads:
 
 ## JVector basics
 Adding to your project. Replace `${latest-version}` with ![Maven Central](https://img.shields.io/maven-central/v/io.github.jbellis/jvector?color=green). Example `<version>1.0.0</version>`:
+
 ```
 <dependency>        
     <groupId>io.github.jbellis</groupId>          
@@ -28,6 +29,7 @@ Adding to your project. Replace `${latest-version}` with ![Maven Central](https:
     <version>${latest-version}</version>
 </dependency>
 ```
+
 Building the index:
 - [`GraphIndexBuilder`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/GraphIndexBuilder.java) is the entry point for building a graph.  You will need to implement
   [`RandomAccessVectorValues`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/RandomAccessVectorValues.java) to provide vectors to the builder;
@@ -41,6 +43,7 @@ Building the index:
   optimize the index and make it ready to write to disk.  (Graphs that are
   in the process of being built can be searched at any time; you do not have to call
   *complete* first.)
+
 Searching the index:
 - [`GraphSearcher`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/GraphSearcher.java) is the entry point for searching.  Results come back as a [`SearchResult`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/SearchResult.java) object that contains node IDs and scores, in
   descending order of similarity to the query vector.  `GraphSearcher` objects are re-usable,
