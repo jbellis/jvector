@@ -54,9 +54,9 @@ public class KMeansPlusPlusClusterer {
         this.points = points;
         this.k = k;
         this.distanceFunction = distanceFunction;
-        this.random = new Random();
-        this.centroidDenoms = new int[k];
-        this.centroidNums = new float[k][points[0].length];
+        random = new Random();
+        centroidDenoms = new int[k];
+        centroidNums = new float[k][points[0].length];
         centroids = chooseInitialCentroids(points);
         assignments = new int[points.length];
         assignPointsToClusters();
