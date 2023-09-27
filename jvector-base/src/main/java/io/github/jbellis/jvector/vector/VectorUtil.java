@@ -229,7 +229,7 @@ public final class VectorUtil {
   public static float[] sub(float[] lhs, float[] rhs) {
     return impl.sub(lhs, rhs);
   }
-  public static float zipAndSum(float[] data, int dataBase, byte[] dataOffsets) {
+  public static float assembleAndSum(float[] data, int dataBase, byte[] dataOffsets) {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }
 }

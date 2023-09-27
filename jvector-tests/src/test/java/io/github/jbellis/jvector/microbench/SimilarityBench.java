@@ -18,7 +18,7 @@ package io.github.jbellis.jvector.microbench;
 
 
 import io.github.jbellis.jvector.vector.DefaultVectorizationProvider;
-import io.github.jbellis.jvector.vector.PanamaVectorizationProvider;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 @Fork(warmups = 1, value = 1, jvmArgsAppend = {"--add-modules=jdk.incubator.vector"})
 public class SimilarityBench {
 
-    private static final PanamaVectorizationProvider simd = new PanamaVectorizationProvider();
     private static final DefaultVectorizationProvider java = new DefaultVectorizationProvider();
 
     static int SIZE = 1536;
@@ -67,7 +66,7 @@ public class SimilarityBench {
     @Threads(8)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void zipAndSumSimd(Blackhole bh, Parameters p) {
-        bh.consume(simd.getVectorUtilSupport().assembleAndSum(q1, 0, indexes));
+        bh.consume(VectorUtil.assembleAndSum(q1, 0, indexes));
     }
 
     @Benchmark

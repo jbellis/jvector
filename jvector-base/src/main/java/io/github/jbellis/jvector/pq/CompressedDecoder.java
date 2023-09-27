@@ -44,7 +44,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
         }
 
         protected float decodedSimilarity(byte[] encoded) {
-            return VectorUtil.zipAndSum(partialSums, ProductQuantization.CLUSTERS, encoded);
+            return VectorUtil.assembleAndSum(partialSums, ProductQuantization.CLUSTERS, encoded);
         }
     }
 
