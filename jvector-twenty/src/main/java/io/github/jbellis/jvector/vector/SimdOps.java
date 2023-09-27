@@ -554,7 +554,10 @@ final class SimdOps {
     static float assembleAndSum512(float[] data, int dataBase, byte[] baseOffsets) {
         int[] convOffsets = scratchInt512.get();
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
-        for (int i = 0; i < baseOffsets.length; i += ByteVector.SPECIES_128.length()) {
+        int i = 0;
+        int limit = FloatVector.SPECIES_128.loopBound(baseOffsets.length);
+
+        for (; i < limit; i += ByteVector.SPECIES_128.length()) {
             var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(1).add(i).mul(dataBase);
 
             ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
@@ -567,13 +570,22 @@ final class SimdOps {
             sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, data, 0, convOffsets, 0));
         }
 
-        return sum.reduceLanes(VectorOperators.ADD);
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        //Process tail
+        for (; i < baseOffsets.length; i++)
+            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
     }
 
     static float assembleAndSum256(float[] data, int dataBase, byte[] baseOffsets) {
         int[] convOffsets = scratchInt256.get();
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
-        for (int i = 0; i < baseOffsets.length; i += ByteVector.SPECIES_64.length()) {
+        int i = 0;
+        int limit = FloatVector.SPECIES_64.loopBound(baseOffsets.length);
+
+        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
             var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(1).add(i).mul(dataBase);
 
             ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i)
@@ -586,7 +598,12 @@ final class SimdOps {
             sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_256, data, 0, convOffsets, 0));
         }
 
-        return sum.reduceLanes(VectorOperators.ADD);
-    }
+        float res = sum.reduceLanes(VectorOperators.ADD);
 
+        // Process tail
+        for (; i < baseOffsets.length; i++)
+            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
+    }
 }
