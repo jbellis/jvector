@@ -554,7 +554,7 @@ final class SimdOps {
     static float assembleAndSum512(float[] data, int dataBase, byte[] baseOffsets) {
         int[] convOffsets = scratchInt512.get();
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
-        for (int i = 0, c = 0; i < baseOffsets.length; i += ByteVector.SPECIES_128.length(), c++) {
+        for (int i = 0; i < baseOffsets.length; i += ByteVector.SPECIES_128.length()) {
             var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(1).add(i).mul(dataBase);
 
             ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
@@ -573,7 +573,7 @@ final class SimdOps {
     static float assembleAndSum256(float[] data, int dataBase, byte[] baseOffsets) {
         int[] convOffsets = scratchInt256.get();
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
-        for (int i = 0, c = 0; i < baseOffsets.length; i += ByteVector.SPECIES_64.length(), c++) {
+        for (int i = 0; i < baseOffsets.length; i += ByteVector.SPECIES_64.length()) {
             var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(1).add(i).mul(dataBase);
 
             ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i)
