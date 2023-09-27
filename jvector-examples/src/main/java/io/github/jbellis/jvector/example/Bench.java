@@ -188,9 +188,8 @@ public class Bench {
 
         start = System.nanoTime();
         var quantizedVectors = pq.encodeAll(ds.baseVectors);
-        System.out.format("PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
-
         var compressedVectors = new CompressedVectors(pq, quantizedVectors);
+        System.out.format("PQ encoded %d[%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
         var testDirectory = Files.createTempDirectory("BenchGraphDir");
 

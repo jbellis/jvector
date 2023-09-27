@@ -69,4 +69,19 @@ public interface VectorUtilSupport {
 
   /** @return lhs - rhs, element-wise */
   public float[] sub(float[] lhs, float[] rhs);
+
+  /**
+   * Calculates the sum of sparse points in a vector.
+   *
+   * This assumes the data vector is a 2d matrix which has been flattened into 1 dimension
+   * so rather than data[n][m] it's data[n * m].  With this layout this method can quickly
+   * assemble the data from this heap and sum it.
+   *
+   * @param data the vector of all datapoints
+   * @param baseIndex the start of the data in the offset table
+   *                  (scaled by the index of the lookup table)
+   * @param baseOffsets bytes that represent offsets from the baseIndex
+   * @return the sum of the points
+   */
+  public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets);
 }

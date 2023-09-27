@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.DataOutput;
@@ -31,24 +32,16 @@ import java.util.stream.IntStream;
 public class CompressedVectors
 {
     final ProductQuantization pq;
-    private final List<byte[]> compressedVectors;
-    private final ThreadLocal<float[][]> partialSums; // for dot product, euclidean, and cosine
-    private final ThreadLocal<float[][]> partialMagnitudes; // for cosine
+    private final byte[][] compressedVectors;
+    private final ThreadLocal<float[]> partialSums; // for dot product, euclidean, and cosine
+    private final ThreadLocal<float[]> partialMagnitudes; // for cosine
 
-    public CompressedVectors(ProductQuantization pq, List<byte[]> compressedVectors)
+    public CompressedVectors(ProductQuantization pq, byte[][] compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
-        this.partialSums = ThreadLocal.withInitial(() -> initFloatFragments(pq));
-        this.partialMagnitudes = ThreadLocal.withInitial(() -> initFloatFragments(pq));
-    }
-
-    private static float[][] initFloatFragments(ProductQuantization pq) {
-        float[][] a = new float[pq.getSubspaceCount()][];
-        for (int i = 0; i < a.length; i++) {
-            a[i] = new float[ProductQuantization.CLUSTERS];
-        }
-        return a;
+        this.partialSums = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
+        this.partialMagnitudes = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
     }
 
     public void write(DataOutput out) throws IOException
@@ -57,7 +50,7 @@ public class CompressedVectors
         pq.write(out);
 
         // compressed vectors
-        out.writeInt(compressedVectors.size());
+        out.writeInt(compressedVectors.length);
         out.writeInt(pq.getSubspaceCount());
         for (var v : compressedVectors) {
             out.write(v);
@@ -73,13 +66,13 @@ public class CompressedVectors
 
         // read the vectors
         int size = in.readInt();
-        var compressedVectors = new ArrayList<byte[]>(size);
+        var compressedVectors = new byte[size][];
         int compressedDimension = in.readInt();
         for (int i = 0; i < size; i++)
         {
             byte[] vector = new byte[compressedDimension];
             in.readFully(vector);
-            compressedVectors.add(vector);
+            compressedVectors[i] = vector;
         }
 
         return new CompressedVectors(pq, compressedVectors);
@@ -92,9 +85,9 @@ public class CompressedVectors
 
         CompressedVectors that = (CompressedVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
-        if (compressedVectors.size() != that.compressedVectors.size()) return false;
-        return IntStream.range(0, compressedVectors.size()).allMatch((i) -> {
-            return Arrays.equals(compressedVectors.get(i), that.compressedVectors.get(i));
+        if (compressedVectors.length != that.compressedVectors.length) return false;
+        return IntStream.range(0, compressedVectors.length).allMatch((i) -> {
+            return Arrays.equals(compressedVectors[i], that.compressedVectors[i]);
         });
     }
 
@@ -117,14 +110,21 @@ public class CompressedVectors
     }
 
     public byte[] get(int ordinal) {
-        return compressedVectors.get(ordinal);
+        return compressedVectors[ordinal];
     }
 
-    float[][] reusablePartialSums() {
+    float[] reusablePartialSums() {
         return partialSums.get();
     }
 
-    float[][] reusablePartialMagnitudes() {
+    float[] reusablePartialMagnitudes() {
         return partialMagnitudes.get();
+    }
+
+    public long memorySize() {
+        long size = pq.memorySize();
+        long bsize = RamUsageEstimator.sizeOf(compressedVectors[0]);
+
+        return size + (bsize * compressedVectors.length);
     }
 }

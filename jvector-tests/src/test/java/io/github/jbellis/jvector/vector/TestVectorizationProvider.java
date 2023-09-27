@@ -58,4 +58,30 @@ public class TestVectorizationProvider extends RandomizedTest {
             Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1, v2), b.getVectorUtilSupport().squareDistance(v1, v2));
         }
     }
+
+    @Test
+    public void testAssembleAndSum() {
+        Assume.assumeTrue(hasSimd);
+
+        VectorizationProvider a = new DefaultVectorizationProvider();
+        VectorizationProvider b = VectorizationProvider.getInstance();
+
+        for (int i = 0; i < 1000; i++) {
+            float[] v2 = GraphIndexTestCase.randomVector(getRandom(), 256);
+
+            float[] v3 = new float[32];
+            byte[] offsets = new byte[32];
+            int skipSize = 256/32;
+            //Assemble v3 from bits of v2
+            for (int j = 0, c = 0; j < 256; j+=skipSize, c++) {
+                v3[c] = v2[j];
+                offsets[c] = (byte) (c * skipSize);
+            }
+
+            Assert.assertEquals(a.getVectorUtilSupport().sum(v3), b.getVectorUtilSupport().sum(v3), 0.0001);
+            Assert.assertEquals(a.getVectorUtilSupport().sum(v3), a.getVectorUtilSupport().assembleAndSum(v2, 0, offsets), 0.0001);
+            Assert.assertEquals(b.getVectorUtilSupport().sum(v3), b.getVectorUtilSupport().assembleAndSum(v2, 0, offsets), 0.0001);
+
+        }
+    }
 }

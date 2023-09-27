@@ -247,4 +247,14 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     }
     return result;
   }
+
+  @Override
+  public float assembleAndSum(float[] data, int dataBase, byte[] baseOffsets)
+  {
+      float sum = 0f;
+      for (int i = 0; i < baseOffsets.length; i++) {
+          sum += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+      }
+      return sum;
+  }
 }

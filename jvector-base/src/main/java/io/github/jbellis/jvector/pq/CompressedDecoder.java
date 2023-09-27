@@ -15,7 +15,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
     }
 
     protected static abstract class CachingDecoder extends CompressedDecoder {
-        protected final float[][] partialSums;
+        protected final float[] partialSums;
 
         protected CachingDecoder(CompressedVectors cv, float[] query, VectorSimilarityFunction vsf) {
             super(cv);
@@ -24,16 +24,17 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
             float[] center = pq.getCenter();
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
-            for (var i = 0; i < partialSums.length; i++) {
+            for (var i = 0; i < pq.getSubspaceCount(); i++) {
+                int offset = pq.subvectorSizesAndOffsets[i][1];
+                int baseOffset = i * ProductQuantization.CLUSTERS;
                 for (var j = 0; j < ProductQuantization.CLUSTERS; j++) {
-                    int offset = pq.subvectorSizesAndOffsets[i][1];
                     float[] centroidSubvector = pq.codebooks[i][j];
                     switch (vsf) {
                         case DOT_PRODUCT:
-                            partialSums[i][j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
+                            partialSums[baseOffset + j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
                             break;
                         case EUCLIDEAN:
-                            partialSums[i][j] = VectorUtil.squareDistance(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
+                            partialSums[baseOffset + j] = VectorUtil.squareDistance(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
                             break;
                         default:
                             throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
@@ -43,14 +44,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
         }
 
         protected float decodedSimilarity(byte[] encoded) {
-            // combining cached fragments is the same for dot product and euclidean; cosine is handled separately
-            float sum = 0.0f;
-            for (int m = 0; m < partialSums.length; ++m) {
-                int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-                var cachedValue = partialSums[m][centroidIndex];
-                sum += cachedValue;
-            }
-            return sum;
+            return VectorUtil.zipAndSum(partialSums, ProductQuantization.CLUSTERS, encoded);
         }
     }
 
@@ -77,8 +71,8 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
     }
 
     static class CosineDecoder extends CompressedDecoder {
-        protected final float[][] partialSums;
-        protected final float[][] aMagnitude;
+        protected final float[] partialSums;
+        protected final float[] aMagnitude;
         protected final float bMagnitude;
 
         public CosineDecoder(CompressedVectors cv, float[] query) {
@@ -95,11 +89,10 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
             for (int m = 0; m < pq.getSubspaceCount(); ++m) {
                 int offset = pq.subvectorSizesAndOffsets[m][1];
-
                 for (int j = 0; j < ProductQuantization.CLUSTERS; ++j) {
                     float[] centroidSubvector = pq.codebooks[m][j];
-                    partialSums[m][j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
-                    aMagnitude[m][j] = VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, centroidSubvector.length);
+                    partialSums[(m * ProductQuantization.CLUSTERS) + j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
+                    aMagnitude[(m * ProductQuantization.CLUSTERS) + j] = VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, centroidSubvector.length);
                 }
 
                 bMagSum += VectorUtil.dotProduct(centeredQuery, offset, centeredQuery, offset, pq.subvectorSizesAndOffsets[m][0]);
@@ -121,8 +114,8 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
             for (int m = 0; m < partialSums.length; ++m) {
                 int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-                sum += partialSums[m][centroidIndex];
-                aMag += aMagnitude[m][centroidIndex];
+                sum += partialSums[(m * ProductQuantization.CLUSTERS) + centroidIndex];
+                aMag += aMagnitude[(m * ProductQuantization.CLUSTERS) + centroidIndex];
             }
 
             return (float) (sum / Math.sqrt(aMag * bMagnitude));

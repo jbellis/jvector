@@ -17,7 +17,8 @@
 package io.github.jbellis.jvector.microbench;
 
 
-import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.DefaultVectorizationProvider;
+import io.github.jbellis.jvector.vector.PanamaVectorizationProvider;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -26,14 +27,20 @@ import java.util.concurrent.TimeUnit;
 
 @Warmup(iterations = 2, time = 5)
 @Measurement(iterations = 3, time = 10)
-@Fork(warmups = 1, value = 1)
+@Fork(warmups = 1, value = 1, jvmArgsAppend = {"--add-modules=jdk.incubator.vector"})
 public class SimilarityBench {
 
-    static int SIZE = 256;
+    private static final PanamaVectorizationProvider simd = new PanamaVectorizationProvider();
+    private static final DefaultVectorizationProvider java = new DefaultVectorizationProvider();
+
+    static int SIZE = 1536;
     static final float[] q1 = new float[SIZE];
     static final float[] q2 = new float[SIZE];
 
-    static final float[] q3 = new float[2];
+    static final float[] q3 = new float[4];
+
+    static final byte[] indexes = new byte[384];
+
 
     static {
         for (int i = 0; i < q1.length; i++) {
@@ -43,6 +50,11 @@ public class SimilarityBench {
 
         q3[0] = ThreadLocalRandom.current().nextFloat();
         q3[1] = ThreadLocalRandom.current().nextFloat();
+
+        int offsetSize = 4;
+        for (int i = 0; i < indexes.length; i++) {
+            indexes[i] = (byte)(i * offsetSize);
+        }
     }
 
     @State(Scope.Benchmark)
@@ -54,9 +66,25 @@ public class SimilarityBench {
     @BenchmarkMode(Mode.Throughput)
     @Threads(8)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public void zipAndSumSimd(Blackhole bh, Parameters p) {
+        bh.consume(simd.getVectorUtilSupport().assembleAndSum(q1, 0, indexes));
+    }
+
+    @Benchmark
+    @BenchmarkMode(Mode.Throughput)
+    @Threads(8)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public void zzipAndSumJava(Blackhole bh, Parameters p) {
+        bh.consume(java.getVectorUtilSupport().assembleAndSum(q1, 0, indexes));
+    }
+
+   /* @Benchmark
+    @BenchmarkMode(Mode.Throughput)
+    @Threads(8)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void dotProduct(Blackhole bh, Parameters p) {
         bh.consume(VectorUtil.dotProduct(q3, 0, q1, 22, q3.length));
-    }
+    }*/
 
     public static void main(String[] args) throws Exception {
         org.openjdk.jmh.Main.main(args);
