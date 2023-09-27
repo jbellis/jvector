@@ -55,7 +55,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         new AtomicReference<>(-1); // Entry node should be negative until a node is added
     this.nsize0 = 2 * M;
 
-    this.nodes = new ConcurrentHashMap<>();
+    this.nodes = new ConcurrentHashMap<>(nsize0);
   }
 
   /**
