@@ -28,6 +28,17 @@ package io.github.jbellis.jvector.util;
  * Base implementation for a bit set.
  */
 public abstract class BitSet implements Bits, Accountable {
+
+  /**
+   * @return true if the BitSet is of fixed size otherwise it's growable
+   */
+  public abstract boolean isFixed();
+
+  /**
+   * @return true if BitSet is sparse, otherwise dense
+   */
+  public abstract boolean isSparse();
+
   /**
    * Clear all the bits of the set.
    *

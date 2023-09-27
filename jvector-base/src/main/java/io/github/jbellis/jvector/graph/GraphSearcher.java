@@ -213,9 +213,8 @@ public class GraphSearcher<T> {
     if (visited.length() < capacity) {
       // this happens during graph construction; otherwise the size of the vector values should
       // be constant, and it will be a SparseFixedBitSet instead of FixedBitSet
-      assert (visited instanceof FixedBitSet || visited instanceof GrowableBitSet)
-          : "Unexpected visited type: " + visited.getClass().getName();
-      if (visited instanceof FixedBitSet) {
+      assert !visited.isSparse() : "Unexpected visited type: " + visited.getClass().getName();
+      if (visited.isFixed()) {
         visited = FixedBitSet.ensureCapacity((FixedBitSet) visited, capacity);
       }
       // else GrowableBitSet knows how to grow itself safely

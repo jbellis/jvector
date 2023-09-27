@@ -78,6 +78,17 @@ public class SparseFixedBitSet extends BitSet {
             + RamUsageEstimator.shallowSizeOf(bits);
   }
 
+
+  @Override
+  public boolean isFixed() {
+    return true;
+  }
+
+  @Override
+  public boolean isSparse() {
+    return true;
+  }
+
   @Override
   public void clear() {
     Arrays.fill(bits, null);

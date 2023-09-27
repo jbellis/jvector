@@ -45,6 +45,16 @@ public class GrowableBitSet extends BitSet {
   }
 
   @Override
+  public boolean isFixed() {
+    return false;
+  }
+
+  @Override
+  public boolean isSparse() {
+    return false;
+  }
+
+  @Override
   public boolean get(int index) {
     return bitSet.get(index);
   }

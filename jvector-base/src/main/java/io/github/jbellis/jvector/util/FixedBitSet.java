@@ -149,6 +149,16 @@ public final class FixedBitSet extends BitSet {
     }
 
     @Override
+    public boolean isFixed() {
+        return true;
+    }
+
+    @Override
+    public boolean isSparse() {
+        return false;
+    }
+
+    @Override
     public void clear() {
         Arrays.fill(bits, 0L);
     }
