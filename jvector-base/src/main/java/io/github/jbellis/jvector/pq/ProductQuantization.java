@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
@@ -100,8 +101,8 @@ public class ProductQuantization {
     /**
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
-    public List<byte[]> encodeAll(List<float[]> vectors) {
-        return vectors.stream().parallel().map(this::encode).collect(Collectors.toList());
+    public byte[][] encodeAll(List<float[]> vectors) {
+        return vectors.stream().parallel().map(this::encode).toArray(byte[][]::new);
     }
 
     /**
@@ -343,5 +344,14 @@ public class ProductQuantization {
 
     public float[] getCenter() {
         return globalCentroid;
+    }
+
+    public long memorySize() {
+        long size = 0;
+        for (int i = 0; i < codebooks.length; i++)
+            for (int j = 0; j < codebooks[i].length; j++)
+                size += RamUsageEstimator.sizeOf(codebooks[i][j]);
+
+        return size;
     }
 }

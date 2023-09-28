@@ -19,9 +19,7 @@ package io.github.jbellis.jvector.vector;
 import java.util.List;
 
 final class
-PanamaVectorUtilSupport implements VectorUtilSupport
-{
-
+PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public float dotProduct(float[] a, float[] b) {
         return SimdOps.dotProduct(a, b);
@@ -85,5 +83,10 @@ PanamaVectorUtilSupport implements VectorUtilSupport
     @Override
     public float[] sub(float[] lhs, float[] rhs) {
         return SimdOps.sub(lhs, rhs);
+    }
+
+    @Override
+    public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets) {
+        return SimdOps.assembleAndSum(data, baseIndex, baseOffsets);
     }
 }

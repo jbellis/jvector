@@ -25,11 +25,11 @@
 package io.github.jbellis.jvector.vector;
 
 /** Default provider returning scalar implementations. */
-final class DefaultVectorizationProvider extends VectorizationProvider {
+final public class DefaultVectorizationProvider extends VectorizationProvider {
 
   private final VectorUtilSupport vectorUtilSupport;
 
-  DefaultVectorizationProvider() {
+  public DefaultVectorizationProvider() {
     vectorUtilSupport = new DefaultVectorUtilSupport();
   }
 

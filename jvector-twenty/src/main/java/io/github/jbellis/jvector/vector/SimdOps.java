@@ -24,9 +24,14 @@ import jdk.incubator.vector.VectorOperators;
 import java.util.List;
 
 final class SimdOps {
-    static {
-        System.setProperty("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", "0");
-    }
+
+    static final boolean HAS_AVX512 = IntVector.SPECIES_PREFERRED == IntVector.SPECIES_512;
+    static final IntVector BYTE_TO_INT_MASK_512 = IntVector.broadcast(IntVector.SPECIES_512, 0xff);
+    static final IntVector BYTE_TO_INT_MASK_256 = IntVector.broadcast(IntVector.SPECIES_256, 0xff);
+
+    static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
+    static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
+
 
     static float sum(float[] vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -539,5 +544,66 @@ final class SimdOps {
         }
 
         return result;
+    }
+
+    static float assembleAndSum(float[] data, int dataBase, byte[] baseOffsets) {
+        return HAS_AVX512 ? assembleAndSum512(data, dataBase, baseOffsets)
+               : assembleAndSum256(data, dataBase, baseOffsets);
+    }
+
+    static float assembleAndSum512(float[] data, int dataBase, byte[] baseOffsets) {
+        int[] convOffsets = scratchInt512.get();
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        int i = 0;
+        int limit = FloatVector.SPECIES_128.loopBound(baseOffsets.length);
+
+        for (; i < limit; i += ByteVector.SPECIES_128.length()) {
+            var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(1).add(i).mul(dataBase);
+
+            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
+                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
+                    .reinterpretAsInts()
+                    .add(scale)
+                    .intoArray(convOffsets,0);
+
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, data, 0, convOffsets, 0));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        //Process tail
+        for (; i < baseOffsets.length; i++)
+            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
+    }
+
+    static float assembleAndSum256(float[] data, int dataBase, byte[] baseOffsets) {
+        int[] convOffsets = scratchInt256.get();
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        int i = 0;
+        int limit = FloatVector.SPECIES_64.loopBound(baseOffsets.length);
+
+        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+            var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(1).add(i).mul(dataBase);
+
+            ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
+                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
+                    .reinterpretAsInts()
+                    .add(scale)
+                    .intoArray(convOffsets,0);
+
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_256, data, 0, convOffsets, 0));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process tail
+        for (; i < baseOffsets.length; i++)
+            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
     }
 }
