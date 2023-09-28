@@ -503,8 +503,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
       assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
     }
   }
-  static class CircularFloatVectorValues
-      implements RandomAccessVectorValues<float[]> {
+  static class CircularFloatVectorValues implements RandomAccessVectorValues<float[]> {
 
     private final int size;
 

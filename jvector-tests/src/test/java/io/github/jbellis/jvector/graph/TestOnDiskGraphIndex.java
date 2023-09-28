@@ -80,16 +80,24 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     @Test
     public void testSimpleGraphs() throws Exception {
-        for (var g : List.of(fullyConnectedGraph, randomlyConnectedGraph))
+        for (var graph : List.of(fullyConnectedGraph, randomlyConnectedGraph))
         {
-            var outputPath = testDirectory.resolve("test_graph_" + g.getClass().getSimpleName());
-            writeGraph(g, new GraphIndexTestCase.CircularFloatVectorValues(g.size()), outputPath);
+            var outputPath = testDirectory.resolve("test_graph_" + graph.getClass().getSimpleName());
+            var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
+            writeGraph(graph, ravv, outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
                  var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
                  var onDiskView = onDiskGraph.getView())
             {
-                validateGraph(g.getView(), onDiskView);
+                validateGraph(graph.getView(), onDiskView);
+                validateVectors(onDiskView, ravv);
             }
+        }
+    }
+
+    private void validateVectors(GraphIndex.View<float[]> view, RandomAccessVectorValues<float[]> ravv) {
+        for (int i = 0; i < view.size(); i++) {
+            assertArrayEquals(view.getVector(i), ravv.vectorValue(i), 0.0f);
         }
     }
 
@@ -98,7 +106,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     {
         var graph = new TestUtil.RandomlyConnectedGraphIndex<float[]>(100_000, 16, getRandom());
         var outputPath = testDirectory.resolve("large_graph");
-        writeGraph(graph, new GraphIndexTestCase.CircularFloatVectorValues(graph.size()), outputPath);
+        var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
+        writeGraph(graph, ravv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
@@ -106,6 +115,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         {
             validateGraph(graph.getView(), onDiskView);
             validateGraph(graph.getView(), new CachingGraphIndex(onDiskGraph).getView());
+            validateVectors(onDiskView, ravv);
         }
     }
 }
