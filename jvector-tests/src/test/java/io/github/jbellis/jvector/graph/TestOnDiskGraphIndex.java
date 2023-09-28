@@ -51,7 +51,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         TestUtil.deleteQuietly(testDirectory);
     }
 
-    private <T> void validateGraph(GraphIndex.View<T> expectedView, GraphIndex.View<T> actualView) throws Exception {
+    private static <T> void validateGraph(GraphIndex.View<T> expectedView, GraphIndex.View<T> actualView) {
         assertEquals(expectedView.size(), actualView.size());
         assertEquals(expectedView.entryNode(), actualView.entryNode());
 
@@ -95,7 +95,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
-    private void validateVectors(GraphIndex.View<float[]> view, RandomAccessVectorValues<float[]> ravv) {
+    private static void validateVectors(GraphIndex.View<float[]> view, RandomAccessVectorValues<float[]> ravv) {
         for (int i = 0; i < view.size(); i++) {
             assertArrayEquals(view.getVector(i), ravv.vectorValue(i), 0.0f);
         }

@@ -144,7 +144,7 @@ public class GraphSearcher<T> {
 
     prepareScratchState(view.size());
     var resultsQueue = new NeighborQueue(topK, false);
-    Map<Integer, T> vectorsEncountered = !scoreFunction.isExact() ? new java.util.HashMap<>() : null;
+    Map<Integer, T> vectorsEncountered = scoreFunction.isExact() ? null : new java.util.HashMap<>();
     int numVisited = 0;
 
     float score = scoreFunction.similarityTo(ep);
