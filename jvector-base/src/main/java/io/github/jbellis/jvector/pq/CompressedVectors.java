@@ -66,8 +66,16 @@ public class CompressedVectors
 
         // read the vectors
         int size = in.readInt();
+        if (size < 0) {
+            throw new IOException("Invalid compressed vector count " + size);
+        }
         var compressedVectors = new byte[size][];
+
         int compressedDimension = in.readInt();
+        if (compressedDimension < 0) {
+            throw new IOException("Invalid compressed vector dimension " + compressedDimension);
+        }
+
         for (int i = 0; i < size; i++)
         {
             byte[] vector = new byte[compressedDimension];
