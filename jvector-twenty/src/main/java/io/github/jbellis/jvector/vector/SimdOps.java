@@ -555,7 +555,7 @@ final class SimdOps {
         int[] convOffsets = scratchInt512.get();
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
         int i = 0;
-        int limit = FloatVector.SPECIES_128.loopBound(baseOffsets.length);
+        int limit = ByteVector.SPECIES_128.loopBound(baseOffsets.length);
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
             var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(1).add(i).mul(dataBase);
@@ -583,7 +583,7 @@ final class SimdOps {
         int[] convOffsets = scratchInt256.get();
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
         int i = 0;
-        int limit = FloatVector.SPECIES_64.loopBound(baseOffsets.length);
+        int limit = ByteVector.SPECIES_64.loopBound(baseOffsets.length);
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
             var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(1).add(i).mul(dataBase);
