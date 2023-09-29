@@ -522,6 +522,26 @@ final class SimdOps {
         }
     }
 
+    static void subInPlace(float[] v1, float[] v2) {
+        if (v1.length != v2.length) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length);
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, i);
+            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, i);
+            a.sub(b).intoArray(v1, i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length; i++) {
+            v1[i] = v1[i] - v2[i];
+        }
+    }
+
     static float[] sub(float[] lhs, float[] rhs) {
         if (lhs.length != rhs.length) {
             throw new IllegalArgumentException("Vectors must have the same length");

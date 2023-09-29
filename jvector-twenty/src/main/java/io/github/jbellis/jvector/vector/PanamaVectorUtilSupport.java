@@ -81,6 +81,11 @@ PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public void subInPlace(float[] v1, float[] v2) {
+        SimdOps.subInPlace(v1, v2);
+    }
+
+    @Override
     public float[] sub(float[] lhs, float[] rhs) {
         return SimdOps.sub(lhs, rhs);
     }

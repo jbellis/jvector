@@ -67,6 +67,9 @@ public interface VectorUtilSupport {
   /** Adds v2 into v1, in place (v1 will be modified) */
   public void addInPlace(float[] v1, float[] v2);
 
+  /** Subtracts v2 from v1, in place (v1 will be modified) */
+  public void subInPlace(float[] v1, float[] v2);
+
   /** @return lhs - rhs, element-wise */
   public float[] sub(float[] lhs, float[] rhs);
 
