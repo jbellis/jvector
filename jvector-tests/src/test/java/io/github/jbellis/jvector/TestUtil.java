@@ -110,7 +110,7 @@ public class TestUtil {
         }
 
         @Override
-        public int maxEdgesPerNode() {
+        public int maxDegree() {
             return size;
         }
 
@@ -187,7 +187,7 @@ public class TestUtil {
         }
 
         @Override
-        public int maxEdgesPerNode() {
+        public int maxDegree() {
             return nodes.get(0).length;
         }
 

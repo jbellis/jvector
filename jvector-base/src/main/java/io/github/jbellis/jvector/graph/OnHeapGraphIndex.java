@@ -86,7 +86,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    * @param node the node to add, represented as an ordinal on the level 0.
    */
   public void addNode(int node) {
-    nodes.put(node, neighborFactory.apply(node, maxEdgesPerNode()));
+    nodes.put(node, neighborFactory.apply(node, maxDegree()));
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
@@ -107,7 +107,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   @Override
-  public int maxEdgesPerNode() {
+  public int maxDegree() {
     return nsize0;
   }
 
@@ -139,7 +139,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     // the main graph structure
     long total = concurrentHashMapRamUsed(size());
     long chmSize = concurrentHashMapRamUsed(size());
-    long neighborSize = neighborsRamUsed(maxEdgesPerNode()) * size();
+    long neighborSize = neighborsRamUsed(maxDegree()) * size();
 
     total += chmSize + neighborSize;
 
@@ -150,8 +150,8 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     int entryCount = (int) (nodeLevel / CHM_LOAD_FACTOR);
     var graphBytesUsed =
         chmEntriesRamUsed(entryCount)
-            + neighborsRamUsed(maxEdgesPerNode())
-            + nodeLevel * neighborsRamUsed(maxEdgesPerNode());
+            + neighborsRamUsed(maxDegree())
+            + nodeLevel * neighborsRamUsed(maxDegree());
     var clockBytesUsed = Integer.BYTES;
     return graphBytesUsed + clockBytesUsed;
   }

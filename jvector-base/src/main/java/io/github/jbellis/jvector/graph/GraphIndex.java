@@ -57,7 +57,7 @@ public interface GraphIndex<T> extends AutoCloseable {
   /**
    * @return the maximum number of edges per node
    */
-  int maxEdgesPerNode();
+  int maxDegree();
 
   @Override
   void close() throws IOException;

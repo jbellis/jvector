@@ -56,8 +56,8 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
     }
 
     @Override
-    public int maxEdgesPerNode() {
-        return graph.maxEdgesPerNode();
+    public int maxDegree() {
+        return graph.maxDegree();
     }
 
     @Override
