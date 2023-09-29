@@ -1,16 +1,19 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         child.project.url.inherit.append.path="false">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.jbellis</groupId>
     <artifactId>jvector-parent</artifactId>
-    <version>dev</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
     <!-- Project Metadata setup -->
     <name>JVector parent</name>
     <description>JVector: the most advanced embedded vector search engine</description>
     <url>https://github.com/jbellis/jvector</url>
-    <scm>
+    <scm child.scm.connection.inherit.append.path="false"
+         child.scm.developerConnection.inherit.append.path="false"
+         child.scm.url.inherit.append.path="false">
         <connection>scm:git:git://github.com/jbellis/jvector.git</connection>
         <developerConnection>scm:git:git@github.com:jbellis/jvector.git</developerConnection>
         <url>http://github.com/jbellis/jvector/tree/main/</url>
@@ -38,12 +41,14 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.install.skip>true</maven.install.skip>
-        <jvector.version>0.9-SNAPSHOT</jvector.version>
+        <revision>0.9.4-SNAPSHOT</revision>
     </properties>
     <modules>
         <module>jvector-base</module>
         <module>jvector-twenty</module>
+        <module>jvector-tests</module>
         <module>jvector-multirelease</module>
+        <module>jvector-examples</module>
     </modules>
     <build>
         <resources>
@@ -54,6 +59,14 @@
         </resources>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.1</version>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
@@ -61,38 +74,6 @@
                     <skip>true</skip>
                     <executable>${java.home}/bin/java</executable>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>sift</id>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>${java.home}/bin/java</executable>
-                            <workingDirectory>${project.parent.basedir}</workingDirectory>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>bench</id>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>${java.home}/bin/java</executable>
-                            <workingDirectory>${project.parent.basedir}</workingDirectory>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>deep100</id>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>${java.home}/bin/java</executable>
-                            <workingDirectory>${project.parent.basedir}</workingDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -134,6 +115,7 @@
                             <goal>aggregate-jar</goal>
                         </goals>
                         <configuration>
+                            <skippedModules>jvector-examples,jvector-tests</skippedModules>
                             <additionalJOptions>
                                 <additionalJOption>--add-modules=jdk.incubator.vector</additionalJOption>
                             </additionalJOptions>
@@ -175,16 +157,6 @@
     </build>
     <!-- Only include dependencies that are needed for the multirelease jar to run -->
     <dependencies>
-        <dependency>
-            <groupId>io.jhdf</groupId>
-            <artifactId>jhdf</artifactId>
-            <version>0.6.10</version>
-        </dependency>
-        <dependency>
-            <groupId>com.indeed</groupId>
-            <artifactId>util-mmap</artifactId>
-            <version>1.0.52-3042601</version>
-        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>

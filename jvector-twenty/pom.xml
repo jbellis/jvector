@@ -7,13 +7,11 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector-twenty</artifactId>
-    <version>${jvector.version}</version>
     <name>Twenty</name>
     <build>
-        <testSourceDirectory>../jvector-base/src/test</testSourceDirectory>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -37,60 +35,13 @@
                     </argLine>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <configuration>
-                    <skip>false</skip>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>sift</id>
-                        <configuration>
-                            <arguments>
-                                <argument>-classpath</argument>
-                                <classpath/>
-                                <argument>--add-modules=jdk.incubator.vector</argument>
-                                <argument>-ea</argument>
-                                <argument>com.github.jbellis.jvector.example.SiftSmall</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>bench</id>
-                        <configuration>
-                            <arguments>
-                                <argument>-classpath</argument>
-                                <classpath/>
-                                <argument>--add-modules=jdk.incubator.vector</argument>
-                                <argument>-Xmx32G</argument>
-                                <argument>-ea</argument>
-                                <argument>com.github.jbellis.jvector.example.Bench</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>deep100</id>
-                        <configuration>
-                            <arguments>
-                                <argument>-classpath</argument>
-                                <classpath/>
-                                <argument>--add-modules=jdk.incubator.vector</argument>
-                                <argument>-Xmx256G</argument>
-                                <argument>-ea</argument>
-                                <argument>com.github.jbellis.jvector.example.Deep100MWriter</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
     <dependencies>
         <dependency>
             <groupId>io.github.jbellis</groupId>
             <artifactId>jvector-base</artifactId>
-            <version>${jvector.version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
