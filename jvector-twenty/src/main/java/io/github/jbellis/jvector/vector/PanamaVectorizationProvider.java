@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.vector;
 
+import jdk.incubator.vector.FloatVector;
+
 public class PanamaVectorizationProvider extends VectorizationProvider
 {
     static {
@@ -26,6 +28,7 @@ public class PanamaVectorizationProvider extends VectorizationProvider
 
     public PanamaVectorizationProvider() {
         this.vectorUtilSupport = new PanamaVectorUtilSupport();
+        LOG.info("Preferred f32 species is " + FloatVector.SPECIES_PREFERRED.vectorBitSize());
     }
 
     @Override
