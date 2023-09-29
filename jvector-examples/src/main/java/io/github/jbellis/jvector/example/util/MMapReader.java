@@ -37,7 +37,7 @@ public class MMapReader implements RandomAccessReader {
         try {
             buffer.memory().getBytes(position, bytes, offset, count);
         } finally {
-            position += bytes.length;
+            position += count;
         }
     }
 
