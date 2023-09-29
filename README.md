@@ -13,7 +13,7 @@ What is JVector?
 
 ## JVector performance, visualized
 JVector vs Lucene searching the Deep100M dataset (about 35GB of vectors and 25GB index):
-![Screenshot from 2023-09-29 16-16-57](https://github.com/jbellis/jvector/assets/42158/88c77805-aefe-4dcd-869b-5cba39ddd1f1)
+![Screenshot from 2023-09-29 16-39-33](https://github.com/jbellis/jvector/assets/42158/7710f33d-ff6a-4282-9e31-4a5eaacd796f)
 
 JVector scales updates linearly to at least 32 threads:
 ![Screenshot from 2023-09-14 18-05-15](https://github.com/jbellis/jvector/assets/42158/f0127bfc-6c45-48b9-96ea-95b2120da0d9)
