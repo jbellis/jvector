@@ -72,8 +72,8 @@ this with the following steps:
 - [`OnDiskGraphIndex`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/OnDiskGraphIndex.java) and [`CompressedVectors`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/CompressedVectors.java) have `write()` methods to save state to disk.
   They initialize from disk using their constructor and `load()` methods, respectively.
   Writing just requires a DataOutput, but reading requires an 
-  implementation of [`RandomAccessReader`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/RandomAccessReader.java) to wrap your
-  preferred i/o class for best performance. See MappedRandomAccessReader for an example.
+  implementation of [`RandomAccessReader`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/RandomAccessReader.java) and the related `ReaderSupplier` to wrap your
+  preferred i/o class for best performance. See `SimpleMappedReader` and `SimpleMappedReaderSupplier` for an example.
 - Building a graph does not technically require your RandomAccessVectorValues object
   to live in memory, but it will perform much better if it does.  OnDiskGraphIndex,
   by contrast, is designed to live on disk and use minimal memory otherwise.
