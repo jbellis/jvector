@@ -24,9 +24,9 @@ jobs:
           java-version: ${{ matrix.jdk }}
           distribution: temurin
           cache: maven
-      - name: Compile and run tests (JDK 20)
+      - name: Compile, run tests, and package (JDK 20)
         run: mvn -B package
         if: matrix.jdk == '20'
       - name: Compile and run tests (JDK 11)
-        run: mvn -B -am -pl jvector-base test
+        run: mvn -B -Pjdk11 -am -pl jvector-tests test
         if: matrix.jdk == '11'
