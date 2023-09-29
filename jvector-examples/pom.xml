@@ -127,6 +127,18 @@
                                     </arguments>
                                 </configuration>
                             </execution>
+                            <execution>
+                                <id>deep100m</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>-Xmx256G</argument>
+                                        <argument>-ea</argument>
+                                        <argument>io.jvector.example.Deep100MWriter</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                 </plugins>

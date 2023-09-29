@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.jbellis.jvector.example;
+package io.github.jbellis.jvector.example;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -31,23 +31,23 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import com.github.jbellis.jvector.disk.CachingGraphIndex;
-import com.github.jbellis.jvector.disk.CompressedVectors;
-import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import com.github.jbellis.jvector.example.util.DataSet;
-import com.github.jbellis.jvector.example.util.Deep1BLoader;
-import com.github.jbellis.jvector.example.util.ReaderSupplierFactory;
-import com.github.jbellis.jvector.example.util.SimpleMappedReader;
-import com.github.jbellis.jvector.graph.GraphIndex;
-import com.github.jbellis.jvector.graph.GraphIndexBuilder;
-import com.github.jbellis.jvector.graph.GraphSearcher;
-import com.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import com.github.jbellis.jvector.graph.NeighborSimilarity;
-import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import com.github.jbellis.jvector.graph.SearchResult;
-import com.github.jbellis.jvector.pq.ProductQuantization;
-import com.github.jbellis.jvector.vector.VectorEncoding;
-import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.jvector.disk.CachingGraphIndex;
+import io.jvector.disk.CompressedVectors;
+import io.jvector.disk.OnDiskGraphIndex;
+import io.jvector.example.util.DataSet;
+import io.jvector.example.util.Deep1BLoader;
+import io.jvector.example.util.ReaderSupplierFactory;
+import io.jvector.example.util.SimpleMappedReader;
+import io.jvector.graph.GraphIndex;
+import io.jvector.graph.GraphIndexBuilder;
+import io.jvector.graph.GraphSearcher;
+import io.jvector.graph.ListRandomAccessVectorValues;
+import io.jvector.graph.NeighborSimilarity;
+import io.jvector.graph.RandomAccessVectorValues;
+import io.jvector.graph.SearchResult;
+import io.jvector.pq.ProductQuantization;
+import io.jvector.vector.VectorEncoding;
+import io.jvector.vector.VectorSimilarityFunction;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
@@ -172,7 +172,7 @@ public class Deep100MWriter {
 
     private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
         var start = System.nanoTime();
-        var pqDims = ds.baseVectors.get(0).length / 2;
+        var pqDims = ds.baseVectors.get(0).length / 4;
         ProductQuantization pq = new ProductQuantization(ds.baseVectors, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
         System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
