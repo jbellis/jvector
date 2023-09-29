@@ -91,7 +91,7 @@ public class SimpleMappedReader implements RandomAccessReader {
     @Override
     public void read(int[] ints, int offset, int count) {
         for (int i = 0; i < count; i++) {
-            ints[i] = mbb.getInt();
+            ints[offset + i] = mbb.getInt();
         }
     }
 
