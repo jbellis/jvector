@@ -115,7 +115,7 @@ public class Bench {
                     var view = index.getView();
                     NeighborSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                     NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
-                    sr = new GraphSearcher.Builder(view)
+                    sr = new GraphSearcher.Builder<>(view)
                             .build()
                             .search(sf, rr, efSearch, null);
                 } else {
