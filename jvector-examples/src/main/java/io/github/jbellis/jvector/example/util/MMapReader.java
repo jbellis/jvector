@@ -9,7 +9,8 @@ import java.nio.ByteOrder;
 public class MMapReader implements RandomAccessReader {
     private final MMapBuffer buffer;
     private long position;
-    private byte[] scratch = new byte[0];
+    private byte[] floatsScratch = new byte[0];
+    private byte[] intsScratch = new byte[0];
 
     MMapReader(MMapBuffer buffer) {
         this.buffer = buffer;
@@ -39,12 +40,23 @@ public class MMapReader implements RandomAccessReader {
     @Override
     public void readFully(float[] floats) {
         int bytesToRead = floats.length * Float.BYTES;
-        if (scratch.length != bytesToRead) {
-            scratch = new byte[bytesToRead];
+        if (floatsScratch.length != bytesToRead) {
+            floatsScratch = new byte[bytesToRead];
         }
-        readFully(scratch);
-        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.BIG_ENDIAN);
+        readFully(floatsScratch);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(floatsScratch).order(ByteOrder.BIG_ENDIAN);
         byteBuffer.asFloatBuffer().get(floats);
+    }
+
+    @Override
+    public void read(int[] ints, int offset, int count) {
+        int bytesToRead = count * Integer.BYTES;
+        if (intsScratch.length != bytesToRead) {
+            intsScratch = new byte[bytesToRead];
+        }
+        readFully(intsScratch);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(intsScratch).order(ByteOrder.BIG_ENDIAN);
+        byteBuffer.asIntBuffer().get(ints, offset, count);
     }
 
     @Override

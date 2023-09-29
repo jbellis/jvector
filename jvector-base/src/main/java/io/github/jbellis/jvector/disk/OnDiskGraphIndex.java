@@ -69,11 +69,13 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     public class OnDiskView implements GraphIndex.View<T>, AutoCloseable
     {
         private final RandomAccessReader reader;
+        private final int[] neighbors;
 
         public OnDiskView(RandomAccessReader reader)
         {
             super();
             this.reader = reader;
+            this.neighbors = new int[maxDegree];
         }
 
         public T getVector(int node) {
@@ -98,28 +100,8 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                         (node * (long) Integer.BYTES * (maxDegree + 1)));
                 int neighborCount = reader.readInt();
                 assert neighborCount <= maxDegree : String.format("neighborCount %d > M %d", neighborCount, maxDegree);
-                return new NodesIterator(neighborCount)
-                {
-                    int currentNeighborsRead = 0;
-
-                    @Override
-                    public int nextInt() {
-                        currentNeighborsRead++;
-                        try {
-                            int ordinal = reader.readInt();
-                            assert ordinal <= OnDiskGraphIndex.this.size : String.format("ordinal %d > size %d", ordinal, size);
-                            return ordinal;
-                        }
-                        catch (IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return currentNeighborsRead < neighborCount;
-                    }
-                };
+                reader.read(neighbors, 0, neighborCount);
+                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);
