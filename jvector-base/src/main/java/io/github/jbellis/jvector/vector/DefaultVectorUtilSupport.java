@@ -240,6 +240,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void subInPlace(float[] v1, float[] v2) {
+    for (int i = 0; i < v1.length; i++) {
+      v1[i] -= v2[i];
+    }
+  }
+
+  @Override
   public float[] sub(float[] lhs, float[] rhs) {
     float[] result = new float[lhs.length];
     for (int i = 0; i < lhs.length; i++) {

@@ -57,19 +57,19 @@ public class Bench {
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         try {
-            DataOutputStream outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)));
-            OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
-            outputStream.flush();
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
-
-            int queryRuns = 2;
-            for (int overquery : efSearchOptions) {
-                for (boolean useDisk : diskOptions) {
-                    start = System.nanoTime();
-                    var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
-                    var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                    System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                            useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+            try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
+                OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+            }
+            try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
+                int queryRuns = 2;
+                for (int overquery : efSearchOptions) {
+                    for (boolean useDisk : diskOptions) {
+                        start = System.nanoTime();
+                        var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
+                        var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
+                        System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                                          useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                    }
                 }
             }
         }
@@ -189,7 +189,7 @@ public class Bench {
         start = System.nanoTime();
         var quantizedVectors = pq.encodeAll(ds.baseVectors);
         var compressedVectors = new CompressedVectors(pq, quantizedVectors);
-        System.out.format("PQ encoded %d[%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+        System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
         var testDirectory = Files.createTempDirectory("BenchGraphDir");
 
