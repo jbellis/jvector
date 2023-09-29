@@ -11,7 +11,7 @@ public class ReaderSupplierFactory {
     public static ReaderSupplier open(Path path) throws IOException {
         try {
             return new MMapReaderSupplier(path);
-        } catch (UnsatisfiedLinkError e) {
+        } catch (UnsatisfiedLinkError|NoClassDefFoundError e) {
             if (Files.size(path) > Integer.MAX_VALUE) {
                 throw new RuntimeException("File sizes greater than 2GB are not supported on Windows--contributions welcome");
             }
