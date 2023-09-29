@@ -30,8 +30,12 @@ public class MMapReader implements RandomAccessReader {
     }
 
     public void readFully(byte[] bytes) {
+        read(bytes, 0, bytes.length);
+    }
+
+    private void read(byte[] bytes, int offset, int count) {
         try {
-            buffer.memory().getBytes(position, bytes);
+            buffer.memory().getBytes(position, bytes, offset, count);
         } finally {
             position += bytes.length;
         }
@@ -40,21 +44,21 @@ public class MMapReader implements RandomAccessReader {
     @Override
     public void readFully(float[] floats) {
         int bytesToRead = floats.length * Float.BYTES;
-        if (floatsScratch.length != bytesToRead) {
+        if (floatsScratch.length < bytesToRead) {
             floatsScratch = new byte[bytesToRead];
         }
-        readFully(floatsScratch);
+        read(floatsScratch, 0, bytesToRead);
         ByteBuffer byteBuffer = ByteBuffer.wrap(floatsScratch).order(ByteOrder.BIG_ENDIAN);
         byteBuffer.asFloatBuffer().get(floats);
     }
 
     @Override
     public void read(int[] ints, int offset, int count) {
-        int bytesToRead = count * Integer.BYTES;
-        if (intsScratch.length != bytesToRead) {
+        int bytesToRead = (count - offset) * Integer.BYTES;
+        if (intsScratch.length < bytesToRead) {
             intsScratch = new byte[bytesToRead];
         }
-        readFully(intsScratch);
+        read(intsScratch, 0, bytesToRead);
         ByteBuffer byteBuffer = ByteBuffer.wrap(intsScratch).order(ByteOrder.BIG_ENDIAN);
         byteBuffer.asIntBuffer().get(ints, offset, count);
     }
