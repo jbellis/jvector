@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.lang.Math.abs;
+import static java.lang.Math.log;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
@@ -82,13 +83,21 @@ public class TestCompressedVectors extends RandomizedTest {
                     delta += abs(f.similarityTo(j) - vsf.compare(q, vectors.get(j)));
                 }
             }
-            System.out.printf("delta for %s is %s for dimension %d and %d codebooks%n", vsf, delta, dimension, codebooks);
+            // https://chat.openai.com/share/7ced3fc8-275a-4134-978c-c822275c3e1f
+            // is there a better way to check for within-expected bounds?
+            var expectedDelta = vsf == VectorSimilarityFunction.EUCLIDEAN
+                    ? 96.98 * log(3.26 + dimension) / log(1.92 + codebooks) - 112.15
+                    : 152.69 * log(3.76 + dimension) / log(1.95 + codebooks) - 180.86;
+            // expected is accurate to within about 10% *on average*.  experimentally 25% is not quite enough
+            // to avoid false positives, so we pad by 40%
+            assert delta <= 1.4 * expectedDelta : String.format("%s > %s for %s with %d dimensions and %d codebooks", delta, expectedDelta, vsf, dimension, codebooks);
         }
     }
 
     @Test
     public void testEncodings() {
-        for (int i = 1; i <= 4; i++) {
+        // start with i=2 (dimension 4) b/c dimension 2 is an outlier for our error prediction
+        for (int i = 2; i <= 8; i++) {
             for (int M = 1; M <= i; M++) {
                 testEncodings(2 * i, M);
             }
