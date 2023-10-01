@@ -112,7 +112,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
 
             byte[] encoded = cv.get(node2);
 
-            for (int m = 0; m < partialSums.length; ++m) {
+            for (int m = 0; m < encoded.length; ++m) {
                 int centroidIndex = Byte.toUnsignedInt(encoded[m]);
                 sum += partialSums[(m * ProductQuantization.CLUSTERS) + centroidIndex];
                 aMag += aMagnitude[(m * ProductQuantization.CLUSTERS) + centroidIndex];
