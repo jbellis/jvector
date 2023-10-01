@@ -26,12 +26,12 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
+import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorUtil;
 import org.junit.Test;
 
 import java.util.*;
@@ -603,7 +603,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
     float[][] vectors = new float[size][];
     for (int offset = 0; offset < size; offset += random.nextInt(3) + 1) {
-      vectors[offset] = randomVector(random, dimension);
+      vectors[offset] = TestUtil.randomVector(random, dimension);
     }
     return vectors;
   }
@@ -611,7 +611,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
   static byte[][] createRandomByteVectors(int size, int dimension, Random random) {
     byte[][] vectors = new byte[size][];
     for (int offset = 0; offset < size; offset += random.nextInt(3) + 1) {
-      vectors[offset] = randomVector8(random, dimension);
+      vectors[offset] = TestUtil.randomVector8(random, dimension);
     }
     return vectors;
   }
@@ -633,26 +633,5 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
       }
     }
     return bits;
-  }
-
-  public static float[] randomVector(Random random, int dim) {
-    float[] vec = new float[dim];
-    for (int i = 0; i < dim; i++) {
-      vec[i] = random.nextFloat();
-      if (random.nextBoolean()) {
-        vec[i] = -vec[i];
-      }
-    }
-    VectorUtil.l2normalize(vec);
-    return vec;
-  }
-
-  public static byte[] randomVector8(Random random, int dim) {
-    float[] fvec = randomVector(random, dim);
-    byte[] bvec = new byte[dim];
-    for (int i = 0; i < dim; i++) {
-      bvec[i] = (byte) (fvec[i] * 127);
-    }
-    return bvec;
   }
 }

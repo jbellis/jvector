@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.vector;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
-import io.github.jbellis.jvector.graph.GraphIndexTestCase;
+import io.github.jbellis.jvector.TestUtil;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
@@ -33,8 +33,8 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorizationProvider b = VectorizationProvider.getInstance();
 
         for (int i = 0; i < 1000; i++) {
-            float[] v1 = GraphIndexTestCase.randomVector(getRandom(), 1021); //prime numbers
-            float[] v2 = GraphIndexTestCase.randomVector(getRandom(), 1021); //prime numbers
+            float[] v1 = TestUtil.randomVector(getRandom(), 1021); //prime numbers
+            float[] v2 = TestUtil.randomVector(getRandom(), 1021); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1, v2), b.getVectorUtilSupport().dotProduct(v1, v2), 0.00001f);
             Assert.assertEquals(a.getVectorUtilSupport().cosine(v1, v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
@@ -50,8 +50,8 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorizationProvider b = VectorizationProvider.getInstance();
 
         for (int i = 0; i < 1000; i++) {
-            byte[] v1 = GraphIndexTestCase.randomVector8(getRandom(), 1021); //prime numbers
-            byte[] v2 = GraphIndexTestCase.randomVector8(getRandom(), 1021); //prime numbers
+            byte[] v1 = TestUtil.randomVector8(getRandom(), 1021); //prime numbers
+            byte[] v2 = TestUtil.randomVector8(getRandom(), 1021); //prime numbers
 
             Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1, v2), b.getVectorUtilSupport().dotProduct(v1, v2));
             Assert.assertEquals(a.getVectorUtilSupport().cosine(v1, v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
@@ -67,7 +67,7 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorizationProvider b = VectorizationProvider.getInstance();
 
         for (int i = 0; i < 1000; i++) {
-            float[] v2 = GraphIndexTestCase.randomVector(getRandom(), 256);
+            float[] v2 = TestUtil.randomVector(getRandom(), 256);
 
             float[] v3 = new float[32];
             byte[] offsets = new byte[32];

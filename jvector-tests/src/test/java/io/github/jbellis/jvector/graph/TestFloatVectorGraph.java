@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
@@ -52,12 +53,12 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
 
   @Override
   float[] randomVector(int dim) {
-    return randomVector(getRandom(), dim);
+    return TestUtil.randomVector(getRandom(), dim);
   }
 
   @Override
   AbstractMockVectorValues<float[]> vectorValues(int size, int dimension) {
-    return MockVectorValues.fromValues(createRandomFloatVectors(size, dimension, getRandom()));
+    return MockVectorValues.fromValues(GraphIndexTestCase.createRandomFloatVectors(size, dimension, getRandom()));
   }
 
   @Override
@@ -73,7 +74,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
       int pregeneratedOffset) {
     float[][] vectors = new float[size][];
     float[][] randomVectors =
-        createRandomFloatVectors(
+        GraphIndexTestCase.createRandomFloatVectors(
             size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
     for (int i = 0; i < pregeneratedOffset; i++) {

@@ -18,6 +18,7 @@ package io.github.jbellis.jvector;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -82,6 +83,27 @@ public class TestUtil {
         } catch (IOException e) {
             System.err.println("deleteQuietly encountered an Exception: " + e.toString());
         }
+    }
+
+    public static float[] randomVector(Random random, int dim) {
+      float[] vec = new float[dim];
+      for (int i = 0; i < dim; i++) {
+        vec[i] = random.nextFloat();
+        if (random.nextBoolean()) {
+          vec[i] = -vec[i];
+        }
+      }
+      VectorUtil.l2normalize(vec);
+      return vec;
+    }
+
+    public static byte[] randomVector8(Random random, int dim) {
+      float[] fvec = randomVector(random, dim);
+      byte[] bvec = new byte[dim];
+      for (int i = 0; i < dim; i++) {
+        bvec[i] = (byte) (fvec[i] * 127);
+      }
+      return bvec;
     }
 
     public static class FullyConnectedGraphIndex<T> implements GraphIndex<T> {

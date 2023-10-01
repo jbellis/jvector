@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -45,12 +46,12 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
 
   @Override
   byte[] randomVector(int dim) {
-    return randomVector8(getRandom(), dim);
+    return TestUtil.randomVector8(getRandom(), dim);
   }
 
   @Override
   AbstractMockVectorValues<byte[]> vectorValues(int size, int dimension) {
-    return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, getRandom()));
+    return MockByteVectorValues.fromValues(GraphIndexTestCase.createRandomByteVectors(size, dimension, getRandom()));
   }
 
   static boolean fitsInByte(float v) {
@@ -86,7 +87,7 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
       int pregeneratedOffset) {
     byte[][] vectors = new byte[size][];
     byte[][] randomVectors =
-        createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
+        GraphIndexTestCase.createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
     for (int i = 0; i < pregeneratedOffset; i++) {
       vectors[i] = randomVectors[i];
