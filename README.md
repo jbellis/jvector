@@ -4,7 +4,7 @@ JVector is a pure Java, zero dependency, embedded vector search engine, used by 
 What is JVector?
 - Algorithmic-fast. JVector uses state of the art graph algorithms inspired by DiskANN and related research that offer high recall and low latency.
 - Implementation-fast. JVector uses the Panama SIMD API to accelerate index build and queries.
-- Memory efficient. JVector compresses vectors using product quantization so they can stay in memory during searches.  (As part of our PQ implementation, our SIMD-accelerated kmeans implementation is 3x faster than Apache Commons Math.)
+- Memory efficient. JVector compresses vectors using product quantization so they can stay in memory during searches.  (As part of our PQ implementation, our SIMD-accelerated kmeans class is 5x faster than the one in Apache Commons Math.)
 - Disk-aware. JVector’s disk layout is designed to do the minimum necessary iops at query time.
 - Concurrent.  Index builds scale linearly to at least 32 threads.  Double the threads, half the build time.
 - Incremental. Query your index as you build it.  No delay between adding a vector and being able to find it in search results.
@@ -19,7 +19,7 @@ JVector scales updates linearly to at least 32 threads:
 ![Screenshot from 2023-09-14 18-05-15](https://github.com/jbellis/jvector/assets/42158/f0127bfc-6c45-48b9-96ea-95b2120da0d9)
 
 ## JVector basics
-Adding to your project. Replace `${latest-version}` with ![Maven Central](https://img.shields.io/maven-central/v/io.github.jbellis/jvector?color=green). Example `<version>1.0.0</version>`:
+Adding to your project. Replace `${latest-version}` with ![Maven Central](https://img.shields.io/maven-central/v/io.github.jbellis/jvector?color=green). Example `<version>1.0.1</version>`:
 
 ```
 <dependency>        
@@ -60,9 +60,9 @@ JVector implements [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.p
 search, meaning that vectors can be compressed using product quantization so that searches
 can be performed using the compressed representation that is kept in memory.  You can enable
 this with the following steps:
-- Create a [`ProductQuantization`](./jvector-base/src/main/java/io/github/jbellis/jvector/pq/ProductQuantization.java) object with your vectors.  This will take some time
+- Create a [`ProductQuantization`](./jvector-base/src/main/java/io/github/jbellis/jvector/pq/ProductQuantization.java) object with your vectors using `ProductQuantization.compute`.  This will take some time
   to compute the codebooks.
-- Use `ProductQuantization.encode` or `encodeAll` to encode your vectors.
+- Use `ProductQuantization::encode` or `encodeAll` to encode your vectors.
 - Create a [`CompressedVectors`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/CompressedVectors.java) object from the encoded vectors.
 - Create a [`NeighborSimilarity.ApproximateScoreFunction`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/NeighborSimilarity.java) for your query that uses the
   `ProductQuantization` object and `CompressedVectors` to compute scores, and pass this
