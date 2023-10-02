@@ -58,7 +58,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
 
   @Override
   AbstractMockVectorValues<float[]> vectorValues(int size, int dimension) {
-    return MockVectorValues.fromValues(GraphIndexTestCase.createRandomFloatVectors(size, dimension, getRandom()));
+    return MockVectorValues.fromValues(createRandomFloatVectors(size, dimension, getRandom()));
   }
 
   @Override
@@ -74,7 +74,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
       int pregeneratedOffset) {
     float[][] vectors = new float[size][];
     float[][] randomVectors =
-        GraphIndexTestCase.createRandomFloatVectors(
+        createRandomFloatVectors(
             size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
     for (int i = 0; i < pregeneratedOffset; i++) {

@@ -51,7 +51,7 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
 
   @Override
   AbstractMockVectorValues<byte[]> vectorValues(int size, int dimension) {
-    return MockByteVectorValues.fromValues(GraphIndexTestCase.createRandomByteVectors(size, dimension, getRandom()));
+    return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, getRandom()));
   }
 
   static boolean fitsInByte(float v) {
@@ -87,7 +87,7 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
       int pregeneratedOffset) {
     byte[][] vectors = new byte[size][];
     byte[][] randomVectors =
-        GraphIndexTestCase.createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
+        createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
 
     for (int i = 0; i < pregeneratedOffset; i++) {
       vectors[i] = randomVectors[i];
