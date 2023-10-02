@@ -70,21 +70,13 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
-    private static <T> void writeGraph(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, Path outputPath) throws IOException {
-        try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
-        {
-            OnDiskGraphIndex.write(graph, vectors, indexOutputWriter);
-            indexOutputWriter.flush();
-        }
-    }
-
     @Test
     public void testSimpleGraphs() throws Exception {
         for (var graph : List.of(fullyConnectedGraph, randomlyConnectedGraph))
         {
             var outputPath = testDirectory.resolve("test_graph_" + graph.getClass().getSimpleName());
             var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
-            writeGraph(graph, ravv, outputPath);
+            TestUtil.writeGraph(graph, ravv, outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
                  var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
                  var onDiskView = onDiskGraph.getView())
@@ -107,15 +99,18 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var graph = new TestUtil.RandomlyConnectedGraphIndex<float[]>(100_000, 16, getRandom());
         var outputPath = testDirectory.resolve("large_graph");
         var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
-        writeGraph(graph, ravv, outputPath);
+        TestUtil.writeGraph(graph, ravv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
-             var onDiskView = onDiskGraph.getView())
+             var onDiskView = onDiskGraph.getView();
+             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph);
+             var cachedOnDiskView = cachedOnDiskGraph.getView())
         {
             validateGraph(graph.getView(), onDiskView);
-            validateGraph(graph.getView(), new CachingGraphIndex(onDiskGraph).getView());
+            validateGraph(graph.getView(), cachedOnDiskView);
             validateVectors(onDiskView, ravv);
+            validateVectors(cachedOnDiskView, ravv);
         }
     }
 }

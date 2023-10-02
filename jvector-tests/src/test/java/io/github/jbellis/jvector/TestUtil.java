@@ -16,8 +16,10 @@
 
 package io.github.jbellis.jvector;
 
+import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.BufferedOutputStream;
@@ -106,6 +108,14 @@ public class TestUtil {
       return bvec;
     }
 
+    public static <T> void writeGraph(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, Path outputPath) throws IOException {
+        try (var indexOutputWriter = openFileForWriting(outputPath))
+        {
+            OnDiskGraphIndex.write(graph, vectors, indexOutputWriter);
+            indexOutputWriter.flush();
+        }
+    }
+
     public static class FullyConnectedGraphIndex<T> implements GraphIndex<T> {
         private final int entryNode;
         private final int size;
@@ -133,7 +143,7 @@ public class TestUtil {
 
         @Override
         public int maxDegree() {
-            return size;
+            return size - 1;
         }
 
         @Override
