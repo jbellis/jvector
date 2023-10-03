@@ -32,7 +32,6 @@ import java.util.stream.IntStream;
  * @param <T> the type of vector
  */
 public class GraphIndexBuilder<T> {
-
   private final int beamWidth;
   private final PoolingSupport<NeighborArray> naturalScratch;
   private final PoolingSupport<NeighborArray> concurrentScratch;
@@ -75,8 +74,8 @@ public class GraphIndexBuilder<T> {
           int beamWidth,
           float neighborOverflow,
           float alpha) {
-    vectors = new PoolingSupport<>(vectorValues::copy);
-    vectorsCopy = new PoolingSupport<>(vectorValues::copy);
+    vectors = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
+    vectorsCopy = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
     this.vectorEncoding = Objects.requireNonNull(vectorEncoding);
     this.similarityFunction = Objects.requireNonNull(similarityFunction);
     this.neighborOverflow = neighborOverflow;
@@ -97,11 +96,11 @@ public class GraphIndexBuilder<T> {
     this.graph =
             new OnHeapGraphIndex<>(
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
-    this.graphSearcher = new PoolingSupport<>(() -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
+    this.graphSearcher = PoolingSupport.newThreadBased(() -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
 
     // in scratch we store candidates in reverse order: worse candidates are first
-    this.naturalScratch = new PoolingSupport<>(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
-    this.concurrentScratch = new PoolingSupport<>(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
+    this.naturalScratch = PoolingSupport.newThreadBased(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
+    this.concurrentScratch = PoolingSupport.newThreadBased(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
   }
 
   public OnHeapGraphIndex<T> build() {
