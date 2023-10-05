@@ -137,7 +137,7 @@ public class Bench {
         var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
-        var diskGrid = List.of(false, true);
+        var diskGrid = List.of(true);
 
         // this dataset contains more than 10k query vectors, so we limit it with .subList
         var adaSet = loadWikipediaData();
@@ -164,7 +164,7 @@ public class Bench {
         }
     }
 
-    private static DataSet loadWikipediaData() throws IOException {
+    public static DataSet loadWikipediaData() throws IOException {
         var baseVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec");
         var queryVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000);
         var gt = SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000);

@@ -9,7 +9,6 @@ import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorEncoding;
@@ -25,9 +24,9 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-@Warmup(iterations = 2, time = 5)
-@Measurement(iterations = 3, time = 10)
-@Fork(warmups = 1, value = 1, jvmArgsAppend = {"-XX:+UnlockDiagnosticVMOptions", "--add-modules=jdk.incubator.vector", "--enable-preview", "-XX:+PreserveFramePointer", "-XX:+DebugNonSafepoints", "-XX:+AlwaysPreTouch", "-Xmx14G", "-Xms14G"})
+@Warmup(iterations = 1, time = 5)
+@Measurement(iterations = 1, time = 10)
+@Fork(warmups = 0, value = 1, jvmArgsAppend = {"--add-modules=jdk.incubator.vector"})//"-XX:+UnlockDiagnosticVMOptions", "--enable-preview", "-XX:+PreserveFramePointer", "-XX:+DebugNonSafepoints", "-XX:+AlwaysPreTouch", "-Xmx14G", "-Xms14G"})
 public class GraphBuildBench {
 
     private static DataSet loadWikipediaData() throws IOException
@@ -68,7 +67,7 @@ public class GraphBuildBench {
 
         int pqDims = p.ravv.dimension() / 4;
         long start = System.nanoTime();
-        var pq = ProductQuantization.compute(p.ravv, p.ravv.dimension(), p.ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
+        var pq = ProductQuantization.compute(p.ravv, pqDims, p.ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
         System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();
@@ -77,7 +76,7 @@ public class GraphBuildBench {
         System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", p.ds.baseVectors.size(), (compressedVectors.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();
-        GraphIndexBuilder<float[]> graphIndexBuilder =  new GraphIndexBuilder<>(p.ravv, VectorEncoding.FLOAT32, p.ds.similarityFunction, 8, 60, 1.2f, 1.4f);
+        GraphIndexBuilder<float[]> graphIndexBuilder =  new GraphIndexBuilder<>(p.ravv, VectorEncoding.FLOAT32, p.ds.similarityFunction, 8, 40, 1.2f, 1.4f);
         var onHeapGraph = graphIndexBuilder.build();
         var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
         System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
