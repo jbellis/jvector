@@ -26,13 +26,10 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import org.jctools.maps.NonBlockingHashMap;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 import java.util.Arrays;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 
 /**
@@ -43,10 +40,9 @@ import java.util.function.BiFunction;
  * and `nextNeighbor` operations.
  */
 public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
-  private static final AtomicLongFieldUpdater<OnHeapGraphIndex> entryPointUpdater = AtomicLongFieldUpdater.newUpdater(OnHeapGraphIndex.class, "entryPointVal");
 
   // the current graph entry node on the top level. -1 if not set
-  private volatile long entryPointVal;
+  private final AtomicLong entryPoint = new AtomicLong(-1);
 
   private final NonBlockingHashMapLong<ConcurrentNeighborSet> nodes;
 
@@ -57,7 +53,6 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   OnHeapGraphIndex(
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
     this.neighborFactory = neighborFactory;
-    this.entryPointVal = -1; // Entry node should be negative until a node is added
     this.nsize0 = 2 * M;
 
     this.nodes = new NonBlockingHashMapLong<>(1024);
@@ -96,7 +91,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   /** must be called after addNode once neighbors are linked in all levels. */
   void markComplete(int node) {
-    entryPointUpdater.accumulateAndGet(this,
+    entryPoint.accumulateAndGet(
         node,
         (oldEntry, newEntry) -> {
           if (oldEntry >= 0) {
@@ -108,7 +103,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   public void updateEntryNode(int node) {
-    entryPointUpdater.set(this, node);
+    entryPoint.set(node);
   }
 
   @Override
@@ -117,7 +112,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   int entry() {
-    return (int) entryPointUpdater.get(this);
+    return (int) entryPoint.get();
   }
 
   @Override
@@ -215,7 +210,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   @Override
   public String toString() {
-    return String.format("OnHeapGraphIndex(size=%d, entryPoint=%d)", size(), entryPointUpdater.get(this));
+    return String.format("OnHeapGraphIndex(size=%d, entryPoint=%d)", size(), entryPoint.get());
   }
 
   @Override
@@ -237,7 +232,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     if (size() == 0) {
       return;
     }
-    var en = entryPointUpdater.get(this);
+    var en = entryPoint.get();
     if (!(en >= 0 && nodes.containsKey(en))) {
       throw new IllegalStateException("Entry node was incompletely added! " + en);
     }
@@ -260,12 +255,12 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
     @Override
     public int entryNode() {
-      return (int) entryPointUpdater.get(OnHeapGraphIndex.this);
+      return (int) entryPoint.get();
     }
 
     @Override
     public String toString() {
-      return "OnHeapGraphIndexView(size=" + size() + ", entryPoint=" + entryPointUpdater.get(OnHeapGraphIndex.this);
+      return "OnHeapGraphIndexView(size=" + size() + ", entryPoint=" + entryPoint.get();
     }
 
     @Override

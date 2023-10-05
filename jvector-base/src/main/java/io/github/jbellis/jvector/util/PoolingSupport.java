@@ -6,16 +6,37 @@ import java.util.stream.Stream;
 
 import org.jctools.queues.MpmcArrayQueue;
 
+/**
+ * Allows any object to be pooled and released when work is done.
+ * This is an alternative to using {@link ThreadLocal}.
+ *
+ * @param <T> The object to be pooled by this instance
+ */
 public abstract class PoolingSupport<T> {
 
+    /**
+     * Creates a pool of objects intended to be used by a fixed thread pool.
+     * The pool size will the processor count.
+     * @param initialValue allows creation of new instances for the pool
+     */
     public static <T> PoolingSupport<T> newThreadBased(Supplier<T> initialValue) {
         return new ThreadPooling<>(initialValue);
     }
 
+    /**
+     * Creates a pool intended to be used by a fixed thread pool
+     * @param threadLimit the specific number of threads to be sharing the pooled objects
+     * @param initialValue allows creation of new instances for the pool
+     */
     public static <T> PoolingSupport<T> newThreadBased(int threadLimit, Supplier<T> initialValue) {
         return new ThreadPooling<>(threadLimit, initialValue);
     }
 
+    /**
+     * Special case of not actually needing a pool (when other times you do)
+     *
+     * @param fixedValue the value this pool will always return
+     */
     public static <T> PoolingSupport<T> newNoPooling(T fixedValue) {
         return new NoPooling<>(fixedValue);
     }
@@ -24,13 +45,33 @@ public abstract class PoolingSupport<T> {
     private PoolingSupport() {
     }
 
+    /**
+     * @return a pooled object which will be returned to the pool when thread is finished with it
+     */
     public abstract Pooled<T> get();
 
+    /**
+     * This call returns all values what are in the pool, for the case of work spread across many pooled objects
+     * then processed after they are finished.
+     *
+     * @return a stream of everything in the pool.
+     * @throws IllegalStateException if outstanding items are not yet returned to the pool
+     */
     public abstract Stream<T> stream();
 
+    /**
+     * Internal call used when pooled item is returned
+     * @param value
+     */
     protected abstract void onClosed(T value);
 
-
+    /**
+     * Wrapper class for items in the pool
+     *
+     * These are AutoClosable and are intended to be used
+     * in a try-with-resources statement.
+     * @param <T>
+     */
     public static class Pooled<T> implements AutoCloseable {
         private final T value;
         private final PoolingSupport<T> owner;
@@ -78,12 +119,13 @@ public abstract class PoolingSupport<T> {
 
         public Stream<T> stream() {
             if (queue.size() < created.get())
-                throw new RuntimeException("close() was not called on all pooled objects yet");
+                throw new IllegalStateException("close() was not called on all pooled objects yet");
 
             return queue.stream();
         }
 
         protected void onClosed(T value) {
+            //Do we are if offer fails?
             queue.offer(value);
         }
     }

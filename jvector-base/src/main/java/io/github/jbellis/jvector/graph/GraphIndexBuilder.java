@@ -18,7 +18,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PoolingSupport;
-import io.github.jbellis.jvector.util.ThreadPerPhysicalCorePool;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -106,7 +106,7 @@ public class GraphIndexBuilder<T> {
 
   public OnHeapGraphIndex<T> build() {
     try (var v = vectors.get()){
-      ThreadPerPhysicalCorePool.instance.execute(() -> {
+      PhysicalCoreExecutor.instance.execute(() -> {
         IntStream.range(0, v.get().size()).parallel().forEach(i -> {
           try (var v1 = vectors.get()) {
             addGraphNode(i, v1.get());
@@ -120,7 +120,7 @@ public class GraphIndexBuilder<T> {
 
   public void complete() {
     graph.validateEntryNode(); // sanity check before we start
-    ThreadPerPhysicalCorePool.instance.execute(() -> IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup()));
+    PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup()));
     graph.updateEntryNode(approximateMedioid());
     graph.validateEntryNode(); // check again after updating
   }

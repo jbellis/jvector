@@ -80,6 +80,14 @@ this with the following steps:
 - You can optionally wrap `OnDiskGraphIndex` in a [`CachingGraphIndex`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/CachingGraphIndex.java) to keep the most commonly accessed
   nodes (the ones nearest to the graph entry point) in memory.
 
+## Advanced configuration
+
+- JVector heavily utilizes the Panama Vector API(SIMD) for ANN indexing and search.  We have seen cases where the memory 
+bandwidth is saturated during indexing and product quantization and can cause the process to slow down. To avoid 
+this, index and PQ builds use a [`PhysicalCoreExecutor`](./jvector-base/src/main/java/io/github/jbellis/jvector/util/PhysicalCoreExecutor.java) 
+to limit the amount of operation to the physical core count (defaults to 1/2 the processor count).
+This may not be correct in all setups (i.e. no hyperthreads). You can override the default with the `-Djvector.physical_core_count` property. 
+
 ## Sample code
 - The [`SiftSmall`](./jvector-examples/src/main/java/io/github/jbellis/jvector/example/SiftSmall.java) class demonstrates how to put all of the above together to index and search the
   "small" SIFT dataset of 10,000 vectors.
