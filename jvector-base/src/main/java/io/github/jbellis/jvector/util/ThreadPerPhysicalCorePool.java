@@ -11,7 +11,7 @@ public class ThreadPerPhysicalCorePool {
     private final ForkJoinPool pool;
 
     private ThreadPerPhysicalCorePool(int cores) {
-        assert cores > 0 && cores <= Runtime.getRuntime().availableProcessors();
+        assert cores > 0 && cores <= Runtime.getRuntime().availableProcessors() : "Invalid core count: " + cores;
         this.pool = new ForkJoinPool(cores);
     }
 
