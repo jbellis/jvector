@@ -163,10 +163,10 @@ public class GraphIndexBuilder<T> {
 
       var bits = new ExcludingBits(node);
       // find best "natural" candidates with a beam search
-      var candidates = gs.searchInternal(scoreFunction, null, beamWidth, ep, bits);
+      var result = gs.searchInternal(scoreFunction, null, beamWidth, ep, bits);
 
       // Update neighbors with these candidates.
-      var natural = getNaturalCandidates(candidates.getNodes());
+      var natural = getNaturalCandidates(result.getNodes());
       var concurrent = getConcurrentCandidates(node, inProgressBefore);
       updateNeighbors(node, natural, concurrent);
       graph.markComplete(node);
