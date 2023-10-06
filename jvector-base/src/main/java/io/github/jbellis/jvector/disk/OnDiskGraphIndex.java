@@ -25,6 +25,7 @@ import io.github.jbellis.jvector.util.Bits;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.stream.IntStream;
 
 public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
 {
@@ -133,7 +134,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     @Override
     public NodesIterator getNodes()
     {
-        throw new UnsupportedOperationException();
+        return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
     }
 
     @Override

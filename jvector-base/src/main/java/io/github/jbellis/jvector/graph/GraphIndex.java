@@ -84,14 +84,6 @@ public interface GraphIndex<T> extends AutoCloseable {
      */
     T getVector(int node);
 
-    // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
-    // TODOJBE remove this
-    default int[] getSortedNodes() {
-      int[] sortedNodes = new int[size()];
-      Arrays.setAll(sortedNodes, i -> i);
-      return sortedNodes;
-    }
-
     //  for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still want/need it
     default int getNeighborCount(int node) {
       return getNeighborsIterator(node).size();

@@ -107,11 +107,6 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
         }
 
         @Override
-        public int[] getSortedNodes() {
-            return View.super.getSortedNodes();
-        }
-
-        @Override
         public int getNeighborCount(int node) {
             return View.super.getNeighborCount(node);
         }
