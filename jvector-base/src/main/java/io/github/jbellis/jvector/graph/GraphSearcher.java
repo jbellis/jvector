@@ -139,7 +139,7 @@ public class GraphSearcher<T> {
     }
 
     if (ep < 0) {
-      return new SearchResult(new SearchResult.NodeScore[0], 0);
+      return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
     }
 
     prepareScratchState(view.size());
@@ -205,7 +205,7 @@ public class GraphSearcher<T> {
       Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
     }
 
-    return new SearchResult(nodes, numVisited);
+    return new SearchResult(nodes, visited, numVisited);
   }
 
   private void prepareScratchState(int capacity) {

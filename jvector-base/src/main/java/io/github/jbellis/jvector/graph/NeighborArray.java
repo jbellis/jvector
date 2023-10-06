@@ -35,8 +35,9 @@ import java.util.Arrays;
  * i.e. the most-similar neighbors are first.
  */
 public class NeighborArray {
-  protected int size;
+  public static final NeighborArray EMPTY = new NeighborArray(0);
 
+  protected int size;
   float[] score;
   int[] node;
 

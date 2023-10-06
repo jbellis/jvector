@@ -16,11 +16,14 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
+import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.IntStream;
 
@@ -41,9 +44,10 @@ public class GraphIndexBuilder<T> {
   private final VectorEncoding vectorEncoding;
   private final ThreadLocal<GraphSearcher<?>> graphSearcher;
 
+  @VisibleForTesting
   final OnHeapGraphIndex<T> graph;
-  private final ConcurrentSkipListSet<Integer> insertionsInProgress =
-          new ConcurrentSkipListSet<>();
+  private final ConcurrentSkipListSet<Integer> insertionsInProgress = new ConcurrentSkipListSet<>();
+  private final Set<Integer> deletedNodes = ConcurrentHashMap.newKeySet();
 
   // We need two sources of vectors in order to perform diversity check comparisons without
   // colliding.  Usually it's obvious because you can see the different sources being used
@@ -108,15 +112,29 @@ public class GraphIndexBuilder<T> {
     IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
       addGraphNode(i, vectors.get());
     });
-    complete();
+    cleanup();
     return graph;
   }
 
-  public void complete() {
+  /**
+   * Cleanup the graph by completing removal of marked-for-delete nodes, trimming
+   * neighbor sets to the advertised degree, and updating the entry node.
+   * <p>
+   * Must be called before writing to disk.
+   * <p>
+   * May be called multiple times, but should not be called during concurrent modifications to the graph.
+   */
+  public void cleanup() {
     graph.validateEntryNode(); // sanity check before we start
+    // TODO
     IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup());
     graph.updateEntryNode(approximateMedioid());
     graph.validateEntryNode(); // check again after updating
+  }
+
+  /** @deprecated synonym for `cleanup` */
+  public void complete() {
+    cleanup();
   }
 
   /**
@@ -167,7 +185,7 @@ public class GraphIndexBuilder<T> {
 
       // Update neighbors with these candidates.
       // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
-      var natural = getNaturalCandidates(result.getNodes());
+      var natural = toScratchCandidates(result.getNodes());
       var concurrent = getConcurrentCandidates(node, inProgressBefore);
       updateNeighbors(node, natural, concurrent);
       graph.markComplete(node);
@@ -176,6 +194,51 @@ public class GraphIndexBuilder<T> {
     }
 
     return graph.ramBytesUsedOneNode(0);
+  }
+
+  public void markNodeDeleted(int node) {
+    deletedNodes.add(node);
+  }
+
+  public long removeGraphNode(int node) {
+    var neighbors = graph.getNeighbors(node);
+    graph.removeNode(node);
+    for (var it = neighbors.iterator(); it.hasNext(); ) {
+      int neighbor = it.nextInt();
+      graph.getNeighbors(neighbor).remove(node);
+    }
+    // after node is removed completely, repair its neighbors
+    for (var it = neighbors.iterator(); it.hasNext(); ) {
+      int neighbor = it.nextInt();
+      addNNDescentConnections(neighbor);
+    }
+
+    return graph.ramBytesUsedOneNode(0);
+  }
+
+  /**
+   * Search for the given node, then submit all nodes along the search path as candidates for
+   * new neighbors.  Standard diversity pruning applies.
+   */
+  private void addNNDescentConnections(int node) {
+    var notSelfBits = new Bits() {
+      @Override
+      public boolean get(int index) {
+        return index != node;
+      }
+
+      @Override
+      public int length() {
+        return graph.size();
+      }
+    };
+
+    var gs = graphSearcher.get();
+    var value = vectors.get().vectorValue(node);
+    NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vectorsCopy.get().vectorValue(i), value);
+    var result = gs.searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits);
+    var candidates = getPathCandidates(result.getVisited(), scoreFunction);
+    updateNeighbors(node, candidates, NeighborArray.EMPTY);
   }
 
   private int approximateMedioid() {
@@ -220,7 +283,18 @@ public class GraphIndexBuilder<T> {
     neighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
 
-  private NeighborArray getNaturalCandidates(SearchResult.NodeScore[] candidates) {
+  /** compute the scores for the nodes set in `visited` and return them in a NeighborArray */
+  private NeighborArray getPathCandidates(BitSet visited, NeighborSimilarity.ExactScoreFunction scoreFunction) {
+    SearchResult.NodeScore[] candidates = new SearchResult.NodeScore[visited.cardinality()];
+    int j = 0;
+    for (int i = visited.nextSetBit(0); i >= 0; i = visited.nextSetBit(i + 1)) {
+      candidates[j++] = new SearchResult.NodeScore(i, scoreFunction.similarityTo(i));
+    }
+    Arrays.sort(candidates, Comparator.comparingDouble(ns -> ns.score));
+    return toScratchCandidates(candidates);
+  }
+
+  private NeighborArray toScratchCandidates(SearchResult.NodeScore[] candidates) {
     NeighborArray scratch = this.naturalScratch.get();
     scratch.clear();
     for (SearchResult.NodeScore candidate : candidates) {

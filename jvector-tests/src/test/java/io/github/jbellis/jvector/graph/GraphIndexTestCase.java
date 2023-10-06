@@ -460,7 +460,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     for (var i = 0; i < vectors.size(); i++) {
       builder.addGraphNode(i, vectors);
     }
-    builder.complete();
+    builder.cleanup();
     return builder.getGraph();
   }
 
