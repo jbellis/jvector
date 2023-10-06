@@ -231,11 +231,12 @@ public class GraphIndexBuilder<T> {
   private NeighborArray getConcurrentCandidates(int newNode, Set<Integer> inProgress) {
     NeighborArray scratch = this.concurrentScratch.get();
     scratch.clear();
+    T v = vectors.get().vectorValue(newNode);
     for (var n : inProgress) {
       if (n != newNode) {
         scratch.insertSorted(
                 n,
-                scoreBetween(vectors.get().vectorValue(newNode), vectorsCopy.get().vectorValue(n)));
+                scoreBetween(v, vectorsCopy.get().vectorValue(n)));
       }
     }
     return scratch;
