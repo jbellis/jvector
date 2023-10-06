@@ -93,6 +93,7 @@ public abstract class PoolingSupport<T> {
 
     static class ThreadPooling<T> extends PoolingSupport<T>
     {
+        private final int limit;
         private final AtomicInteger created;
         private final MpmcArrayQueue<T> queue;
         private final Supplier<T> initialValue;
@@ -103,6 +104,7 @@ public abstract class PoolingSupport<T> {
         }
 
         private ThreadPooling(int threadLimit, Supplier<T> initialValue) {
+            this.limit = threadLimit;
             this.created = new AtomicInteger(0);
             this.queue = new MpmcArrayQueue<>(threadLimit);
             this.initialValue = initialValue;
@@ -113,7 +115,10 @@ public abstract class PoolingSupport<T> {
             if (t != null)
                 return new Pooled<>(this, t);
 
-            created.incrementAndGet();
+            if (created.incrementAndGet() >= limit) {
+                created.decrementAndGet();
+                throw new IllegalStateException("Number of outstanding pooled objects has gone beyond the limit of " + limit);
+            }
             return new Pooled<>(this, initialValue.get());
         }
 
