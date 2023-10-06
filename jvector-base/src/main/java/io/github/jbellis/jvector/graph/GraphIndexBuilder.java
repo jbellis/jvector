@@ -105,15 +105,19 @@ public class GraphIndexBuilder<T> {
   }
 
   public OnHeapGraphIndex<T> build() {
-    try (var v = vectors.get()){
-      PhysicalCoreExecutor.instance.execute(() -> {
-        IntStream.range(0, v.get().size()).parallel().forEach(i -> {
-          try (var v1 = vectors.get()) {
-            addGraphNode(i, v1.get());
-          }
-        });
-      });
+    int size;
+    try (var v = vectors.get()) {
+      size = v.get().size();
     }
+
+    PhysicalCoreExecutor.instance.execute(() -> {
+      IntStream.range(0, size).parallel().forEach(i -> {
+        try (var v1 = vectors.get()) {
+          addGraphNode(i, v1.get());
+        }
+      });
+    });
+
     complete();
     return graph;
   }
@@ -125,14 +129,6 @@ public class GraphIndexBuilder<T> {
     graph.validateEntryNode(); // check again after updating
   }
 
-  /**
-   * Adds a node to the graph, with the vector at the same ordinal in the given provider.
-   *
-   * <p>See {@link #addGraphNode(int, Object)} for more details.
-   */
-  public long addGraphNode(int node, RandomAccessVectorValues<T> values) {
-    return addGraphNode(node, values.vectorValue(node));
-  }
 
   public OnHeapGraphIndex<T> getGraph() {
     return graph;
@@ -151,10 +147,12 @@ public class GraphIndexBuilder<T> {
    * other in-progress updates as neighbor candidates.
    *
    * @param node the node ID to add
-   * @param value the vector value to add
+   * @param vectors the set of vectors
    * @return an estimate of the number of extra bytes used by the graph after adding the given node
    */
-  public long addGraphNode(int node, T value) {
+  public long addGraphNode(int node, RandomAccessVectorValues<T> vectors) {
+    final T value = vectors.vectorValue(node);
+
     // do this before adding to in-progress, so a concurrent writer checking
     // the in-progress set doesn't have to worry about uninitialized neighbor sets
     graph.addNode(node);
@@ -162,7 +160,6 @@ public class GraphIndexBuilder<T> {
     insertionsInProgress.add(node);
     ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
     try (var gs = graphSearcher.get();
-         var v = vectors.get();
          var vc = vectorsCopy.get();
          var naturalScratchPooled = naturalScratch.get();
          var concurrentScratchPooled = concurrentScratch.get()){
@@ -176,7 +173,7 @@ public class GraphIndexBuilder<T> {
 
       // Update neighbors with these candidates.
       var natural = getNaturalCandidates(candidates.getNodes(), naturalScratchPooled.get());
-      var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), v.get(), vc.get());
+      var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
       updateNeighbors(node, natural, concurrent);
       graph.markComplete(node);
     } finally {
