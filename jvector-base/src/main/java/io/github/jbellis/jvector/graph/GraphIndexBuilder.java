@@ -166,6 +166,7 @@ public class GraphIndexBuilder<T> {
       var result = gs.searchInternal(scoreFunction, null, beamWidth, ep, bits);
 
       // Update neighbors with these candidates.
+      // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
       var natural = getNaturalCandidates(result.getNodes());
       var concurrent = getConcurrentCandidates(node, inProgressBefore);
       updateNeighbors(node, natural, concurrent);
