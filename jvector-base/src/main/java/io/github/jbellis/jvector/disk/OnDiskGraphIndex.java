@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -116,6 +117,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         @Override
         public int entryNode() {
             return OnDiskGraphIndex.this.entryNode;
+        }
+
+        @Override
+        public Bits liveNodes() {
+            return Bits.ALL;
         }
 
         @Override

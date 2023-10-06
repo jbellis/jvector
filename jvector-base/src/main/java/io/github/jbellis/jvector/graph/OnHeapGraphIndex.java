@@ -25,6 +25,9 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.BitSet;
+import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +46,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   private final AtomicReference<Integer> entryPoint; 
 
   private final ConcurrentHashMap<Integer, ConcurrentNeighborSet> nodes;
+  private BitSet deletedNodes = new GrowableBitSet(0);
 
   // max neighbors/edges per node
   final int nsize0;
@@ -87,6 +91,13 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    */
   public void addNode(int node) {
     nodes.put(node, neighborFactory.apply(node, maxDegree()));
+  }
+
+  /**
+   * Mark the given node deleted.  Does NOT remove the node from the graph.
+   */
+  public void markDeleted(int node) {
+    deletedNodes.set(node);
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
@@ -261,6 +272,11 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     @Override
     public String toString() {
       return "OnHeapGraphIndexView(size=" + size() + ", entryPoint=" + entryPoint.get();
+    }
+
+    @Override
+    public Bits liveNodes() {
+      return deletedNodes.cardinality() == 0 ? Bits.ALL : Bits.inverseOf(deletedNodes);
     }
 
     @Override

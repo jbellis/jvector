@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.disk;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -113,6 +114,11 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
         @Override
         public int getNeighborCount(int node) {
             return View.super.getNeighborCount(node);
+        }
+
+        @Override
+        public Bits liveNodes() {
+            return view.liveNodes();
         }
 
         @Override

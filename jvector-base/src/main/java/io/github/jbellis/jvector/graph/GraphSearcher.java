@@ -125,6 +125,8 @@ public class GraphSearcher<T> {
    * score/comparison value, will be at the front of the array.
    * <p>
    * If scoreFunction is exact, then reRanker may be null.
+   * <p>
+   * This method never calls acceptOrds.length(), so the length-free Bits.ALL may be passed in.
    */
   // TODO add back ability to re-use a results structure instead of allocating a new one each time?
   SearchResult searchInternal(
@@ -137,10 +139,15 @@ public class GraphSearcher<T> {
     if (!scoreFunction.isExact() && reRanker == null) {
       throw new IllegalArgumentException("Either scoreFunction must be exact, or reRanker must not be null");
     }
+    if (acceptOrds == null) {
+      throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
+    }
 
     if (ep < 0) {
       return new SearchResult(new SearchResult.NodeScore[0], 0);
     }
+
+    acceptOrds = Bits.intersectionOf(acceptOrds, view.liveNodes());
 
     prepareScratchState(view.size());
     var resultsQueue = new NeighborQueue(topK, false);
@@ -151,7 +158,7 @@ public class GraphSearcher<T> {
     visited.set(ep);
     numVisited++;
     candidates.add(ep, score);
-    if (acceptOrds == null || acceptOrds.get(ep)) {
+    if (acceptOrds.get(ep)) {
       resultsQueue.add(ep, score);
     }
 
@@ -182,7 +189,7 @@ public class GraphSearcher<T> {
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
-          if (acceptOrds == null || acceptOrds.get(friendOrd)) {
+          if (acceptOrds.get(friendOrd)) {
             if (resultsQueue.insertWithReplacement(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
               minAcceptedSimilarity = resultsQueue.topScore();
             }

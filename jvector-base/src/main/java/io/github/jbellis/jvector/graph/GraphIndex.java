@@ -24,6 +24,8 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.util.Bits;
+
 import java.io.IOException;
 import java.util.Arrays;
 
@@ -83,6 +85,7 @@ public interface GraphIndex<T> extends AutoCloseable {
     T getVector(int node);
 
     // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
+    // TODOJBE remove this
     default int[] getSortedNodes() {
       int[] sortedNodes = new int[size()];
       Arrays.setAll(sortedNodes, i -> i);
@@ -93,6 +96,8 @@ public interface GraphIndex<T> extends AutoCloseable {
     default int getNeighborCount(int node) {
       return getNeighborsIterator(node).size();
     }
+
+    Bits liveNodes();
   }
 
   static <T> String prettyPrint(GraphIndex<T> graph) {

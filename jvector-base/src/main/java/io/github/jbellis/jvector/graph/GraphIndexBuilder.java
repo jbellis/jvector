@@ -16,11 +16,17 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.IntStream;
 
@@ -175,6 +181,10 @@ public class GraphIndexBuilder<T> {
     }
 
     return graph.ramBytesUsedOneNode(0);
+  }
+
+  public void markNodeDeleted(int node) {
+    graph.markDeleted(node);
   }
 
   private int approximateMedioid() {
