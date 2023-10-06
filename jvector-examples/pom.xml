@@ -133,8 +133,8 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-Xmx256G</argument>
-                                        <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Deep100MWriter</argument>
                                     </arguments>
                                 </configuration>

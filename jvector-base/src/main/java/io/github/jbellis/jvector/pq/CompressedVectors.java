@@ -69,6 +69,7 @@ public class CompressedVectors
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
+        System.out.println("Reading " + size + " vectors");
         var compressedVectors = new byte[size][];
 
         int compressedDimension = in.readInt();
