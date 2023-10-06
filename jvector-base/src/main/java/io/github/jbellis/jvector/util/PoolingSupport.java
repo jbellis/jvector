@@ -115,7 +115,7 @@ public abstract class PoolingSupport<T> {
             if (t != null)
                 return new Pooled<>(this, t);
 
-            if (created.incrementAndGet() >= limit) {
+            if (created.incrementAndGet() > limit) {
                 created.decrementAndGet();
                 throw new IllegalStateException("Number of outstanding pooled objects has gone beyond the limit of " + limit);
             }
@@ -130,7 +130,6 @@ public abstract class PoolingSupport<T> {
         }
 
         protected void onClosed(T value) {
-            //Do we are if offer fails?
             queue.offer(value);
         }
     }
