@@ -17,6 +17,8 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.PoolingSupport;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -31,15 +33,14 @@ import java.util.stream.IntStream;
  * @param <T> the type of vector
  */
 public class GraphIndexBuilder<T> {
-
   private final int beamWidth;
-  private final ThreadLocal<NeighborArray> naturalScratch;
-  private final ThreadLocal<NeighborArray> concurrentScratch;
+  private final PoolingSupport<NeighborArray> naturalScratch;
+  private final PoolingSupport<NeighborArray> concurrentScratch;
 
   private final VectorSimilarityFunction similarityFunction;
   private final float neighborOverflow;
   private final VectorEncoding vectorEncoding;
-  private final ThreadLocal<GraphSearcher<?>> graphSearcher;
+  private final PoolingSupport<GraphSearcher<?>> graphSearcher;
 
   final OnHeapGraphIndex<T> graph;
   private final ConcurrentSkipListSet<Integer> insertionsInProgress =
@@ -49,8 +50,8 @@ public class GraphIndexBuilder<T> {
   // colliding.  Usually it's obvious because you can see the different sources being used
   // in the same method.  The only tricky place is in addGraphNode, which uses `vectors` immediately,
   // and `vectorsCopy` later on when defining the ScoreFunction for search.
-  private final ThreadLocal<RandomAccessVectorValues<T>> vectors;
-  private final ThreadLocal<RandomAccessVectorValues<T>> vectorsCopy;
+  private final PoolingSupport<RandomAccessVectorValues<T>> vectors;
+  private final PoolingSupport<RandomAccessVectorValues<T>> vectorsCopy;
 
   /**
    * Reads all the vectors from vector values, builds a graph connecting them by their dense
@@ -74,8 +75,8 @@ public class GraphIndexBuilder<T> {
           int beamWidth,
           float neighborOverflow,
           float alpha) {
-    this.vectors = ThreadLocal.withInitial(vectorValues::copy);
-    this.vectorsCopy = ThreadLocal.withInitial(vectorValues::copy);
+    vectors = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
+    vectorsCopy = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
     this.vectorEncoding = Objects.requireNonNull(vectorEncoding);
     this.similarityFunction = Objects.requireNonNull(similarityFunction);
     this.neighborOverflow = neighborOverflow;
@@ -88,45 +89,46 @@ public class GraphIndexBuilder<T> {
     this.beamWidth = beamWidth;
 
     NeighborSimilarity similarity = node1 -> {
-      T v1 = vectors.get().vectorValue(node1);
-      return (NeighborSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vectorsCopy.get().vectorValue(node2));
+      try(var v = vectors.get(); var vc = vectorsCopy.get()) {
+        T v1 = v.get().vectorValue(node1);
+        return (NeighborSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vc.get().vectorValue(node2));
+      }
     };
     this.graph =
             new OnHeapGraphIndex<>(
                     M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
-    this.graphSearcher =
-            ThreadLocal.withInitial(
-                    () -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
+    this.graphSearcher = PoolingSupport.newThreadBased(() -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
+
     // in scratch we store candidates in reverse order: worse candidates are first
-    this.naturalScratch =
-            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
-    this.concurrentScratch =
-            ThreadLocal.withInitial(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
+    this.naturalScratch = PoolingSupport.newThreadBased(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
+    this.concurrentScratch = PoolingSupport.newThreadBased(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
   }
 
   public OnHeapGraphIndex<T> build() {
-    IntStream.range(0, vectors.get().size()).parallel().forEach(i -> {
-      addGraphNode(i, vectors.get());
+    int size;
+    try (var v = vectors.get()) {
+      size = v.get().size();
+    }
+
+    PhysicalCoreExecutor.instance.execute(() -> {
+      IntStream.range(0, size).parallel().forEach(i -> {
+        try (var v1 = vectors.get()) {
+          addGraphNode(i, v1.get());
+        }
+      });
     });
+
     complete();
     return graph;
   }
 
   public void complete() {
     graph.validateEntryNode(); // sanity check before we start
-    IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup());
+    PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup()));
     graph.updateEntryNode(approximateMedioid());
     graph.validateEntryNode(); // check again after updating
   }
 
-  /**
-   * Adds a node to the graph, with the vector at the same ordinal in the given provider.
-   *
-   * <p>See {@link #addGraphNode(int, Object)} for more details.
-   */
-  public long addGraphNode(int node, RandomAccessVectorValues<T> values) {
-    return addGraphNode(node, values.vectorValue(node));
-  }
 
   public OnHeapGraphIndex<T> getGraph() {
     return graph;
@@ -145,29 +147,33 @@ public class GraphIndexBuilder<T> {
    * other in-progress updates as neighbor candidates.
    *
    * @param node the node ID to add
-   * @param value the vector value to add
+   * @param vectors the set of vectors
    * @return an estimate of the number of extra bytes used by the graph after adding the given node
    */
-  public long addGraphNode(int node, T value) {
+  public long addGraphNode(int node, RandomAccessVectorValues<T> vectors) {
+    final T value = vectors.vectorValue(node);
+
     // do this before adding to in-progress, so a concurrent writer checking
     // the in-progress set doesn't have to worry about uninitialized neighbor sets
     graph.addNode(node);
 
     insertionsInProgress.add(node);
     ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
-    try {
+    try (var gs = graphSearcher.get();
+         var vc = vectorsCopy.get();
+         var naturalScratchPooled = naturalScratch.get();
+         var concurrentScratchPooled = concurrentScratch.get()){
       // find ANN of the new node by searching the graph
       int ep = graph.entry();
-      var gs = graphSearcher.get();
-      NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vectorsCopy.get().vectorValue(i), value);
+      NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
 
       var bits = new ExcludingBits(node);
       // find best "natural" candidates with a beam search
-      var candidates = gs.searchInternal(scoreFunction, null, beamWidth, ep, bits);
+      var candidates = gs.get().searchInternal(scoreFunction, null, beamWidth, ep, bits);
 
       // Update neighbors with these candidates.
-      var natural = getNaturalCandidates(candidates.getNodes());
-      var concurrent = getConcurrentCandidates(node, inProgressBefore);
+      var natural = getNaturalCandidates(candidates.getNodes(), naturalScratchPooled.get());
+      var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
       updateNeighbors(node, natural, concurrent);
       graph.markComplete(node);
     } finally {
@@ -178,37 +184,37 @@ public class GraphIndexBuilder<T> {
   }
 
   private int approximateMedioid() {
-    var v1 = vectors.get();
-    var v2 = vectorsCopy.get();
+    try (var v1 = vectors.get(); var v2 = vectorsCopy.get()) {
+      GraphIndex.View<T> view = graph.getView();
+      var startNode = view.entryNode();
+      int newStartNode;
 
-    GraphIndex.View<T> view = graph.getView();
-    var startNode = view.entryNode();
-    int newStartNode;
-
-    // Check start node's neighbors for a better candidate, until we reach a local minimum.
-    // This isn't a very good mediod approximation, but all we really need to accomplish is
-    // not to be stuck with the worst possible candidate -- searching isn't super sensitive
-    // to how good the mediod is, especially in higher dimensions
-    while (true) {
-      var startNeighbors = graph.getNeighbors(startNode).getCurrent();
-      // Map each neighbor node to a pair of node and its average distance score.
-      // (We use average instead of total, since nodes may have different numbers of neighbors.)
-      newStartNode = IntStream.concat(IntStream.of(startNode), Arrays.stream(startNeighbors.node(), 0, startNeighbors.size))
-              .mapToObj(node -> {
-                var nodeNeighbors = graph.getNeighbors(node).getCurrent();
-                double score = Arrays.stream(nodeNeighbors.node(), 0, nodeNeighbors.size)
-                        .mapToDouble(i -> scoreBetween(v1.vectorValue(node), v2.vectorValue(i)))
-                        .sum();
-                return new AbstractMap.SimpleEntry<>(node, score / v2.size());
-              })
-              // Find the entry with the minimum score
-              .min(Comparator.comparingDouble(AbstractMap.SimpleEntry::getValue))
-              // Extract the node of the minimum entry
-              .map(AbstractMap.SimpleEntry::getKey).get();
-      if (startNode != newStartNode) {
-        startNode = newStartNode;
-      } else {
-        return newStartNode;
+      // Check start node's neighbors for a better candidate, until we reach a local minimum.
+      // This isn't a very good mediod approximation, but all we really need to accomplish is
+      // not to be stuck with the worst possible candidate -- searching isn't super sensitive
+      // to how good the mediod is, especially in higher dimensions
+      while (true) {
+        var startNeighbors = graph.getNeighbors(startNode).getCurrent();
+        // Map each neighbor node to a pair of node and its average distance score.
+        // (We use average instead of total, since nodes may have different numbers of neighbors.)
+        newStartNode = IntStream.concat(IntStream.of(startNode), Arrays.stream(startNeighbors.node(), 0, startNeighbors.size))
+                .mapToObj(node -> {
+                  var nodeNeighbors = graph.getNeighbors(node).getCurrent();
+                  double score = Arrays.stream(nodeNeighbors.node(), 0, nodeNeighbors.size)
+                          .mapToDouble(i -> scoreBetween(v1.get().vectorValue(node), v2.get().vectorValue(i)))
+                          .sum();
+                  return new AbstractMap.SimpleEntry<>(node, score / v2.get().size());
+                })
+                // Find the entry with the minimum score
+                .min(Comparator.comparingDouble(AbstractMap.SimpleEntry::getValue))
+                // Extract the node of the minimum entry
+                .map(AbstractMap.SimpleEntry::getKey).get();
+        if (startNode != newStartNode) {
+          startNode = newStartNode;
+        }
+        else {
+          return newStartNode;
+        }
       }
     }
   }
@@ -219,8 +225,7 @@ public class GraphIndexBuilder<T> {
     neighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
 
-  private NeighborArray getNaturalCandidates(SearchResult.NodeScore[] candidates) {
-    NeighborArray scratch = this.naturalScratch.get();
+  private NeighborArray getNaturalCandidates(SearchResult.NodeScore[] candidates, NeighborArray scratch) {
     scratch.clear();
     for (SearchResult.NodeScore candidate : candidates) {
       scratch.addInOrder(candidate.node, candidate.score);
@@ -228,17 +233,17 @@ public class GraphIndexBuilder<T> {
     return scratch;
   }
 
-  private NeighborArray getConcurrentCandidates(int newNode, Set<Integer> inProgress) {
-    NeighborArray scratch = this.concurrentScratch.get();
-    scratch.clear();
-    for (var n : inProgress) {
-      if (n != newNode) {
-        scratch.insertSorted(
-                n,
-                scoreBetween(vectors.get().vectorValue(newNode), vectorsCopy.get().vectorValue(n)));
+  private NeighborArray getConcurrentCandidates(int newNode, Set<Integer> inProgress,
+          NeighborArray scratch, RandomAccessVectorValues<T> values, RandomAccessVectorValues<T> valuesCopy) {
+      scratch.clear();
+      for (var n : inProgress) {
+        if (n != newNode) {
+          scratch.insertSorted(
+                  n,
+                  scoreBetween(values.vectorValue(newNode), valuesCopy.vectorValue(n)));
+        }
       }
-    }
-    return scratch;
+      return scratch;
   }
 
   protected float scoreBetween(T v1, T v2) {
