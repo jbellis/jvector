@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
@@ -150,9 +151,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
     public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
-        assert graph.size() == vectors.size() : String.format("graph size %d != vectors size %d", graph.size(), vectors.size());
-
         var view = graph.getView();
+        if (graph instanceof OnHeapGraphIndex && ((OnHeapGraphIndex<T>)graph).getDeletedNodes().cardinality() > 0) {
+            vectors = new RenumberingVectorValues(((OnHeapGraphIndex<T>) graph).getDeletedNodes(), vectors);
+            graph = new RenumberingGraphIndex<>((OnHeapGraphIndex<T>) graph);
+        }
 
         // graph-level properties
         out.writeInt(graph.size());
@@ -163,7 +166,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         // for each graph node, write the associated vector and its neighbors
         for (int node = 0; node < graph.size(); node++) {
             out.writeInt(node); // unnecessary, but a reasonable sanity check
-            Io.writeFloats(out, (float[]) vectors.vectorValue(node));
+            Io.writeFloats(out, (float[]) view.getVector(node));
 
             var neighbors = view.getNeighborsIterator(node);
             out.writeInt(neighbors.size());

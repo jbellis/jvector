@@ -249,6 +249,10 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     }
   }
 
+  public BitSet getDeletedNodes() {
+    return deletedNodes;
+  }
+
   private class ConcurrentGraphIndexView implements GraphIndex.View<T> {
     @Override
     public T getVector(int node) {
