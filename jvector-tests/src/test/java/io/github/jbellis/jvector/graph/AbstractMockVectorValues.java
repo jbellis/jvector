@@ -65,14 +65,6 @@ abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T
 
   @Override
   public T vectorValue(int targetOrd) {
-    if (callingThreadID < 0) {
-      callingThreadID = Thread.currentThread().getId();
-    }
-    if (callingThreadID != Thread.currentThread().getId()) {
-      throw new RuntimeException(
-          "RandomAccessVectorValues is not thread safe, but multiple calling threads detected");
-    }
-
     return denseValues[targetOrd];
   }
 

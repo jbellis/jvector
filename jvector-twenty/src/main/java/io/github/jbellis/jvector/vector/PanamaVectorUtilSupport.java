@@ -92,6 +92,13 @@ PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets) {
-        return SimdOps.assembleAndSum(data, baseIndex, baseOffsets);
+        //TODO: Re-enable once Jdk bug is fixed
+        //return SimdOps.assembleAndSum(data, baseIndex, baseOffsets);
+
+        float sum = 0f;
+        for (int i = 0; i < baseOffsets.length; i++) {
+            sum += data[baseIndex * i + Byte.toUnsignedInt(baseOffsets[i])];
+        }
+        return sum;
     }
 }
