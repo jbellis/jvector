@@ -18,12 +18,15 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.stream.IntStream;
 
 public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
 {
@@ -119,6 +122,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         }
 
         @Override
+        public Bits liveNodes() {
+            return Bits.ALL;
+        }
+
+        @Override
         public void close() throws IOException {
             reader.close();
         }
@@ -127,7 +135,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     @Override
     public NodesIterator getNodes()
     {
-        throw new UnsupportedOperationException();
+        return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
     }
 
     @Override
@@ -143,9 +151,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
     public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
-        assert graph.size() == vectors.size() : String.format("graph size %d != vectors size %d", graph.size(), vectors.size());
-
         var view = graph.getView();
+        if (graph instanceof OnHeapGraphIndex && ((OnHeapGraphIndex<T>)graph).getDeletedNodes().cardinality() > 0) {
+            vectors = new RenumberingVectorValues<>(((OnHeapGraphIndex<T>) graph).getDeletedNodes(), vectors);
+            graph = new RenumberingGraphIndex<>((OnHeapGraphIndex<T>) graph);
+        }
 
         // graph-level properties
         out.writeInt(graph.size());

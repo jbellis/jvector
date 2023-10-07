@@ -21,6 +21,7 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -171,6 +172,11 @@ public class TestUtil {
             }
 
             @Override
+            public Bits liveNodes() {
+                return Bits.ALL;
+            }
+
+            @Override
             public void close() { }
         }
     }
@@ -245,6 +251,11 @@ public class TestUtil {
             @Override
             public T getVector(int node) {
                 throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
+            }
+
+            @Override
+            public Bits liveNodes() {
+                return Bits.ALL;
             }
 
             @Override

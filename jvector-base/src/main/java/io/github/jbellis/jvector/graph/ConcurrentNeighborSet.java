@@ -17,9 +17,11 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.BitSet;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -99,7 +101,21 @@ public class ConcurrentNeighborSet {
     neighborsRef.getAndUpdate(this::removeAllNonDiverse);
   }
 
-  private static class NeighborIterator extends NodesIterator {
+  /**
+   * @return true if we had deleted neighbors
+   */
+  public boolean removeDeletedNeighbors(Bits deletedNodes) {
+    AtomicBoolean found = new AtomicBoolean();
+    neighborsRef.getAndUpdate(current -> {
+      var next = current.copy();
+      next.retain(Bits.inverseOf(deletedNodes));
+      found.set(next.size < current.size);
+      return next;
+    });
+    return found.get();
+  }
+
+    private static class NeighborIterator extends NodesIterator {
     private final NeighborArray neighbors;
     private int i;
 
@@ -373,7 +389,7 @@ public class ConcurrentNeighborSet {
      * <p>
      * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
      */
-    public void retain(BitSet selected) {
+    public void retain(Bits selected) {
       int writeIdx = 0; // index for where to write the next retained element
 
       for (int readIdx = 0; readIdx < size; readIdx++) {

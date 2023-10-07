@@ -136,7 +136,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
             getVectorEncoding(),
             similarityFunction,
             graph,
-            null
+            Bits.ALL
     ).getNodes();
     int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
@@ -409,7 +409,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     GraphIndexBuilder<T> builder =
         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
     var graph = builder.build();
-    Bits acceptOrds = getRandom().nextBoolean() ? null : createRandomAcceptOrds(0, size);
+    Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
     int efSearch = 100;
     int totalMatches = 0;
@@ -429,7 +429,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
       NeighborQueue expected = new NeighborQueue(topK, false);
       for (int j = 0; j < size; j++) {
-        if (vectors.vectorValue(j) != null && (acceptOrds == null || acceptOrds.get(j))) {
+        if (vectors.vectorValue(j) != null && acceptOrds.get(j)) {
           if (getVectorEncoding() == VectorEncoding.BYTE) {
             assert query instanceof byte[];
             expected.add(
