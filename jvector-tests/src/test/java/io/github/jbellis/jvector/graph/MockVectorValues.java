@@ -24,11 +24,9 @@
 
 package io.github.jbellis.jvector.graph;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
 
 class MockVectorValues extends AbstractMockVectorValues<float[]> {
-  private final float[] scratch;
   private final float[] denseScratch;
 
   static MockVectorValues fromValues(float[][] values) {
@@ -41,35 +39,19 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
         denseValues[count++] = values[i];
       }
     }
-    return new MockVectorValues(values, dimension, denseValues, count);
+    return new MockVectorValues(dimension, denseValues, count);
   }
 
-  MockVectorValues(float[][] values, int dimension, float[][] denseValues, int numVectors) {
-    super(values, dimension, denseValues, numVectors);
-    this.scratch = new float[dimension];
+  MockVectorValues(int dimension, float[][] denseValues, int numVectors) {
+    super(dimension, denseValues, numVectors);
     this.denseScratch = new float[dimension];
   }
 
   @Override
   public MockVectorValues copy() {
-    return new MockVectorValues(
-        ArrayUtil.copyOfSubArray(values, 0, values.length),
-        dimension,
-        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
-        numVectors);
-  }
-
-  @Override
-  public float[] vectorValue() {
-    if (RandomizedTest.getRandom().nextBoolean()) {
-      return values[pos];
-    } else {
-      // Sometimes use the same scratch array repeatedly, mimicing what the codec will do.
-      // This should help us catch cases of aliasing where the same vector values source is used
-      // twice in a single computation.
-      System.arraycopy(values[pos], 0, scratch, 0, dimension);
-      return scratch;
-    }
+    return new MockVectorValues(dimension,
+                                ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
+                                numVectors);
   }
 
   @Override
