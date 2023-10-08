@@ -39,19 +39,19 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
                 denseValues[count++] = value;
             }
         }
-        return new MockVectorValues(dimension, denseValues, count);
+        return new MockVectorValues(dimension, denseValues);
     }
 
-    MockVectorValues(int dimension, float[][] denseValues, int numVectors) {
-        super(dimension, denseValues, numVectors);
+    MockVectorValues(int dimension, float[][] denseValues) {
+        super(dimension, denseValues);
         this.denseScratch = new float[dimension];
     }
 
     @Override
     public MockVectorValues copy() {
         return new MockVectorValues(dimension,
-                                    ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
-                                    numVectors);
+                                    ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length)
+        );
     }
 
     @Override

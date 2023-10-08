@@ -39,19 +39,19 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
                 denseValues[count++] = value;
             }
         }
-        return new MockByteVectorValues(dimension, denseValues, count);
+        return new MockByteVectorValues(dimension, denseValues);
     }
 
-    MockByteVectorValues(int dimension, byte[][] denseValues, int numVectors) {
-        super(dimension, denseValues, numVectors);
+    MockByteVectorValues(int dimension, byte[][] denseValues) {
+        super(dimension, denseValues);
         denseScratch = new byte[dimension];
     }
 
     @Override
     public MockByteVectorValues copy() {
         return new MockByteVectorValues(dimension,
-                                        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
-                                        numVectors);
+                                        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length)
+        );
     }
 
     @Override

@@ -27,18 +27,15 @@ package io.github.jbellis.jvector.graph;
 abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T> {
     protected final int dimension;
     protected final T[] denseValues;
-    protected final int numVectors;
 
-    AbstractMockVectorValues(int dimension, T[] denseValues, int numVectors) {
+    AbstractMockVectorValues(int dimension, T[] denseValues) {
         this.dimension = dimension;
         this.denseValues = denseValues;
-        // used by tests that build a graph from bytes rather than floats
-        this.numVectors = numVectors;
     }
 
     @Override
     public int size() {
-        return numVectors;
+        return denseValues.length;
     }
 
     @Override
