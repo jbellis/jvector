@@ -29,6 +29,9 @@ abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T
     protected final T[] denseValues;
 
     AbstractMockVectorValues(int dimension, T[] denseValues) {
+        for (var a : denseValues) {
+            assert a != null;
+        }
         this.dimension = dimension;
         this.denseValues = denseValues;
     }

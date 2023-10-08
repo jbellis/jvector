@@ -30,16 +30,7 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
     private final byte[] denseScratch;
 
     static MockByteVectorValues fromValues(byte[][] values) {
-        int dimension = values[0].length;
-        int maxDoc = values.length;
-        byte[][] denseValues = new byte[maxDoc][];
-        int count = 0;
-        for (byte[] value : values) {
-            if (value != null) {
-                denseValues[count++] = value;
-            }
-        }
-        return new MockByteVectorValues(dimension, denseValues);
+        return new MockByteVectorValues(values[0].length, values);
     }
 
     MockByteVectorValues(int dimension, byte[][] denseValues) {
@@ -62,9 +53,6 @@ class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
     @Override
     public byte[] vectorValue(int targetOrd) {
         byte[] original = super.vectorValue(targetOrd);
-        if (original == null) {
-            return null;
-        }
         // present a single vector reference to callers like the disk-backed RAVV implmentations,
         // to catch cases where they are not making a copy
         System.arraycopy(original, 0, denseScratch, 0, dimension);

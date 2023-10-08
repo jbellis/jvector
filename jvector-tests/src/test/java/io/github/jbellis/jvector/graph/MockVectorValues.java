@@ -30,16 +30,7 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
     private final float[] denseScratch;
 
     static MockVectorValues fromValues(float[][] values) {
-        int dimension = values[0].length;
-        int maxDoc = values.length;
-        float[][] denseValues = new float[maxDoc][];
-        int count = 0;
-        for (float[] value : values) {
-            if (value != null) {
-                denseValues[count++] = value;
-            }
-        }
-        return new MockVectorValues(dimension, denseValues);
+        return new MockVectorValues(values[0].length, values);
     }
 
     MockVectorValues(int dimension, float[][] denseValues) {
@@ -62,9 +53,6 @@ class MockVectorValues extends AbstractMockVectorValues<float[]> {
     @Override
     public float[] vectorValue(int targetOrd) {
         float[] original = super.vectorValue(targetOrd);
-        if (original == null) {
-            return null;
-        }
         // present a single vector reference to callers like the disk-backed RAVV implmentations,
         // to catch cases where they are not making a copy
         System.arraycopy(original, 0, denseScratch, 0, dimension);
