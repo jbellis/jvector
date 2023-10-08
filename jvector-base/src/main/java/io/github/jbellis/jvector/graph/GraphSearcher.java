@@ -81,11 +81,11 @@ public class GraphSearcher<T> {
 
   /** Builder */
   public static class Builder<T> {
-    private final GraphIndex.View<T> graph;
+    private final GraphIndex.View<T> view;
     private boolean concurrent;
 
-    public Builder(GraphIndex.View<T> graph) {
-      this.graph = graph;
+    public Builder(GraphIndex.View<T> view) {
+      this.view = view;
     }
 
     public Builder<T> withConcurrentUpdates() {
@@ -94,8 +94,9 @@ public class GraphSearcher<T> {
     }
 
     public GraphSearcher<T> build() {
-      BitSet bits = concurrent ? new GrowableBitSet(graph.size()) : new SparseFixedBitSet(graph.size());
-      return new GraphSearcher<>(graph, bits);
+      int size = view.getMaxNodeId() + 1;
+      BitSet bits = concurrent ? new GrowableBitSet(size) : new SparseFixedBitSet(size);
+      return new GraphSearcher<>(view, bits);
     }
   }
 
@@ -143,13 +144,13 @@ public class GraphSearcher<T> {
       throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
     }
 
+    prepareScratchState(view.size());
     if (ep < 0) {
       return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
     }
 
     acceptOrds = Bits.intersectionOf(acceptOrds, view.liveNodes());
 
-    prepareScratchState(view.size());
     var resultsQueue = new NeighborQueue(topK, false);
     Map<Integer, T> vectorsEncountered = scoreFunction.isExact() ? null : new java.util.HashMap<>();
     int numVisited = 0;

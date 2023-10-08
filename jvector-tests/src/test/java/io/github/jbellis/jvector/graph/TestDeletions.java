@@ -9,29 +9,69 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
 import static io.github.jbellis.jvector.graph.GraphIndexTestCase.createRandomFloatVectors;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestDeletions extends LuceneTestCase {
     @Test
-    public void testSimple() {
+    public void testMarkDeleted() {
+        // graph of 10 vectors
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var graph = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f).build();
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var graph = builder.build();
+
+        // delete a random entry
         int n = getRandom().nextInt(ravv.size());
-        graph.markDeleted(n);
+        builder.markNodeDeleted(n);
+        // check that searching for random vectors never results in the deleted one
         for (int i = 0; i < 100; i++) {
             var v = TestUtil.randomVector(getRandom(), dimension);
-            assertNotFound(n, 3, v, ravv, graph);
+            var results = GraphSearcher.search(v, 3, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+            for (var ns : results.getNodes()) {
+                assertNotEquals(n, ns.node);
+            }
         }
+        // check that asking for the entire graph back still doesn't surface the deleted one
         var v = ravv.vectorValue(n);
-        assertNotFound(n, ravv.size(), v, ravv, graph);
-    }
-
-    private static void assertNotFound(int n, int topK, float[] v, MockVectorValues ravv, OnHeapGraphIndex<float[]> graph) {
-        var results = GraphSearcher.search(v, topK, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+        var results = GraphSearcher.search(v, ravv.size(), ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+        assertEquals(ravv.size() - 1, results.getNodes().length);
         for (var ns : results.getNodes()) {
             assertNotEquals(n, ns.node);
         }
+    }
+
+    @Test
+    public void testCleanup() {
+        // graph of 10 vectors
+        int dimension = 2;
+        var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var graph = builder.build();
+
+        // delete all nodes that connect to a random node
+        int nodeToIsolate = getRandom().nextInt(ravv.size());
+        var view = graph.getView();
+        int nDeleted = 0;
+        for (var i = 0; i < view.size(); i++) {
+            for (var it = graph.getView().getNeighborsIterator(i); it.hasNext(); ) {
+                if (nodeToIsolate == it.nextInt()) {
+                    builder.markNodeDeleted(i);
+                    nDeleted++;
+                    break;
+                }
+            }
+        }
+        assertNotEquals(0, nDeleted);
+
+        // cleanup removes the deleted nodes
+        builder.cleanup();
+        assertEquals(ravv.size() - nDeleted, graph.size());
+
+        // cleanup should have added new connections to the node that would otherwise have been disconnected
+        var v = ravv.vectorValue(nodeToIsolate);
+        var results = GraphSearcher.search(v, 1, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+        assertEquals(nodeToIsolate, results.getNodes()[0].node);
     }
 }

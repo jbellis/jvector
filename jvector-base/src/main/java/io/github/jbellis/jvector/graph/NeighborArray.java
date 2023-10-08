@@ -131,6 +131,9 @@ public class NeighborArray {
     return start;
   }
 
+  /**
+   * Caution! This performs a linear scan.
+   */
   @VisibleForTesting
   boolean contains(int node) {
     for (int i = 0; i < size; i++) {

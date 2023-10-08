@@ -32,8 +32,11 @@ import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
@@ -42,13 +45,14 @@ import java.util.function.BiFunction;
  * <p>To search this graph, you should use a View obtained from {@link #getView()} to perform `seek`
  * and `nextNeighbor` operations.
  */
-public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
+public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   // the current graph entry node on the top level. -1 if not set
   private final AtomicLong entryPoint = new AtomicLong(-1);
 
   private final NonBlockingHashMapLong<ConcurrentNeighborSet> nodes;
-  private BitSet deletedNodes = new GrowableBitSet(0);
+  private final BitSet deletedNodes = new GrowableBitSet(0);
+  private final AtomicInteger maxNodeId = new AtomicInteger(-1);
 
   // max neighbors/edges per node
   final int nsize0;
@@ -91,6 +95,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    */
   public void addNode(int node) {
     nodes.put(node, neighborFactory.apply(node, maxDegree()));
+    maxNodeId.accumulateAndGet(node, Math::max);
   }
 
   /**
@@ -101,7 +106,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
-  void markComplete(int node) {
+  public void markComplete(int node) {
     entryPoint.accumulateAndGet(
         node,
         (oldEntry, newEntry) -> {
@@ -128,21 +133,9 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   @Override
   public NodesIterator getNodes() {
-    // We avoid the temptation to optimize this by using ArrayNodesIterator.
-    // This is because, while the graph will contain sequential ordinals once the graph is complete,
-    // we should not assume that that is the only time it will be called.
-    var keysInts = Arrays.stream(nodes.keySetLong()).iterator();
-    return new NodesIterator(nodes.size()) {
-      @Override
-      public int nextInt() {
-        return keysInts.next().intValue();
-      }
-
-      @Override
-      public boolean hasNext() {
-        return keysInts.hasNext();
-      }
-    };
+    long[] keys = nodes.keySetLong();
+    var keysInts = Arrays.stream(keys).mapToInt(i -> (int) i).iterator();
+    return NodesIterator.fromPrimitiveIterator(keysInts, keys.length);
   }
 
   @Override
@@ -257,6 +250,15 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     nodes.remove(node);
   }
 
+  @Override
+  public int getMaxNodeId() {
+    return maxNodeId.get();
+  }
+
+  public int[] rawNodes() {
+    return nodes.keySet().stream().mapToInt(i -> (int) (long) i).toArray();
+  }
+
   private class ConcurrentGraphIndexView implements GraphIndex.View<T> {
     @Override
     public T getVector(int node) {
@@ -285,6 +287,11 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     @Override
     public Bits liveNodes() {
       return deletedNodes.cardinality() == 0 ? Bits.ALL : Bits.inverseOf(deletedNodes);
+    }
+
+    @Override
+    public int getMaxNodeId() {
+      return OnHeapGraphIndex.this.getMaxNodeId();
     }
 
     @Override

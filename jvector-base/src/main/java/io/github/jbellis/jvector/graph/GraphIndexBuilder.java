@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorEncoding;
@@ -28,10 +27,14 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.IntStream;
+
+import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -133,13 +136,31 @@ public class GraphIndexBuilder<T> {
      * Cleanup the graph by completing removal of marked-for-delete nodes, trimming
      * neighbor sets to the advertised degree, and updating the entry node.
      * <p>
+     * Uses default threadpool to process nodes in parallel.  There is currently no way to restrict this to a single thread.
+     * <p>
      * Must be called before writing to disk.
      * <p>
      * May be called multiple times, but should not be called during concurrent modifications to the graph.
      */
     public void cleanup() {
+        if (graph.size() == 0) {
+            return;
+        }
         graph.validateEntryNode(); // sanity check before we start
-        PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup()));
+
+        // purge deleted nodes.
+        // backlinks can cause neighbors to soft-overflow, so do this before neighbors cleanup
+        removeDeletedNodes();
+
+        // clean up neighbors
+        IntStream.range(0, graph.getMaxNodeId() + 1).parallel().forEach(i -> {
+            var neighbors = graph.getNeighbors(i);
+            if (neighbors != null) {
+                neighbors.cleanup();
+            }
+        });
+
+        // optimize entry node
         graph.updateEntryNode(approximateMedioid());
         graph.validateEntryNode(); // check again after updating
     }
@@ -211,35 +232,76 @@ public class GraphIndexBuilder<T> {
         graph.markDeleted(node);
     }
 
-    public long removeDeletedNodes() {
-        // remove the nodes from the graph, leaving holes and invalid neighbor references
+    /**
+     * Remove nodes marked for deletion from the graph, and update neighbor lists
+     * to maintain connectivity.
+     *
+     * @return approximate size of memory no longer used
+     */
+    private long removeDeletedNodes() {
         var deletedNodes = graph.getDeletedNodes();
-        for (int i = deletedNodes.nextSetBit(0); i >= 0; i = deletedNodes.nextSetBit(i + 1)) {
+        if (deletedNodes.cardinality() == 0) {
+            return 0;
+        }
+
+        // remove the nodes from the graph, leaving holes and invalid neighbor references
+        for (int i = deletedNodes.nextSetBit(0); i != NO_MORE_DOCS; i = deletedNodes.nextSetBit(i + 1)) {
             graph.removeNode(i);
         }
+        var liveNodes = graph.rawNodes();
 
         // remove deleted nodes from neighbor lists.  If neighbor count drops below a minimum,
         // add random connections to preserve connectivity
-        var affectedNodes = new FixedBitSet(graph.size());
-        for (int i = 0; i < graph.size(); i++) {
-            if (deletedNodes.get(i)) {
-                continue;
+        var affectedLiveNodes = new HashSet<Integer>();
+        var R = new Random();
+        try (var v1 = vectors.get();
+            var v2 = vectorsCopy.get())
+        {
+            for (var node : liveNodes) {
+                assert !deletedNodes.get(node);
+
+                ConcurrentNeighborSet neighbors = graph.getNeighbors(node);
+                if (neighbors.removeDeletedNeighbors(deletedNodes)) {
+                    affectedLiveNodes.add(node);
+                }
+
+                // add random connections if we've dropped below minimum
+                int minConnections = 1 + graph.maxDegree() / 2;
+                if (neighbors.size() < minConnections) {
+                    // create a NeighborArray of random connections
+                    NeighborArray randomConnections = new NeighborArray(graph.maxDegree() - neighbors.size());
+                    // doing actual sampling-without-replacement is expensive so we'll loop a fixed number of times instead
+                    for (int i = 0; i < 2 * graph.maxDegree(); i++) {
+                        int randomNode = liveNodes[R.nextInt(liveNodes.length)];
+                        if (randomNode != node && !randomConnections.contains(randomNode)) {
+                            float score = scoreBetween(v1.get().vectorValue(node), v2.get().vectorValue(randomNode));
+                            randomConnections.insertSorted(randomNode, score);
+                        }
+                        if (randomConnections.size == randomConnections.node.length) {
+                            break;
+                        }
+                    }
+                    neighbors.padWithRandom(randomConnections);
+                }
             }
-            if (graph.getNeighbors(i).removeDeletedNeighbors(deletedNodes)) {
-                affectedNodes.set(i);
-            }
-            int minConnections = 1 + graph.maxDegree() / 2;
-            if (graph.getNeighbors(i).size() < minConnections) {
-                // TODO create a NeighborArray of random connections
-                NeighborArray[] randomConnections;
-                // TODO inject these connections even if they're not diverse
+        }
+
+        // update entry node if old one was deleted
+        if (deletedNodes.get(graph.entry())) {
+            if (graph.size() > 0) {
+                graph.updateEntryNode(graph.getNodes().nextInt());
+            } else {
+                graph.updateEntryNode(-1);
             }
         }
 
         // repair affected nodes
-        for (int i = affectedNodes.nextSetBit(0); i >= 0; i = affectedNodes.nextSetBit(i + 1)) {
-            addNNDescentConnections(i);
+        for (var node : affectedLiveNodes) {
+            addNNDescentConnections(node);
         }
+
+        // reset deleted collection
+        deletedNodes.clear();
 
         return graph.ramBytesUsedOneNode(0);
     }
@@ -257,17 +319,18 @@ public class GraphIndexBuilder<T> {
 
             @Override
             public int length() {
-                return graph.size();
+                // length is max node id, which could be larger than size after deletes
+                throw new UnsupportedOperationException();
             }
         };
 
         try (var gs = graphSearcher.get();
-             var pooledVectors = vectors.get();
-             var pooledCopy = vectorsCopy.get();
+             var v1 = vectors.get();
+             var v2 = vectorsCopy.get();
              var scratch = naturalScratch.get())
         {
-            var value = pooledVectors.get().vectorValue(node);
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(pooledCopy.get().vectorValue(i), value);
+            var value = v1.get().vectorValue(node);
+            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits);
             var candidates = getPathCandidates(result.getVisited(), scoreFunction, scratch.get());
             updateNeighbors(node, candidates, NeighborArray.EMPTY);
@@ -321,7 +384,7 @@ public class GraphIndexBuilder<T> {
     private NeighborArray getPathCandidates(BitSet visited, NeighborSimilarity.ExactScoreFunction scoreFunction, NeighborArray scratch) {
         SearchResult.NodeScore[] candidates = new SearchResult.NodeScore[visited.cardinality()];
         int j = 0;
-        for (int i = visited.nextSetBit(0); i >= 0; i = visited.nextSetBit(i + 1)) {
+        for (int i = visited.nextSetBit(0); i != NO_MORE_DOCS; i = visited.nextSetBit(i + 1)) {
             candidates[j++] = new SearchResult.NodeScore(i, scoreFunction.similarityTo(i));
         }
         Arrays.sort(candidates, Comparator.comparingDouble(ns -> ns.score));

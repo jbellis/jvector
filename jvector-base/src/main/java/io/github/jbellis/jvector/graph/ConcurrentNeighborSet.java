@@ -115,7 +115,7 @@ public class ConcurrentNeighborSet {
     return found.get();
   }
 
-    private static class NeighborIterator extends NodesIterator {
+  private static class NeighborIterator extends NodesIterator {
     private final NeighborArray neighbors;
     private int i;
 
@@ -156,16 +156,33 @@ public class ConcurrentNeighborSet {
     }
 
     neighborsRef.getAndUpdate(current -> {
+      // if either natural or concurrent is empty, skip the merge
+      NeighborArray toMerge;
+      if (concurrent.size == 0) {
+        toMerge = natural;
+      } else if (natural.size == 0) {
+        toMerge = concurrent;
+      } else {
+        toMerge = mergeNeighbors(natural, concurrent);
+      }
+
       // merge all the candidates into a single array and compute the diverse ones to keep
       // from that.  we do this first by selecting the ones to keep, and then by copying
       // only those into a new NeighborArray.  This is less expensive than doing the
       // diversity computation in-place, since we are going to do multiple passes and
       // pruning back extras is expensive.
-      var merged = mergeNeighbors(mergeNeighbors(natural, current), concurrent);
+      var merged = mergeNeighbors(natural, toMerge);
       BitSet selected = selectDiverse(merged);
       merged.retain(selected);
       return merged;
     });
+  }
+
+  void padWithRandom(NeighborArray connections) {
+    // we deliberately do not perform diversity checks here
+    // (it will be invoked when the cleanup code calls insertDiverse later
+    // with the results of the nn descent rebuild)
+    neighborsRef.getAndUpdate(current -> mergeNeighbors(current, connections));
   }
 
   /**
@@ -216,7 +233,7 @@ public class ConcurrentNeighborSet {
     return selected;
   }
 
-  public ConcurrentNeighborArray getCurrent() {
+  ConcurrentNeighborArray getCurrent() {
     return neighborsRef.get();
   }
 
@@ -400,7 +417,6 @@ public class ConcurrentNeighborSet {
             score[writeIdx] = score[readIdx];
           }
           // else { we haven't created any gaps in the backing arrays yet, so we don't need to move anything }
-
           writeIdx++;
         }
       }

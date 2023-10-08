@@ -61,6 +61,14 @@ public interface GraphIndex<T> extends AutoCloseable {
    */
   int maxDegree();
 
+  /**
+   * @return the maximum node id in the graph.  May be different from size() if nodes are
+   * being added concurrently, or if nodes have been deleted (and cleaned up).
+   */
+  default int getMaxNodeId() {
+    return size();
+  }
+
   @Override
   void close() throws IOException;
 
@@ -90,6 +98,10 @@ public interface GraphIndex<T> extends AutoCloseable {
     }
 
     Bits liveNodes();
+
+    default int getMaxNodeId() {
+      return size();
+    }
   }
 
   static <T> String prettyPrint(GraphIndex<T> graph) {
