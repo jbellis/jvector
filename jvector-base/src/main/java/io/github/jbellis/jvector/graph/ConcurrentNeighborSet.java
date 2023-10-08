@@ -108,9 +108,24 @@ public class ConcurrentNeighborSet {
   public boolean removeDeletedNeighbors(Bits deletedNodes) {
     AtomicBoolean found = new AtomicBoolean();
     neighborsRef.getAndUpdate(current -> {
+      // build a set of the entries we want to retain
+      var toRetain = new FixedBitSet(current.size);
+      for (int i = 0; i < current.size; i++) {
+        if (deletedNodes.get(current.node[i])) {
+          found.set(true);
+        } else {
+          toRetain.set(i);
+        }
+      }
+
+      // if we're retaining everything, no need to make a copy
+      if (!found.get()) {
+        return current;
+      }
+
+      // copy and purge the deleted ones
       var next = current.copy();
-      next.retain(Bits.inverseOf(deletedNodes));
-      found.set(next.size < current.size);
+      next.retain(toRetain);
       return next;
     });
     return found.get();

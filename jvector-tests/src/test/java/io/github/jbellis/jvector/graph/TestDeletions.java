@@ -8,6 +8,8 @@ import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
+import java.util.Arrays;
+
 import static io.github.jbellis.jvector.graph.GraphIndexTestCase.createRandomFloatVectors;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -70,8 +72,8 @@ public class TestDeletions extends LuceneTestCase {
         assertEquals(ravv.size() - nDeleted, graph.size());
 
         // cleanup should have added new connections to the node that would otherwise have been disconnected
-        var v = ravv.vectorValue(nodeToIsolate);
-        var results = GraphSearcher.search(v, 1, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+        var v = Arrays.copyOf(ravv.vectorValue(nodeToIsolate), ravv.dimension);
+        var results = GraphSearcher.search(v, 10, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
         assertEquals(nodeToIsolate, results.getNodes()[0].node);
     }
 }
