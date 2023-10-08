@@ -21,6 +21,7 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 
+import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -241,16 +242,38 @@ public class ConcurrentNeighborSet {
     ConcurrentNeighborArray merged = new ConcurrentNeighborArray(a1.size() + a2.size());
     int i = 0, j = 0;
 
+    float lastAddedScore = Float.NaN;
+    // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
+    // we need to remember all the nodes with the current score to avoid adding duplicates
+    var nodesWithLastScore = new HashSet<>();
     while (i < a1.size() && j < a2.size()) {
       if (a1.score()[i] < a2.score[j]) {
-        merged.addInOrder(a2.node[j], a2.score[j]);
+        if (a2.score[j] != lastAddedScore) {
+          nodesWithLastScore.clear();
+          lastAddedScore = a2.score[j];
+        }
+        if (nodesWithLastScore.add(a2.node[j])) {
+          merged.addInOrder(a2.node[j], a2.score[j]);
+        }
         j++;
       } else if (a1.score()[i] > a2.score[j]) {
-        merged.addInOrder(a1.node()[i], a1.score()[i]);
+        if (a1.score()[i] != lastAddedScore) {
+          nodesWithLastScore.clear();
+          lastAddedScore = a1.score()[i];
+        }
+        if (nodesWithLastScore.add(a1.node()[i])) {
+          merged.addInOrder(a1.node()[i], a1.score()[i]);
+        }
         i++;
       } else {
-        merged.addInOrder(a1.node()[i], a1.score()[i]);
-        if (a2.node[j] != a1.node()[i]) {
+        if (a1.score()[i] != lastAddedScore) {
+          nodesWithLastScore.clear();
+          lastAddedScore = a1.score()[i];
+        }
+        if (nodesWithLastScore.add(a1.node()[i])) {
+          merged.addInOrder(a1.node()[i], a1.score()[i]);
+        }
+        if (nodesWithLastScore.add(a2.node()[j])) {
           merged.addInOrder(a2.node[j], a2.score[j]);
         }
         i++;
@@ -259,25 +282,33 @@ public class ConcurrentNeighborSet {
     }
 
     // If elements remain in a1, add them
-    while (i < a1.size()) {
-      // Skip duplicates between the remaining elements in a1 and the last added element in a2
-      if (j > 0 && i < a1.size() && a1.node()[i] == a2.node[j - 1]) {
+    if (i < a1.size()) {
+      // avoid duplicates while adding nodes with the same score
+      while (i < a1.size && a1.score()[i] == lastAddedScore) {
+        if (!nodesWithLastScore.contains(a1.node()[i])) {
+          merged.addInOrder(a1.node()[i], a1.score()[i]);
+        }
         i++;
-        continue;
       }
-      merged.addInOrder(a1.node()[i], a1.score()[i]);
-      i++;
+      // the remaining nodes have a different score, so we can just add them
+      System.arraycopy(a1.node, i, merged.node, merged.size, a1.size - i);
+      System.arraycopy(a1.score, i, merged.score, merged.size, a1.size - i);
+      merged.size += a1.size - i;
     }
 
     // If elements remain in a2, add them
-    while (j < a2.size()) {
-      // Skip duplicates between the remaining elements in a2 and the last added element in a1
-      if (i > 0 && j < a2.size() && a2.node[j] == a1.node()[i - 1]) {
+    if (j < a2.size()) {
+      // avoid duplicates while adding nodes with the same score
+      while (j < a2.size && a2.score[j] == lastAddedScore) {
+        if (!nodesWithLastScore.contains(a2.node[j])) {
+          merged.addInOrder(a2.node[j], a2.score[j]);
+        }
         j++;
-        continue;
       }
-      merged.addInOrder(a2.node[j], a2.score[j]);
-      j++;
+      // the remaining nodes have a different score, so we can just add them
+      System.arraycopy(a2.node, j, merged.node, merged.size, a2.size - j);
+      System.arraycopy(a2.score, j, merged.score, merged.size, a2.size - j);
+      merged.size += a2.size - j;
     }
 
     return merged;
@@ -405,6 +436,7 @@ public class ConcurrentNeighborSet {
      * This modifies the array in place, preserving the relative order of the elements retained.
      * <p>
      * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
+     *                 (Thus, the elements of selected represent positions in the NeighborArray, NOT node ids.)
      */
     public void retain(Bits selected) {
       int writeIdx = 0; // index for where to write the next retained element

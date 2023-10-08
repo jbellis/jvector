@@ -18,11 +18,14 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
+import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.stream.IntStream;
 
 import static org.junit.Assert.*;
@@ -140,18 +143,28 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testMergeCandidatesSimple() {
-    NeighborArray arr1 = new NeighborArray(3);
+    var arr1 = new NeighborArray(1);
+    arr1.addInOrder(1, 1.0f);
+
+    var arr2 = new NeighborArray(1);
+    arr2.addInOrder(0, 2.0f);
+
+    var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    // Expected result: [0, 1]
+    assertEquals(2, merged.size());
+    assertArrayEquals(new int[] {0, 1}, Arrays.copyOf(merged.node(), 2));
+
+    arr1 = new NeighborArray(3);
     arr1.addInOrder(3, 3.0f);
     arr1.addInOrder(2, 2.0f);
     arr1.addInOrder(1, 1.0f);
 
-    NeighborArray arr2 = new NeighborArray(3);
+    arr2 = new NeighborArray(3);
     arr2.addInOrder(4, 4.0f);
     arr2.addInOrder(2, 2.0f);
     arr2.addInOrder(1, 1.0f);
 
-    NeighborArray merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
-
+    merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
     // Expected result: [4, 3, 2, 1]
     assertEquals(4, merged.size());
     assertArrayEquals(new int[] {4, 3, 2, 1}, Arrays.copyOf(merged.node(), 4));
@@ -166,7 +179,6 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     arr2.addInOrder(2, 2.0f);
 
     merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
-
     // Expected result: [3, 2]
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {3, 2}, Arrays.copyOf(merged.node(), 2));
@@ -175,6 +187,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   private void testMergeCandidatesOnce() {
+    // test merge where one array contains either exact duplicates, or duplicate scores, of the other
     int maxSize = 1 + getRandom().nextInt(5);
 
     NeighborArray arr1 = new NeighborArray(maxSize);
@@ -217,11 +230,14 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
     assert merged.size <= arr1.size() + arr2.size();
     assert merged.size >= Math.max(arr1.size(), arr2.size());
+    var uniqueNodes = new HashSet<>();
     for (int i = 0; i < merged.size - 1; i++) {
-      assert merged.score[i] >= merged.score[i + 1];
+      assertTrue(merged.score[i] >= merged.score[i + 1]);
+      assertTrue(uniqueNodes.add(merged.node[i]));
     }
   }
 
+  @Test
   public void testMergeCandidatesRandom() {
     for (int i = 0; i < 10000; i++) {
       testMergeCandidatesOnce();
