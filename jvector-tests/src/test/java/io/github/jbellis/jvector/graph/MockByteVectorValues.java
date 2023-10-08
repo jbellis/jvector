@@ -27,47 +27,47 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.util.ArrayUtil;
 
 class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
-  private final byte[] denseScratch;
+    private final byte[] denseScratch;
 
-  static MockByteVectorValues fromValues(byte[][] values) {
-    int dimension = values[0].length;
-    int maxDoc = values.length;
-    byte[][] denseValues = new byte[maxDoc][];
-    int count = 0;
-    for (int i = 0; i < maxDoc; i++) {
-      if (values[i] != null) {
-        denseValues[count++] = values[i];
-      }
+    static MockByteVectorValues fromValues(byte[][] values) {
+        int dimension = values[0].length;
+        int maxDoc = values.length;
+        byte[][] denseValues = new byte[maxDoc][];
+        int count = 0;
+        for (byte[] value : values) {
+            if (value != null) {
+                denseValues[count++] = value;
+            }
+        }
+        return new MockByteVectorValues(dimension, denseValues, count);
     }
-    return new MockByteVectorValues(dimension, denseValues, count);
-  }
 
-  MockByteVectorValues(int dimension, byte[][] denseValues, int numVectors) {
-    super(dimension, denseValues, numVectors);
-    denseScratch = new byte[dimension];
-  }
-
-  @Override
-  public MockByteVectorValues copy() {
-    return new MockByteVectorValues(dimension,
-                                    ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
-                                    numVectors);
-  }
-
-  @Override
-  public boolean isValueShared() {
-    return true;
-  }
-
-  @Override
-  public byte[] vectorValue(int targetOrd) {
-    byte[] original = super.vectorValue(targetOrd);
-    if (original == null) {
-      return null;
+    MockByteVectorValues(int dimension, byte[][] denseValues, int numVectors) {
+        super(dimension, denseValues, numVectors);
+        denseScratch = new byte[dimension];
     }
-    // present a single vector reference to callers like the disk-backed RAVV implmentations,
-    // to catch cases where they are not making a copy
-    System.arraycopy(original, 0, denseScratch, 0, dimension);
-    return denseScratch;
-  }
+
+    @Override
+    public MockByteVectorValues copy() {
+        return new MockByteVectorValues(dimension,
+                                        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
+                                        numVectors);
+    }
+
+    @Override
+    public boolean isValueShared() {
+        return true;
+    }
+
+    @Override
+    public byte[] vectorValue(int targetOrd) {
+        byte[] original = super.vectorValue(targetOrd);
+        if (original == null) {
+            return null;
+        }
+        // present a single vector reference to callers like the disk-backed RAVV implmentations,
+        // to catch cases where they are not making a copy
+        System.arraycopy(original, 0, denseScratch, 0, dimension);
+        return denseScratch;
+    }
 }
