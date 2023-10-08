@@ -26,7 +26,6 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -64,35 +63,6 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
   @Override
   AbstractMockVectorValues<float[]> vectorValues(float[][] values) {
     return MockVectorValues.fromValues(values);
-  }
-
-  @Override
-  AbstractMockVectorValues<float[]> vectorValues(
-      int size,
-      int dimension,
-      AbstractMockVectorValues<float[]> pregeneratedVectorValues,
-      int pregeneratedOffset) {
-    float[][] vectors = new float[size][];
-    float[][] randomVectors =
-        createRandomFloatVectors(
-            size - pregeneratedVectorValues.values.length, dimension, getRandom());
-
-    for (int i = 0; i < pregeneratedOffset; i++) {
-      vectors[i] = randomVectors[i];
-    }
-
-    int currentDoc;
-    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-      vectors[pregeneratedOffset + currentDoc] = pregeneratedVectorValues.values[currentDoc];
-    }
-
-    for (int i = pregeneratedOffset + pregeneratedVectorValues.values.length;
-        i < vectors.length;
-        i++) {
-      vectors[i] = randomVectors[i - pregeneratedVectorValues.values.length];
-    }
-
-    return MockVectorValues.fromValues(vectors);
   }
 
   @Override

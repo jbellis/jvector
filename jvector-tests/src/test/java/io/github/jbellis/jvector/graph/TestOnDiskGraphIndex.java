@@ -28,7 +28,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -52,38 +51,6 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         TestUtil.deleteQuietly(testDirectory);
     }
 
-    private static <T> void validateGraph(GraphIndex expectedGraph, GraphIndex actualGraph) throws Exception {
-        assertEquals(expectedGraph.size(), actualGraph.size());
-        var nodes = getSortedNodes(expectedGraph);
-        assertArrayEquals(nodes, getSortedNodes(actualGraph));
-
-        try (var expectedView = expectedGraph.getView();
-             var actualView = actualGraph.getView()) {
-            assertEquals(expectedView.entryNode(), actualView.entryNode());
-
-            // For each node, check its neighbors
-            for (int j : nodes) {
-                var expectedNeighbors = expectedView.getNeighborsIterator(j);
-                var actualNeighbors = actualView.getNeighborsIterator(j);
-                assertEquals(expectedNeighbors.size(), actualNeighbors.size());
-                while (expectedNeighbors.hasNext()) {
-                    assertEquals(expectedNeighbors.nextInt(), actualNeighbors.nextInt());
-                }
-                assertFalse(actualNeighbors.hasNext());
-            }
-        }
-    }
-
-    private static <T> int[] getSortedNodes(GraphIndex<T> graph) {
-        int[] a = new int[graph.size()];
-        int j = 0;
-        for (var it = graph.getNodes(); it.hasNext(); ) {
-            a[j++] = it.nextInt();
-        }
-        Arrays.sort(a);
-        return a;
-    }
-
     @Test
     public void testSimpleGraphs() throws Exception {
         for (var graph : List.of(fullyConnectedGraph, randomlyConnectedGraph))
@@ -94,7 +61,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
                  var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0))
             {
-                validateGraph(graph, onDiskGraph);
+                TestUtil.assertGraphEquals(graph, onDiskGraph);
                 try (var onDiskView = onDiskGraph.getView()) {
                     validateVectors(onDiskView, ravv);
                 }
@@ -120,8 +87,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
              var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
         {
-            validateGraph(graph, onDiskGraph);
-            validateGraph(graph, new CachingGraphIndex(onDiskGraph));
+            TestUtil.assertGraphEquals(graph, onDiskGraph);
+            TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);
             try (var onDiskView = onDiskGraph.getView();
                  var cachedOnDiskView = onDiskGraph.getView())
             {

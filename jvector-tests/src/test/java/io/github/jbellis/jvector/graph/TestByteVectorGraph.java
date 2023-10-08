@@ -26,7 +26,6 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
@@ -79,35 +78,7 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
     return MockByteVectorValues.fromValues(bValues);
   }
 
-  @Override
-  AbstractMockVectorValues<byte[]> vectorValues(
-      int size,
-      int dimension,
-      AbstractMockVectorValues<byte[]> pregeneratedVectorValues,
-      int pregeneratedOffset) {
-    byte[][] vectors = new byte[size][];
-    byte[][] randomVectors =
-        createRandomByteVectors(size - pregeneratedVectorValues.values.length, dimension, getRandom());
-
-    for (int i = 0; i < pregeneratedOffset; i++) {
-      vectors[i] = randomVectors[i];
-    }
-
-    int currentDoc;
-    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-      vectors[pregeneratedOffset + currentDoc] = pregeneratedVectorValues.values[currentDoc];
-    }
-
-    for (int i = pregeneratedOffset + pregeneratedVectorValues.values.length;
-        i < vectors.length;
-        i++) {
-      vectors[i] = randomVectors[i - pregeneratedVectorValues.values.length];
-    }
-
-    return MockByteVectorValues.fromValues(vectors);
-  }
-
-  @Override
+    @Override
   RandomAccessVectorValues<byte[]> circularVectorValues(int nDoc) {
     return new CircularByteVectorValues(nDoc);
   }

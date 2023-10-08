@@ -55,62 +55,9 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
     abstract AbstractMockVectorValues<T> vectorValues(float[][] values);
 
-    abstract AbstractMockVectorValues<T> vectorValues(
-            int size,
-            int dimension,
-            AbstractMockVectorValues<T> pregeneratedVectorValues,
-            int pregeneratedOffset);
-
     abstract RandomAccessVectorValues<T> circularVectorValues(int nDoc);
 
     abstract T getTargetVector();
-
-    List<Integer> sortedNodes(GraphIndex<T> h) {
-        var nodesOnLevel = h.getNodes();
-        List<Integer> nodes = new ArrayList<>();
-        while (nodesOnLevel.hasNext()) {
-            nodes.add(nodesOnLevel.next());
-        }
-        Collections.sort(nodes);
-        return nodes;
-    }
-
-    void assertGraphEqual(GraphIndex<T> g, GraphIndex<T> h) {
-        // construct these up front since they call seek which will mess up our test loop
-        String prettyG = GraphIndex.prettyPrint(g);
-        String prettyH = GraphIndex.prettyPrint(h);
-        assertEquals(String.format(Locale.ROOT,
-                                   "the number of nodes in the graphs are different:%n%s%n%s",
-                                   prettyG,
-                                   prettyH),
-                     g.size(),
-                     h.size());
-
-        // assert equal nodes on each level
-        List<Integer> hNodes = sortedNodes(h);
-        List<Integer> gNodes = sortedNodes(g);
-        assertEquals(String.format(Locale.ROOT,
-                                   "nodes in the graphs are different:%n%s%n%s",
-                                   prettyG,
-                                   prettyH),
-                     gNodes,
-                     hNodes);
-
-        // assert equal nodes' neighbours on each level
-        NodesIterator nodesOnLevel = g.getNodes();
-        var gv = g.getView();
-        var hv = h.getView();
-        while (nodesOnLevel.hasNext()) {
-            int node = nodesOnLevel.nextInt();
-            assertEquals(String.format(Locale.ROOT,
-                                       "arcs differ for node %d%n%s%n%s",
-                                       node,
-                                       prettyG,
-                                       prettyH),
-                         getNeighborNodes(gv, node),
-                         getNeighborNodes(hv, node));
-        }
-    }
 
     // Make sure we actually approximately find the closest k elements. Mostly this is about
     // ensuring that we have all the distance functions, comparators, priority queues and so on
@@ -492,8 +439,6 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
         private final int size;
 
-        int doc = -1;
-
         CircularFloatVectorValues(int size) {
             this.size = size;
         }
@@ -531,8 +476,6 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
             implements RandomAccessVectorValues<byte[]> {
         private final int size;
 
-        int doc = -1;
-
         CircularByteVectorValues(int size) {
             this.size = size;
         }
@@ -569,22 +512,9 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     }
 
     private static float[] unitVector2d(double piRadians) {
-        return unitVector2d(piRadians, new float[2]);
-    }
-
-    private static float[] unitVector2d(double piRadians, float[] value) {
-        return new float[]{
+        return new float[] {
                 (float) Math.cos(Math.PI * piRadians), (float) Math.sin(Math.PI * piRadians)
         };
-    }
-
-    private Set<Integer> getNeighborNodes(GraphIndex.View g, int node) {
-        Set<Integer> neighbors = new HashSet<>();
-        for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
-            int n = it.nextInt();
-            neighbors.add(n);
-        }
-        return neighbors;
     }
 
     static float[][] createRandomFloatVectors(int size, int dimension, Random random) {

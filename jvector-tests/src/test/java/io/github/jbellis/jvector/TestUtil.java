@@ -33,8 +33,11 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.junit.Assert.assertEquals;
 
 public class TestUtil {
     /** min .. max inclusive on both ends, to match Lucene's */
@@ -114,6 +117,68 @@ public class TestUtil {
         {
             OnDiskGraphIndex.write(graph, vectors, indexOutputWriter);
             indexOutputWriter.flush();
+        }
+    }
+
+    static Set<Integer> getNeighborNodes(GraphIndex.View<?> g, int node) {
+      Set<Integer> neighbors = new HashSet<>();
+      for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
+        int n = it.nextInt();
+        neighbors.add(n);
+      }
+      return neighbors;
+    }
+
+    static List<Integer> sortedNodes(GraphIndex<?> h) {
+          var nodesOnLevel = h.getNodes();
+          List<Integer> nodes = new ArrayList<>();
+          while (nodesOnLevel.hasNext()) {
+              nodes.add(nodesOnLevel.next());
+          }
+          Collections.sort(nodes);
+          return nodes;
+      }
+
+    public static void assertGraphEquals(GraphIndex<?> g, GraphIndex<?> h) {
+          // construct these up front since they call seek which will mess up our test loop
+          String prettyG = GraphIndex.prettyPrint(g);
+          String prettyH = GraphIndex.prettyPrint(h);
+          assertEquals(String.format("the number of nodes in the graphs are different:%n%s%n%s",
+                                     prettyG,
+                                     prettyH),
+                       g.size(),
+                       h.size());
+
+          // assert equal nodes on each level
+          List<Integer> hNodes = sortedNodes(h);
+          List<Integer> gNodes = sortedNodes(g);
+          assertEquals(String.format("nodes in the graphs are different:%n%s%n%s",
+                                     prettyG,
+                                     prettyH),
+                       gNodes,
+                       hNodes);
+
+          // assert equal nodes' neighbours on each level
+          NodesIterator nodesOnLevel = g.getNodes();
+          var gv = g.getView();
+          var hv = h.getView();
+          while (nodesOnLevel.hasNext()) {
+              int node = nodesOnLevel.nextInt();
+              assertEqualsLazy(() -> String.format("arcs differ for node %d%n%s%n%s",
+                                                   node,
+                                                   prettyG,
+                                                   prettyH),
+                               getNeighborNodes(gv, node),
+                               getNeighborNodes(hv, node));
+          }
+      }
+
+    /**
+     * For when building the failure message is expensive
+     */
+    public static void assertEqualsLazy(Supplier<String> f, Set<Integer> s1, Set<Integer> s2) {
+        if (!s1.equals(s2)) {
+            throw new AssertionError(f.get());
         }
     }
 
