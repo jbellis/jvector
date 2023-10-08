@@ -217,7 +217,7 @@ public class GraphIndexBuilder<T> {
 
             // Update neighbors with these candidates.
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
-            var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled.get());
+            var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
             var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
             updateNeighbors(node, natural, concurrent);
             graph.markComplete(node);
@@ -332,7 +332,7 @@ public class GraphIndexBuilder<T> {
             var value = v1.get().vectorValue(node);
             NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits);
-            var candidates = getPathCandidates(result.getVisited(), scoreFunction, scratch.get());
+            var candidates = getPathCandidates(result.getVisited(), node, scoreFunction, scratch.get());
             updateNeighbors(node, candidates, NeighborArray.EMPTY);
         }
     }
@@ -381,19 +381,23 @@ public class GraphIndexBuilder<T> {
     /**
      * compute the scores for the nodes set in `visited` and return them in a NeighborArray
      */
-    private NeighborArray getPathCandidates(BitSet visited, NeighborSimilarity.ExactScoreFunction scoreFunction, NeighborArray scratch) {
+    private NeighborArray getPathCandidates(BitSet visited, int node, NeighborSimilarity.ExactScoreFunction scoreFunction, NeighborArray scratch) {
+        // doing a single sort is faster than repeatedly calling insertSorted
         SearchResult.NodeScore[] candidates = new SearchResult.NodeScore[visited.cardinality()];
         int j = 0;
         for (int i = visited.nextSetBit(0); i != NO_MORE_DOCS; i = visited.nextSetBit(i + 1)) {
-            candidates[j++] = new SearchResult.NodeScore(i, scoreFunction.similarityTo(i));
+            if (i != node) {
+                candidates[j++] = new SearchResult.NodeScore(i, scoreFunction.similarityTo(i));
+            }
         }
-        Arrays.sort(candidates, Comparator.comparingDouble(ns -> ns.score));
-        return toScratchCandidates(candidates, scratch);
+        Arrays.sort(candidates, 0, j, Comparator.comparingDouble(ns -> -ns.score));
+        return toScratchCandidates(candidates, j, scratch);
     }
 
-    private NeighborArray toScratchCandidates(SearchResult.NodeScore[] candidates, NeighborArray scratch) {
+    private NeighborArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NeighborArray scratch) {
         scratch.clear();
-        for (SearchResult.NodeScore candidate : candidates) {
+        for (int i = 0; i < count; i++) {
+            var candidate = candidates[i];
             scratch.addInOrder(candidate.node, candidate.score);
         }
         return scratch;
