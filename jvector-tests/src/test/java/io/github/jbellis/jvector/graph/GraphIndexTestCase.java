@@ -173,8 +173,8 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
     @Test
     public void testGraphIndexBuilderInvalid() {
-        assertThrows(
-                NullPointerException.class, () -> new GraphIndexBuilder<>(null, null, null, 0, 0, 1.0f, 1.0f));
+        assertThrows(NullPointerException.class,
+                     () -> new GraphIndexBuilder<>(null, null, null, 0, 0, 1.0f, 1.0f));
         // M must be > 0
         assertThrows(IllegalArgumentException.class,
                      () -> {
@@ -426,9 +426,10 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
                         return super.scoreBetween(v1, v2);
                     }
                 };
-        var graph = builder.build();
-        for (int i = 0; i < vectors.size(); i++) {
-            assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
+        try (var graph = builder.build()) {
+            for (int i = 0; i < vectors.size(); i++) {
+                assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
+            }
         }
     }
 
@@ -472,8 +473,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     /**
      * Returns vectors evenly distributed around the upper unit semicircle.
      */
-    static class CircularByteVectorValues
-            implements RandomAccessVectorValues<byte[]> {
+    static class CircularByteVectorValues implements RandomAccessVectorValues<byte[]> {
         private final int size;
 
         CircularByteVectorValues(int size) {

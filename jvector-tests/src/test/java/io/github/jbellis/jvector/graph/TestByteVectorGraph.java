@@ -30,61 +30,63 @@ import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
 
-/** Tests KNN graphs */
+/**
+ * Tests KNN graphs
+ */
 public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
 
-  @Before
-  public void setup() {
-    similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
-  }
-
-  @Override
-  VectorEncoding getVectorEncoding() {
-    return VectorEncoding.BYTE;
-  }
-
-  @Override
-  byte[] randomVector(int dim) {
-    return TestUtil.randomVector8(getRandom(), dim);
-  }
-
-  @Override
-  AbstractMockVectorValues<byte[]> vectorValues(int size, int dimension) {
-    return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, getRandom()));
-  }
-
-  static boolean fitsInByte(float v) {
-    return v <= 127 && v >= -128 && v % 1 == 0;
-  }
-
-  @Override
-  AbstractMockVectorValues<byte[]> vectorValues(float[][] values) {
-    byte[][] bValues = new byte[values.length][];
-    // The case when all floats fit within a byte already.
-    boolean scaleSimple = fitsInByte(values[0][0]);
-    for (int i = 0; i < values.length; i++) {
-      bValues[i] = new byte[values[i].length];
-      for (int j = 0; j < values[i].length; j++) {
-        final float v;
-        if (scaleSimple) {
-          assert fitsInByte(values[i][j]);
-          v = values[i][j];
-        } else {
-          v = values[i][j] * 127;
-        }
-        bValues[i][j] = (byte) v;
-      }
+    @Before
+    public void setup() {
+        similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
     }
-    return MockByteVectorValues.fromValues(bValues);
-  }
 
     @Override
-  RandomAccessVectorValues<byte[]> circularVectorValues(int nDoc) {
-    return new CircularByteVectorValues(nDoc);
-  }
+    VectorEncoding getVectorEncoding() {
+        return VectorEncoding.BYTE;
+    }
 
-  @Override
-  byte[] getTargetVector() {
-    return new byte[] {1, 0};
-  }
+    @Override
+    byte[] randomVector(int dim) {
+        return TestUtil.randomVector8(getRandom(), dim);
+    }
+
+    @Override
+    AbstractMockVectorValues<byte[]> vectorValues(int size, int dimension) {
+        return MockByteVectorValues.fromValues(createRandomByteVectors(size, dimension, getRandom()));
+    }
+
+    static boolean fitsInByte(float v) {
+        return v <= 127 && v >= -128 && v % 1 == 0;
+    }
+
+    @Override
+    AbstractMockVectorValues<byte[]> vectorValues(float[][] values) {
+        byte[][] bValues = new byte[values.length][];
+        // The case when all floats fit within a byte already.
+        boolean scaleSimple = fitsInByte(values[0][0]);
+        for (int i = 0; i < values.length; i++) {
+            bValues[i] = new byte[values[i].length];
+            for (int j = 0; j < values[i].length; j++) {
+                final float v;
+                if (scaleSimple) {
+                    assert fitsInByte(values[i][j]);
+                    v = values[i][j];
+                } else {
+                    v = values[i][j] * 127;
+                }
+                bValues[i][j] = (byte) v;
+            }
+        }
+        return MockByteVectorValues.fromValues(bValues);
+    }
+
+    @Override
+    RandomAccessVectorValues<byte[]> circularVectorValues(int nDoc) {
+        return new CircularByteVectorValues(nDoc);
+    }
+
+    @Override
+    byte[] getTargetVector() {
+        return new byte[]{1, 0};
+    }
 }
