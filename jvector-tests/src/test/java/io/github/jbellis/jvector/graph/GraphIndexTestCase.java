@@ -426,10 +426,9 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
                         return super.scoreBetween(v1, v2);
                     }
                 };
-        try (var graph = builder.build()) {
-            for (int i = 0; i < vectors.size(); i++) {
-                assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
-            }
+        var graph = builder.build();
+        for (int i = 0; i < vectors.size(); i++) {
+            assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
         }
     }
 
