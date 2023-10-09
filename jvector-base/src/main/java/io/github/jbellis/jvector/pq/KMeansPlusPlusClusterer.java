@@ -59,7 +59,7 @@ public class KMeansPlusPlusClusterer {
         centroidNums = new float[k][points[0].length];
         centroids = chooseInitialCentroids(points);
         assignments = new int[points.length];
-        assignPointsToClusters();
+        assignPointsToClusters(true);
     }
 
     /**
@@ -80,7 +80,7 @@ public class KMeansPlusPlusClusterer {
     // This is broken out as a separate public method to allow implementing OPQ efficiently
     public int clusterOnce() {
         updateCentroids();
-        return assignPointsToClusters();
+        return assignPointsToClusters(false);
     }
 
     /**
@@ -143,18 +143,24 @@ public class KMeansPlusPlusClusterer {
 
     /**
      * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`
+     *
+     * @param firstRun whether this is the first assignment of points, which means the previous assignment is meaningless
+     * @return the number of points that changed clusters
      */
-    private int assignPointsToClusters() {
+    private int assignPointsToClusters(boolean firstRun) {
         int changedCount = 0;
 
         for (int i = 0; i < points.length; i++) {
             float[] point = points[i];
-            var oldAssignment = assignments[i];
+            var oldAssignment = firstRun ? -1 : assignments[i];
             var newAssignment = getNearestCluster(point, centroids);
+
             if (newAssignment != oldAssignment) {
-                centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
+                if (!firstRun) {
+                    centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
+                    VectorUtil.subInPlace(centroidNums[oldAssignment], point);
+                }
                 centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
-                VectorUtil.subInPlace(centroidNums[oldAssignment], point);
                 VectorUtil.addInPlace(centroidNums[newAssignment], point);
                 assignments[i] = newAssignment;
                 changedCount++;
