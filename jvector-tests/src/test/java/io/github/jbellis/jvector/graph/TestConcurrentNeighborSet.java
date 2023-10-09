@@ -187,34 +187,24 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   private void testMergeCandidatesOnce() {
-    // test merge where one array contains either exact duplicates, or duplicate scores, of the other
+    // test merge emphasizing dealing with tied scores
     int maxSize = 1 + getRandom().nextInt(5);
 
     // fill arr1 with nodes from 0..size, with random scores assigned (so random order of nodes)
     NeighborArray arr1 = new NeighborArray(maxSize);
-    int a1Size;
-    if (getRandom().nextBoolean()) {
-      a1Size = maxSize;
-    } else {
-      a1Size = 1 + getRandom().nextInt(maxSize);
-    }
+    int a1Size = getRandom().nextBoolean() ? maxSize : 1 + getRandom().nextInt(maxSize);
     for (int i = 0; i < a1Size; i++) {
       arr1.insertSorted(i, getRandom().nextFloat());
     }
 
-    // arr2 (smaller or same size as arr1) contains either
+    // arr2 contains either
     // -- an exact duplicates of the corresponding node in arr1, or
     // -- a random score chosen from arr1
     // this is designed to maximize the need for correct handling of corner cases in the merge
     NeighborArray arr2 = new NeighborArray(maxSize);
-    int a2Size;
-    if (getRandom().nextBoolean()) {
-      a2Size = maxSize;
-    } else {
-      a2Size = 1 + getRandom().nextInt(maxSize);
-    }
+    int a2Size = getRandom().nextBoolean() ? maxSize : 1 + getRandom().nextInt(maxSize);
     for (int i = 0; i < a2Size; i++) {
-      if (getRandom().nextBoolean()) {
+      if (i < a1Size && getRandom().nextBoolean()) {
         // duplicate entry
         int j = getRandom().nextInt(a1Size);
         if (!arr2.contains(arr1.node[j])) {
