@@ -190,6 +190,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     // test merge where one array contains either exact duplicates, or duplicate scores, of the other
     int maxSize = 1 + getRandom().nextInt(5);
 
+    // fill arr1 with nodes from 0..size, with random scores assigned (so random order of nodes)
     NeighborArray arr1 = new NeighborArray(maxSize);
     int a1Size;
     if (getRandom().nextBoolean()) {
@@ -201,6 +202,10 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
       arr1.insertSorted(i, getRandom().nextFloat());
     }
 
+    // arr2 (smaller or same size as arr1) contains either
+    // -- an exact duplicates of the corresponding node in arr1, or
+    // -- a random score chosen from arr1
+    // this is designed to maximize the need for correct handling of corner cases in the merge
     NeighborArray arr2 = new NeighborArray(maxSize);
     int a2Size;
     if (getRandom().nextBoolean()) {
@@ -227,13 +232,37 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
       }
     }
 
+    // merge!
     var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+
+    // sanity check
     assert merged.size <= arr1.size() + arr2.size();
     assert merged.size >= Math.max(arr1.size(), arr2.size());
     var uniqueNodes = new HashSet<>();
+
+    // results should be sorted by score, and not contain duplicates
     for (int i = 0; i < merged.size - 1; i++) {
       assertTrue(merged.score[i] >= merged.score[i + 1]);
       assertTrue(uniqueNodes.add(merged.node[i]));
+    }
+    assertTrue(uniqueNodes.add(merged.node[merged.size - 1]));
+
+    // results should contain all the nodes that were in the source arrays
+    for (int i = 0; i < arr1.size(); i++) {
+      assertTrue(String.format("%s missing%na1: %s%na2: %s%nmerged: %s%n",
+                               arr1.node[i],
+                               Arrays.toString(arr1.node),
+                               Arrays.toString(arr2.node),
+                               Arrays.toString(merged.node)),
+                 uniqueNodes.contains(arr1.node[i]));
+    }
+    for (int i = 0; i < arr2.size(); i++) {
+        assertTrue(String.format("%s missing%na1: %s%na2: %s%nmerged: %s%n",
+                                 arr2.node[i],
+                                 Arrays.toString(arr1.node),
+                                 Arrays.toString(arr2.node),
+                                 Arrays.toString(merged.node)),
+                     uniqueNodes.contains(arr2.node[i]));
     }
   }
 
