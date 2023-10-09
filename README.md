@@ -124,7 +124,7 @@ multirelease jar for release. [jvector-examples](./jvector-examples) is an addit
 jvector-base/jvector-twenty to run example code.
 
 You can run `SiftSmall` and `Bench` directly to get an idea of what all is going on here. `Bench`
-requires some datasets to be downloaded from https://github.com/erikbern/ann-benchmarks. The files used by `SiftSmall`
+requires some datasets to be downloaded from [https://github.com/erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks/blob/main/README.md#data-sets). The files used by `SiftSmall`
 can be found in the [siftsmall directory](./siftsmall) in the project root.
 
 To run either class, you can use the Maven exec-plugin via the following incantations:
