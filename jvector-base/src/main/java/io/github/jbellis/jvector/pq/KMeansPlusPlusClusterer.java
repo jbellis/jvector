@@ -157,7 +157,8 @@ public class KMeansPlusPlusClusterer {
 
     /**
      * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`.
-     * This method relies on valid assignments existing following a run of initializeAssignedPoints.
+     * This method relies on valid assignments existing from either initializeAssignedPoints or
+     * a previous invocation of this method.
      *
      * @return the number of points that changed clusters
      */
