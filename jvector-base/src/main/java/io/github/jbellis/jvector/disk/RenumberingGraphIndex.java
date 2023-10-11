@@ -5,14 +5,28 @@ import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.util.Bits;
 
-import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 class RenumberingGraphIndex<T> implements GraphIndex<T> {
-    private final OnHeapGraphIndex graph;
+    private final OnHeapGraphIndex<T> graph;
+    private final View<T> view;
+    private final Map<Integer, Integer> newToOldMap;
+    private final Map<Integer, Integer> oldToNewMap;
 
-    public RenumberingGraphIndex(OnHeapGraphIndex graph) {
+    public RenumberingGraphIndex(OnHeapGraphIndex<T> graph) {
         this.graph = graph;
+        this.view = graph.getView();
+        this.newToOldMap = new HashMap<>();
+        this.oldToNewMap = new HashMap<>();
+        int nextOrdinal = 0;
+        for (int i = 0; i <= graph.getMaxNodeId(); i++) {
+            if (graph.getNeighbors(i) != null) {
+                oldToNewMap.put(i, nextOrdinal);
+                newToOldMap.put(nextOrdinal++, i);
+            }
+        }
     }
 
     @Override
@@ -36,39 +50,50 @@ class RenumberingGraphIndex<T> implements GraphIndex<T> {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         graph.close();
     }
 
     private class RenumberingView implements View<T> {
         @Override
         public NodesIterator getNeighborsIterator(int node) {
-            return null;
+            var it = graph.getNeighbors(newToOldMap.get(node)).iterator();
+            return new NodesIterator(it.size()) {
+                @Override
+                public int nextInt() {
+                    return oldToNewMap.get(it.nextInt());
+                }
+
+                @Override
+                public boolean hasNext() {
+                    return it.hasNext();
+                }
+            };
         }
 
         @Override
         public int size() {
-            return 0;
+            return graph.size();
         }
 
         @Override
         public int entryNode() {
-            return 0;
+            return oldToNewMap.get(view.entryNode());
         }
 
         @Override
         public T getVector(int node) {
-            return null;
+            return view.getVector(newToOldMap.get(node));
         }
 
         @Override
         public Bits liveNodes() {
-            return null;
+            return Bits.ALL;
         }
 
         @Override
-        public void close() throws Exception {
-
+        public void close() {
+            // no-op
         }
     }
 }

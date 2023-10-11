@@ -1,7 +1,7 @@
 package io.github.jbellis.jvector.disk;
 
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.util.BitSet;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,12 +10,12 @@ class RenumberingVectorValues<T> implements RandomAccessVectorValues<T> {
     private final RandomAccessVectorValues<T> ravv;
     private final Map<Integer, Integer> newToOldMap;
 
-    public RenumberingVectorValues(BitSet deletedNodes, RandomAccessVectorValues<T> ravv) {
+    public RenumberingVectorValues(OnHeapGraphIndex<T> graph, RandomAccessVectorValues<T> ravv) {
         this.ravv = ravv;
         this.newToOldMap = new HashMap<>();
         int nextOrdinal = 0;
         for (int i = 0; i < ravv.size(); i++) {
-            if (!deletedNodes.get(i)) {
+            if (graph.getNeighbors(i) != null) {
                 newToOldMap.put(nextOrdinal++, i);
             }
         }

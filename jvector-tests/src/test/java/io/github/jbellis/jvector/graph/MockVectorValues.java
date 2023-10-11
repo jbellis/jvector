@@ -26,10 +26,10 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.ArrayUtil;
 
-class MockVectorValues extends AbstractMockVectorValues<float[]> {
+public class MockVectorValues extends AbstractMockVectorValues<float[]> {
     private final float[] denseScratch;
 
-    static MockVectorValues fromValues(float[][] values) {
+    public static MockVectorValues fromValues(float[][] values) {
         return new MockVectorValues(values[0].length, values);
     }
 

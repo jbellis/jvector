@@ -57,6 +57,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   // max neighbors/edges per node
   final int nsize0;
   private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
+  private boolean hasPurgedNodes;
 
   OnHeapGraphIndex(
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
@@ -67,7 +68,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   /**
-   * Returns the neighbors connected to the given node.
+   * Returns the neighbors connected to the given node, or null if the node does not exist.
    *
    * @param node the node whose neighbors are returned, represented as an ordinal on the level 0.
    */
@@ -248,6 +249,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   public void removeNode(int node) {
     nodes.remove(node);
+    hasPurgedNodes = true;
   }
 
   @Override
@@ -257,6 +259,10 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   public int[] rawNodes() {
     return nodes.keySet().stream().mapToInt(i -> (int) (long) i).toArray();
+  }
+
+  public boolean hasPurgedNodes() {
+    return hasPurgedNodes;
   }
 
   private class ConcurrentGraphIndexView implements GraphIndex.View<T> {
@@ -286,6 +292,8 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
     @Override
     public Bits liveNodes() {
+      // this Bits will return true for node ids that no longer exist in the graph after being purged,
+      // but we defined the method contract so that that is okay
       return deletedNodes.cardinality() == 0 ? Bits.ALL : Bits.inverseOf(deletedNodes);
     }
 

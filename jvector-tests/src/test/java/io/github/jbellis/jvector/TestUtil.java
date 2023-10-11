@@ -120,7 +120,7 @@ public class TestUtil {
         }
     }
 
-    static Set<Integer> getNeighborNodes(GraphIndex.View<?> g, int node) {
+    public static Set<Integer> getNeighborNodes(GraphIndex.View<?> g, int node) {
       Set<Integer> neighbors = new HashSet<>();
       for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
         int n = it.nextInt();

@@ -151,11 +151,17 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
     // but I'm not sure yet.
     public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
-        var view = graph.getView();
-        if (graph instanceof OnHeapGraphIndex && ((OnHeapGraphIndex<T>)graph).getDeletedNodes().cardinality() > 0) {
-            vectors = new RenumberingVectorValues<>(((OnHeapGraphIndex<T>) graph).getDeletedNodes(), vectors);
-            graph = new RenumberingGraphIndex<>((OnHeapGraphIndex<T>) graph);
+        if (graph instanceof OnHeapGraphIndex) {
+            var ohgi = (OnHeapGraphIndex<T>) graph;
+            if (ohgi.getDeletedNodes().cardinality() > 0) {
+                throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
+            }
+            if (ohgi.hasPurgedNodes()) {
+                vectors = new RenumberingVectorValues<>(ohgi, vectors);
+                graph = new RenumberingGraphIndex<>(ohgi);
+            }
         }
+        var view = graph.getView();
 
         // graph-level properties
         out.writeInt(graph.size());

@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph;
+package io.github.jbellis.jvector.disk;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.disk.SimpleMappedReader;
+import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.GraphIndexTestCase;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.vector.VectorEncoding;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -30,8 +34,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.Assert.*;
+import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
+@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestOnDiskGraphIndex extends RandomizedTest {
 
     private Path testDirectory;
@@ -66,6 +74,52 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
                     validateVectors(onDiskView, ravv);
                 }
             }
+        }
+    }
+
+    @Test
+    public void testRenumberingOnDelete() throws IOException {
+        // graph of 3 vectors
+        var ravv = new GraphIndexTestCase.CircularFloatVectorValues(3);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        // add sequentially so it's deterministic
+        builder.addGraphNode(0, ravv);
+        builder.addGraphNode(1, ravv);
+        builder.addGraphNode(2, ravv);
+        var original = builder.build();
+
+        // delete the first node
+        builder.markNodeDeleted(0);
+        builder.cleanup();
+
+        // check
+        assertEquals(2, original.size());
+        var originalView = original.getView();
+        // 1 -> 2
+        assertEquals(1, getNeighborNodes(originalView, 1).size());
+        assertTrue(getNeighborNodes(originalView, 1).contains(2));
+        // 2 -> 1
+        assertEquals(1, getNeighborNodes(originalView, 2).size());
+        assertTrue(getNeighborNodes(originalView, 2).contains(1));
+
+        // check renumbered
+        var renumbered = new RenumberingGraphIndex<>(original);
+        var renumberedView = renumbered.getView();
+        assertEquals(2, renumbered.size());
+        // 0 -> 1
+        assertEquals(1, getNeighborNodes(renumberedView, 0).size());
+        assertTrue(getNeighborNodes(renumberedView, 0).contains(1));
+        // 1 -> 0
+        assertEquals(1, getNeighborNodes(renumberedView, 1).size());
+        assertTrue(getNeighborNodes(renumberedView, 1).contains(0));
+
+        // writing to disk should be the same as the renumbered
+        var outputPath = testDirectory.resolve("large_graph");
+        TestUtil.writeGraph(original, ravv, outputPath);
+        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0))
+        {
+            TestUtil.assertGraphEquals(renumbered, onDiskGraph);
         }
     }
 

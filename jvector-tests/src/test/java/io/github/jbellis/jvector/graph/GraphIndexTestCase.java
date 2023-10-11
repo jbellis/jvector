@@ -435,11 +435,11 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     /**
      * Returns vectors evenly distributed around the upper unit semicircle.
      */
-    static class CircularFloatVectorValues implements RandomAccessVectorValues<float[]> {
+    public static class CircularFloatVectorValues implements RandomAccessVectorValues<float[]> {
 
         private final int size;
 
-        CircularFloatVectorValues(int size) {
+        public CircularFloatVectorValues(int size) {
             this.size = size;
         }
 
@@ -516,7 +516,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         };
     }
 
-    static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
+    public static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
         float[][] vectors = new float[size][];
         for (int offset = 0; offset < size; offset++) {
             vectors[offset] = TestUtil.randomVector(random, dimension);
