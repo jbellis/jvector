@@ -59,7 +59,7 @@ public class KMeansPlusPlusClusterer {
         centroidNums = new float[k][points[0].length];
         centroids = chooseInitialCentroids(points);
         assignments = new int[points.length];
-        assignPointsToClusters(true);
+        initializeAssignedPoints();
     }
 
     /**
@@ -80,7 +80,7 @@ public class KMeansPlusPlusClusterer {
     // This is broken out as a separate public method to allow implementing OPQ efficiently
     public int clusterOnce() {
         updateCentroids();
-        return assignPointsToClusters(false);
+        return updateAssignedPoints();
     }
 
     /**
@@ -142,24 +142,36 @@ public class KMeansPlusPlusClusterer {
     }
 
     /**
-     * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`
+     * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`.
+     * This method should only be called once after initial centroids are chosen.
+     */
+    private void initializeAssignedPoints() {
+        for (int i = 0; i < points.length; i++) {
+            float[] point = points[i];
+            var newAssignment = getNearestCluster(point, centroids);
+            centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
+            VectorUtil.addInPlace(centroidNums[newAssignment], point);
+            assignments[i] = newAssignment;
+        }
+    }
+
+    /**
+     * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`.
+     * This method relies on valid assignments existing following a run of initializeAssignedPoints.
      *
-     * @param firstRun whether this is the first assignment of points, which means the previous assignment is meaningless
      * @return the number of points that changed clusters
      */
-    private int assignPointsToClusters(boolean firstRun) {
+    private int updateAssignedPoints() {
         int changedCount = 0;
 
         for (int i = 0; i < points.length; i++) {
             float[] point = points[i];
-            var oldAssignment = firstRun ? -1 : assignments[i];
+            var oldAssignment = assignments[i];
             var newAssignment = getNearestCluster(point, centroids);
 
             if (newAssignment != oldAssignment) {
-                if (!firstRun) {
-                    centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
-                    VectorUtil.subInPlace(centroidNums[oldAssignment], point);
-                }
+                centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
+                VectorUtil.subInPlace(centroidNums[oldAssignment], point);
                 centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
                 VectorUtil.addInPlace(centroidNums[newAssignment], point);
                 assignments[i] = newAssignment;
