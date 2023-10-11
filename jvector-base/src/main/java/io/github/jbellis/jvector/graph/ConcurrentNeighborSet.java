@@ -257,12 +257,16 @@ public class ConcurrentNeighborSet {
     ConcurrentNeighborArray merged = new ConcurrentNeighborArray(a1.size() + a2.size());
     int i = 0, j = 0;
 
-    float lastAddedScore = Float.NaN;
     // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
     // we need to remember all the nodes with the current score to avoid adding duplicates
     var nodesWithLastScore = new HashSet<>();
+    float lastAddedScore = Float.NaN;
+
+    // loop through both source arrays, adding the highest score element to the merged array,
+    // until we reach the end of one of the sources
     while (i < a1.size() && j < a2.size()) {
       if (a1.score()[i] < a2.score[j]) {
+        // add from a2
         if (a2.score[j] != lastAddedScore) {
           nodesWithLastScore.clear();
           lastAddedScore = a2.score[j];
@@ -272,6 +276,7 @@ public class ConcurrentNeighborSet {
         }
         j++;
       } else if (a1.score()[i] > a2.score[j]) {
+        // add from a1
         if (a1.score()[i] != lastAddedScore) {
           nodesWithLastScore.clear();
           lastAddedScore = a1.score()[i];
@@ -281,6 +286,7 @@ public class ConcurrentNeighborSet {
         }
         i++;
       } else {
+        // same score -- add both
         if (a1.score()[i] != lastAddedScore) {
           nodesWithLastScore.clear();
           lastAddedScore = a1.score()[i];
@@ -305,7 +311,7 @@ public class ConcurrentNeighborSet {
         }
         i++;
       }
-      // the remaining nodes have a different score, so we can just add them
+      // the remaining nodes have a different score, so we can bulk-add them
       System.arraycopy(a1.node, i, merged.node, merged.size, a1.size - i);
       System.arraycopy(a1.score, i, merged.score, merged.size, a1.size - i);
       merged.size += a1.size - i;
@@ -320,7 +326,7 @@ public class ConcurrentNeighborSet {
         }
         j++;
       }
-      // the remaining nodes have a different score, so we can just add them
+      // the remaining nodes have a different score, so we can bulk-add them
       System.arraycopy(a2.node, j, merged.node, merged.size, a2.size - j);
       System.arraycopy(a2.score, j, merged.score, merged.size, a2.size - j);
       merged.size += a2.size - j;
