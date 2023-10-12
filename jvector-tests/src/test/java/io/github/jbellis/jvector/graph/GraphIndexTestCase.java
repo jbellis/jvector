@@ -70,7 +70,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
                 new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
         // run some searches
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
                                                            10,
@@ -108,7 +108,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
                 new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
         // the first 10 docs must not be deleted to ensure the expected recall
         Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
@@ -139,7 +139,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
                 new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
         // Only mark a few vectors as accepted
         var acceptOrds = new FixedBitSet(nDoc);
         for (int i = 0; i < nDoc; i += nextInt(15, 20)) {
@@ -383,14 +383,6 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // a bug has been introduced in graph construction.
         double overlap = totalMatches / (double) (100 * topK);
         assertTrue("overlap=" + overlap, overlap > 0.9);
-    }
-
-    protected OnHeapGraphIndex<T> buildInOrder(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
-        for (var i = 0; i < vectors.size(); i++) {
-            builder.addGraphNode(i, vectors);
-        }
-        builder.cleanup();
-        return builder.getGraph();
     }
 
     private int computeOverlap(int[] a, int[] b) {

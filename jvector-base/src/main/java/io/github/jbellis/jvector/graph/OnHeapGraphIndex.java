@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
+import java.util.stream.IntStream;
 
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
@@ -70,7 +71,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    *
    * @param node the node whose neighbors are returned, represented as an ordinal on the level 0.
    */
-  public ConcurrentNeighborSet getNeighbors(int node) {
+  ConcurrentNeighborSet getNeighbors(int node) {
     return nodes.get(node);
   }
 
@@ -105,7 +106,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
-  public void markComplete(int node) {
+  void markComplete(int node) {
     entryPoint.accumulateAndGet(
         node,
         (oldEntry, newEntry) -> {
@@ -117,7 +118,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         });
   }
 
-  public void updateEntryNode(int node) {
+  void updateEntryNode(int node) {
     entryPoint.set(node);
   }
 
@@ -149,7 +150,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return total;
   }
 
-  public long ramBytesUsedOneNode(int nodeLevel) {
+  long ramBytesUsedOneNode(int nodeLevel) {
     int entryCount = (int) (nodeLevel / CHM_LOAD_FACTOR);
     var graphBytesUsed =
         chmEntriesRamUsed(entryCount)
@@ -227,6 +228,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    *
    * <p>Multiple Views may be searched concurrently.
    */
+  @Override
   public GraphIndex.View<T> getView() {
     return new ConcurrentGraphIndexView();
   }
@@ -245,7 +247,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return deletedNodes;
   }
 
-  public void removeNode(int node) {
+  void removeNode(int node) {
     nodes.remove(node);
     hasPurgedNodes = true;
   }
@@ -255,12 +257,24 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return maxNodeId.get();
   }
 
-  public int[] rawNodes() {
+  int[] rawNodes() {
     return nodes.keySet().stream().mapToInt(i -> (int) (long) i).toArray();
   }
 
   public boolean hasPurgedNodes() {
     return hasPurgedNodes;
+  }
+
+  public boolean containsNode(int i) {
+    return nodes.containsKey(i);
+  }
+
+  public double getAverageShortEdges() {
+    return IntStream.range(0, getMaxNodeId())
+            .filter(this::containsNode)
+            .mapToDouble(i -> getNeighbors(i).getShortEdges())
+            .average()
+            .orElse(Double.NaN);
   }
 
   private class ConcurrentGraphIndexView implements GraphIndex.View<T> {

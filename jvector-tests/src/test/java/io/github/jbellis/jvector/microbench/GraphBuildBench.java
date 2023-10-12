@@ -78,7 +78,7 @@ public class GraphBuildBench {
         start = System.nanoTime();
         GraphIndexBuilder<float[]> graphIndexBuilder =  new GraphIndexBuilder<>(p.ravv, VectorEncoding.FLOAT32, p.ds.similarityFunction, 8, 40, 1.2f, 1.4f);
         var onHeapGraph = graphIndexBuilder.build();
-        var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
+        var avgShortEdges = onHeapGraph.getAverageShortEdges();
         System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
                 8, 60, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
     }

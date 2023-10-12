@@ -15,7 +15,7 @@ class RenumberingVectorValues<T> implements RandomAccessVectorValues<T> {
         this.newToOldMap = new HashMap<>();
         int nextOrdinal = 0;
         for (int i = 0; i < ravv.size(); i++) {
-            if (graph.getNeighbors(i) != null) {
+            if (graph.containsNode(i)) {
                 newToOldMap.put(nextOrdinal++, i);
             }
         }

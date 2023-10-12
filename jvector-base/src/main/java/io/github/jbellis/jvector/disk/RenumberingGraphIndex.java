@@ -22,7 +22,7 @@ class RenumberingGraphIndex<T> implements GraphIndex<T> {
         this.oldToNewMap = new HashMap<>();
         int nextOrdinal = 0;
         for (int i = 0; i <= graph.getMaxNodeId(); i++) {
-            if (graph.getNeighbors(i) != null) {
+            if (graph.containsNode(i)) {
                 oldToNewMap.put(i, nextOrdinal);
                 newToOldMap.put(nextOrdinal++, i);
             }
@@ -57,7 +57,7 @@ class RenumberingGraphIndex<T> implements GraphIndex<T> {
     private class RenumberingView implements View<T> {
         @Override
         public NodesIterator getNeighborsIterator(int node) {
-            var it = graph.getNeighbors(newToOldMap.get(node)).iterator();
+            var it = view.getNeighborsIterator(newToOldMap.get(node));
             return new NodesIterator(it.size()) {
                 @Override
                 public int nextInt() {
