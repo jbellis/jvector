@@ -32,11 +32,9 @@ import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 import java.util.Arrays;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
@@ -55,14 +53,14 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   private final AtomicInteger maxNodeId = new AtomicInteger(-1);
 
   // max neighbors/edges per node
-  final int nsize0;
+  final int maxDegree;
   private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
   private boolean hasPurgedNodes;
 
   OnHeapGraphIndex(
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
     this.neighborFactory = neighborFactory;
-    this.nsize0 = 2 * M;
+    this.maxDegree = 2 * M;
 
     this.nodes = new NonBlockingHashMapLong<>(1024);
   }
@@ -125,7 +123,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   @Override
   public int maxDegree() {
-    return nsize0;
+    return maxDegree;
   }
 
   int entry() {
