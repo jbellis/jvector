@@ -68,6 +68,13 @@ public interface GraphIndex<T> extends AutoCloseable {
     return size();
   }
 
+  /**
+   * @return true iff the graph contains the node with the given ordinal id
+   */
+  default boolean containsNode(int nodeId) {
+    return nodeId >= 0 && nodeId < size();
+  }
+
   @Override
   void close() throws IOException;
 

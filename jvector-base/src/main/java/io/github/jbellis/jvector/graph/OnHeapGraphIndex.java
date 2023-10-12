@@ -261,12 +261,8 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return nodes.keySet().stream().mapToInt(i -> (int) (long) i).toArray();
   }
 
-  public boolean hasPurgedNodes() {
-    return hasPurgedNodes;
-  }
-
-  public boolean containsNode(int i) {
-    return nodes.containsKey(i);
+  public boolean containsNode(int nodeId) {
+    return nodes.containsKey(nodeId);
   }
 
   public double getAverageShortEdges() {

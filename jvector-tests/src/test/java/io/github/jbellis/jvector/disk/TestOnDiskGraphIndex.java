@@ -32,7 +32,10 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
 import static org.junit.Assert.assertArrayEquals;
@@ -98,24 +101,34 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         assertEquals(1, getNeighborNodes(originalView, 2).size());
         assertTrue(getNeighborNodes(originalView, 2).contains(1));
 
-        // check renumbered
-        var renumbered = new RenumberingGraphIndex<>(original);
-        var renumberedView = renumbered.getView();
-        assertEquals(2, renumbered.size());
-        // 0 -> 1
-        assertEquals(1, getNeighborNodes(renumberedView, 0).size());
-        assertTrue(getNeighborNodes(renumberedView, 0).contains(1));
-        // 1 -> 0
-        assertEquals(1, getNeighborNodes(renumberedView, 1).size());
-        assertTrue(getNeighborNodes(renumberedView, 1).contains(0));
+        // create renumbering map
+        Map<Integer, Integer> oldToNewMap = new HashMap<>();
+        int nextOrdinal = 0;
+        for (int i = 0; i <= originalView.getMaxNodeId(); i++) {
+            if (original.containsNode(i)) {
+                oldToNewMap.put(i, nextOrdinal++);
+            }
+        }
+        assertEquals(2, oldToNewMap.size());
+        assertEquals(0, (int) oldToNewMap.get(1));
+        assertEquals(1, (int) oldToNewMap.get(2));
 
-        // writing to disk should be the same as the renumbered
-        var outputPath = testDirectory.resolve("large_graph");
-        TestUtil.writeGraph(original, ravv, outputPath);
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0))
+        // write the graph
+        var outputPath = testDirectory.resolve("renumbered_graph");
+        try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
         {
-            TestUtil.assertGraphEquals(renumbered, onDiskGraph);
+            OnDiskGraphIndex.write(original, ravv, oldToNewMap::get, indexOutputWriter);
+            indexOutputWriter.flush();
+        }
+        // check that written graph ordinals match the new ones
+        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskView = onDiskGraph.getView())
+        {
+            // 0 -> 1
+            assertTrue(getNeighborNodes(onDiskView, 0).contains(1));
+            // 1 -> 0
+            assertTrue(getNeighborNodes(onDiskView, 1).contains(0));
         }
     }
 

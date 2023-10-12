@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -59,7 +60,7 @@ public class Bench {
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         try {
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+                OnDiskGraphIndex.write(onHeapGraph, floatVectors, Function.identity(), outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
                 int queryRuns = 2;

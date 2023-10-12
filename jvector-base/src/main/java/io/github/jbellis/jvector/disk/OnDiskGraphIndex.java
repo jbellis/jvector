@@ -26,6 +26,8 @@ import io.github.jbellis.jvector.util.Bits;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashSet;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
@@ -147,18 +149,27 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         readerSupplier.close();
     }
 
-    // takes Graph and Vectors separately since I'm reluctant to introduce a Vectors reference
-    // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
-    // but I'm not sure yet.
-    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
+    /**
+     * @param graph the graph to write
+     * @param vectors the vectors associated with each node
+     * @param ordinalMapper A function that maps from the graph's ordinals to the ordinals in the output.
+     *                      For simple use cases this can be the identity function.  To deal with deleted nodes,
+     *                      or to renumber the nodes to match rows or documents elsewhere, you may provide
+     *                      something custom.  The mapper must map from the graph's ordinals
+     *                      [0..getMaxNodeId()], to the output's ordinals [0..size()), with no gaps and
+     *                      no duplicates.
+     * @param out the output to write to
+     */
+    public static <T> void write(GraphIndex<T> graph,
+                                 RandomAccessVectorValues<T> vectors,
+                                 Function<Integer, Integer> ordinalMapper,
+                                 DataOutput out)
+            throws IOException
+    {
         if (graph instanceof OnHeapGraphIndex) {
             var ohgi = (OnHeapGraphIndex<T>) graph;
             if (ohgi.getDeletedNodes().cardinality() > 0) {
                 throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
-            }
-            if (ohgi.hasPurgedNodes()) {
-                vectors = new RenumberingVectorValues<>(ohgi, vectors);
-                graph = new RenumberingGraphIndex<>(ohgi);
             }
         }
         var view = graph.getView();
@@ -170,15 +181,22 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         out.writeInt(graph.maxDegree());
 
         // for each graph node, write the associated vector and its neighbors
-        for (int node = 0; node < graph.size(); node++) {
-            out.writeInt(node); // unnecessary, but a reasonable sanity check
-            Io.writeFloats(out, (float[]) vectors.vectorValue(node));
+        var newOrdinals = new HashSet<Integer>();
+        for (int originalOrdinal = 0; originalOrdinal <= graph.getMaxNodeId(); originalOrdinal++) {
+            if (!graph.containsNode(originalOrdinal)) {
+                continue;
+            }
 
-            var neighbors = view.getNeighborsIterator(node);
+            int newOrdinal = ordinalMapper.apply(originalOrdinal);
+            newOrdinals.add(newOrdinal);
+            out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
+            Io.writeFloats(out, (float[]) vectors.vectorValue(originalOrdinal));
+
+            var neighbors = view.getNeighborsIterator(originalOrdinal);
             out.writeInt(neighbors.size());
             int n = 0;
             for ( ; n < neighbors.size(); n++) {
-                out.writeInt(neighbors.nextInt());
+                out.writeInt(ordinalMapper.apply(neighbors.nextInt()));
             }
             assert !neighbors.hasNext();
 
@@ -186,6 +204,17 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
             for (; n < graph.maxDegree(); n++) {
                 out.writeInt(-1);
             }
+        }
+
+        // verify that the provided mapper was well-behaved
+        if (newOrdinals.size() > graph.size()) {
+            throw new IllegalArgumentException("graph modified during write");
+        }
+        if (newOrdinals.size() < graph.size()) {
+            throw new IllegalArgumentException("ordinalMapper resulted in duplicate entries");
+        }
+        if (graph.size() > 0 && newOrdinals.stream().mapToInt(i -> i).max().getAsInt() != graph.size() - 1)  {
+            throw new IllegalArgumentException("ordinalMapper produced out-of-range entries");
         }
     }
 }
