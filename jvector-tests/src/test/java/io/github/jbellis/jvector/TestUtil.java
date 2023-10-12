@@ -18,7 +18,9 @@ package io.github.jbellis.jvector;
 
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.util.Bits;
@@ -180,6 +182,14 @@ public class TestUtil {
         if (!s1.equals(s2)) {
             throw new AssertionError(f.get());
         }
+    }
+
+    public static <T> OnHeapGraphIndex<T> buildSequentially(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
+        for (var i = 0; i < vectors.size(); i++) {
+            builder.addGraphNode(i, vectors);
+        }
+        builder.cleanup();
+        return builder.getGraph();
     }
 
     public static class FullyConnectedGraphIndex<T> implements GraphIndex<T> {

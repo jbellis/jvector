@@ -82,11 +82,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         // graph of 3 vectors
         var ravv = new GraphIndexTestCase.CircularFloatVectorValues(3);
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
-        // add sequentially so it's deterministic
-        builder.addGraphNode(0, ravv);
-        builder.addGraphNode(1, ravv);
-        builder.addGraphNode(2, ravv);
-        var original = builder.build();
+        var original = TestUtil.buildSequentially(builder, ravv);
 
         // delete the first node
         builder.markNodeDeleted(0);

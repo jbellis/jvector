@@ -83,7 +83,7 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
         VectorEncoding vectorEncoding = getVectorEncoding();
         getRandom().nextInt();
         GraphIndexBuilder<float[]> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
 
         // Skip over half of the documents that are closest to the query vector
         FixedBitSet acceptOrds = new FixedBitSet(nDoc);

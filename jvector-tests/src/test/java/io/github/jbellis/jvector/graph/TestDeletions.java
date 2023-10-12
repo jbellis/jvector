@@ -22,7 +22,7 @@ public class TestDeletions extends LuceneTestCase {
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
-        var graph = builder.build();
+        var graph = TestUtil.buildSequentially(builder, ravv);
 
         // delete a random entry
         int n = getRandom().nextInt(ravv.size());
@@ -38,7 +38,7 @@ public class TestDeletions extends LuceneTestCase {
         // check that asking for the entire graph back still doesn't surface the deleted one
         var v = ravv.vectorValue(n);
         var results = GraphSearcher.search(v, ravv.size(), ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
-        assertEquals(ravv.size() - 1, results.getNodes().length);
+        assertEquals(GraphIndex.prettyPrint(graph), ravv.size() - 1, results.getNodes().length);
         for (var ns : results.getNodes()) {
             assertNotEquals(n, ns.node);
         }
@@ -50,7 +50,7 @@ public class TestDeletions extends LuceneTestCase {
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
-        var graph = builder.build();
+        var graph = TestUtil.buildSequentially(builder, ravv);
 
         // delete all nodes that connect to a random node
         int nodeToIsolate = getRandom().nextInt(ravv.size());
