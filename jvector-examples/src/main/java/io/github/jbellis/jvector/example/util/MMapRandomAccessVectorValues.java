@@ -2,24 +2,21 @@ package io.github.jbellis.jvector.example.util;
 
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOError;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 
+import com.indeed.util.mmap.MMapBuffer;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 
-public class MMapRandomAccessVectorValues implements RandomAccessVectorValues<float[]>, Closeable
-{
-
+public class MMapRandomAccessVectorValues implements RandomAccessVectorValues<float[]>, Closeable {
     final int dimension;
     final int rows;
     final File file;
-    final byte[] byteBuffer;
     final float[] valueBuffer;
 
-    final RandomAccessFile fileReader;
+    final MMapBuffer fileReader;
 
     public MMapRandomAccessVectorValues(File f, int dimension) {
         assert f != null && f.exists() && f.canRead();
@@ -27,12 +24,11 @@ public class MMapRandomAccessVectorValues implements RandomAccessVectorValues<fl
 
         try {
             this.file = f;
-            this.fileReader = new RandomAccessFile(f, "r");
+            this.fileReader = new MMapBuffer(f, FileChannel.MapMode.READ_ONLY, ByteOrder.LITTLE_ENDIAN);
             this.dimension = dimension;
             this.rows = ((int) f.length()) / dimension;
-            this.byteBuffer = new byte[dimension * Float.BYTES];
             this.valueBuffer = new float[dimension];
-        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
             throw new IOError(e);
         }
     }
@@ -49,14 +45,12 @@ public class MMapRandomAccessVectorValues implements RandomAccessVectorValues<fl
 
     @Override
     public float[] vectorValue(int targetOrd) {
-        try {
-            fileReader.seek((long) targetOrd * dimension * Float.BYTES);
-            fileReader.readFully(byteBuffer);
-            ByteBuffer.wrap(byteBuffer).asFloatBuffer().get(valueBuffer);
-            return valueBuffer;
-        } catch (IOException e) {
-            throw new IOError(e);
-        }
+        long offset = (long) targetOrd * dimension * Float.BYTES;
+        int i = 0;
+        for (long o = offset; o < offset + ((long) dimension * Float.BYTES); o += Float.BYTES, i++)
+            valueBuffer[i] = fileReader.memory().getFloat(o);
+
+        return valueBuffer;
     }
 
     @Override

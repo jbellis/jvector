@@ -1,22 +1,33 @@
 package io.github.jbellis.jvector.example;
 
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.stream.IntStream;
 
+import io.github.jbellis.jvector.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.MMapRandomAccessVectorValues;
+import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.UpdatableRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.newsclub.net.unix.AFUNIXServerSocket;
@@ -34,23 +45,25 @@ public class AnnBenchRunner {
 
     class SessionContext {
         boolean isBulkLoad = false;
+
         int dimension;
         int M;
         int efConstruction;
         VectorSimilarityFunction similarityFunction;
         RandomAccessVectorValues<float[]> ravv;
+        CompressedVectors cv;
         GraphIndexBuilder<float[]> indexBuilder;
-
+        GraphIndex<float[]> index;
+        GraphSearcher<float[]> searcher;
         StringBuffer result = new StringBuffer(1024);
     }
 
-
     enum Command {
         CREATE,  //DIMENSIONS SIMILARITY_TYPE M EF\n
-        WRITE,  //[N,N,N] [N,N,N]\n
+        WRITE,  //[N,N,N] [N,N,N]...\n
         BULKLOAD, // #ROWS #COLUMNS /path/to/local/file
-        OPTIMIZE,
-        SEARCH, //[N,N,N] EF-search limit\n
+        OPTIMIZE, //Run once finished writing
+        SEARCH, //EF-search limit [N,N,N] [N,N,N]...\n
         MEMORY, // Memory usage in kb
     }
 
@@ -111,7 +124,7 @@ public class AnnBenchRunner {
         }
     }
 
-    void load(String input, SessionContext ctx) {
+    void bulkLoad(String input, SessionContext ctx) {
         String[] args = input.split("\\s+");
         if (args.length != 1)
             throw new IllegalArgumentException("Invalid arguments. Expecting 'BULKLOAD /path/to/local/file'. got " + input);
@@ -123,51 +136,122 @@ public class AnnBenchRunner {
         long length = f.length();
         if (length % ((long) ctx.dimension * Float.BYTES) != 0)
             throw new IllegalArgumentException("File is not encoded correctly");
-        
-        ctx.ravv = new MMapRandomAccessVectorValues(f, ctx.dimension);
-        ctx.indexBuilder = new GraphIndexBuilder<>(ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.M, ctx.efConstruction, 1.2f, 1.4f);
-        ctx.indexBuilder.build();
+
+        ctx.index = null;
+        ctx.ravv = null;
+        ctx.indexBuilder = null;
+        ctx.isBulkLoad = true;
+
+        var ravv = new MMapRandomAccessVectorValues(f, ctx.dimension);
+        var indexBuilder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.M, ctx.efConstruction, 1.2f, 1.4f);
+        System.out.println("BulkIndexing " + ravv.size());
+        ctx.index = flushGraphIndex(indexBuilder.build(), ravv);
+        ctx.cv = pqIndex(ravv, ctx);
+
+        //Finished with raw data we can close/cleanup
+        ravv.close();
+        ctx.searcher = new GraphSearcher.Builder<>(ctx.index.getView()).build();
+    }
+
+    private CompressedVectors pqIndex(RandomAccessVectorValues<float[]> ravv, SessionContext ctx) {
+        var pqDims = ctx.dimension;
+        long start = System.nanoTime();
+        ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ctx.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
+        System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
+        start = System.nanoTime();
+
+        byte[][] quantizedVectors = new byte[ravv.size()][];
+        var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
+        PhysicalCoreExecutor.instance.execute(() ->
+            IntStream.range(0, quantizedVectors.length).parallel().forEach(i -> {
+                try (var pooledRavv = ravvCopy.get()) {
+                    var localRavv = pooledRavv.get();
+                    quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
+                }
+            })
+        );
+
+        var cv = new CompressedVectors(pq, quantizedVectors);
+        System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ravv.size(), (cv.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+        return cv;
+    }
+
+    private CachingGraphIndex flushGraphIndex(OnHeapGraphIndex<float[]> onHeapIndex, RandomAccessVectorValues<float[]> ravv) {
+        try {
+            var testDirectory = Files.createTempDirectory("BenchGraphDir");
+            var graphPath = testDirectory.resolve("graph.bin");
+
+            try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
+                OnDiskGraphIndex.write(onHeapIndex, ravv, outputStream);
+            }
+            return new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
+        } catch (IOException e) {
+            throw new IOError(e);
+        }
     }
 
     void optimize(SessionContext ctx) {
-        if (!ctx.isBulkLoad)
+        if (!ctx.isBulkLoad) {
             ctx.indexBuilder.complete();
+            ctx.index = flushGraphIndex(ctx.indexBuilder.getGraph(), ctx.ravv);
+            ctx.cv = pqIndex(ctx.ravv, ctx);
+            ctx.indexBuilder = null;
+            ctx.ravv = null;
+        }
     }
 
     String memory(SessionContext ctx) {
-        return String.format("%s %d\n", Response.RESULT, 1L);
+        long kb = 0;
+        if (ctx.cv != null)
+            kb = ctx.cv.memorySize() / 1024;
+        return String.format("%s %d\n", Response.RESULT, kb);
     }
 
     String search(String input, SessionContext ctx) {
         String[] args = input.split("\\s+");
 
-        if (args.length != 3)
-            throw new IllegalArgumentException("Invalid arguments [vector] search-ef limit");
+        if (args.length < 3)
+            throw new IllegalArgumentException("Invalid arguments search-ef top-k [vector1] [vector2]...");
 
-        String vStr = args[0];
-        if (!vStr.startsWith("[") || !vStr.endsWith("]"))
-            throw new IllegalArgumentException("Invalid query vector encountered:" + vStr);
+        int searchEf = Integer.parseInt(args[0]);
+        int topK = Integer.parseInt(args[1]);
 
-        String[] values = vStr.substring(1, vStr.length() - 1).split("\\s*,\\s*");
-        if (values.length != ctx.ravv.dimension())
-            throw new IllegalArgumentException(String.format("Invalid vector dimension: %d!=%d", values.length, ctx.ravv.dimension()));
-
-        float[] vector = new float[ctx.dimension];
-        for (int k = 0; k < vector.length; k++)
-            vector[k] = Float.parseFloat(values[k]);
-
-        int searchEf = Integer.parseInt(args[1]);
-        int topK = Integer.parseInt(args[2]);
-
-        SearchResult r = GraphSearcher.search(vector, searchEf, ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.indexBuilder.getGraph(), null);
-
-        var resultNodes = r.getNodes();
-        int count = Math.min(resultNodes.length, topK);
+        float[] queryVector = new float[ctx.dimension];
         ctx.result.setLength(0);
-        ctx.result.append(Response.RESULT).append(" ");
-        for (int i = 0; i < count; i++) {
-            if (i > 0) ctx.result.append(",");
-            ctx.result.append(resultNodes[i].node);
+        ctx.result.append(Response.RESULT);
+        int[][] results = new int[args.length - 2][];
+        IntStream.range(0, args.length-2).parallel().forEach(i -> {
+            String vStr = args[i + 2]; //Skipping first 2 args which are not vectors
+            if (!vStr.startsWith("[") || !vStr.endsWith("]"))
+                throw new IllegalArgumentException("Invalid query vector encountered:" + vStr);
+
+            String[] values = vStr.substring(1, vStr.length() - 1).split("\\s*,\\s*");
+            if (values.length != ctx.dimension)
+                throw new IllegalArgumentException(String.format("Invalid vector dimension: %d!=%d", values.length, ctx.dimension));
+
+            for (int k = 0; k < queryVector.length; k++)
+                queryVector[k] = Float.parseFloat(values[k]);
+
+            NeighborSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
+            NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
+            SearchResult r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, null);
+
+            var resultNodes = r.getNodes();
+            int count = Math.min(resultNodes.length, topK);
+
+            results[i] = new int[count];
+            for (int k = 0; k < count; k++)
+                results[i][k] = resultNodes[k].node;
+        });
+
+        //Format Response
+        for (int i = 0; i < results.length; i++) {
+            ctx.result.append(" [");
+            for (int k = 0; k < results[i].length; k++) {
+                if (k > 0) ctx.result.append(",");
+                ctx.result.append(results[i][k]);
+            }
+            ctx.result.append("]");
         }
         ctx.result.append("\n");
         return ctx.result.toString();
@@ -178,11 +262,10 @@ public class AnnBenchRunner {
         String command = delim < 1 ? input : input.substring(0, delim);
         String commandArgs = input.substring(delim + 1);
         String response = Response.OK.name();
-        System.err.println(command);
         switch (Command.valueOf(command)) {
             case CREATE: create(commandArgs, ctx); break;
             case WRITE: write(commandArgs, ctx); break;
-            case BULKLOAD: load(commandArgs, ctx); break;
+            case BULKLOAD: bulkLoad(commandArgs, ctx); break;
             case OPTIMIZE: optimize(ctx); break;
             case SEARCH: response = search(commandArgs, ctx); break;
             case MEMORY: response = memory(ctx); break;
@@ -191,8 +274,7 @@ public class AnnBenchRunner {
         return response;
     }
 
-    void serve() throws IOException
-    {
+    void serve() throws IOException {
         int bufferSize = unixSocket.getReceiveBufferSize();
         byte[] buffer = new byte[bufferSize];
         StringBuffer sb = new StringBuffer(1024);

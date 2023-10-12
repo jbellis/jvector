@@ -124,7 +124,7 @@ public class GraphIndexBuilder<T> {
 
   public void complete() {
     graph.validateEntryNode(); // sanity check before we start
-    PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup()));
+    IntStream.range(0, graph.size()).parallel().forEach(i -> graph.getNeighbors(i).cleanup());
     graph.updateEntryNode(approximateMedioid());
     graph.validateEntryNode(); // check again after updating
   }
