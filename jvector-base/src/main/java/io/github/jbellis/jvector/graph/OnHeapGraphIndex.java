@@ -24,6 +24,8 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.disk.Io;
+import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
@@ -31,6 +33,8 @@ import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.jctools.maps.NonBlockingHashMapLong;
 
+import java.io.DataOutput;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -56,7 +60,6 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   // max neighbors/edges per node
   final int maxDegree;
   private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
-  private boolean hasPurgedNodes;
 
   OnHeapGraphIndex(
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
@@ -95,6 +98,14 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    */
   public void addNode(int node) {
     nodes.put(node, neighborFactory.apply(node, maxDegree()));
+    maxNodeId.accumulateAndGet(node, Math::max);
+  }
+
+  /**
+   * Only for use by Builder loading a saved graph
+   */
+  void addNode(int node, ConcurrentNeighborSet neighbors) {
+    nodes.put(node, neighbors);
     maxNodeId.accumulateAndGet(node, Math::max);
   }
 
@@ -249,7 +260,6 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   void removeNode(int node) {
     nodes.remove(node);
-    hasPurgedNodes = true;
   }
 
   @Override
@@ -313,6 +323,32 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     @Override
     public void close() {
       // no-op
+    }
+  }
+
+  public void save(DataOutput out) throws IOException {
+    if (deletedNodes.cardinality() > 0) {
+        throw new IllegalStateException("Cannot save a graph that has deleted nodes.  Call cleanup() first");
+    }
+
+    // graph-level properties
+    var view = getView();
+    out.writeInt(size());
+    out.writeInt(view.entryNode());
+    out.writeInt(maxDegree());
+
+    // neighbors
+    for (var entry : nodes.entrySet()) {
+      var i = (int) (long) entry.getKey();
+      var neighbors = entry.getValue().iterator();
+      out.writeInt(i);
+
+      out.writeInt(neighbors.size());
+      int n = 0;
+      for ( ; n < neighbors.size(); n++) {
+        out.writeInt(neighbors.nextInt());
+      }
+      assert !neighbors.hasNext();
     }
   }
 }

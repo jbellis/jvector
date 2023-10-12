@@ -172,6 +172,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                 throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
             }
         }
+
         var view = graph.getView();
 
         // graph-level properties

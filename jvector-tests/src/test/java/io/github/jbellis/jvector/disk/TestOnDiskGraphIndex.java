@@ -35,7 +35,6 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
 import static org.junit.Assert.assertArrayEquals;

@@ -116,10 +116,10 @@ public class TestUtil {
     }
 
     public static <T> void writeGraph(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, Path outputPath) throws IOException {
-        try (var indexOutputWriter = openFileForWriting(outputPath))
+        try (var out = openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(graph, vectors, Function.identity(), indexOutputWriter);
-            indexOutputWriter.flush();
+            OnDiskGraphIndex.write(graph, vectors, Function.identity(), out);
+            out.flush();
         }
     }
 

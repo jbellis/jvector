@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
+import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PoolingSupport;
@@ -24,6 +25,7 @@ import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
+import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -49,6 +51,7 @@ public class GraphIndexBuilder<T> {
 
     private final VectorSimilarityFunction similarityFunction;
     private final float neighborOverflow;
+    private final float alpha;
     private final VectorEncoding vectorEncoding;
     private final PoolingSupport<GraphSearcher<?>> graphSearcher;
 
@@ -62,6 +65,7 @@ public class GraphIndexBuilder<T> {
     // and `vectorsCopy` later on when defining the ScoreFunction for search.
     private final PoolingSupport<RandomAccessVectorValues<T>> vectors;
     private final PoolingSupport<RandomAccessVectorValues<T>> vectorsCopy;
+    private final NeighborSimilarity similarity;
 
     /**
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
@@ -90,6 +94,7 @@ public class GraphIndexBuilder<T> {
         this.vectorEncoding = Objects.requireNonNull(vectorEncoding);
         this.similarityFunction = Objects.requireNonNull(similarityFunction);
         this.neighborOverflow = neighborOverflow;
+        this.alpha = alpha;
         if (M <= 0) {
             throw new IllegalArgumentException("maxConn must be positive");
         }
@@ -98,7 +103,7 @@ public class GraphIndexBuilder<T> {
         }
         this.beamWidth = beamWidth;
 
-        NeighborSimilarity similarity = node1 -> {
+        similarity = node1 -> {
             try (var v = vectors.get(); var vc = vectorsCopy.get()) {
                 T v1 = v.get().vectorValue(node1);
                 return (NeighborSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vc.get().vectorValue(node2));
@@ -452,5 +457,28 @@ public class GraphIndexBuilder<T> {
         public int length() {
             throw new UnsupportedOperationException();
         }
+    }
+
+    public void load(RandomAccessReader in) throws IOException {
+        if (graph.size() != 0) {
+            throw new IllegalStateException("Cannot load into a non-empty graph");
+        }
+
+        int size = in.readInt();
+        int entryNode = in.readInt();
+        int maxDegree = in.readInt();
+
+        for (int i = 0; i < size; i++) {
+            int node = in.readInt();
+            int nNeighbors = in.readInt();
+            var ca = new ConcurrentNeighborSet.ConcurrentNeighborArray(maxDegree);
+            for (int j = 0; j < nNeighbors; j++) {
+                int neighbor = in.readInt();
+                ca.addInOrder(neighbor, similarity.score(node, neighbor));
+            }
+            graph.addNode(node, new ConcurrentNeighborSet(node, maxDegree, similarity, alpha, ca));
+        }
+
+        graph.updateEntryNode(entryNode);
     }
 }

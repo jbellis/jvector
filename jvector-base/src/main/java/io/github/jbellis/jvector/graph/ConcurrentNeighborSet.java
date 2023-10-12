@@ -50,17 +50,25 @@ public class ConcurrentNeighborSet {
   /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
   private float shortEdges = Float.NaN;
 
-  public ConcurrentNeighborSet(
-      int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
+  public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity) {
+    this(nodeId, maxConnections, similarity, 1.0f);
+  }
+
+  public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
+    this(nodeId, maxConnections, similarity, alpha, new ConcurrentNeighborArray(maxConnections));
+  }
+
+  ConcurrentNeighborSet(int nodeId,
+                        int maxConnections,
+                        NeighborSimilarity similarity,
+                        float alpha,
+                        ConcurrentNeighborArray neighbors)
+  {
     this.nodeId = nodeId;
     this.maxConnections = maxConnections;
     this.similarity = similarity;
-    neighborsRef = new AtomicReference<>(new ConcurrentNeighborArray(maxConnections));
     this.alpha = alpha;
-  }
-
-  public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity) {
-    this(nodeId, maxConnections, similarity, 1.0f);
+    this.neighborsRef = new AtomicReference<>(neighbors);
   }
 
   private ConcurrentNeighborSet(ConcurrentNeighborSet old) {
