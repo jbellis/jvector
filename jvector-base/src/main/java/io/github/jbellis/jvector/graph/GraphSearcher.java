@@ -213,12 +213,11 @@ public class GraphSearcher<T> {
     if (visited.length() < capacity) {
       // this happens during graph construction; otherwise the size of the vector values should
       // be constant, and it will be a SparseFixedBitSet instead of FixedBitSet
-      assert (visited instanceof FixedBitSet || visited instanceof GrowableBitSet)
-          : String.format("Unexpected visited type: %s. Encountering this means that the graph changed " +
-                          "while being searched, and the Searcher was not built withConcurrentUpdates()",
-                          visited.getClass().getName());
-      if (visited instanceof FixedBitSet) {
-        visited = FixedBitSet.ensureCapacity((FixedBitSet) visited, capacity);
+      if (!(visited instanceof GrowableBitSet)) {
+          throw new IllegalArgumentException(
+                  String.format("Unexpected visited type: %s. Encountering this means that the graph changed " +
+                                "while being searched, and the Searcher was not built withConcurrentUpdates()",
+                                visited.getClass().getName()));
       }
       // else GrowableBitSet knows how to grow itself safely
     }
