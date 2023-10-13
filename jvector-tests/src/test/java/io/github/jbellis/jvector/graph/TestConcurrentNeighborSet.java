@@ -33,32 +33,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
-  private static final NeighborSimilarity simpleScore = a -> {
-    return (NeighborSimilarity.ExactScoreFunction) b -> VectorSimilarityFunction.EUCLIDEAN.compare(new float[] { a }, new float[] { b });
-  };
-
-  private static float baseScore(int neighbor) {
-    return simpleScore.score(0, neighbor);
-  }
 
   private static void validateSortedByScore(NeighborArray na) {
     for (int i = 0; i < na.size() - 1; i++) {
       assertTrue(na.score[i] >= na.score[i + 1]);
     }
-  }
-
-  @Test
-  public void testInsertAndSize() {
-    ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 2, simpleScore);
-    neighbors.insert(1, baseScore(1));
-    neighbors.insert(2, baseScore(2));
-    assertEquals(2, neighbors.size());
-
-    neighbors.insert(3, baseScore(3));
-    // going past the max size results in evicting ALL non-diverse neighbors which leave us at 1
-    assertEquals(1, neighbors.size());
-    assertEquals(1, neighbors.iterator().nextInt());
-    validateSortedByScore(neighbors.getCurrent());
   }
 
   @Test

@@ -363,10 +363,6 @@ public class ConcurrentNeighborSet {
         });
   }
 
-  public void insert(int neighborId, float score) {
-    insert(neighborId, score, 1.0f);
-  }
-
   // is the candidate node with the given score closer to the base node than it is to any of the
   // existing neighbors
   private boolean isDiverse(
