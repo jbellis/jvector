@@ -38,7 +38,7 @@ public class ConcurrentNeighborSet {
    * faster: no boxing/unboxing, all the data is stored sequentially instead of having to follow
    * references, and no fancy encoding necessary for node/score.
    */
-  private final AtomicReference<ConcurrentNeighborArray> neighborsRef;
+  private final AtomicReference<NeighborArray> neighborsRef;
 
   private final float alpha;
 
@@ -55,14 +55,14 @@ public class ConcurrentNeighborSet {
   }
 
   public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
-    this(nodeId, maxConnections, similarity, alpha, new ConcurrentNeighborArray(maxConnections));
+    this(nodeId, maxConnections, similarity, alpha, new NeighborArray(maxConnections));
   }
 
   ConcurrentNeighborSet(int nodeId,
                         int maxConnections,
                         NeighborSimilarity similarity,
                         float alpha,
-                        ConcurrentNeighborArray neighbors)
+                        NeighborArray neighbors)
   {
     this.nodeId = nodeId;
     this.maxConnections = maxConnections;
@@ -212,8 +212,8 @@ public class ConcurrentNeighborSet {
   /**
    * Copies the selected neighbors from the merged array into a new array.
    */
-  private ConcurrentNeighborArray copyDiverse(NeighborArray merged, BitSet selected) {
-    ConcurrentNeighborArray next = new ConcurrentNeighborArray(maxConnections);
+  private NeighborArray copyDiverse(NeighborArray merged, BitSet selected) {
+    NeighborArray next = new NeighborArray(maxConnections);
     for (int i = 0; i < merged.size(); i++) {
       if (!selected.get(i)) {
         continue;
@@ -257,12 +257,12 @@ public class ConcurrentNeighborSet {
     return selected;
   }
 
-  ConcurrentNeighborArray getCurrent() {
+  NeighborArray getCurrent() {
     return neighborsRef.get();
   }
 
-  static ConcurrentNeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
-    ConcurrentNeighborArray merged = new ConcurrentNeighborArray(a1.size() + a2.size());
+  static NeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
+    NeighborArray merged = new NeighborArray(a1.size() + a2.size());
     int i = 0, j = 0;
 
     // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
@@ -351,7 +351,7 @@ public class ConcurrentNeighborSet {
     assert neighborId != nodeId : "can't add self as neighbor at node " + nodeId;
     neighborsRef.getAndUpdate(
         current -> {
-          ConcurrentNeighborArray next = current.copy();
+          NeighborArray next = current.copy();
           next.insertSorted(neighborId, score);
           // batch up the enforcement of the max connection limit, since otherwise
           // we do a lot of duplicate work scanning nodes that we won't remove
@@ -389,7 +389,7 @@ public class ConcurrentNeighborSet {
     return true;
   }
 
-  private ConcurrentNeighborArray removeAllNonDiverse(ConcurrentNeighborArray neighbors) {
+  private NeighborArray removeAllNonDiverse(NeighborArray neighbors) {
     if (neighbors.size <= maxConnections) {
       return neighbors;
     }
@@ -410,83 +410,5 @@ public class ConcurrentNeighborSet {
       }
     }
     return false;
-  }
-
-  /** A NeighborArray that knows how to copy itself and that checks for duplicate entries */
-  static class ConcurrentNeighborArray extends NeighborArray {
-    public ConcurrentNeighborArray(int maxSize) {
-      super(maxSize);
-    }
-
-    // two nodes may attempt to add each other in the Concurrent classes,
-    // so we need to check if the node is already present.  this means that we can't use
-    // the parent approach of "append it, and then move it into place"
-    @Override
-    public void insertSorted(int newNode, float newScore) {
-      if (size == node.length) {
-        growArrays();
-      }
-      int insertionPoint = descSortFindRightMostInsertionPoint(newScore);
-      if (!duplicateExistsNear(insertionPoint, newNode, newScore)) {
-        System.arraycopy(node, insertionPoint, node, insertionPoint + 1, size - insertionPoint);
-        System.arraycopy(score, insertionPoint, score, insertionPoint + 1, size - insertionPoint);
-        node[insertionPoint] = newNode;
-        score[insertionPoint] = newScore;
-        ++size;
-      }
-    }
-
-    private boolean duplicateExistsNear(int insertionPoint, int newNode, float newScore) {
-      // Check to the left
-      for (int i = insertionPoint - 1; i >= 0 && score[i] == newScore; i--) {
-        if (node[i] == newNode) {
-          return true;
-        }
-      }
-
-      // Check to the right
-      for (int i = insertionPoint; i < size && score[i] == newScore; i++) {
-        if (node[i] == newNode) {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    /**
-     * Retains only the elements in the current ConcurrentNeighborArray whose corresponding index
-     * is set in the given BitSet.
-     * <p>
-     * This modifies the array in place, preserving the relative order of the elements retained.
-     * <p>
-     * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
-     *                 (Thus, the elements of selected represent positions in the NeighborArray, NOT node ids.)
-     */
-    public void retain(Bits selected) {
-      int writeIdx = 0; // index for where to write the next retained element
-
-      for (int readIdx = 0; readIdx < size; readIdx++) {
-        if (selected.get(readIdx)) {
-          if (writeIdx != readIdx) {
-            // Move the selected entries to the front while maintaining their relative order
-            node[writeIdx] = node[readIdx];
-            score[writeIdx] = score[readIdx];
-          }
-          // else { we haven't created any gaps in the backing arrays yet, so we don't need to move anything }
-          writeIdx++;
-        }
-      }
-
-      size = writeIdx;
-    }
-
-    public ConcurrentNeighborArray copy() {
-      ConcurrentNeighborArray copy = new ConcurrentNeighborArray(node.length);
-      copy.size = size;
-      System.arraycopy(node, 0, copy.node, 0, size);
-      System.arraycopy(score, 0, copy.score, 0, size);
-      return copy;
-    }
   }
 }

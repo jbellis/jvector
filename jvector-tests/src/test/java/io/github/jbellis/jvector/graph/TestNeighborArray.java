@@ -25,8 +25,11 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import io.github.jbellis.jvector.util.FixedBitSet;
+import org.junit.Assert;
 import org.junit.Test;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -90,6 +93,59 @@ public class TestNeighborArray extends RandomizedTest {
   private void assertNodesEqual(int[] nodes, NeighborArray neighbors) {
     for (int i = 0; i < nodes.length; i++) {
       assertEquals(nodes[i], neighbors.node[i]);
+    }
+  }
+
+  @Test
+  public void testRetainNoneSelected() {
+    var array = new NeighborArray(10);
+    for (int i = 1; i <= 10; i++) {
+      array.addInOrder(i, 11 - i);
+    }
+    var selected = new FixedBitSet(10); // All bits are false by default
+    array.retain(selected);
+    Assert.assertEquals(0, array.size());
+  }
+
+  @Test
+  public void testRetainAllSelected() {
+    var array = new NeighborArray(10);
+    for (int i = 1; i <= 10; i++) {
+      array.addInOrder(i, 11 - i);
+    }
+    var selected = new FixedBitSet(10);
+    selected.set(0, 10); // Set all bits to true
+    array.retain(selected);
+    Assert.assertEquals(10, array.size());
+  }
+
+  @Test
+  public void testRetainSomeSelectedNotFront() {
+    var array = new NeighborArray(10);
+    for (int i = 1; i <= 10; i++) {
+      array.addInOrder(i, 11 - i);
+    }
+    var selected = new FixedBitSet(10);
+    selected.set(5, 10); // Select last 5 elements
+    array.retain(selected);
+    Assert.assertEquals(5, array.size());
+    for (int i = 0; i < array.size(); i++) {
+      assertTrue(selected.get(i + 5));
+    }
+  }
+
+  @Test
+  public void testRetainSomeSelectedAtFront() {
+    var array = new NeighborArray(10);
+    for (int i = 1; i <= 10; i++) {
+      array.addInOrder(i, 11 - i);
+    }
+    var selected = new FixedBitSet(10);
+    selected.set(0, 5); // Select first 5 elements
+    array.retain(selected);
+    Assert.assertEquals(5, array.size());
+    for (int i = 0; i < array.size(); i++) {
+      assertTrue(selected.get(i));
     }
   }
 }

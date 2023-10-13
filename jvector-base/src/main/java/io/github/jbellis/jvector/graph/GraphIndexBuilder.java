@@ -245,14 +245,14 @@ public class GraphIndexBuilder<T> {
      */
     private long removeDeletedNodes() {
         var deletedNodes = graph.getDeletedNodes();
-        var nRemoved = deletedNodes.cardinality()
+        var nRemoved = deletedNodes.cardinality();
         if (nRemoved == 0) {
             return 0;
         }
 
         // remove the nodes from the graph, leaving holes and invalid neighbor references
         for (int i = deletedNodes.nextSetBit(0); i != NO_MORE_DOCS; i = deletedNodes.nextSetBit(i + 1)) {
-            var success = !graph.removeNode(i));
+            var success = !graph.removeNode(i);
             assert success : String.format("Node %d marked deleted but not present", i);
         }
         var liveNodes = graph.rawNodes();
@@ -310,7 +310,7 @@ public class GraphIndexBuilder<T> {
         // reset deleted collection
         deletedNodes.clear();
 
-        return nRemoved * graph.ramBytesUsedOneNode(0);
+        return nRemoved *graph.ramBytesUsedOneNode(0);
     }
 
     /**
@@ -473,7 +473,7 @@ public class GraphIndexBuilder<T> {
         for (int i = 0; i < size; i++) {
             int node = in.readInt();
             int nNeighbors = in.readInt();
-            var ca = new ConcurrentNeighborSet.ConcurrentNeighborArray(maxDegree);
+            var ca = new NeighborArray(maxDegree);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();
                 ca.addInOrder(neighbor, similarity.score(node, neighbor));

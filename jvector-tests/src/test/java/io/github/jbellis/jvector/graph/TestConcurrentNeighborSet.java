@@ -112,10 +112,10 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     };
 
     // check that the new neighbor doesn't replace the existing one (since both are diverse, and the max degree accommodates both)
-    var cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(1);
+    var cna = new NeighborArray(1);
     cna.addInOrder(6, scoreBetween.score(7, 6));
 
-    var cna2 = new ConcurrentNeighborSet.ConcurrentNeighborArray(1);
+    var cna2 = new NeighborArray(1);
     cna2.addInOrder(8, scoreBetween.score(7, 6));
 
     var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween, 1.0f, cna);
@@ -125,7 +125,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testNoDuplicatesDescOrder() {
-    ConcurrentNeighborSet.ConcurrentNeighborArray cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(5);
+    NeighborArray cna = new NeighborArray(5);
     cna.insertSorted(1, 10.0f);
     cna.insertSorted(2, 9.0f);
     cna.insertSorted(3, 8.0f);
@@ -139,7 +139,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testNoDuplicatesSameScores() {
-    ConcurrentNeighborSet.ConcurrentNeighborArray cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(5);
+    NeighborArray cna = new NeighborArray(5);
     cna.insertSorted(1, 10.0f);
     cna.insertSorted(2, 10.0f);
     cna.insertSorted(3, 10.0f);
