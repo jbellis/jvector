@@ -59,7 +59,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     /**
      * @return a Map of old to new graph ordinals where the new ordinals are sequential starting at 0,
      * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
-     * if i < j in `graph` then map[i] < map[j] in the returned map.
+     * if i &lt; j in `graph` then map[i] &lt; map[j] in the returned map.
      */
     public static <T> Map<Integer, Integer> getSequentialRenumbering(GraphIndex<T> graph) {
         try (var view = graph.getView()) {
