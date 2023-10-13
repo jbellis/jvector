@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 public class SiftSmall {
@@ -62,7 +63,7 @@ public class SiftSmall {
         var graphPath = testDirectory.resolve("graph_test");
         try {
             DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
-            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
+            OnDiskGraphIndex.write(onHeapGraph, ravv, Function.identity(), outputFile);
 
             var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 

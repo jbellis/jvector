@@ -70,7 +70,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
                 new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
         // run some searches
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
                                                            10,
@@ -108,7 +108,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
                 new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
         // the first 10 docs must not be deleted to ensure the expected recall
         Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
@@ -139,7 +139,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
                 new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
-        var graph = buildInOrder(builder, vectors);
+        var graph = TestUtil.buildSequentially(builder, vectors);
         // Only mark a few vectors as accepted
         var acceptOrds = new FixedBitSet(nDoc);
         for (int i = 0; i < nDoc; i += nextInt(15, 20)) {
@@ -385,14 +385,6 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         assertTrue("overlap=" + overlap, overlap > 0.9);
     }
 
-    protected OnHeapGraphIndex<T> buildInOrder(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
-        for (var i = 0; i < vectors.size(); i++) {
-            builder.addGraphNode(i, vectors);
-        }
-        builder.cleanup();
-        return builder.getGraph();
-    }
-
     private int computeOverlap(int[] a, int[] b) {
         Arrays.sort(a);
         Arrays.sort(b);
@@ -435,11 +427,11 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     /**
      * Returns vectors evenly distributed around the upper unit semicircle.
      */
-    static class CircularFloatVectorValues implements RandomAccessVectorValues<float[]> {
+    public static class CircularFloatVectorValues implements RandomAccessVectorValues<float[]> {
 
         private final int size;
 
-        CircularFloatVectorValues(int size) {
+        public CircularFloatVectorValues(int size) {
             this.size = size;
         }
 
@@ -516,7 +508,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         };
     }
 
-    static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
+    public static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
         float[][] vectors = new float[size][];
         for (int offset = 0; offset < size; offset++) {
             vectors[offset] = TestUtil.randomVector(random, dimension);

@@ -30,7 +30,13 @@ package io.github.jbellis.jvector.graph;
  */
 public interface RandomAccessVectorValues<T> {
 
-  /** Return the number of vector values */
+  /**
+   * Return the number of vector values.
+   * <p>
+   * All copies of a given RAVV should have the same size.  Typically this is achieved by either
+   * (1) implementing a threadsafe, un-shared RAVV, where `copy` returns `this`, or
+   * (2) implementing a fixed-size RAVV.
+   */
   int size();
 
   /** Return the dimension of the returned vector values */
@@ -58,6 +64,8 @@ public interface RandomAccessVectorValues<T> {
    * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
    * access different values at once, to avoid overwriting the underlying float vector returned by
    * a shared {@link RandomAccessVectorValues#vectorValue}.
+   * <p>
+   * Un-shared implementations may simply return `this`.
    */
   RandomAccessVectorValues<T> copy();
 }

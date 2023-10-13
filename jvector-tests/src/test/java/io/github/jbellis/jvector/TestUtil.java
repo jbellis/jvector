@@ -18,7 +18,9 @@ package io.github.jbellis.jvector;
 
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.util.Bits;
@@ -33,6 +35,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -113,14 +116,14 @@ public class TestUtil {
     }
 
     public static <T> void writeGraph(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, Path outputPath) throws IOException {
-        try (var indexOutputWriter = openFileForWriting(outputPath))
+        try (var out = openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(graph, vectors, indexOutputWriter);
-            indexOutputWriter.flush();
+            OnDiskGraphIndex.write(graph, vectors, Function.identity(), out);
+            out.flush();
         }
     }
 
-    static Set<Integer> getNeighborNodes(GraphIndex.View<?> g, int node) {
+    public static Set<Integer> getNeighborNodes(GraphIndex.View<?> g, int node) {
       Set<Integer> neighbors = new HashSet<>();
       for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
         int n = it.nextInt();
@@ -180,6 +183,14 @@ public class TestUtil {
         if (!s1.equals(s2)) {
             throw new AssertionError(f.get());
         }
+    }
+
+    public static <T> OnHeapGraphIndex<T> buildSequentially(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
+        for (var i = 0; i < vectors.size(); i++) {
+            builder.addGraphNode(i, vectors);
+        }
+        builder.cleanup();
+        return builder.getGraph();
     }
 
     public static class FullyConnectedGraphIndex<T> implements GraphIndex<T> {

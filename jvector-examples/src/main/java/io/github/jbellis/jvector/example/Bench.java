@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -52,14 +53,14 @@ public class Bench {
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
-        var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
+        var avgShortEdges = onHeapGraph.getAverageShortEdges();
         System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
                 M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         try {
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+                OnDiskGraphIndex.write(onHeapGraph, floatVectors, Function.identity(), outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
                 int queryRuns = 2;

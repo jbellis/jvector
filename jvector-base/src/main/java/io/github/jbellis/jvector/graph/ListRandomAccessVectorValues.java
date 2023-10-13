@@ -64,7 +64,6 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues<fl
 
     @Override
     public ListRandomAccessVectorValues copy() {
-        // our vectorValue is Unshared, but copy anyway in case the underlying List is not threadsafe
-        return new ListRandomAccessVectorValues(List.copyOf(vectors), dimension);
+        return this;
     }
 }

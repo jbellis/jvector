@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import java.util.Arrays;
 import java.util.List;
 
 /** Utilities for computations with numeric arrays */
@@ -55,7 +56,7 @@ public final class VectorUtil {
               (a.length - aoffset) + "), b(" + (b.length - boffset) + "), length(" + length + ")");
     }*/
     float r = impl.dotProduct(a, aoffset, b, boffset, length);
-    assert Float.isFinite(r);
+    assert Float.isFinite(r) : String.format("dotProduct(%s, %s) = %s", Arrays.toString(a), Arrays.toString(b), r);
     return r;
   }
 
@@ -69,7 +70,7 @@ public final class VectorUtil {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
     float r = impl.cosine(a, b);
-    assert Float.isFinite(r);
+    assert Float.isFinite(r) : String.format("cosine(%s, %s) = %s", Arrays.toString(a), Arrays.toString(b), r);
     return r;
   }
 
@@ -91,7 +92,7 @@ public final class VectorUtil {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
     float r = impl.squareDistance(a, b);
-    assert Float.isFinite(r);
+    assert Float.isFinite(r) : String.format("squareDistance(%s, %s) = %s", Arrays.toString(a), Arrays.toString(b), r);
     return r;
   }
 

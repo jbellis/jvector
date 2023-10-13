@@ -50,17 +50,25 @@ public class ConcurrentNeighborSet {
   /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
   private float shortEdges = Float.NaN;
 
-  public ConcurrentNeighborSet(
-      int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
+  public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity) {
+    this(nodeId, maxConnections, similarity, 1.0f);
+  }
+
+  public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
+    this(nodeId, maxConnections, similarity, alpha, new ConcurrentNeighborArray(maxConnections));
+  }
+
+  ConcurrentNeighborSet(int nodeId,
+                        int maxConnections,
+                        NeighborSimilarity similarity,
+                        float alpha,
+                        ConcurrentNeighborArray neighbors)
+  {
     this.nodeId = nodeId;
     this.maxConnections = maxConnections;
     this.similarity = similarity;
-    neighborsRef = new AtomicReference<>(new ConcurrentNeighborArray(maxConnections));
     this.alpha = alpha;
-  }
-
-  public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity) {
-    this(nodeId, maxConnections, similarity, 1.0f);
+    this.neighborsRef = new AtomicReference<>(neighbors);
   }
 
   private ConcurrentNeighborSet(ConcurrentNeighborSet old) {
@@ -257,12 +265,16 @@ public class ConcurrentNeighborSet {
     ConcurrentNeighborArray merged = new ConcurrentNeighborArray(a1.size() + a2.size());
     int i = 0, j = 0;
 
-    float lastAddedScore = Float.NaN;
     // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
     // we need to remember all the nodes with the current score to avoid adding duplicates
     var nodesWithLastScore = new HashSet<>();
+    float lastAddedScore = Float.NaN;
+
+    // loop through both source arrays, adding the highest score element to the merged array,
+    // until we reach the end of one of the sources
     while (i < a1.size() && j < a2.size()) {
       if (a1.score()[i] < a2.score[j]) {
+        // add from a2
         if (a2.score[j] != lastAddedScore) {
           nodesWithLastScore.clear();
           lastAddedScore = a2.score[j];
@@ -272,6 +284,7 @@ public class ConcurrentNeighborSet {
         }
         j++;
       } else if (a1.score()[i] > a2.score[j]) {
+        // add from a1
         if (a1.score()[i] != lastAddedScore) {
           nodesWithLastScore.clear();
           lastAddedScore = a1.score()[i];
@@ -281,6 +294,7 @@ public class ConcurrentNeighborSet {
         }
         i++;
       } else {
+        // same score -- add both
         if (a1.score()[i] != lastAddedScore) {
           nodesWithLastScore.clear();
           lastAddedScore = a1.score()[i];
@@ -305,7 +319,7 @@ public class ConcurrentNeighborSet {
         }
         i++;
       }
-      // the remaining nodes have a different score, so we can just add them
+      // the remaining nodes have a different score, so we can bulk-add them
       System.arraycopy(a1.node, i, merged.node, merged.size, a1.size - i);
       System.arraycopy(a1.score, i, merged.score, merged.size, a1.size - i);
       merged.size += a1.size - i;
@@ -320,7 +334,7 @@ public class ConcurrentNeighborSet {
         }
         j++;
       }
-      // the remaining nodes have a different score, so we can just add them
+      // the remaining nodes have a different score, so we can bulk-add them
       System.arraycopy(a2.node, j, merged.node, merged.size, a2.size - j);
       System.arraycopy(a2.score, j, merged.score, merged.size, a2.size - j);
       merged.size += a2.size - j;
@@ -347,10 +361,6 @@ public class ConcurrentNeighborSet {
           }
           return next;
         });
-  }
-
-  public void insert(int neighborId, float score) {
-    insert(neighborId, score, 1.0f);
   }
 
   // is the candidate node with the given score closer to the base node than it is to any of the

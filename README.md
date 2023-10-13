@@ -1,5 +1,5 @@
 # JVector 
-JVector is a pure Java, zero dependency, embedded vector search engine, used by [DataStax Astra DB](https://www.datastax.com/products/datastax-astra) and (soon) Apache Cassandra.
+JVector is a pure Java embedded vector search engine, used by [DataStax Astra DB](https://www.datastax.com/products/datastax-astra) and (soon) Apache Cassandra.
 
 What is JVector?
 - Algorithmic-fast. JVector uses state of the art graph algorithms inspired by DiskANN and related research that offer high recall and low latency.
@@ -124,7 +124,7 @@ multirelease jar for release. [jvector-examples](./jvector-examples) is an addit
 jvector-base/jvector-twenty to run example code.
 
 You can run `SiftSmall` and `Bench` directly to get an idea of what all is going on here. `Bench`
-requires some datasets to be downloaded from https://github.com/erikbern/ann-benchmarks. The files used by `SiftSmall`
+requires some datasets to be downloaded from [https://github.com/erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks/blob/main/README.md#data-sets). The files used by `SiftSmall`
 can be found in the [siftsmall directory](./siftsmall) in the project root.
 
 To run either class, you can use the Maven exec-plugin via the following incantations:

@@ -27,7 +27,6 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.util.Bits;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 /**
  * Represents a graph-based vector index.  Nodes are represented as ints, and edges are
@@ -69,6 +68,13 @@ public interface GraphIndex<T> extends AutoCloseable {
     return size();
   }
 
+  /**
+   * @return true iff the graph contains the node with the given ordinal id
+   */
+  default boolean containsNode(int nodeId) {
+    return nodeId >= 0 && nodeId < size();
+  }
+
   @Override
   void close() throws IOException;
 
@@ -79,8 +85,14 @@ public interface GraphIndex<T> extends AutoCloseable {
      */
     NodesIterator getNeighborsIterator(int node);
 
+    /**
+     * @return the number of nodes in the graph
+     */
     int size();
 
+    /**
+     * @return the node of the graph to start searches at
+     */
     int entryNode();
 
     /**
@@ -92,13 +104,15 @@ public interface GraphIndex<T> extends AutoCloseable {
      */
     T getVector(int node);
 
-    //  for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still want/need it
-    default int getNeighborCount(int node) {
-      return getNeighborsIterator(node).size();
-    }
-
+    /**
+     * Return a Bits instance indicating which nodes are live.  The result is undefined for
+     * ordinals that do not correspond to nodes in the graph.
+     */
     Bits liveNodes();
 
+    /**
+     * @return the largest ordinal id in the graph.  May be different from size() if nodes have been deleted.
+     */
     default int getMaxNodeId() {
       return size();
     }
