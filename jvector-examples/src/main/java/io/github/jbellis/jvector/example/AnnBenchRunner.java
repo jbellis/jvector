@@ -63,7 +63,7 @@ public class AnnBenchRunner {
     enum Command {
         CREATE,  //DIMENSIONS SIMILARITY_TYPE M EF\n
         WRITE,  //[N,N,N] [N,N,N]...\n
-        BULKLOAD, // #ROWS #COLUMNS /path/to/local/file
+        BULKLOAD, // /path/to/local/file
         OPTIMIZE, //Run once finished writing
         SEARCH, //EF-search limit [N,N,N] [N,N,N]...\n
         MEMORY, // Memory usage in kb
