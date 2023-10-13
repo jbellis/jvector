@@ -195,7 +195,7 @@ public class ConcurrentNeighborSet {
       // only those into a new NeighborArray.  This is less expensive than doing the
       // diversity computation in-place, since we are going to do multiple passes and
       // pruning back extras is expensive.
-      var merged = mergeNeighbors(natural, toMerge);
+      var merged = mergeNeighbors(current, toMerge);
       BitSet selected = selectDiverse(merged);
       merged.retain(selected);
       return merged;
