@@ -125,6 +125,37 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
+    @Test
+    public void testReordingReumbering() throws IOException {
+        // graph of 3 vectors
+        var ravv = new GraphIndexTestCase.CircularFloatVectorValues(3);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var original = TestUtil.buildSequentially(builder, ravv);
+
+        // create renumbering map
+        Map<Integer, Integer> oldToNewMap = new HashMap<>();
+        oldToNewMap.put(0, 2);
+        oldToNewMap.put(1, 1);
+        oldToNewMap.put(2, 0);
+
+        // write the graph
+        var outputPath = testDirectory.resolve("renumbered_graph");
+        try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
+        {
+            OnDiskGraphIndex.write(original, ravv, oldToNewMap::get, indexOutputWriter);
+            indexOutputWriter.flush();
+        }
+        // check that written graph ordinals match the new ones
+        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskView = onDiskGraph.getView())
+        {
+            assertArrayEquals(onDiskView.getVector(0), ravv.vectorValue(2), 0.0f);
+            assertArrayEquals(onDiskView.getVector(1), ravv.vectorValue(1), 0.0f);
+            assertArrayEquals(onDiskView.getVector(2), ravv.vectorValue(0), 0.0f);
+        }
+    }
+
     private static void validateVectors(GraphIndex.View<float[]> view, RandomAccessVectorValues<float[]> ravv) {
         for (int i = 0; i < view.size(); i++) {
             assertArrayEquals(view.getVector(i), ravv.vectorValue(i), 0.0f);
