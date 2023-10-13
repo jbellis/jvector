@@ -1,4 +1,6 @@
-# JVector 
+# JVector
+<a href="https://trendshift.io/repositories/2946" target="_blank"><img src="https://trendshift.io/api/badge/repositories/2946" alt="jbellis%2Fjvector | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 JVector is a pure Java embedded vector search engine, used by [DataStax Astra DB](https://www.datastax.com/products/datastax-astra) and (soon) Apache Cassandra.
 
 What is JVector?
