@@ -10,7 +10,9 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
@@ -220,7 +222,13 @@ public class AnnBenchRunner {
         ctx.result.setLength(0);
         ctx.result.append(Response.RESULT);
         int[][] results = new int[args.length - 2][];
-        IntStream.range(0, args.length-2).parallel().forEach(i -> {
+        IntStream loopStream = IntStream.range(0, args.length-2);
+
+        //Only use parallel path if we have > 1 core
+        if (ForkJoinPool.commonPool().getPoolSize() > 1)
+            loopStream = loopStream.parallel();
+
+        loopStream.forEach(i -> {
             String vStr = args[i + 2]; //Skipping first 2 args which are not vectors
             if (!vStr.startsWith("[") || !vStr.endsWith("]"))
                 throw new IllegalArgumentException("Invalid query vector encountered:" + vStr);
