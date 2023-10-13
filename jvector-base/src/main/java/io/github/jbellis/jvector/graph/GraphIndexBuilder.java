@@ -157,7 +157,7 @@ public class GraphIndexBuilder<T> {
         // backlinks can cause neighbors to soft-overflow, so do this before neighbors cleanup
         removeDeletedNodes();
 
-        // clean up neighbors
+        // clean up overflowed neighbor lists
         IntStream.range(0, graph.getMaxNodeId() + 1).parallel().forEach(i -> {
             var neighbors = graph.getNeighbors(i);
             if (neighbors != null) {
@@ -252,7 +252,7 @@ public class GraphIndexBuilder<T> {
 
         // remove the nodes from the graph, leaving holes and invalid neighbor references
         for (int i = deletedNodes.nextSetBit(0); i != NO_MORE_DOCS; i = deletedNodes.nextSetBit(i + 1)) {
-            var success = !graph.removeNode(i);
+            var success = graph.removeNode(i);
             assert success : String.format("Node %d marked deleted but not present", i);
         }
         var liveNodes = graph.rawNodes();

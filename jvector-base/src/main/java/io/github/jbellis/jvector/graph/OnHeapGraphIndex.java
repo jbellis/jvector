@@ -258,6 +258,9 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return deletedNodes;
   }
 
+  /**
+   * @return true iff the node was present
+   */
   boolean removeNode(int node) {
     return nodes.remove(node) != null;
   }
