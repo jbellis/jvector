@@ -118,7 +118,7 @@ public class TestUtil {
     public static <T> void writeGraph(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, Path outputPath) throws IOException {
         try (var out = openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(graph, vectors, Function.identity(), out);
+            OnDiskGraphIndex.write(graph, vectors, out);
             out.flush();
         }
     }

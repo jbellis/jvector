@@ -26,10 +26,10 @@ import io.github.jbellis.jvector.util.Bits;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.IntStream;
 
 public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
@@ -61,16 +61,19 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
      * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
      * if i < j in `graph` then map[i] < map[j] in the returned map.
      */
-    public static Map<Integer, Integer> getSequentialRenumbering(OnHeapGraphIndex<float[]> graph) {
-        var view = graph.getView();
-        Map<Integer, Integer> oldToNewMap = new HashMap<>();
-        int nextOrdinal = 0;
-        for (int i = 0; i <= view.getMaxNodeId(); i++) {
-            if (graph.containsNode(i)) {
-                oldToNewMap.put(i, nextOrdinal++);
+    public static <T> Map<Integer, Integer> getSequentialRenumbering(GraphIndex<T> graph) {
+        try (var view = graph.getView()) {
+            Map<Integer, Integer> oldToNewMap = new HashMap<>();
+            int nextOrdinal = 0;
+            for (int i = 0; i <= view.getMaxNodeId(); i++) {
+                if (graph.containsNode(i)) {
+                    oldToNewMap.put(i, nextOrdinal++);
+                }
             }
+            return oldToNewMap;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        return oldToNewMap;
     }
 
     @Override
@@ -171,17 +174,34 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     /**
      * @param graph the graph to write
      * @param vectors the vectors associated with each node
-     * @param ordinalMapper A function that maps from the graph's ordinals to the ordinals in the output.
-     *                      For simple use cases this can be the identity function.  To deal with deleted nodes,
-     *                      or to renumber the nodes to match rows or documents elsewhere, you may provide
-     *                      something custom.  The mapper must map from the graph's ordinals
-     *                      [0..getMaxNodeId()], to the output's ordinals [0..size()), with no gaps and
-     *                      no duplicates.
+     * @param out the output to write to
+     *
+     * If any nodes have been deleted, you must use the overload specifying `oldToNewOrdinals` instead.
+     */
+    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out)
+            throws IOException
+    {
+        try (var view = graph.getView()) {
+            if (view.getMaxNodeId() >= graph.size()) {
+                throw new IllegalArgumentException("Graph contains deletes, must specify oldToNewOrdinals map");
+            }
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+        write(graph, vectors, getSequentialRenumbering(graph), out);
+    }
+
+    /**
+     * @param graph the graph to write
+     * @param vectors the vectors associated with each node
+     * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
+     *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
+     *                         any deleted noes.
      * @param out the output to write to
      */
     public static <T> void write(GraphIndex<T> graph,
                                  RandomAccessVectorValues<T> vectors,
-                                 Function<Integer, Integer> ordinalMapper,
+                                 Map<Integer, Integer> oldToNewOrdinals,
                                  DataOutput out)
             throws IOException
     {
@@ -191,50 +211,52 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                 throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
             }
         }
-
-        var view = graph.getView();
-
-        // graph-level properties
-        out.writeInt(graph.size());
-        out.writeInt(vectors.dimension());
-        out.writeInt(view.entryNode());
-        out.writeInt(graph.maxDegree());
-
-        // for each graph node, write the associated vector and its neighbors
-        var newOrdinals = new HashSet<Integer>();
-        for (int originalOrdinal = 0; originalOrdinal <= graph.getMaxNodeId(); originalOrdinal++) {
-            if (!graph.containsNode(originalOrdinal)) {
-                continue;
-            }
-
-            int newOrdinal = ordinalMapper.apply(originalOrdinal);
-            newOrdinals.add(newOrdinal);
-            out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-            Io.writeFloats(out, (float[]) vectors.vectorValue(originalOrdinal));
-
-            var neighbors = view.getNeighborsIterator(originalOrdinal);
-            out.writeInt(neighbors.size());
-            int n = 0;
-            for ( ; n < neighbors.size(); n++) {
-                out.writeInt(ordinalMapper.apply(neighbors.nextInt()));
-            }
-            assert !neighbors.hasNext();
-
-            // pad out to maxEdgesPerNode
-            for (; n < graph.maxDegree(); n++) {
-                out.writeInt(-1);
-            }
+        if (oldToNewOrdinals.size() != graph.size()) {
+            throw new IllegalArgumentException(String.format("ordinalMapper size %d does not match graph size %d",
+                                                             oldToNewOrdinals.size(), graph.size()));
         }
 
-        // verify that the provided mapper was well-behaved
-        if (newOrdinals.size() > graph.size()) {
-            throw new IllegalArgumentException("graph modified during write");
+        var entriesByNewOrdinal = new ArrayList<>(oldToNewOrdinals.entrySet());
+        entriesByNewOrdinal.sort(Comparator.comparingInt(Map.Entry::getValue));
+        // the last new ordinal should be size-1
+        if (graph.size() > 0 && entriesByNewOrdinal.get(entriesByNewOrdinal.size() - 1).getValue() != graph.size() - 1) {
+            throw new IllegalArgumentException("oldToNewOrdinals produced out-of-range entries");
         }
-        if (newOrdinals.size() < graph.size()) {
-            throw new IllegalArgumentException("ordinalMapper resulted in duplicate entries");
-        }
-        if (graph.size() > 0 && newOrdinals.stream().mapToInt(i -> i).max().getAsInt() != graph.size() - 1)  {
-            throw new IllegalArgumentException("ordinalMapper produced out-of-range entries");
+
+        try (var view = graph.getView()) {
+            // graph-level properties
+            out.writeInt(graph.size());
+            out.writeInt(vectors.dimension());
+            out.writeInt(view.entryNode());
+            out.writeInt(graph.maxDegree());
+
+            // for each graph node, write the associated vector and its neighbors
+            for (int i = 0; i < oldToNewOrdinals.size(); i++) {
+                var entry = entriesByNewOrdinal.get(i);
+                int originalOrdinal = entry.getKey();
+                int newOrdinal = entry.getValue();
+                if (!graph.containsNode(originalOrdinal)) {
+                    continue;
+                }
+
+                out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
+                Io.writeFloats(out, (float[]) vectors.vectorValue(originalOrdinal));
+
+                var neighbors = view.getNeighborsIterator(originalOrdinal);
+                out.writeInt(neighbors.size());
+                int n = 0;
+                for (; n < neighbors.size(); n++) {
+                    out.writeInt(oldToNewOrdinals.get(neighbors.nextInt()));
+                }
+                assert !neighbors.hasNext();
+
+                // pad out to maxEdgesPerNode
+                for (; n < graph.maxDegree(); n++) {
+                    out.writeInt(-1);
+                }
+            }
+        } catch (Exception e) {
+            throw new IOException(e);
         }
     }
 }

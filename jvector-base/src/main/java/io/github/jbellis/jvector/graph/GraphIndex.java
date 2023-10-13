@@ -114,7 +114,7 @@ public interface GraphIndex<T> extends AutoCloseable {
      * @return the largest ordinal id in the graph.  May be different from size() if nodes have been deleted.
      */
     default int getMaxNodeId() {
-      return size();
+      return size() - 1;
     }
   }
 

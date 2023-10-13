@@ -63,7 +63,7 @@ public class SiftSmall {
         var graphPath = testDirectory.resolve("graph_test");
         try {
             DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
-            OnDiskGraphIndex.write(onHeapGraph, ravv, Function.identity(), outputFile);
+            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
 
             var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 

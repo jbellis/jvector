@@ -110,7 +110,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(original, ravv, oldToNewMap::get, indexOutputWriter);
+            OnDiskGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
             indexOutputWriter.flush();
         }
         // check that written graph ordinals match the new ones
@@ -142,7 +142,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(original, ravv, oldToNewMap::get, indexOutputWriter);
+            OnDiskGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
             indexOutputWriter.flush();
         }
         // check that written graph ordinals match the new ones
