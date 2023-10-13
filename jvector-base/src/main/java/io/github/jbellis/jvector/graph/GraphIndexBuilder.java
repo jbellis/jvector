@@ -245,13 +245,15 @@ public class GraphIndexBuilder<T> {
      */
     private long removeDeletedNodes() {
         var deletedNodes = graph.getDeletedNodes();
-        if (deletedNodes.cardinality() == 0) {
+        var nRemoved = deletedNodes.cardinality()
+        if (nRemoved == 0) {
             return 0;
         }
 
         // remove the nodes from the graph, leaving holes and invalid neighbor references
         for (int i = deletedNodes.nextSetBit(0); i != NO_MORE_DOCS; i = deletedNodes.nextSetBit(i + 1)) {
-            graph.removeNode(i);
+            var success = !graph.removeNode(i));
+            assert success : String.format("Node %d marked deleted but not present", i);
         }
         var liveNodes = graph.rawNodes();
 
@@ -308,7 +310,7 @@ public class GraphIndexBuilder<T> {
         // reset deleted collection
         deletedNodes.clear();
 
-        return graph.ramBytesUsedOneNode(0);
+        return nRemoved * graph.ramBytesUsedOneNode(0);
     }
 
     /**
