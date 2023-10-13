@@ -101,13 +101,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         assertTrue(getNeighborNodes(originalView, 2).contains(1));
 
         // create renumbering map
-        Map<Integer, Integer> oldToNewMap = new HashMap<>();
-        int nextOrdinal = 0;
-        for (int i = 0; i <= originalView.getMaxNodeId(); i++) {
-            if (original.containsNode(i)) {
-                oldToNewMap.put(i, nextOrdinal++);
-            }
-        }
+        Map<Integer, Integer> oldToNewMap = OnDiskGraphIndex.getSequentialRenumbering(original);
         assertEquals(2, oldToNewMap.size());
         assertEquals(0, (int) oldToNewMap.get(1));
         assertEquals(1, (int) oldToNewMap.get(2));

@@ -26,7 +26,9 @@ import io.github.jbellis.jvector.util.Bits;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
@@ -52,6 +54,23 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
+    }
+
+    /**
+     * @return a Map of old to new graph ordinals where the new ordinals are sequential starting at 0,
+     * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
+     * if i < j in `graph` then map[i] < map[j] in the returned map.
+     */
+    public static Map<Integer, Integer> getSequentialRenumbering(OnHeapGraphIndex<float[]> graph) {
+        var view = graph.getView();
+        Map<Integer, Integer> oldToNewMap = new HashMap<>();
+        int nextOrdinal = 0;
+        for (int i = 0; i <= view.getMaxNodeId(); i++) {
+            if (graph.containsNode(i)) {
+                oldToNewMap.put(i, nextOrdinal++);
+            }
+        }
+        return oldToNewMap;
     }
 
     @Override
