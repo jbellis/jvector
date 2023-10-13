@@ -156,7 +156,7 @@ public class AnnBenchRunner {
     }
 
     private CompressedVectors pqIndex(RandomAccessVectorValues<float[]> ravv, SessionContext ctx) {
-        var pqDims = ctx.dimension / 4;
+        var pqDims = ctx.dimension > 10 ? Math.max(ctx.dimension / 4, 10) : ctx.dimension;
         long start = System.nanoTime();
         ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ctx.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
         System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
