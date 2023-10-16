@@ -12,7 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
@@ -37,11 +36,11 @@ import org.newsclub.net.unix.AFUNIXSocket;
 import org.newsclub.net.unix.AFUNIXSocketAddress;
 
 /**
- * Simple local service to use for ann-benchmarks runner.
+ * Simple local service to use for interactive with JVector over IPC.
  * Only handles a single connection at a time.
  */
-public class AnnBenchRunner {
-
+public class IPCService
+{
     // How each command message is marked as finished
     private static final String DELIM = "\n";
 
@@ -77,7 +76,7 @@ public class AnnBenchRunner {
 
     final Path socketFile;
     final AFUNIXServerSocket unixSocket;
-    AnnBenchRunner(Path socketFile) throws IOException {
+    IPCService(Path socketFile) throws IOException {
         this.socketFile = socketFile;
         this.unixSocket = AFUNIXServerSocket.newInstance();
         this.unixSocket.bind(AFUNIXSocketAddress.of(socketFile));
@@ -194,11 +193,18 @@ public class AnnBenchRunner {
 
     void optimize(SessionContext ctx) {
         if (!ctx.isBulkLoad) {
-            ctx.indexBuilder.complete();
-            ctx.index = flushGraphIndex(ctx.indexBuilder.getGraph(), ctx.ravv);
-            ctx.cv = pqIndex(ctx.ravv, ctx);
-            ctx.indexBuilder = null;
-            ctx.ravv = null;
+            if (ctx.ravv.size() > 256) {
+                ctx.indexBuilder.complete();
+                ctx.index = flushGraphIndex(ctx.indexBuilder.getGraph(), ctx.ravv);
+                ctx.cv = pqIndex(ctx.ravv, ctx);
+                ctx.indexBuilder = null;
+                ctx.ravv = null;
+            } else { //Not enough data for PQ
+                ctx.indexBuilder.complete();
+                ctx.index =ctx.indexBuilder.getGraph();
+                ctx.cv = null;
+            }
+
         }
     }
 
@@ -240,9 +246,14 @@ public class AnnBenchRunner {
             for (int k = 0; k < queryVector.length; k++)
                 queryVector[k] = Float.parseFloat(values[k]);
 
-            NeighborSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
-            NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
-            SearchResult r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, null);
+            SearchResult r;
+            if (ctx.cv != null) {
+                NeighborSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
+                NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
+                r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, null);
+            } else {
+                r = GraphSearcher.search(queryVector, topK, ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.index, null);
+            }
 
             var resultNodes = r.getNodes();
             int count = Math.min(resultNodes.length, topK);
@@ -328,7 +339,7 @@ public class AnnBenchRunner {
     }
 
     static void help() {
-        System.out.println("Usage: annbench.jar [/unix/socket/path.sock]");
+        System.out.println("Usage: ipcservice.jar [/unix/socket/path.sock]");
         System.exit(1);
     }
 
@@ -341,7 +352,7 @@ public class AnnBenchRunner {
             socketFile = args[0];
 
         try {
-            AnnBenchRunner service = new AnnBenchRunner(Path.of(socketFile));
+            IPCService service = new IPCService(Path.of(socketFile));
             service.serve();
         } catch (Throwable t) {
             t.printStackTrace();

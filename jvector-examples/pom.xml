@@ -134,19 +134,19 @@
                                 </configuration>
                             </execution>
                             <execution>
-                                <id>annbench</id>
+                                <id>ipcserve</id>
                                 <configuration>
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-ea</argument>
-                                        <argument>io.github.jbellis.jvector.example.AnnBenchRunner</argument>
+                                        <argument>io.github.jbellis.jvector.example.IPCService</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
                             <execution>
-                                <id>annbench-1core</id>
+                                <id>ipcserve-1core</id>
                                 <configuration>
                                     <arguments>
                                         <argument>-classpath</argument>
@@ -155,7 +155,7 @@
                                         <argument>-Djava.util.concurrent.ForkJoinPool.common.parallelism=1</argument>
                                         <argument>-Djvector.physical_core_count=1</argument>
                                         <argument>-ea</argument>
-                                        <argument>io.github.jbellis.jvector.example.AnnBenchRunner</argument>
+                                        <argument>io.github.jbellis.jvector.example.IPCService</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
