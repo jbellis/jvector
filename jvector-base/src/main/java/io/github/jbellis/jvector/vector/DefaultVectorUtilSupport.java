@@ -226,7 +226,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void divInPlace(float[] vector, float divisor) {
+  public void scale(float[] vector, float divisor) {
     for (int i = 0; i < vector.length; i++) {
       vector[i] /= divisor;
     }

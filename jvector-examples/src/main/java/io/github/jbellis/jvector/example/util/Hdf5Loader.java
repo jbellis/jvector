@@ -109,7 +109,7 @@ public class Hdf5Loader {
 
     private static void normalizeAll(Iterable<float[]> vectors) {
         for (float[] v : vectors) {
-            VectorUtil.l2normalize(v);
+            VectorUtil.normalize(v);
         }
     }
 

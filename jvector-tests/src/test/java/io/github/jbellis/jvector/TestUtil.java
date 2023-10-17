@@ -95,7 +95,7 @@ public class TestUtil {
           vec[i] = -vec[i];
         }
       }
-      VectorUtil.l2normalize(vec);
+      VectorUtil.normalize(vec);
       return vec;
     }
 
