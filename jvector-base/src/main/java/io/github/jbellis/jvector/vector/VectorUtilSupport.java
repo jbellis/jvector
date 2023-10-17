@@ -62,7 +62,7 @@ public interface VectorUtilSupport {
   float sum(float[] vector);
 
   /** Divide vector by divisor, in place (vector will be modified) */
-  void divInPlace(float[] vector, float divisor);
+  void scale(float[] vector, float multiplier);
 
   /** Adds v2 into v1, in place (v1 will be modified) */
   public void addInPlace(float[] v1, float[] v2);

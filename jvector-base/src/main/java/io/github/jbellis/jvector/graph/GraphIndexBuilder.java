@@ -529,7 +529,7 @@ public class GraphIndexBuilder<T> {
             var node = it.nextInt();
             VectorUtil.addInPlace(centroid, (float[]) vc.vectorValue(node));
         }
-        VectorUtil.divInPlace(centroid, graph.size());
+        VectorUtil.scale(centroid, 1.0f / graph.size());
         NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.vectorValue(i), (T) centroid);
         int ep = graph.entry();
         var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);

@@ -116,52 +116,14 @@ public final class VectorUtil {
   /**
    * Modifies the argument to be unit length, dividing by its l2-norm. IllegalArgumentException is
    * thrown for zero vectors.
-   *
-   * @return the input array after normalization
    */
-  public static float[] l2normalize(float[] v) {
-    l2normalize(v, true);
-    return v;
-  }
-
-  /**
-   * Modifies the argument to be unit length, dividing by its l2-norm.
-   *
-   * @param v the vector to normalize
-   * @param throwOnZero whether to throw an exception when <code>v</code> has all zeros
-   * @return the input array after normalization
-   * @throws IllegalArgumentException when the vector is all zero and throwOnZero is true
-   */
-  public static float[] l2normalize(float[] v, boolean throwOnZero) {
-    double squareSum = 0.0f;
-    int dim = v.length;
-    for (float x : v) {
-      squareSum += x * x;
-    }
+  public static void l2normalize(float[] v) {
+    double squareSum = dotProduct(v, v);
     if (squareSum == 0) {
-      if (throwOnZero) {
-        throw new IllegalArgumentException("Cannot normalize a zero-length vector");
-      } else {
-        return v;
-      }
+      throw new IllegalArgumentException("Cannot normalize a zero-length vector");
     }
     double length = Math.sqrt(squareSum);
-    for (int i = 0; i < dim; i++) {
-      v[i] /= length;
-    }
-    return v;
-  }
-
-  /**
-   * Adds the second argument to the first
-   *
-   * @param u the destination
-   * @param v the vector to add to the destination
-   */
-  public static void add(float[] u, float[] v) {
-    for (int i = 0; i < u.length; i++) {
-      u[i] += v[i];
-    }
+    scale(v, (float) (1.0 / length));
   }
 
   /**
@@ -191,22 +153,6 @@ public final class VectorUtil {
     return 0.5f + dotProduct(a, b) / denom;
   }
 
-  /**
-   * Checks if a float vector only has finite components.
-   *
-   * @param v bytes containing a vector
-   * @return the vector for call-chaining
-   * @throws IllegalArgumentException if any component of vector is not finite
-   */
-  public static float[] checkFinite(float[] v) {
-    for (int i = 0; i < v.length; i++) {
-      if (!Float.isFinite(v[i])) {
-        throw new IllegalArgumentException("non-finite value at vector[" + i + "]=" + v[i]);
-      }
-    }
-    return v;
-  }
-
   public static float[] sum(List<float[]> vectors) {
     if (vectors.isEmpty()) {
       throw new IllegalArgumentException("Input list cannot be empty");
@@ -219,8 +165,8 @@ public final class VectorUtil {
     return impl.sum(vector);
   }
 
-  public static void divInPlace(float[] vector, float divisor) {
-    impl.divInPlace(vector, divisor);
+  public static void scale(float[] vector, float multiplier) {
+    impl.scale(vector, multiplier);
   }
 
   public static void addInPlace(float[] v1, float[] v2) {
