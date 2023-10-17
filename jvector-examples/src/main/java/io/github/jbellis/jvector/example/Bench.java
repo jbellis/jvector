@@ -74,7 +74,7 @@ public class Bench {
                         var pq = ProductQuantization.compute(ravv, pqDims, threshold, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
                         var encoded = pq.encodeAll(ds.baseVectors);
                         var cv = new CompressedVectors(pq, encoded);
-                        System.out.format("PQ@%s, T=%.2f built in %.2fs,%n", pqDims, threshold, (System.nanoTime() - start) / 1_000_000_000.0);
+                        System.out.format("PQ@%sB, T=%.2f built in %.2fs,%n", pqDims, threshold, (System.nanoTime() - start) / 1_000_000_000.0);
 
                         int queryRuns = 2;
                         for (int overquery : efSearchOptions) {
@@ -166,9 +166,9 @@ public class Bench {
                 // large files not yet supported
                 // "hdf5/deep-image-96-angular.hdf5",
                 // "hdf5/gist-960-euclidean.hdf5",
-                "hdf5/glove-200-angular.hdf5",
-                "hdf5/nytimes-256-angular.hdf5",
                 "hdf5/glove-100-angular.hdf5",
+                "hdf5/nytimes-256-angular.hdf5",
+                "hdf5/glove-200-angular.hdf5",
                 "hdf5/sift-128-euclidean.hdf5");
         for (var f : files) {
             gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
