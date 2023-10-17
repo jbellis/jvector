@@ -71,8 +71,8 @@ PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void divInPlace(float[] vector, float divisor) {
-        SimdOps.divInPlace(vector, divisor);
+    public void scale(float[] vector, float multiplier) {
+        SimdOps.scale(vector, multiplier);
     }
 
     @Override

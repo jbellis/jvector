@@ -211,7 +211,7 @@ public class KMeansPlusPlusClusterer {
                 centroids[i] = points[random.nextInt(points.length)];
             } else {
                 centroids[i] = Arrays.copyOf(centroidNums[i], centroidNums[i].length);
-                VectorUtil.divInPlace(centroids[i], centroidDenoms[i]);
+                VectorUtil.scale(centroids[i], 1.0f / centroidDenoms[i]);
             }
         }
     }
@@ -225,7 +225,7 @@ public class KMeansPlusPlusClusterer {
         }
 
         float[] centroid = VectorUtil.sum(points);
-        VectorUtil.divInPlace(centroid, points.size());
+        VectorUtil.scale(centroid, 1.0f / points.size());
 
         return centroid;
     }
