@@ -198,7 +198,7 @@ public class ProductQuantization {
                         float[][] subvectors = vectors.stream().parallel()
                                 .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
                                 .toArray(float[][]::new);
-                        var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::dotProduct);
+                        var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::dotProduct, threshold);
                         return clusterer.cluster(K_MEANS_ITERATIONS);
                     })
                     .toArray(float[][][]::new);

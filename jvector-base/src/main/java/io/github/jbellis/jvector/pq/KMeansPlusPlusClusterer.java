@@ -35,6 +35,7 @@ public class KMeansPlusPlusClusterer {
     private final float[][] centroids;
     private final int[] centroidDenoms;
     private final float[][] centroidNums;
+    private final float eta;
 
     /**
      * Constructs a KMeansPlusPlusFloatClusterer with the specified number of clusters,
@@ -43,7 +44,7 @@ public class KMeansPlusPlusClusterer {
      * @param k number of clusters.
      * @param distanceFunction a function to compute the distance between two points.
      */
-    public KMeansPlusPlusClusterer(float[][] points, int k, BiFunction<float[], float[], Float> distanceFunction) {
+    public KMeansPlusPlusClusterer(float[][] points, int k, BiFunction<float[], float[], Float> distanceFunction, double threshold) {
         if (k <= 0) {
             throw new IllegalArgumentException("Number of clusters must be positive.");
         }
@@ -59,7 +60,15 @@ public class KMeansPlusPlusClusterer {
         centroidNums = new float[k][points[0].length];
         centroids = chooseInitialCentroids(points);
         assignments = new int[points.length];
+        eta = Math.max(1.0f, computeParallelCostMultiplier(threshold, 1.0, points[0].length));
+
         initializeAssignedPoints();
+    }
+
+    float computeParallelCostMultiplier(double T, double squaredNorm, int dims) {
+        double parallelCost = T * T / squaredNorm;
+        double perpendicularCost = (1 - T * T / squaredNorm) / (dims - 1);
+        return (float) (parallelCost / perpendicularCost);
     }
 
     /**
@@ -187,13 +196,18 @@ public class KMeansPlusPlusClusterer {
      * Return the index of the closest centroid to the given point
      */
     private int getNearestCluster(float[] point, float[][] centroids) {
-        float minDistance = Float.MAX_VALUE;
+        float minWeightedDistance = Float.MAX_VALUE;
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            float distance = distanceFunction.apply(point, centroids[i]);
-            if (distance < minDistance) {
-                minDistance = distance;
+            float[] r = VectorUtil.sub(point, centroids[i]);
+            float[] r_parallel = Arrays.copyOf(point, point.length);
+            VectorUtil.scale(r_parallel, VectorUtil.dotProduct(r, point) / VectorUtil.normSquared(point));
+            float[] r_perp = VectorUtil.sub(r, r_parallel);
+            float weightedDistance = eta * VectorUtil.normSquared(r_parallel) + VectorUtil.normSquared(r_perp);
+
+            if (weightedDistance < minWeightedDistance) {
+                minWeightedDistance = weightedDistance;
                 nearestCluster = i;
             }
         }
@@ -209,10 +223,28 @@ public class KMeansPlusPlusClusterer {
             var denom = centroidDenoms[i];
             if (denom == 0) {
                 centroids[i] = points[random.nextInt(points.length)];
-            } else {
-                centroids[i] = Arrays.copyOf(centroidNums[i], centroidNums[i].length);
-                VectorUtil.scale(centroids[i], 1 / (float) centroidDenoms[i]);
+                continue;
             }
+
+            float[] sum_eta_r_parallel = new float[points[0].length];
+            float[] sum_r_perp = new float[points[0].length];
+
+            for (int j = 0; j < points.length; j++) {
+                if (assignments[j] == i) {
+                    float[] r = VectorUtil.sub(points[j], centroids[i]);
+                    float[] r_parallel = Arrays.copyOf(points[j], points[j].length);
+                    VectorUtil.scale(r_parallel, VectorUtil.dotProduct(r, points[j]) / VectorUtil.normSquared(points[j]));
+                    float[] r_perp = VectorUtil.sub(r, r_parallel);
+                    VectorUtil.scale(r_parallel, eta);
+
+                    VectorUtil.addInPlace(sum_eta_r_parallel, r_parallel);
+                    VectorUtil.addInPlace(sum_r_perp, r_perp);
+                }
+            }
+
+            VectorUtil.addInPlace(sum_eta_r_parallel, sum_r_perp);
+            VectorUtil.scale(sum_eta_r_parallel, 1 / (float) denom);
+            centroids[i] = sum_eta_r_parallel;
         }
     }
 

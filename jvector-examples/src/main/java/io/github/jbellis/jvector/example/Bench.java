@@ -166,10 +166,10 @@ public class Bench {
                 // large files not yet supported
                 // "hdf5/deep-image-96-angular.hdf5",
                 // "hdf5/gist-960-euclidean.hdf5",
+                "hdf5/glove-200-angular.hdf5",
                 "hdf5/nytimes-256-angular.hdf5",
                 "hdf5/glove-100-angular.hdf5",
-                "hdf5/glove-200-angular.hdf5");
-//                "hdf5/sift-128-euclidean.hdf5");
+                "hdf5/sift-128-euclidean.hdf5");
         for (var f : files) {
             gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
         }

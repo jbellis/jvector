@@ -183,4 +183,8 @@ public final class VectorUtil {
   public static float assembleAndSum(float[] data, int dataBase, byte[] dataOffsets) {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }
+
+  public static float normSquared(float[] vector) {
+    return dotProduct(vector, vector);
+  }
 }
