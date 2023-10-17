@@ -41,7 +41,7 @@ import static java.lang.Math.min;
  */
 public class ProductQuantization {
     static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
-    private static final int K_MEANS_ITERATIONS = 12;
+    private static final int K_MEANS_ITERATIONS = 6;
     private static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
 
     final float[][][] codebooks;
@@ -192,27 +192,17 @@ public class ProductQuantization {
     }
 
     static float[][][] createCodebooks(List<float[]> vectors, int M, double threshold, int[][] subvectorSizeAndOffset) {
-        var ignored = new LongAdder();
-        var total = new LongAdder();
-        var a = PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, M).parallel()
-                                                                   .mapToObj(m -> {
-                                                                       float[][] subvectors = vectors.stream().parallel()
-                                                                                                     .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
-                                                                                                     .toArray(float[][]::new);
-                                                                       var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, (v1, v2) -> {
-                                                                           total.add(1);
-                                                                           var d = VectorUtil.squareDistance(v1, v2);
-                                                                           if (d >= threshold) {
-                                                                               return d;
-                                                                           }
-                                                                           ignored.add(1);
-                                                                           return 0f;
-                                                                       });
-                                                                       return clusterer.cluster(K_MEANS_ITERATIONS);
-                                                                   })
-                                                                   .toArray(float[][][]::new));
-        System.out.printf("Ignored %s of %s distances = %s%%%n", ignored.sum(), total.sum(), 100.0 * ignored.doubleValue() / total.doubleValue());
-        return a;
+        return PhysicalCoreExecutor.instance.submit(() -> {
+            return IntStream.range(0, M).parallel()
+                    .mapToObj(m -> {
+                        float[][] subvectors = vectors.stream().parallel()
+                                .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
+                                .toArray(float[][]::new);
+                        var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::dotProduct);
+                        return clusterer.cluster(K_MEANS_ITERATIONS);
+                    })
+                    .toArray(float[][][]::new);
+        });
     }
 
     static int closetCentroidIndex(float[] subvector, float[][] codebook) {
