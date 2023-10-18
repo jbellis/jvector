@@ -155,7 +155,7 @@ public class GraphIndexBuilder<T> {
 
     // do this before adding to in-progress, so a concurrent writer checking
     // the in-progress set doesn't have to worry about uninitialized neighbor sets
-    graph.addNode(node);
+    ConcurrentNeighborSet newNodeNeighbors = graph.addNode(node);
 
     insertionsInProgress.add(node);
     ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
@@ -174,7 +174,7 @@ public class GraphIndexBuilder<T> {
       // Update neighbors with these candidates.
       var natural = getNaturalCandidates(candidates.getNodes(), naturalScratchPooled.get());
       var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
-      updateNeighbors(node, natural, concurrent);
+      updateNeighbors(newNodeNeighbors, natural, concurrent);
       graph.markComplete(node);
     } finally {
       insertionsInProgress.remove(node);
@@ -219,10 +219,9 @@ public class GraphIndexBuilder<T> {
     }
   }
 
-  private void updateNeighbors(int node, NeighborArray natural, NeighborArray concurrent) {
-    ConcurrentNeighborSet neighbors = graph.getNeighbors(node);
-    neighbors.insertDiverse(natural, concurrent);
-    neighbors.backlink(graph::getNeighbors, neighborOverflow);
+  private void updateNeighbors(ConcurrentNeighborSet nodeNeighbors, NeighborArray natural, NeighborArray concurrent) {
+    nodeNeighbors.insertDiverse(natural, concurrent);
+    nodeNeighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
 
   private NeighborArray getNaturalCandidates(SearchResult.NodeScore[] candidates, NeighborArray scratch) {

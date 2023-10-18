@@ -25,12 +25,12 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import org.jctools.maps.NonBlockingHashMapLong;
 
-import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.stream.IntStream;
 
 /**
  * An {@link GraphIndex} that offers concurrent access; for typical graphs you will get significant
@@ -42,9 +42,9 @@ import java.util.function.BiFunction;
 public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
   // the current graph entry node on the top level. -1 if not set
-  private final AtomicLong entryPoint = new AtomicLong(-1);
+  private final AtomicInteger entryPoint = new AtomicInteger(-1);
 
-  private final NonBlockingHashMapLong<ConcurrentNeighborSet> nodes;
+  private final DenseIntMap<ConcurrentNeighborSet> nodes;
 
   // max neighbors/edges per node
   final int nsize0;
@@ -54,8 +54,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
       int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
     this.neighborFactory = neighborFactory;
     this.nsize0 = 2 * M;
-
-    this.nodes = new NonBlockingHashMapLong<>(1024);
+    this.nodes = new DenseIntMap<>(1024);
   }
 
   /**
@@ -66,6 +65,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   public ConcurrentNeighborSet getNeighbors(int node) {
     return nodes.get(node);
   }
+
 
   @Override
   public int size() {
@@ -84,9 +84,12 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
    * <p>It is also the responsibility of the caller to ensure that each node is only added once.
    *
    * @param node the node to add, represented as an ordinal on the level 0.
+   * @return the neighbor set for this node
    */
-  public void addNode(int node) {
-    nodes.put(node, neighborFactory.apply(node, maxDegree()));
+  public ConcurrentNeighborSet addNode(int node) {
+    ConcurrentNeighborSet newNeighborSet = neighborFactory.apply(node, maxDegree());
+    nodes.put(node, newNeighborSet);
+    return newNeighborSet;
   }
 
   /** must be called after addNode once neighbors are linked in all levels. */
@@ -112,7 +115,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   }
 
   int entry() {
-    return (int) entryPoint.get();
+    return entryPoint.get();
   }
 
   @Override
@@ -120,11 +123,12 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     // We avoid the temptation to optimize this by using ArrayNodesIterator.
     // This is because, while the graph will contain sequential ordinals once the graph is complete,
     // we should not assume that that is the only time it will be called.
-    var keysInts = Arrays.stream(nodes.keySetLong()).iterator();
-    return new NodesIterator(nodes.size()) {
+    int size = nodes.size();
+    var keysInts = IntStream.range(0, size).iterator();
+    return new NodesIterator(size) {
       @Override
       public int nextInt() {
-        return keysInts.next().intValue();
+        return keysInts.next();
       }
 
       @Override
@@ -137,20 +141,14 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
   @Override
   public long ramBytesUsed() {
     // the main graph structure
-    long total = concurrentHashMapRamUsed(size());
-    long chmSize = concurrentHashMapRamUsed(size());
+    long total = (long) size() * RamUsageEstimator.NUM_BYTES_OBJECT_REF;
     long neighborSize = neighborsRamUsed(maxDegree()) * size();
-
-    total += chmSize + neighborSize;
-
-    return total;
+    return total + neighborSize + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
   }
 
   public long ramBytesUsedOneNode(int nodeLevel) {
-    int entryCount = (int) (nodeLevel / CHM_LOAD_FACTOR);
     var graphBytesUsed =
-        chmEntriesRamUsed(entryCount)
-            + neighborsRamUsed(maxDegree())
+              neighborsRamUsed(maxDegree())
             + nodeLevel * neighborsRamUsed(maxDegree());
     var clockBytesUsed = Integer.BYTES;
     return graphBytesUsed + clockBytesUsed;
@@ -171,42 +169,6 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     return neighborSetBytes + (long) count * (Integer.BYTES + Float.BYTES);
   }
 
-  private static final float CHM_LOAD_FACTOR = 0.75f; // this is hardcoded inside ConcurrentHashMap
-
-  /**
-   * caller's responsibility to divide number of entries by load factor to get internal node count
-   */
-  private static long chmEntriesRamUsed(int internalEntryCount) {
-    long REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-    long chmNodeBytes =
-        REF_BYTES // node itself in Node[]
-            + 3L * REF_BYTES
-            + Integer.BYTES; // node internals
-
-    return internalEntryCount * chmNodeBytes;
-  }
-
-  private static long concurrentHashMapRamUsed(int externalSize) {
-    long REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-    long AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
-    long CORES = Runtime.getRuntime().availableProcessors();
-
-    // CHM has a striped counter Cell implementation, we expect at most one per core
-    long chmCounters = AH_BYTES + CORES * (REF_BYTES + Long.BYTES);
-
-    int nodeCount = (int) (externalSize / CHM_LOAD_FACTOR);
-
-    long chmSize =
-        chmEntriesRamUsed(nodeCount) // nodes
-            + nodeCount * REF_BYTES
-            + AH_BYTES // nodes array
-            + Long.BYTES
-            + 3 * Integer.BYTES
-            + 3 * REF_BYTES // extra internal fields
-            + chmCounters
-            + REF_BYTES; // the Map reference itself
-    return chmSize;
-  }
 
   @Override
   public String toString() {
@@ -233,7 +195,7 @@ public final class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
       return;
     }
     var en = entryPoint.get();
-    if (!(en >= 0 && nodes.containsKey(en))) {
+    if (!(en >= 0 && getNeighbors(en) != null)) {
       throw new IllegalStateException("Entry node was incompletely added! " + en);
     }
   }
