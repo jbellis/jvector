@@ -201,7 +201,7 @@ public class IPCService
                 ctx.ravv = null;
             } else { //Not enough data for PQ
                 ctx.indexBuilder.complete();
-                ctx.index =ctx.indexBuilder.getGraph();
+                ctx.index = ctx.indexBuilder.getGraph();
                 ctx.cv = null;
             }
 
