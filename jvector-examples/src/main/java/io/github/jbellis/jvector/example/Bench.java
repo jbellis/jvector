@@ -140,10 +140,11 @@ public class Bench {
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
         var diskGrid = List.of(false, true);
+        var pqGrid = List.of(2, 4, 8);
 
         // this dataset contains more than 10k query vectors, so we limit it with .subList
         var adaSet = loadWikipediaData();
-        gridSearch(adaSet, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+        gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
 
         var files = List.of(
                 // large files not yet supported
@@ -154,7 +155,7 @@ public class Bench {
                 "hdf5/glove-200-angular.hdf5",
                 "hdf5/sift-128-euclidean.hdf5");
         for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
         }
 
         // tiny dataset, don't waste time building a huge index
@@ -162,7 +163,7 @@ public class Bench {
         mGrid = List.of(8, 12, 16, 24);
         efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
         for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
         }
     }
 
@@ -180,29 +181,31 @@ public class Bench {
         return ds;
     }
 
-    private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
-        var start = System.nanoTime();
-        int originalDimension = ds.baseVectors.get(0).length;
-        var pqDims = originalDimension / 4;
-        ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
-        ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
-        System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
+    private static void gridSearch(DataSet ds, List<Integer> pqGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
+        for (var pqFactor : pqGrid) {
+            var start = System.nanoTime();
+            int originalDimension = ds.baseVectors.get(0).length;
+            var pqDims = originalDimension / pqFactor;
+            ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
+            ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
+            System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
-        start = System.nanoTime();
-        var quantizedVectors = pq.encodeAll(ds.baseVectors);
-        var compressedVectors = new CompressedVectors(pq, quantizedVectors);
-        System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+            start = System.nanoTime();
+            var quantizedVectors = pq.encodeAll(ds.baseVectors);
+            var compressedVectors = new CompressedVectors(pq, quantizedVectors);
+            System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
-        var testDirectory = Files.createTempDirectory("BenchGraphDir");
+            var testDirectory = Files.createTempDirectory("BenchGraphDir");
 
-        try {
-            for (int M : mGrid) {
-                for (int beamWidth : efConstructionGrid) {
-                    testRecall(M, beamWidth, diskOptions, efSearchFactor, ds, compressedVectors, testDirectory);
+            try {
+                for (int M : mGrid) {
+                    for (int beamWidth : efConstructionGrid) {
+                        testRecall(M, beamWidth, diskOptions, efSearchFactor, ds, compressedVectors, testDirectory);
+                    }
                 }
+            } finally {
+                Files.delete(testDirectory);
             }
-        } finally {
-            Files.delete(testDirectory);
         }
     }
 }

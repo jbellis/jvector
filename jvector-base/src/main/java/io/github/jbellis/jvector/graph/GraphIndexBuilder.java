@@ -158,7 +158,7 @@ public class GraphIndexBuilder<T> {
         removeDeletedNodes();
 
         // clean up overflowed neighbor lists
-        IntStream.range(0, graph.getMaxNodeId() + 1).parallel().forEach(i -> {
+        IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
             var neighbors = graph.getNeighbors(i);
             if (neighbors != null) {
                 neighbors.cleanup();
@@ -202,9 +202,9 @@ public class GraphIndexBuilder<T> {
     public long addGraphNode(int node, RandomAccessVectorValues<T> vectors) {
         final T value = vectors.vectorValue(node);
 
-        // do this before adding to in-progress, so a concurrent writer checking
-        // the in-progress set doesn't have to worry about uninitialized neighbor sets
-        graph.addNode(node);
+    // do this before adding to in-progress, so a concurrent writer checking
+    // the in-progress set doesn't have to worry about uninitialized neighbor sets
+    var newNodeNeighbors = graph.addNode(node);
 
         insertionsInProgress.add(node);
         ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
@@ -224,7 +224,7 @@ public class GraphIndexBuilder<T> {
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
             var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
             var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
-            updateNeighbors(node, natural, concurrent);
+            updateNeighbors(newNodeNeighbors, natural, concurrent);
             graph.markComplete(node);
         } finally {
             insertionsInProgress.remove(node);
@@ -310,7 +310,7 @@ public class GraphIndexBuilder<T> {
         // reset deleted collection
         deletedNodes.clear();
 
-        return nRemoved *graph.ramBytesUsedOneNode(0);
+        return nRemoved * graph.ramBytesUsedOneNode(0);
     }
 
     /**
@@ -340,7 +340,7 @@ public class GraphIndexBuilder<T> {
             NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits);
             var candidates = getPathCandidates(result.getVisited(), node, scoreFunction, scratch.get());
-            updateNeighbors(node, candidates, NeighborArray.EMPTY);
+            updateNeighbors(graph.getNeighbors(node), candidates, NeighborArray.EMPTY);
         }
     }
 
@@ -379,11 +379,10 @@ public class GraphIndexBuilder<T> {
         }
     }
 
-    private void updateNeighbors(int node, NeighborArray natural, NeighborArray concurrent) {
-        ConcurrentNeighborSet neighbors = graph.getNeighbors(node);
-        neighbors.insertDiverse(natural, concurrent);
-        neighbors.backlink(graph::getNeighbors, neighborOverflow);
-    }
+  private void updateNeighbors(ConcurrentNeighborSet neighbors, NeighborArray natural, NeighborArray concurrent) {
+    neighbors.insertDiverse(natural, concurrent);
+    neighbors.backlink(graph::getNeighbors, neighborOverflow);
+  }
 
     /**
      * compute the scores for the nodes set in `visited` and return them in a NeighborArray

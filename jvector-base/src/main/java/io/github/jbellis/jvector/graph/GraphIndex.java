@@ -46,7 +46,7 @@ public interface GraphIndex<T> extends AutoCloseable {
    * Get all nodes on a given level as node 0th ordinals. The nodes are NOT guaranteed to be
    * presented in any particular order.
    *
-   * @return an iterator over nodes where {@code nextInt} returns a next node on the level
+   * @return an iterator over nodes where {@code nextInt} returns a next node on the level.
    */
   NodesIterator getNodes();
 
@@ -64,7 +64,7 @@ public interface GraphIndex<T> extends AutoCloseable {
    * @return the maximum node id in the graph.  May be different from size() if nodes are
    * being added concurrently, or if nodes have been deleted (and cleaned up).
    */
-  default int getMaxNodeId() {
+  default int getIdUpperBound() {
     return size();
   }
 
@@ -113,8 +113,8 @@ public interface GraphIndex<T> extends AutoCloseable {
     /**
      * @return the largest ordinal id in the graph.  May be different from size() if nodes have been deleted.
      */
-    default int getMaxNodeId() {
-      return size() - 1;
+    default int getIdUpperBound() {
+      return size();
     }
   }
 

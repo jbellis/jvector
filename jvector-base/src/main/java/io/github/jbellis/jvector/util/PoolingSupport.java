@@ -1,10 +1,9 @@
 package io.github.jbellis.jvector.util;
 
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
-
-import org.jctools.queues.MpmcArrayQueue;
 
 /**
  * Allows any object to be pooled and released when work is done.
@@ -95,7 +94,7 @@ public abstract class PoolingSupport<T> {
     {
         private final int limit;
         private final AtomicInteger created;
-        private final MpmcArrayQueue<T> queue;
+        private final LinkedBlockingQueue<T> queue;
         private final Supplier<T> initialValue;
 
         private ThreadPooling(Supplier<T> initialValue) {
@@ -106,7 +105,7 @@ public abstract class PoolingSupport<T> {
         private ThreadPooling(int threadLimit, Supplier<T> initialValue) {
             this.limit = threadLimit;
             this.created = new AtomicInteger(0);
-            this.queue = new MpmcArrayQueue<>(threadLimit);
+            this.queue = new LinkedBlockingQueue<>(threadLimit);
             this.initialValue = initialValue;
         }
 

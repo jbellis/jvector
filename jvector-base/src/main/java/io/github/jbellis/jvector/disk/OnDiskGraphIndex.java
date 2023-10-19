@@ -65,7 +65,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         try (var view = graph.getView()) {
             Map<Integer, Integer> oldToNewMap = new HashMap<>();
             int nextOrdinal = 0;
-            for (int i = 0; i <= view.getMaxNodeId(); i++) {
+            for (int i = 0; i < view.getIdUpperBound(); i++) {
                 if (graph.containsNode(i)) {
                     oldToNewMap.put(i, nextOrdinal++);
                 }
@@ -182,7 +182,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
             throws IOException
     {
         try (var view = graph.getView()) {
-            if (view.getMaxNodeId() >= graph.size()) {
+            if (view.getIdUpperBound() > graph.size()) {
                 throw new IllegalArgumentException("Graph contains deletes, must specify oldToNewOrdinals map");
             }
         } catch (Exception e) {
