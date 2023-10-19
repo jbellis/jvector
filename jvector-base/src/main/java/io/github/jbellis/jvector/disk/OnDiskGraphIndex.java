@@ -196,7 +196,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
      * @param vectors the vectors associated with each node
      * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
      *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
-     *                         any deleted noes.
+     *                         any deleted nodes.
      * @param out the output to write to
      */
     public static <T> void write(GraphIndex<T> graph,

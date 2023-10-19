@@ -126,7 +126,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     }
 
     @Test
-    public void testReordingReumbering() throws IOException {
+    public void testReorderingRenumbering() throws IOException {
         // graph of 3 vectors
         var ravv = new GraphIndexTestCase.CircularFloatVectorValues(3);
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
