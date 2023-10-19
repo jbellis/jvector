@@ -131,33 +131,6 @@ public class ProductQuantization {
     }
 
     /**
-     * Computes the cosine of the (approximate) original decoded vector with
-     * another vector.
-     * <p>
-     * This method can compute the cosine without materializing the decoded vector as a new float[],
-     * which will be roughly 1.5x as fast as decode() + dot().
-     * <p>
-     * It is the caller's responsibility to center the `other` vector by subtracting the global centroid
-     * before calling this method.
-     */
-    public float decodedCosine(byte[] encoded, float[] other) {
-        float sum = 0.0f;
-        float aMagnitude = 0.0f;
-        float bMagnitude = 0.0f;
-        for (int m = 0; m < M; ++m) {
-            int offset = subvectorSizesAndOffsets[m][1];
-            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks[m][centroidIndex];
-            var length = centroidSubvector.length;
-            sum += VectorUtil.dotProduct(centroidSubvector, 0, other, offset, length);
-            aMagnitude += VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, length);
-            bMagnitude +=  VectorUtil.dotProduct(other, offset, other, offset, length);
-        }
-
-        return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
-    }
-
-    /**
      * Decodes the quantized representation (byte array) to its approximate original vector.
      */
     public void decode(byte[] encoded, float[] target) {

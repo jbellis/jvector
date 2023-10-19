@@ -112,7 +112,7 @@ public class IPCService
             if (!vStr.startsWith("[") || !vStr.endsWith("]"))
                 throw new IllegalArgumentException("Invalid vector encountered. Expecting 'WRITE [F1,F2...] [F3,F4...] ...' but got " + vStr);
 
-            String[] values = vStr.substring(1, vStr.length() - 1).split("\\s*,\\s*");
+            String[] values = vStr.substring(1, vStr.length() - 1).split(",");
             if (values.length != ctx.ravv.dimension())
                 throw new IllegalArgumentException(String.format("Invalid vector dimension: %d %d!=%d", i, values.length, ctx.ravv.dimension()));
 
@@ -239,7 +239,7 @@ public class IPCService
             if (!vStr.startsWith("[") || !vStr.endsWith("]"))
                 throw new IllegalArgumentException("Invalid query vector encountered:" + vStr);
 
-            String[] values = vStr.substring(1, vStr.length() - 1).split("\\s*,\\s*");
+            String[] values = vStr.substring(1, vStr.length() - 1).split(",");
             if (values.length != ctx.dimension)
                 throw new IllegalArgumentException(String.format("Invalid vector dimension: %d!=%d", values.length, ctx.dimension));
 

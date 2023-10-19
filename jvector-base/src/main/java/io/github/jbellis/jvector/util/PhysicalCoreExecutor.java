@@ -35,4 +35,8 @@ public class PhysicalCoreExecutor {
     public <T> T submit(Supplier<T> run) {
         return pool.submit(run::get).join();
     }
+
+    public static int getPhysicalCoreCount() {
+        return physicalCoreCount;
+    }
 }

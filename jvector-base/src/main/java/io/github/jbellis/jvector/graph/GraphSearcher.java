@@ -65,7 +65,7 @@ public class GraphSearcher<T> {
    * is the unique owner of the vectors instance passed in here.
    */
   public static <T> SearchResult search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
-    var searcher = new GraphSearcher.Builder<>(graph.getView()).build();
+    var searcher = new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build();
     NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
       switch (vectorEncoding) {
         case BYTE:
@@ -213,10 +213,11 @@ public class GraphSearcher<T> {
     if (visited.length() < capacity) {
       // this happens during graph construction; otherwise the size of the vector values should
       // be constant, and it will be a SparseFixedBitSet instead of FixedBitSet
-      assert (visited instanceof FixedBitSet || visited instanceof GrowableBitSet)
-          : "Unexpected visited type: " + visited.getClass().getName();
-      if (visited instanceof FixedBitSet) {
-        visited = FixedBitSet.ensureCapacity((FixedBitSet) visited, capacity);
+      if (!(visited instanceof GrowableBitSet)) {
+          throw new IllegalArgumentException(
+                  String.format("Unexpected visited type: %s. Encountering this means that the graph changed " +
+                                "while being searched, and the Searcher was not built withConcurrentUpdates()",
+                                visited.getClass().getName()));
       }
       // else GrowableBitSet knows how to grow itself safely
     }

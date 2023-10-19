@@ -1,11 +1,10 @@
 package io.github.jbellis.jvector.util;
 
+import java.util.Objects;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
-
-import org.jctools.queues.MpmcUnboundedXaddArrayQueue;
-
 
 /**
  * Allows any object to be pooled and released when work is done.
@@ -98,12 +97,9 @@ public abstract class PoolingSupport<T> {
         private final ThreadLocal<Pooled<T>> threadLocal;
         private final Supplier<T> initialValue;
 
-        private final MpmcUnboundedXaddArrayQueue<T> queue;
-
         private ThreadPooling(Supplier<T> initialValue) {
             this.initialValue = initialValue;
             this.threadLocal = new ThreadLocal<>();
-            this.queue = new MpmcUnboundedXaddArrayQueue<>(128);
         }
 
         @Override
@@ -113,14 +109,13 @@ public abstract class PoolingSupport<T> {
                 return val;
 
             val = new Pooled<>(this, initialValue.get());
-            queue.offer(val.get());
             threadLocal.set(val);
             return val;
         }
 
         @Override
         public Stream<T> stream() {
-            return queue.stream();
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -157,13 +152,13 @@ public abstract class PoolingSupport<T> {
     final static class QueuedPooling<T> extends PoolingSupport<T> {
         private final int limit;
         private final AtomicInteger created;
-        private final MpmcUnboundedXaddArrayQueue<Pooled<T>> queue;
+        private final LinkedBlockingQueue<Pooled<T>> queue;
         private final Supplier<T> initialValue;
 
         private QueuedPooling(int limit, Supplier<T> initialValue) {
             this.limit = limit;
             this.created = new AtomicInteger(0);
-            this.queue = new MpmcUnboundedXaddArrayQueue<>(128);
+            this.queue = new LinkedBlockingQueue<>(limit);
             this.initialValue = initialValue;
         }
 
@@ -185,7 +180,7 @@ public abstract class PoolingSupport<T> {
             if (queue.size() < created.get())
                 throw new IllegalStateException("close() was not called on all pooled objects yet");
 
-            return queue.stream().map(Pooled::get);
+            return queue.stream().filter(Objects::nonNull).map(Pooled::get);
         }
 
         @Override
