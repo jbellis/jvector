@@ -344,7 +344,7 @@ public class IPCService
     }
 
     public static void main(String[] args) {
-        String socketFile = "/tmp/jvector.sock";
+        String socketFile = System.getProperty("java.io.tmpdir") + "/jvector.sock";
         if (args.length > 1)
             help();
 
