@@ -36,7 +36,7 @@ import org.newsclub.net.unix.AFUNIXSocket;
 import org.newsclub.net.unix.AFUNIXSocketAddress;
 
 /**
- * Simple local service to use for interactive with JVector over IPC.
+ * Simple local service to use for interaction with JVector over IPC.
  * Only handles a single connection at a time.
  */
 public class IPCService
