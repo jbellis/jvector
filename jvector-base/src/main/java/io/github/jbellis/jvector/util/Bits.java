@@ -24,10 +24,15 @@
 
 package io.github.jbellis.jvector.util;
 
+import static java.lang.Math.max;
+
 /**
  * Interface for Bitset-like structures.
  */
 public interface Bits {
+    Bits ALL = new MatchAllBits();
+    Bits NONE = new MatchNoBits();
+
     /**
      * Returns the value of the bit with the specified <code>index</code>.
      *
@@ -40,9 +45,61 @@ public interface Bits {
     /** Returns the number of bits in this set */
     int length();
 
-    /** Bits impl of the specified length with all bits set. */
+    /**
+     * Returns a Bits that is true when `bits` is false, and false when `bits` is true
+     */
+    static Bits inverseOf(Bits bits) {
+        return new Bits() {
+            @Override
+            public boolean get(int index) {
+                return !bits.get(index);
+            }
+
+            @Override
+            public int length() {
+                return bits.length();
+            }
+        };
+    }
+
+    /**
+     * Return a Bits that is set for a given ordinal iff both it is set in both `a` and `b`.
+     */
+    static Bits intersectionOf(Bits a, Bits b) {
+        if (a instanceof MatchAllBits) {
+            return b;
+        }
+        if (b instanceof MatchAllBits) {
+            return a;
+        }
+
+        if (a instanceof MatchNoBits) {
+            return a;
+        }
+        if (b instanceof MatchNoBits) {
+            return b;
+        }
+
+        return new Bits() {
+            @Override
+            public boolean get(int index) {
+                return a.get(index) && b.get(index);
+            }
+
+            @Override
+            public int length() {
+                return max(a.length(), b.length());
+            }
+        };
+    }
+
+    /** Bits with all bits set. */
     class MatchAllBits implements Bits {
         final int len;
+
+        public MatchAllBits() {
+            this(-1);
+        }
 
         public MatchAllBits(int len) {
             this.len = len;
@@ -55,13 +112,20 @@ public interface Bits {
 
         @Override
         public int length() {
+            if (len == -1) {
+                throw new UnsupportedOperationException("Unspecified length");
+            }
             return len;
         }
     }
 
-    /** Bits impl of the specified length with no bits set. */
+    /** Bits with no bits set. */
     class MatchNoBits implements Bits {
         final int len;
+
+        public MatchNoBits() {
+            this(-1);
+        }
 
         public MatchNoBits(int len) {
             this.len = len;
@@ -74,6 +138,9 @@ public interface Bits {
 
         @Override
         public int length() {
+            if (len == -1) {
+                throw new UnsupportedOperationException("Unspecified length");
+            }
             return len;
         }
     }

@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 public class SiftSmall {

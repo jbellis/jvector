@@ -1,8 +1,15 @@
 package io.github.jbellis.jvector.util;
 
+import io.github.jbellis.jvector.graph.NodesIterator;
+
+import java.util.AbstractMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.StampedLock;
+import java.util.stream.IntStream;
 
 /**
  * A Map of int -> T where the int keys are dense and start at zero, but the
@@ -72,5 +79,68 @@ public class DenseIntMap<T> {
         } finally {
             sl.unlockWrite(stamp);
         }
+    }
+
+    /**
+     * @return the former value of the key, or null if it was not set
+     */
+    public T remove(int key) {
+        if (key >= objects.length()) {
+            return null;
+        }
+        var old = objects.get(key);
+        if (old == null) {
+            return null;
+        }
+
+        // ensureCapacity doesn't spin, so we respect the Big Lock to make sure `objects` doesn't
+        // change out from underneath us
+        long stamp = sl.writeLock();
+        try {
+            if (objects.compareAndSet(key, old, null)) {
+                size.decrementAndGet();
+                return old;
+            } else {
+                return null;
+            }
+        } finally {
+            sl.unlockWrite(stamp);
+        }
+    }
+
+    public boolean containsKey(int key) {
+        return get(key) != null;
+    }
+
+    public Set<Map.Entry<Integer, T>> entrySet() {
+        var entries = new HashSet<Map.Entry<Integer, T>>(size());
+        var ref = objects;
+        for (int i = 0; i < ref.length(); i++) {
+            var value = ref.get(i);
+            if (value != null) {
+                entries.add(new AbstractMap.SimpleEntry<>(i, value));
+            }
+        }
+        return entries;
+    }
+
+    public Set<Integer> keySet() {
+        var keys = new HashSet<Integer>(size());
+        var ref = objects;
+        for (int i = 0; i < ref.length(); i++) {
+            var value = ref.get(i);
+            if (value != null) {
+                keys.add(i);
+            }
+        }
+        return keys;
+    }
+
+    public NodesIterator getNodesIterator() {
+        // implemented here because we can't make it threadsafe AND performant elsewhere
+        var minSize = size(); // if keys are added concurrently we will miss them
+        var ref = objects;
+        var keysInts = IntStream.range(0, ref.length()).filter(i -> ref.get(i) != null).iterator();
+        return NodesIterator.fromPrimitiveIterator(keysInts, minSize);
     }
 }

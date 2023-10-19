@@ -81,11 +81,11 @@ public class GraphSearcher<T> {
 
   /** Builder */
   public static class Builder<T> {
-    private final GraphIndex.View<T> graph;
+    private final GraphIndex.View<T> view;
     private boolean concurrent;
 
-    public Builder(GraphIndex.View<T> graph) {
-      this.graph = graph;
+    public Builder(GraphIndex.View<T> view) {
+      this.view = view;
     }
 
     public Builder<T> withConcurrentUpdates() {
@@ -94,8 +94,9 @@ public class GraphSearcher<T> {
     }
 
     public GraphSearcher<T> build() {
-      BitSet bits = concurrent ? new GrowableBitSet(graph.size()) : new SparseFixedBitSet(graph.size());
-      return new GraphSearcher<>(graph, bits);
+      int size = view.getIdUpperBound();
+      BitSet bits = concurrent ? new GrowableBitSet(size) : new SparseFixedBitSet(size);
+      return new GraphSearcher<>(view, bits);
     }
   }
 
@@ -125,6 +126,8 @@ public class GraphSearcher<T> {
    * score/comparison value, will be at the front of the array.
    * <p>
    * If scoreFunction is exact, then reRanker may be null.
+   * <p>
+   * This method never calls acceptOrds.length(), so the length-free Bits.ALL may be passed in.
    */
   // TODO add back ability to re-use a results structure instead of allocating a new one each time?
   SearchResult searchInternal(
@@ -137,12 +140,17 @@ public class GraphSearcher<T> {
     if (!scoreFunction.isExact() && reRanker == null) {
       throw new IllegalArgumentException("Either scoreFunction must be exact, or reRanker must not be null");
     }
-
-    if (ep < 0) {
-      return new SearchResult(new SearchResult.NodeScore[0], 0);
+    if (acceptOrds == null) {
+      throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
     }
 
     prepareScratchState(view.size());
+    if (ep < 0) {
+      return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
+    }
+
+    acceptOrds = Bits.intersectionOf(acceptOrds, view.liveNodes());
+
     var resultsQueue = new NeighborQueue(topK, false);
     Map<Integer, T> vectorsEncountered = scoreFunction.isExact() ? null : new java.util.HashMap<>();
     int numVisited = 0;
@@ -151,7 +159,7 @@ public class GraphSearcher<T> {
     visited.set(ep);
     numVisited++;
     candidates.add(ep, score);
-    if (acceptOrds == null || acceptOrds.get(ep)) {
+    if (acceptOrds.get(ep)) {
       resultsQueue.add(ep, score);
     }
 
@@ -182,7 +190,7 @@ public class GraphSearcher<T> {
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
-          if (acceptOrds == null || acceptOrds.get(friendOrd)) {
+          if (acceptOrds.get(friendOrd)) {
             if (resultsQueue.insertWithReplacement(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
               minAcceptedSimilarity = resultsQueue.topScore();
             }
@@ -205,7 +213,7 @@ public class GraphSearcher<T> {
       Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
     }
 
-    return new SearchResult(nodes, numVisited);
+    return new SearchResult(nodes, visited, numVisited);
   }
 
   private void prepareScratchState(int capacity) {

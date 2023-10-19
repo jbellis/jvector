@@ -24,78 +24,38 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.util.BytesRef;
-import io.github.jbellis.jvector.util.DocIdSetIterator;
-
 abstract class AbstractMockVectorValues<T> implements RandomAccessVectorValues<T> {
+    protected final int dimension;
+    protected final T[] denseValues;
 
-  protected final int dimension;
-  protected final T[] denseValues;
-  protected final T[] values;
-  protected final int numVectors;
-  protected final BytesRef binaryValue;
-
-  private long callingThreadID = -1;
-  protected int pos = -1;
-
-  AbstractMockVectorValues(T[] values, int dimension, T[] denseValues, int numVectors) {
-    this.dimension = dimension;
-    this.values = values;
-    this.denseValues = denseValues;
-    // used by tests that build a graph from bytes rather than floats
-    binaryValue = new BytesRef(dimension);
-    binaryValue.length = dimension;
-    this.numVectors = numVectors;
-  }
-
-  @Override
-  public int size() {
-    return numVectors;
-  }
-
-  @Override
-  public int dimension() {
-    return dimension;
-  }
-
-  @Override
-  public boolean isValueShared() {
-    return false;
-  }
-
-  @Override
-  public T vectorValue(int targetOrd) {
-    return denseValues[targetOrd];
-  }
-
-  @Override
-  public abstract AbstractMockVectorValues<T> copy();
-
-  public abstract T vectorValue();
-
-  private boolean seek(int target) {
-    if (target >= 0 && target < values.length && values[target] != null) {
-      pos = target;
-      return true;
-    } else {
-      return false;
+    AbstractMockVectorValues(int dimension, T[] denseValues) {
+        for (var a : denseValues) {
+            assert a != null;
+        }
+        this.dimension = dimension;
+        this.denseValues = denseValues;
     }
-  }
 
-  public int docID() {
-    return pos;
-  }
-
-  public int nextDoc() {
-    return advance(pos + 1);
-  }
-
-  public int advance(int target) {
-    while (++pos < values.length) {
-      if (seek(pos)) {
-        return pos;
-      }
+    @Override
+    public int size() {
+        return denseValues.length;
     }
-    return DocIdSetIterator.NO_MORE_DOCS;
-  }
+
+    @Override
+    public int dimension() {
+        return dimension;
+    }
+
+    @Override
+    public boolean isValueShared() {
+        return false;
+    }
+
+    @Override
+    public T vectorValue(int targetOrd) {
+        return denseValues[targetOrd];
+    }
+
+    @Override
+    public abstract AbstractMockVectorValues<T> copy();
 }
