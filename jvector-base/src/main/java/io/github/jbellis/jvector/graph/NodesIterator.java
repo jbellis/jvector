@@ -49,6 +49,20 @@ public abstract class NodesIterator implements PrimitiveIterator.OfInt {
         return size;
     }
 
+    public static NodesIterator fromPrimitiveIterator(PrimitiveIterator.OfInt iterator, int size) {
+        return new NodesIterator(size) {
+            @Override
+            public int nextInt() {
+                return iterator.nextInt();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+        };
+    }
+
     public static class ArrayNodesIterator extends NodesIterator {
         private final int[] nodes;
         private int cur = 0;

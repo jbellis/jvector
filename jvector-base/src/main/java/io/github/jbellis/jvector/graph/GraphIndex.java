@@ -24,8 +24,9 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.util.Bits;
+
 import java.io.IOException;
-import java.util.Arrays;
 
 /**
  * Represents a graph-based vector index.  Nodes are represented as ints, and edges are
@@ -45,7 +46,7 @@ public interface GraphIndex<T> extends AutoCloseable {
    * Get all nodes on a given level as node 0th ordinals. The nodes are NOT guaranteed to be
    * presented in any particular order.
    *
-   * @return an iterator over nodes where {@code nextInt} returns a next node on the level
+   * @return an iterator over nodes where {@code nextInt} returns a next node on the level.
    */
   NodesIterator getNodes();
 
@@ -59,6 +60,21 @@ public interface GraphIndex<T> extends AutoCloseable {
    */
   int maxDegree();
 
+  /**
+   * @return the maximum node id in the graph.  May be different from size() if nodes are
+   * being added concurrently, or if nodes have been deleted (and cleaned up).
+   */
+  default int getIdUpperBound() {
+    return size();
+  }
+
+  /**
+   * @return true iff the graph contains the node with the given ordinal id
+   */
+  default boolean containsNode(int nodeId) {
+    return nodeId >= 0 && nodeId < size();
+  }
+
   @Override
   void close() throws IOException;
 
@@ -69,8 +85,14 @@ public interface GraphIndex<T> extends AutoCloseable {
      */
     NodesIterator getNeighborsIterator(int node);
 
+    /**
+     * @return the number of nodes in the graph
+     */
     int size();
 
+    /**
+     * @return the node of the graph to start searches at
+     */
     int entryNode();
 
     /**
@@ -82,16 +104,17 @@ public interface GraphIndex<T> extends AutoCloseable {
      */
     T getVector(int node);
 
-    // for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still need it
-    default int[] getSortedNodes() {
-      int[] sortedNodes = new int[size()];
-      Arrays.setAll(sortedNodes, i -> i);
-      return sortedNodes;
-    }
+    /**
+     * Return a Bits instance indicating which nodes are live.  The result is undefined for
+     * ordinals that do not correspond to nodes in the graph.
+     */
+    Bits liveNodes();
 
-    //  for compatibility with Cassandra's ExtendedHnswGraph.  Not sure if we still want/need it
-    default int getNeighborCount(int node) {
-      return getNeighborsIterator(node).size();
+    /**
+     * @return the largest ordinal id in the graph.  May be different from size() if nodes have been deleted.
+     */
+    default int getIdUpperBound() {
+      return size();
     }
   }
 
