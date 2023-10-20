@@ -21,17 +21,13 @@ You can use [`plot_output.py`](./plot_output.py) to graph the [pareto-optimal po
 Some sample KNN datasets for testing based on ada-002 embeddings generated on wikipedia data are available in ivec/fvec format for testing at:
 
 ```
-aws s3 ls s3://astra-vector/wikipedia/ --no-sign-request 
+aws s3 ls s3://astra-vector/wikipedia_squad/ --no-sign-request 
                            PRE 100k/
                            PRE 1M/
                            PRE 4M/
 ```
 
-download them with the aws s3 cli as follows:
-
-```
-aws s3 sync s3://astra-vector/wikipedia/100k ./ --no-sign-request
-```
+Bench automatically downloads the 100k dataset to the `./fvec` directory .
 
 To run `SiftSmall`/`Bench` without the JVM vector module available, you can use the following invocations:
 
