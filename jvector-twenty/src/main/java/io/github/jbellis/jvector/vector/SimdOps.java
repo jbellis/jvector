@@ -141,7 +141,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -166,7 +166,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -192,7 +192,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -217,7 +217,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -267,7 +267,7 @@ final class SimdOps {
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, i);
             var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, i);
-            vsum = vsum.add(a.mul(b));
+            vsum = a.fma(b, vsum);
             vaMagnitude = vaMagnitude.add(a.mul(a));
             vbMagnitude = vbMagnitude.add(b.mul(b));
         }

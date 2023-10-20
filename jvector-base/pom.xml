@@ -11,12 +11,15 @@
     </parent>
     <artifactId>jvector-base</artifactId>
     <name>Base</name>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.jctools</groupId>
-            <artifactId>jctools-core</artifactId>
-            <version>4.0.1</version>
-        </dependency>
-    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+                <configuration>
+                    <excludesFile>${project.parent.basedir}/rat-excludes.txt</excludesFile>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

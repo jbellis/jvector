@@ -24,68 +24,38 @@
 
 package io.github.jbellis.jvector.graph;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
 
-class MockVectorValues extends AbstractMockVectorValues<float[]> {
-  private final float[] scratch;
-  private final float[] denseScratch;
+public class MockVectorValues extends AbstractMockVectorValues<float[]> {
+    private final float[] denseScratch;
 
-  static MockVectorValues fromValues(float[][] values) {
-    int dimension = values[0].length;
-    int maxDoc = values.length;
-    float[][] denseValues = new float[maxDoc][];
-    int count = 0;
-    for (int i = 0; i < maxDoc; i++) {
-      if (values[i] != null) {
-        denseValues[count++] = values[i];
-      }
+    public static MockVectorValues fromValues(float[][] values) {
+        return new MockVectorValues(values[0].length, values);
     }
-    return new MockVectorValues(values, dimension, denseValues, count);
-  }
 
-  MockVectorValues(float[][] values, int dimension, float[][] denseValues, int numVectors) {
-    super(values, dimension, denseValues, numVectors);
-    this.scratch = new float[dimension];
-    this.denseScratch = new float[dimension];
-  }
-
-  @Override
-  public MockVectorValues copy() {
-    return new MockVectorValues(
-        ArrayUtil.copyOfSubArray(values, 0, values.length),
-        dimension,
-        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
-        numVectors);
-  }
-
-  @Override
-  public float[] vectorValue() {
-    if (RandomizedTest.getRandom().nextBoolean()) {
-      return values[pos];
-    } else {
-      // Sometimes use the same scratch array repeatedly, mimicing what the codec will do.
-      // This should help us catch cases of aliasing where the same vector values source is used
-      // twice in a single computation.
-      System.arraycopy(values[pos], 0, scratch, 0, dimension);
-      return scratch;
+    MockVectorValues(int dimension, float[][] denseValues) {
+        super(dimension, denseValues);
+        this.denseScratch = new float[dimension];
     }
-  }
 
-  @Override
-  public boolean isValueShared() {
-    return true;
-  }
-
-  @Override
-  public float[] vectorValue(int targetOrd) {
-    float[] original = super.vectorValue(targetOrd);
-    if (original == null) {
-      return null;
+    @Override
+    public MockVectorValues copy() {
+        return new MockVectorValues(dimension,
+                                    ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length)
+        );
     }
-    // present a single vector reference to callers like the disk-backed RAVV implmentations,
-    // to catch cases where they are not making a copy
-    System.arraycopy(original, 0, denseScratch, 0, dimension);
-    return denseScratch;
-  }
+
+    @Override
+    public boolean isValueShared() {
+        return true;
+    }
+
+    @Override
+    public float[] vectorValue(int targetOrd) {
+        float[] original = super.vectorValue(targetOrd);
+        // present a single vector reference to callers like the disk-backed RAVV implmentations,
+        // to catch cases where they are not making a copy
+        System.arraycopy(original, 0, denseScratch, 0, dimension);
+        return denseScratch;
+    }
 }

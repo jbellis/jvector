@@ -26,119 +26,90 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
 
-import java.io.IOException;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Tests KNN graphs */
+/**
+ * Tests KNN graphs
+ */
 public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
 
-  @Before
-  public void setup() {
-    similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
-  }
-
-  @Override
-  VectorEncoding getVectorEncoding() {
-    return VectorEncoding.FLOAT32;
-  }
-
-  @Override
-  float[] randomVector(int dim) {
-    return TestUtil.randomVector(getRandom(), dim);
-  }
-
-  @Override
-  AbstractMockVectorValues<float[]> vectorValues(int size, int dimension) {
-    return MockVectorValues.fromValues(createRandomFloatVectors(size, dimension, getRandom()));
-  }
-
-  @Override
-  AbstractMockVectorValues<float[]> vectorValues(float[][] values) {
-    return MockVectorValues.fromValues(values);
-  }
-
-  @Override
-  AbstractMockVectorValues<float[]> vectorValues(
-      int size,
-      int dimension,
-      AbstractMockVectorValues<float[]> pregeneratedVectorValues,
-      int pregeneratedOffset) {
-    float[][] vectors = new float[size][];
-    float[][] randomVectors =
-        createRandomFloatVectors(
-            size - pregeneratedVectorValues.values.length, dimension, getRandom());
-
-    for (int i = 0; i < pregeneratedOffset; i++) {
-      vectors[i] = randomVectors[i];
+    @Before
+    public void setup() {
+        similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
     }
 
-    int currentDoc;
-    while ((currentDoc = pregeneratedVectorValues.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-      vectors[pregeneratedOffset + currentDoc] = pregeneratedVectorValues.values[currentDoc];
+    @Override
+    VectorEncoding getVectorEncoding() {
+        return VectorEncoding.FLOAT32;
     }
 
-    for (int i = pregeneratedOffset + pregeneratedVectorValues.values.length;
-        i < vectors.length;
-        i++) {
-      vectors[i] = randomVectors[i - pregeneratedVectorValues.values.length];
+    @Override
+    float[] randomVector(int dim) {
+        return TestUtil.randomVector(getRandom(), dim);
     }
 
-    return MockVectorValues.fromValues(vectors);
-  }
-
-  @Override
-  RandomAccessVectorValues<float[]> circularVectorValues(int nDoc) {
-    return new CircularFloatVectorValues(nDoc);
-  }
-
-  @Override
-  float[] getTargetVector() {
-    return new float[] {1f, 0f};
-  }
-
-  public void testSearchWithSkewedAcceptOrds() throws IOException {
-    int nDoc = 1000;
-    similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
-    RandomAccessVectorValues<float[]> vectors = circularVectorValues(nDoc);
-    VectorEncoding vectorEncoding = getVectorEncoding();
-    getRandom().nextInt();
-    GraphIndexBuilder<float[]> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
-    OnHeapGraphIndex graph = buildInOrder(builder, vectors);
-
-    // Skip over half of the documents that are closest to the query vector
-    FixedBitSet acceptOrds = new FixedBitSet(nDoc);
-    for (int i = 500; i < nDoc; i++) {
-      acceptOrds.set(i);
+    @Override
+    AbstractMockVectorValues<float[]> vectorValues(int size, int dimension) {
+        return MockVectorValues.fromValues(createRandomFloatVectors(size, dimension, getRandom()));
     }
-    SearchResult.NodeScore[] nn =
-        GraphSearcher.search(
-            getTargetVector(),
-            10,
-            vectors.copy(),
-            getVectorEncoding(),
-            similarityFunction,
-            graph,
-            acceptOrds
-        ).getNodes();
 
-    int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
-    assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
-    int sum = 0;
-    for (int node : nodes) {
-      assertTrue("the results include a deleted document: " + node, acceptOrds.get(node));
-      sum += node;
+    @Override
+    AbstractMockVectorValues<float[]> vectorValues(float[][] values) {
+        return MockVectorValues.fromValues(values);
     }
-    // We still expect to get reasonable recall. The lowest non-skipped docIds
-    // are closest to the query vector: sum(500,509) = 5045
-    assertTrue("sum(result docs)=" + sum, sum < 5100);
-  }
+
+    @Override
+    RandomAccessVectorValues<float[]> circularVectorValues(int nDoc) {
+        return new CircularFloatVectorValues(nDoc);
+    }
+
+    @Override
+    float[] getTargetVector() {
+        return new float[]{1f, 0f};
+    }
+
+    public void testSearchWithSkewedAcceptOrds() {
+        int nDoc = 1000;
+        similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
+        RandomAccessVectorValues<float[]> vectors = circularVectorValues(nDoc);
+        VectorEncoding vectorEncoding = getVectorEncoding();
+        getRandom().nextInt();
+        GraphIndexBuilder<float[]> builder = new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.0f);
+        var graph = TestUtil.buildSequentially(builder, vectors);
+
+        // Skip over half of the documents that are closest to the query vector
+        FixedBitSet acceptOrds = new FixedBitSet(nDoc);
+        for (int i = 500; i < nDoc; i++) {
+            acceptOrds.set(i);
+        }
+        SearchResult.NodeScore[] nn =
+                GraphSearcher.search(
+                        getTargetVector(),
+                        10,
+                        vectors.copy(),
+                        getVectorEncoding(),
+                        similarityFunction,
+                        graph,
+                        acceptOrds
+                ).getNodes();
+
+        int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
+        assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
+        int sum = 0;
+        for (int node : nodes) {
+            assertTrue("the results include a deleted document: " + node, acceptOrds.get(node));
+            sum += node;
+        }
+        // We still expect to get reasonable recall. The lowest non-skipped docIds
+        // are closest to the query vector: sum(500,509) = 5045
+        assertTrue("sum(result docs)=" + sum, sum < 5100);
+    }
 }

@@ -18,6 +18,8 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
+import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Assert;
 import org.junit.Test;
@@ -31,13 +33,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
-  private static final NeighborSimilarity simpleScore = a -> {
-    return (NeighborSimilarity.ExactScoreFunction) b -> VectorSimilarityFunction.EUCLIDEAN.compare(new float[] { a }, new float[] { b });
-  };
-
-  private static float baseScore(int neighbor) {
-    return simpleScore.score(0, neighbor);
-  }
 
   private static void validateSortedByScore(NeighborArray na) {
     for (int i = 0; i < na.size() - 1; i++) {
@@ -46,21 +41,8 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   @Test
-  public void testInsertAndSize() {
-    ConcurrentNeighborSet neighbors = new ConcurrentNeighborSet(0, 2, simpleScore);
-    neighbors.insert(1, baseScore(1));
-    neighbors.insert(2, baseScore(2));
-    assertEquals(2, neighbors.size());
-
-    neighbors.insert(3, baseScore(3));
-    // going past the max size results in evicting ALL non-diverse neighbors which leave us at 1
-    assertEquals(1, neighbors.size());
-    assertEquals(1, neighbors.iterator().nextInt());
-    validateSortedByScore(neighbors.getCurrent());
-  }
-
-  @Test
   public void testInsertDiverse() {
+    // set up scoreBetween
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
@@ -68,6 +50,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     NeighborSimilarity scoreBetween = a -> {
       return (NeighborSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     };
+    // fill candidates with all the nodes except 7
     IntStream.range(0, 10)
         .filter(i -> i != 7)
         .forEach(
@@ -76,6 +59,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
             });
     assert candidates.size() == 9;
 
+    // only nodes 6 and 8 are diverse wrt 7
     var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween);
     var empty = new NeighborArray(0);
     neighbors.insertDiverse(candidates, empty);
@@ -87,6 +71,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testInsertDiverseConcurrent() {
+    // set up scoreBetween
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
@@ -95,6 +80,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     NeighborSimilarity scoreBetween = a -> {
       return (NeighborSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     };
+    // "natural" candidates are [0..7), "concurrent" are [8..10)
     IntStream.range(0, 7)
         .forEach(
             i -> {
@@ -106,6 +92,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
               concurrent.insertSorted(i, scoreBetween.score(7, i));
             });
 
+    // only nodes 6 and 8 are diverse wrt 7
     var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween);
     neighbors.insertDiverse(natural, concurrent);
     assertEquals(2, neighbors.size());
@@ -115,8 +102,30 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   @Test
+  public void testInsertDiverseRetainsNatural() {
+    // set up scoreBetween
+    var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
+    var vectorsCopy = vectors.copy();
+    var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
+    NeighborSimilarity scoreBetween = a -> {
+      return (NeighborSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    };
+
+    // check that the new neighbor doesn't replace the existing one (since both are diverse, and the max degree accommodates both)
+    var cna = new NeighborArray(1);
+    cna.addInOrder(6, scoreBetween.score(7, 6));
+
+    var cna2 = new NeighborArray(1);
+    cna2.addInOrder(8, scoreBetween.score(7, 6));
+
+    var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween, 1.0f, cna);
+    neighbors.insertDiverse(cna2, NeighborArray.EMPTY);
+    assertEquals(2, neighbors.size());
+  }
+
+  @Test
   public void testNoDuplicatesDescOrder() {
-    ConcurrentNeighborSet.ConcurrentNeighborArray cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(5);
+    NeighborArray cna = new NeighborArray(5);
     cna.insertSorted(1, 10.0f);
     cna.insertSorted(2, 9.0f);
     cna.insertSorted(3, 8.0f);
@@ -130,7 +139,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testNoDuplicatesSameScores() {
-    ConcurrentNeighborSet.ConcurrentNeighborArray cna = new ConcurrentNeighborSet.ConcurrentNeighborArray(5);
+    NeighborArray cna = new NeighborArray(5);
     cna.insertSorted(1, 10.0f);
     cna.insertSorted(2, 10.0f);
     cna.insertSorted(3, 10.0f);

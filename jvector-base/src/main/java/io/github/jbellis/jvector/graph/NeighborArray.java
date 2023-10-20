@@ -26,6 +26,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.util.ArrayUtil;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.util.Arrays;
 
@@ -35,8 +36,9 @@ import java.util.Arrays;
  * i.e. the most-similar neighbors are first.
  */
 public class NeighborArray {
-  protected int size;
+  public static final NeighborArray EMPTY = new NeighborArray(0);
 
+  protected int size;
   float[] score;
   int[] node;
 
@@ -67,17 +69,79 @@ public class NeighborArray {
     ++size;
   }
 
-  /** Add a new node to the NeighborArray into a correct sort position according to its score. */
-  public void insertSorted(int newNode, float newScore) {
+  /** 
+   * Add a new node to the NeighborArray into a correct sort position according to its score. 
+   * Duplicate node + score pairs are ignored.
+   * @return true if the new node + score pair did not already exist
+   */
+  public boolean insertSorted(int newNode, float newScore) {
     if (size == node.length) {
       growArrays();
     }
     int insertionPoint = descSortFindRightMostInsertionPoint(newScore);
+    if (duplicateExistsNear(insertionPoint, newNode, newScore)) {
+      return false;
+    }
+
     System.arraycopy(node, insertionPoint, node, insertionPoint + 1, size - insertionPoint);
     System.arraycopy(score, insertionPoint, score, insertionPoint + 1, size - insertionPoint);
     node[insertionPoint] = newNode;
     score[insertionPoint] = newScore;
     ++size;
+    return true;
+  }
+
+  private boolean duplicateExistsNear(int insertionPoint, int newNode, float newScore) {
+    // Check to the left
+    for (int i = insertionPoint - 1; i >= 0 && score[i] == newScore; i--) {
+      if (node[i] == newNode) {
+        return true;
+      }
+    }
+
+    // Check to the right
+    for (int i = insertionPoint; i < size && score[i] == newScore; i++) {
+      if (node[i] == newNode) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Retains only the elements in the current NeighborArray whose corresponding index
+   * is set in the given BitSet.
+   * <p>
+   * This modifies the array in place, preserving the relative order of the elements retained.
+   * <p>
+   * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
+   *                 (Thus, the elements of selected represent positions in the NeighborArray, NOT node ids.)
+   */
+  public void retain(Bits selected) {
+    int writeIdx = 0; // index for where to write the next retained element
+
+    for (int readIdx = 0; readIdx < size; readIdx++) {
+      if (selected.get(readIdx)) {
+        if (writeIdx != readIdx) {
+          // Move the selected entries to the front while maintaining their relative order
+          node[writeIdx] = node[readIdx];
+          score[writeIdx] = score[readIdx];
+        }
+        // else { we haven't created any gaps in the backing arrays yet, so we don't need to move anything }
+        writeIdx++;
+      }
+    }
+
+    size = writeIdx;
+  }
+
+  public NeighborArray copy() {
+    NeighborArray copy = new NeighborArray(node.length);
+    copy.size = size;
+    System.arraycopy(node, 0, copy.node, 0, size);
+    System.arraycopy(score, 0, copy.score, 0, size);
+    return copy;
   }
 
   protected final void growArrays() {
@@ -130,6 +194,9 @@ public class NeighborArray {
     return start;
   }
 
+  /**
+   * Caution! This performs a linear scan.
+   */
   @VisibleForTesting
   boolean contains(int node) {
     for (int i = 0; i < size; i++) {
