@@ -100,18 +100,13 @@ This may not be correct in all setups (e.g. no hyperthreading or hybrid architec
 Some sample KNN datasets for testing based on ada-002 embeddings generated on wikipedia data are available in ivec/fvec format for testing at:
 
 ```
-aws s3 ls s3://astra-vector/wikipedia/ --no-sign-request 
+aws s3 ls s3://astra-vector/wikipedia_scout/ --no-sign-request 
                            PRE 100k/
                            PRE 1M/
                            PRE 4M/
 ```
 
-download them with the aws s3 cli as follows:
-
-```
-aws s3 sync s3://astra-vector/wikipedia/100k ./ --no-sign-request
-```
-
+Bench (see below) automatically downloads the 100k dataset to the `./fvec` directory
 
 ## Developing and Testing
 This project is organized as a [multimodule Maven build](https://maven.apache.org/guides/mini/guide-multiple-modules.html). The intent is to produce a multirelease jar suitable for use as

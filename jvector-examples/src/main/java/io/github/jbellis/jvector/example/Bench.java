@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
@@ -28,12 +29,22 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider;
+import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
+import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
+import software.amazon.awssdk.transfer.s3.S3TransferManager;
+import software.amazon.awssdk.transfer.s3.model.*;
+import software.amazon.awssdk.transfer.s3.progress.LoggingTransferListener;
+import java.util.logging.Logger;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -41,11 +52,14 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
+
+    private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
     private static void testRecall(int M, int efConstruction, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv, Path testDirectory) throws IOException {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
         var topK = ds.groundTruth.get(0).size();
@@ -142,8 +156,8 @@ public class Bench {
         var diskGrid = List.of(false, true);
         var pqGrid = List.of(2, 4, 8);
 
-        // this dataset contains more than 10k query vectors, so we limit it with .subList
-        var adaSet = loadWikipediaData();
+        maybeDownloadData();
+        var adaSet = fvecLoadData("wikipedia_squad", "wikipedia_squad/100k");
         gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
 
         var files = List.of(
@@ -167,17 +181,74 @@ public class Bench {
         }
     }
 
-    private static DataSet loadWikipediaData() throws IOException {
-        var baseVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000);
-        var gt = SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000);
-        var ds = new DataSet("wikipedia",
+    private static void maybeDownloadData() {
+        String[] keys = {
+                "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"
+        };
+
+        String bucketName = "astra-vector";
+
+        S3AsyncClientBuilder s3ClientBuilder = S3AsyncClient.builder()
+                .region(Region.of("us-east-1"))
+                .httpClient(AwsCrtAsyncHttpClient.builder()
+                        .maxConcurrency(1)
+                        .build())
+                .credentialsProvider(AnonymousCredentialsProvider.create());
+
+        // get directory from paths in keys
+        List<String> dirs = Arrays.stream(keys).map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
+        for (String dir : dirs) {
+            try {
+                dir = "fvec/"+dir;
+                Files.createDirectories(Paths.get(dir));
+            } catch (IOException e) {
+                System.err.println("Failed to create directory: " + e.getMessage());
+            }
+        }
+
+       try (S3AsyncClient s3Client = s3ClientBuilder.build()) {
+            S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
+            for (String key : keys) {
+                Path path = Paths.get("fvec", key);
+                if (Files.exists(path)) {
+                    continue;
+                }
+
+                System.out.println("Downloading: "+key);
+                DownloadFileRequest downloadFileRequest =
+                        DownloadFileRequest.builder()
+                                .getObjectRequest(b -> b.bucket(bucketName).key(key))
+                                .addTransferListener(LoggingTransferListener.create())
+                                .destination(Paths.get(path.toString()))
+                                .build();
+
+                FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
+
+                CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
+                System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
+
+            }
+            tm.close();
+        }
+        catch(Exception e){
+            System.out.println("Error downloading data from S3: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private static DataSet fvecLoadData(String name, String path) throws IOException {
+        var baseVectors = SiftLoader.readFvecs("fvec/"+path+"/ada_002_100000_base_vectors.fvec");
+        var queryVectors = SiftLoader.readFvecs("fvec/"+path+"/ada_002_100000_query_vectors_10000.fvec");
+        var gt = SiftLoader.readIvecs("fvec/"+path+"/ada_002_100000_indices_query_10000.ivec");
+        var ds = new DataSet(name,
                              VectorSimilarityFunction.DOT_PRODUCT,
                              baseVectors,
                              queryVectors,
                              gt);
-        System.out.format("%nWikipedia: %d base and %d query vectors loaded, dimensions %d%n",
-                          baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
+        System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
+                          name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
         return ds;
     }
 
