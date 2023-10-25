@@ -23,7 +23,13 @@ import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
-import io.github.jbellis.jvector.graph.*;
+import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
@@ -35,9 +41,10 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
-import software.amazon.awssdk.transfer.s3.model.*;
+import software.amazon.awssdk.transfer.s3.model.CompletedFileDownload;
+import software.amazon.awssdk.transfer.s3.model.DownloadFileRequest;
+import software.amazon.awssdk.transfer.s3.model.FileDownload;
 import software.amazon.awssdk.transfer.s3.progress.LoggingTransferListener;
-import java.util.logging.Logger;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -49,10 +56,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.function.Function;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
