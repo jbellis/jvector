@@ -24,6 +24,8 @@ import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.*;
+import io.github.jbellis.jvector.pq.BQVectors;
+import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -159,25 +161,25 @@ public class Bench {
         var adaSet = fvecLoadData("wikipedia_squad", "wikipedia_squad/100k");
         gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
 
-        var files = List.of(
-                // large files not yet supported
-                // "hdf5/deep-image-96-angular.hdf5",
-                // "hdf5/gist-960-euclidean.hdf5",
-                "hdf5/nytimes-256-angular.hdf5",
-                "hdf5/glove-100-angular.hdf5",
-                "hdf5/glove-200-angular.hdf5",
-                "hdf5/sift-128-euclidean.hdf5");
-        for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-        }
-
-        // tiny dataset, don't waste time building a huge index
-        files = List.of("hdf5/fashion-mnist-784-euclidean.hdf5");
-        mGrid = List.of(8, 12, 16, 24);
-        efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
-        for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-        }
+//        var files = List.of(
+//                // large files not yet supported
+//                // "hdf5/deep-image-96-angular.hdf5",
+//                // "hdf5/gist-960-euclidean.hdf5",
+//                "hdf5/nytimes-256-angular.hdf5",
+//                "hdf5/glove-100-angular.hdf5",
+//                "hdf5/glove-200-angular.hdf5",
+//                "hdf5/sift-128-euclidean.hdf5");
+//        for (var f : files) {
+//            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+//        }
+//
+//        // tiny dataset, don't waste time building a huge index
+//        files = List.of("hdf5/fashion-mnist-784-euclidean.hdf5");
+//        mGrid = List.of(8, 12, 16, 24);
+//        efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
+//        for (var f : files) {
+//            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+//        }
     }
 
     private static void maybeDownloadData() {
@@ -256,13 +258,12 @@ public class Bench {
             var start = System.nanoTime();
             int originalDimension = ds.baseVectors.get(0).length;
             var pqDims = originalDimension / pqFactor;
-            ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
-            ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
+            var bq = new BinaryQuantization();
             System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
             start = System.nanoTime();
-            var quantizedVectors = pq.encodeAll(ds.baseVectors);
-            var compressedVectors = new PQVectors(pq, quantizedVectors);
+            var quantizedVectors = bq.encodeAll(ds.baseVectors);
+            var compressedVectors = new BQVectors(bq, quantizedVectors);
             System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
             var testDirectory = Files.createTempDirectory("BenchGraphDir");
