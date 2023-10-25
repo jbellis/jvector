@@ -94,14 +94,12 @@ public class CompressedVectors
         CompressedVectors that = (CompressedVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
         if (compressedVectors.length != that.compressedVectors.length) return false;
-        return IntStream.range(0, compressedVectors.length).allMatch((i) -> {
-            return Arrays.equals(compressedVectors[i], that.compressedVectors[i]);
-        });
+        return Arrays.deepEquals(compressedVectors, that.compressedVectors);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pq, compressedVectors);
+        return Objects.hash(pq, Arrays.deepHashCode(compressedVectors));
     }
 
     public NeighborSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
