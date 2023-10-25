@@ -20,7 +20,6 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
-import io.github.jbellis.jvector.graph.GraphIndexTestCase;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
@@ -46,7 +45,7 @@ public class TestCompressedVectors extends RandomizedTest {
 
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
-        var cv = new CompressedVectors(pq, compressed);
+        var cv = new PQVectors(pq, compressed);
 
         // Write compressed vectors
         File cvFile = File.createTempFile("pqtest", ".cv");
@@ -55,7 +54,7 @@ public class TestCompressedVectors extends RandomizedTest {
         }
         // Read compressed vectors
         try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-            var cv2 = CompressedVectors.load(in, 0);
+            var cv2 = PQVectors.load(in, 0);
             assertEquals(cv, cv2);
         }
     }
@@ -71,7 +70,7 @@ public class TestCompressedVectors extends RandomizedTest {
 
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
-        var cv = new CompressedVectors(pq, compressed);
+        var cv = new PQVectors(pq, compressed);
 
         // compare the encoded similarities to the raw
         for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {

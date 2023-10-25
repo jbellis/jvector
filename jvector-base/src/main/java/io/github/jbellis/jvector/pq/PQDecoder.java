@@ -22,17 +22,17 @@ import io.github.jbellis.jvector.vector.VectorUtil;
 /**
  * Performs similarity comparisons with compressed vectors without decoding them
  */
-abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreFunction {
-    protected final CompressedVectors cv;
+abstract class PQDecoder implements NeighborSimilarity.ApproximateScoreFunction {
+    protected final PQVectors cv;
 
-    protected CompressedDecoder(CompressedVectors cv) {
+    protected PQDecoder(PQVectors cv) {
         this.cv = cv;
     }
 
-    protected static abstract class CachingDecoder extends CompressedDecoder {
+    protected static abstract class CachingDecoder extends PQDecoder {
         protected final float[] partialSums;
 
-        protected CachingDecoder(CompressedVectors cv, float[] query, VectorSimilarityFunction vsf) {
+        protected CachingDecoder(PQVectors cv, float[] query, VectorSimilarityFunction vsf) {
             super(cv);
             var pq = this.cv.pq;
             partialSums = cv.reusablePartialSums();
@@ -64,7 +64,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
     }
 
     static class DotProductDecoder extends CachingDecoder {
-        public DotProductDecoder(CompressedVectors cv, float[] query) {
+        public DotProductDecoder(PQVectors cv, float[] query) {
             super(cv, query, VectorSimilarityFunction.DOT_PRODUCT);
         }
 
@@ -75,7 +75,7 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
     }
 
     static class EuclideanDecoder extends CachingDecoder {
-        public EuclideanDecoder(CompressedVectors cv, float[] query) {
+        public EuclideanDecoder(PQVectors cv, float[] query) {
             super(cv, query, VectorSimilarityFunction.EUCLIDEAN);
         }
 
@@ -85,12 +85,12 @@ abstract class CompressedDecoder implements NeighborSimilarity.ApproximateScoreF
         }
     }
 
-    static class CosineDecoder extends CompressedDecoder {
+    static class CosineDecoder extends PQDecoder {
         protected final float[] partialSums;
         protected final float[] aMagnitude;
         protected final float bMagnitude;
 
-        public CosineDecoder(CompressedVectors cv, float[] query) {
+        public CosineDecoder(PQVectors cv, float[] query) {
             super(cv);
             var pq = this.cv.pq;
 

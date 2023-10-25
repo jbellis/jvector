@@ -26,6 +26,7 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
@@ -172,8 +173,8 @@ public class IPCService
             })
         );
 
-        var cv = new CompressedVectors(pq, quantizedVectors);
-        System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ravv.size(), (cv.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+        var cv = new PQVectors(pq, quantizedVectors);
+        System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ravv.size(), (cv.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
         return cv;
     }
 
@@ -211,7 +212,7 @@ public class IPCService
     String memory(SessionContext ctx) {
         long kb = 0;
         if (ctx.cv != null)
-            kb = ctx.cv.memorySize() / 1024;
+            kb = ctx.cv.ramBytesUsed() / 1024;
         return String.format("%s %d\n", Response.RESULT, kb);
     }
 
