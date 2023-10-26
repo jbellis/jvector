@@ -2,6 +2,7 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -28,11 +29,7 @@ public class BQVectors implements CompressedVectors {
             @Override
             public float similarityTo(int node2) {
                 var vBQ = compressedVectors[node2];
-                int hammingDistance = 0;
-                for (int i = 0; i < vBQ.length; i++) {
-                    hammingDistance += Long.bitCount(vBQ[i] ^ qBQ[i]);
-                }
-                return 1 - (float) hammingDistance / bitLength;
+                return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / bitLength;
             }
         };
     }
