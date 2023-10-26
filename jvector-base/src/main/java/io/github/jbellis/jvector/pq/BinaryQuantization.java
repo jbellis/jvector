@@ -34,12 +34,15 @@ public class BinaryQuantization {
      * @return one bit per original f32
      */
     public long[] encode(float[] vector) {
-        int M = vector.length / 64;
+        int M = (int) Math.ceil(vector.length / 64.0);
         long[] encoded = new long[M];
         for (int i = 0; i < M; i++) {
             long bits = 0;
             for (int j = 0; j < 64; j++) {
                 int idx = i * 64 + j;
+                if (idx >= vector.length) {
+                    break;
+                }
                 if (vector[idx] > 0) {
                     bits |= 1L << j;
                 }
