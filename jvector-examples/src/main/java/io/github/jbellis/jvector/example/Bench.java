@@ -177,7 +177,7 @@ public class Bench {
         var diskGrid = List.of(false, true);
         var pqGrid = List.of(2, 4, 8);
 
-        DownloadHelper.maybeDownloadData();
+        DownloadHelper.maybeDownloadFvecs();
         var adaSet = loadWikipediaData("wikipedia_squad/100k");
         gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
         cachedPQ.clear();
@@ -186,11 +186,15 @@ public class Bench {
                 // large files not yet supported
                 // "hdf5/deep-image-96-angular.hdf5",
                 // "hdf5/gist-960-euclidean.hdf5",
-                "hdf5/nytimes-256-angular.hdf5",
-                "hdf5/glove-100-angular.hdf5",
-                "hdf5/glove-200-angular.hdf5",
-                "hdf5/sift-128-euclidean.hdf5");
+                "glove-25-angular.hdf5",
+                "glove-50-angular.hdf5",
+                "lastfm-64-dot.hdf5",
+                "glove-100-angular.hdf5",
+                "glove-200-angular.hdf5",
+                "nytimes-256-angular.hdf5",
+                "sift-128-euclidean.hdf5");
         for (var f : files) {
+            DownloadHelper.maybeDownloadHdf5(f);
             gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
             cachedPQ.clear();
         }

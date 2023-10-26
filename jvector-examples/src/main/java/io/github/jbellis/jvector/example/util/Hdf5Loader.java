@@ -25,24 +25,26 @@ import java.nio.file.Paths;
 import java.util.*;
 
 public class Hdf5Loader {
-    public static DataSet load(String pathStr) {
+    public static final String HDF5_DIR = "hdf5/";
+
+    public static DataSet load(String filename) {
         // infer the similarity
         VectorSimilarityFunction similarityFunction;
-        if (pathStr.contains("angular")) {
+        if (filename.contains("-angular") || filename.contains("-dot")) {
             similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         }
-        else if (pathStr.contains("euclidean")) {
+        else if (filename.contains("-euclidean")) {
             similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
         }
         else {
-            throw new IllegalArgumentException("Unknown similarity function -- expected angular or euclidean for " + pathStr);
+            throw new IllegalArgumentException("Unknown similarity function -- expected angular or euclidean for " + filename);
         }
 
         // read the data
         float[][] baseVectors;
         float[][] queryVectors;
         int[][] groundTruth;
-        Path path = Paths.get(pathStr);
+        Path path = Path.of(HDF5_DIR).resolve(filename);
         try (HdfFile hdf = new HdfFile(path)) {
             baseVectors = (float[][]) hdf.getDatasetByPath("train").getData();
             queryVectors = (float[][]) hdf.getDatasetByPath("test").getData();
@@ -102,7 +104,7 @@ public class Hdf5Loader {
         }
 
         System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
-                          pathStr, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
+                          filename, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
 
         return new DataSet(path.getFileName().toString(), similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }

@@ -12,15 +12,20 @@ import software.amazon.awssdk.transfer.s3.model.FileDownload;
 import software.amazon.awssdk.transfer.s3.progress.LoggingTransferListener;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class DownloadHelper {
-    public static void maybeDownloadData() {
+
+    public static void maybeDownloadFvecs() {
         // TODO how to detect and recover from incomplete downloads?
         String[] keys = {
                 "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
@@ -73,6 +78,43 @@ public class DownloadHelper {
             tm.close();
         } catch (Exception e) {
             System.out.println("Error downloading data from S3: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    public static void maybeDownloadHdf5(String datasetName) {
+        var fullPath = Path.of(Hdf5Loader.HDF5_DIR).resolve(datasetName);
+        if (Files.exists(fullPath)) {
+            return;
+        }
+
+        // Download from http://ann-benchmarks.com/datasetName
+        var url = "http://ann-benchmarks.com/" + datasetName;
+        System.out.println("Downloading: " + url);
+
+        HttpURLConnection connection = null;
+        while (true) {
+            int responseCode;
+            try {
+                connection = (HttpURLConnection) new URL(url).openConnection();
+                responseCode = connection.getResponseCode();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP) {
+                String newUrl = connection.getHeaderField("Location");
+                System.out.println("Redirect detected to URL: " + newUrl);
+                url = newUrl;
+            } else {
+                break;
+            }
+        }
+
+        try (InputStream in = connection.getInputStream()) {
+            Files.createDirectories(Path.of(Hdf5Loader.HDF5_DIR));
+            Files.copy(in, fullPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            System.out.println("Error downloading data: " + e.getMessage());
             System.exit(1);
         }
     }
