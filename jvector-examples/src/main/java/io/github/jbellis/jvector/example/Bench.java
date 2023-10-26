@@ -20,26 +20,23 @@ import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.example.util.DataSet;
-import io.github.jbellis.jvector.example.util.Hdf5Loader;
+import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
-import io.github.jbellis.jvector.graph.*;
+import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.pq.BQVectors;
 import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider;
-import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3AsyncClient;
-import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
-import software.amazon.awssdk.transfer.s3.S3TransferManager;
-import software.amazon.awssdk.transfer.s3.model.*;
-import software.amazon.awssdk.transfer.s3.progress.LoggingTransferListener;
 import java.util.logging.Logger;
 
 import java.io.BufferedOutputStream;
@@ -47,9 +44,10 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
@@ -61,7 +59,8 @@ import java.util.stream.IntStream;
 public class Bench {
 
     private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
-    private static void testRecall(int M, int efConstruction, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, CompressedVectors cv, Path testDirectory) throws IOException {
+
+    private static void testRecall(int M, int efConstruction, List<Integer> pqGrid, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, Path testDirectory) throws IOException {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
         var topK = ds.groundTruth.get(0).size();
 
@@ -78,14 +77,22 @@ public class Bench {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
-                int queryRuns = 2;
-                for (int overquery : efSearchOptions) {
-                    for (boolean useDisk : diskOptions) {
-                        start = System.nanoTime();
-                        var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
-                        var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                        System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                                          useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                for (var pqFactor : List.of(8)) {
+                    var bq = new BinaryQuantization();
+                    start = System.nanoTime();
+                    var quantizedVectors = bq.encodeAll(ds.baseVectors);
+                    var cv = new BQVectors(bq, quantizedVectors);
+                    System.out.format("BQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (cv.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+
+                    int queryRuns = 2;
+                    for (int overquery : efSearchOptions) {
+                        for (boolean useDisk : diskOptions) {
+                            start = System.nanoTime();
+                            var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
+                            var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
+                            System.out.format("  Query BQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                                              useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                        }
                     }
                 }
             }
@@ -93,6 +100,20 @@ public class Bench {
         finally {
             Files.deleteIfExists(graphPath);
         }
+    }
+
+    // avoid recomputing the codebooks repeatedly (this is a relatively small memory footprint)
+    private static final Map<Integer, ProductQuantization> cachedPQ = new HashMap<>();
+    private static ProductQuantization getProductQuantization(DataSet ds, Integer pqFactor) {
+        return cachedPQ.computeIfAbsent(pqFactor, __ -> {
+            var start = System.nanoTime();
+            int originalDimension = ds.baseVectors.get(0).length;
+            var pqDims = originalDimension / pqFactor;
+            ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
+            ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
+            System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
+            return pq;
+        });
     }
 
     static class ResultSummary {
@@ -157,92 +178,34 @@ public class Bench {
         var diskGrid = List.of(false, true);
         var pqGrid = List.of(2, 4, 8);
 
-        maybeDownloadData();
-        var adaSet = fvecLoadData("wikipedia_squad", "wikipedia_squad/100k");
+        DownloadHelper.maybeDownloadFvecs();
+        var adaSet = loadWikipediaData("wikipedia_squad/100k");
         gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+        cachedPQ.clear();
 
 //        var files = List.of(
 //                // large files not yet supported
 //                // "hdf5/deep-image-96-angular.hdf5",
 //                // "hdf5/gist-960-euclidean.hdf5",
-//                "hdf5/nytimes-256-angular.hdf5",
-//                "hdf5/glove-100-angular.hdf5",
-//                "hdf5/glove-200-angular.hdf5",
-//                "hdf5/sift-128-euclidean.hdf5");
+//                "glove-25-angular.hdf5",
+//                "glove-50-angular.hdf5",
+//                "lastfm-64-dot.hdf5",
+//                "glove-100-angular.hdf5",
+//                "glove-200-angular.hdf5",
+//                "nytimes-256-angular.hdf5",
+//                "sift-128-euclidean.hdf5");
 //        for (var f : files) {
+//            DownloadHelper.maybeDownloadHdf5(f);
 //            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-//        }
-//
-//        // tiny dataset, don't waste time building a huge index
-//        files = List.of("hdf5/fashion-mnist-784-euclidean.hdf5");
-//        mGrid = List.of(8, 12, 16, 24);
-//        efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
-//        for (var f : files) {
-//            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+//            cachedPQ.clear();
 //        }
     }
 
-    private static void maybeDownloadData() {
-        String[] keys = {
-                "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"
-        };
-
-        String bucketName = "astra-vector";
-
-        S3AsyncClientBuilder s3ClientBuilder = S3AsyncClient.builder()
-                .region(Region.of("us-east-1"))
-                .httpClient(AwsCrtAsyncHttpClient.builder()
-                        .maxConcurrency(1)
-                        .build())
-                .credentialsProvider(AnonymousCredentialsProvider.create());
-
-        // get directory from paths in keys
-        List<String> dirs = Arrays.stream(keys).map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
-        for (String dir : dirs) {
-            try {
-                dir = "fvec/"+dir;
-                Files.createDirectories(Paths.get(dir));
-            } catch (IOException e) {
-                System.err.println("Failed to create directory: " + e.getMessage());
-            }
-        }
-
-       try (S3AsyncClient s3Client = s3ClientBuilder.build()) {
-            S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
-            for (String key : keys) {
-                Path path = Paths.get("fvec", key);
-                if (Files.exists(path)) {
-                    continue;
-                }
-
-                System.out.println("Downloading: "+key);
-                DownloadFileRequest downloadFileRequest =
-                        DownloadFileRequest.builder()
-                                .getObjectRequest(b -> b.bucket(bucketName).key(key))
-                                .addTransferListener(LoggingTransferListener.create())
-                                .destination(Paths.get(path.toString()))
-                                .build();
-
-                FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
-
-                CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
-                System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
-
-            }
-            tm.close();
-        }
-        catch(Exception e){
-            System.out.println("Error downloading data from S3: " + e.getMessage());
-            System.exit(1);
-        }
-    }
-
-    private static DataSet fvecLoadData(String name, String path) throws IOException {
+    private static DataSet loadWikipediaData(String path) throws IOException {
         var baseVectors = SiftLoader.readFvecs("fvec/"+path+"/ada_002_100000_base_vectors.fvec");
         var queryVectors = SiftLoader.readFvecs("fvec/"+path+"/ada_002_100000_query_vectors_10000.fvec");
         var gt = SiftLoader.readIvecs("fvec/"+path+"/ada_002_100000_indices_query_10000.ivec");
+        String name = Path.of(path).getName(0).toString();
         var ds = new DataSet(name,
                              VectorSimilarityFunction.DOT_PRODUCT,
                              baseVectors,
@@ -254,29 +217,15 @@ public class Bench {
     }
 
     private static void gridSearch(DataSet ds, List<Integer> pqGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
-        for (var pqFactor : pqGrid) {
-            var start = System.nanoTime();
-            int originalDimension = ds.baseVectors.get(0).length;
-            var pqDims = originalDimension / pqFactor;
-            var bq = new BinaryQuantization();
-            System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
-
-            start = System.nanoTime();
-            var quantizedVectors = bq.encodeAll(ds.baseVectors);
-            var compressedVectors = new BQVectors(bq, quantizedVectors);
-            System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (compressedVectors.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
-
-            var testDirectory = Files.createTempDirectory("BenchGraphDir");
-
-            try {
-                for (int M : mGrid) {
-                    for (int beamWidth : efConstructionGrid) {
-                        testRecall(M, beamWidth, diskOptions, efSearchFactor, ds, compressedVectors, testDirectory);
-                    }
+        var testDirectory = Files.createTempDirectory("BenchGraphDir");
+        try {
+            for (int M : mGrid) {
+                for (int efC : efConstructionGrid) {
+                    testRecall(M, efC, pqGrid, diskOptions, efSearchFactor, ds, testDirectory);
                 }
-            } finally {
-                Files.delete(testDirectory);
             }
+        } finally {
+            Files.delete(testDirectory);
         }
     }
 }

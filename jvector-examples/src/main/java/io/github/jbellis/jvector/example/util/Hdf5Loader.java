@@ -19,33 +19,52 @@ package io.github.jbellis.jvector.example.util;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.jhdf.HdfFile;
+import io.jhdf.api.Dataset;
+import io.jhdf.object.datatype.DataType;
+import io.jhdf.object.datatype.FloatingPoint;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.IntStream;
 
 public class Hdf5Loader {
-    public static DataSet load(String pathStr) {
+    public static final String HDF5_DIR = "hdf5/";
+
+    public static DataSet load(String filename) {
         // infer the similarity
         VectorSimilarityFunction similarityFunction;
-        if (pathStr.contains("angular")) {
+        if (filename.contains("-angular") || filename.contains("-dot")) {
             similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         }
-        else if (pathStr.contains("euclidean")) {
+        else if (filename.contains("-euclidean")) {
             similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
         }
         else {
-            throw new IllegalArgumentException("Unknown similarity function -- expected angular or euclidean for " + pathStr);
+            throw new IllegalArgumentException("Unknown similarity function -- expected angular or euclidean for " + filename);
         }
 
         // read the data
         float[][] baseVectors;
         float[][] queryVectors;
         int[][] groundTruth;
-        Path path = Paths.get(pathStr);
+        Path path = Path.of(HDF5_DIR).resolve(filename);
         try (HdfFile hdf = new HdfFile(path)) {
             baseVectors = (float[][]) hdf.getDatasetByPath("train").getData();
-            queryVectors = (float[][]) hdf.getDatasetByPath("test").getData();
+            Dataset queryDataset = hdf.getDatasetByPath("test");
+            if (((FloatingPoint) queryDataset.getDataType()).getBitPrecision() == 64) {
+                // lastfm dataset contains f64 queries but f32 everything else
+                var doubles = ((double[][]) queryDataset.getData());
+                queryVectors = IntStream.range(0, doubles.length).parallel().mapToObj(i -> {
+                    var a = new float[doubles[i].length];
+                    for (int j = 0; j < doubles[i].length; j++) {
+                        a[j] = (float) doubles[i][j];
+                    }
+                    return a;
+                }).toArray(float[][]::new);
+            } else {
+                queryVectors = (float[][]) queryDataset.getData();
+            }
             groundTruth = (int[][]) hdf.getDatasetByPath("neighbors").getData();
         }
 
@@ -102,7 +121,7 @@ public class Hdf5Loader {
         }
 
         System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
-                          pathStr, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
+                          filename, scrubbedBaseVectors.size(), scrubbedQueryVectors.size(), scrubbedBaseVectors.get(0).length);
 
         return new DataSet(path.getFileName().toString(), similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
