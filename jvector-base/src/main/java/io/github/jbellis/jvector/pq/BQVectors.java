@@ -19,7 +19,20 @@ public class BQVectors implements CompressedVectors {
 
     @Override
     public void write(DataOutput out) throws IOException {
-        // TODO
+        // pq codebooks
+        bq.write(out);
+
+        // compressed vectors
+        out.writeInt(compressedVectors.length);
+        if (compressedVectors.length <= 0) {
+            return;
+        }
+        out.writeInt(compressedVectors[0].length);
+        for (var v : compressedVectors) {
+            for (int i = 0; i < v.length; i++) {
+                out.writeLong(v[i]);
+            }
+        }
     }
 
     @Override
@@ -38,7 +51,6 @@ public class BQVectors implements CompressedVectors {
 
     @Override
     public long ramBytesUsed() {
-        // TODO
-        return 0;
+        return compressedVectors.length * RamUsageEstimator.sizeOf(compressedVectors[0]);
     }
 }
