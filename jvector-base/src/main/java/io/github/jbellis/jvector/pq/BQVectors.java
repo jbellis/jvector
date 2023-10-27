@@ -1,6 +1,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
@@ -25,13 +26,14 @@ public class BQVectors implements CompressedVectors {
     public NeighborSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
         var qBQ = bq.encode(q);
         int bitLength = qBQ.length * Long.SIZE;
-        return new NeighborSimilarity.ApproximateScoreFunction() {
-            @Override
-            public float similarityTo(int node2) {
-                var vBQ = compressedVectors[node2];
-                return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / bitLength;
-            }
+        return node2 -> {
+            var vBQ = compressedVectors[node2];
+            return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / bitLength;
         };
+    }
+
+    public long[] get(int i) {
+        return compressedVectors[i];
     }
 
     @Override

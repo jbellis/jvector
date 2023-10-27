@@ -127,9 +127,8 @@ public class PQVectors implements CompressedVectors {
 
     @Override
     public long ramBytesUsed() {
-        long size = pq.memorySize();
-        long bsize = RamUsageEstimator.sizeOf(compressedVectors[0]);
-
-        return size + (bsize * compressedVectors.length);
+        long codebooksSize = pq.memorySize();
+        long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors[0]);
+        return codebooksSize + (compressedVectorSize * compressedVectors.length);
     }
 }

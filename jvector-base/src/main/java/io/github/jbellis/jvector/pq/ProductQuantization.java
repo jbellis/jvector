@@ -154,13 +154,6 @@ public class ProductQuantization {
     }
 
     /**
-     * @return The dimension of the vectors being quantized.
-     */
-    public int getOriginalDimension() {
-        return originalDimension;
-    }
-
-    /**
      * @return how many bytes we are compressing to
      */
     public int getSubspaceCount() {
@@ -328,9 +321,11 @@ public class ProductQuantization {
 
     public long memorySize() {
         long size = 0;
-        for (int i = 0; i < codebooks.length; i++)
-            for (int j = 0; j < codebooks[i].length; j++)
-                size += RamUsageEstimator.sizeOf(codebooks[i][j]);
+        for (float[][] codebook : codebooks) {
+            for (float[] floats : codebook) {
+                size += RamUsageEstimator.sizeOf(floats);
+            }
+        }
 
         return size;
     }
