@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
@@ -51,7 +50,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
-import java.util.logging.Logger;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -59,9 +58,6 @@ import java.util.stream.IntStream;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-
-    private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
-
     private static void testRecall(int M,
                                    int efConstruction,
                                    List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
@@ -114,13 +110,12 @@ public class Bench {
                     }
                 }
             }
-        }
-        finally {
+        } finally {
             Files.deleteIfExists(graphPath);
         }
     }
 
-    // avoid recomputing the codebooks repeatedly (this is a relatively small memory footprint)
+    // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
     private static final Map<Function<DataSet, VectorCompressor<?>>, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
     private static VectorCompressor<?> getCompressor(Function<DataSet, VectorCompressor<?>> cf, DataSet ds) {
         if (cf == null) {
@@ -203,15 +198,25 @@ public class Bench {
 //        gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
 //        cachedCompressors.clear();
 
-        DownloadHelper.maybeDownloadFvecs();
+        // args is list of regexes, possibly needing to be split by whitespace.
+        // generate a regex that matches any regex in args, or if args is empty/null, match everything
+        var regex = args.length == 0 ? ".*" : Arrays.stream(args).flatMap(s -> Arrays.stream(s.split("\\s"))).map(s -> "(?:" + s + ")").collect(Collectors.joining("|"));
+        // compile regex and do substring matching using find
+        var pattern = Pattern.compile(regex);
 
-        var e5set = loadE5SmallData("wikipedia_squad/100k");
-        gridSearch(e5set, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-        cachedCompressors.clear();
+        if (pattern.matcher("wikipedia_squad/100k/e5-small-v2").find()) {
+            DownloadHelper.maybeDownloadFvecs(List.of("intfloat_e5-small-v2_100000"));
+            var e5set = loadE5SmallData("wikipedia_squad/100k");
+            gridSearch(e5set, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+            cachedCompressors.clear();
+        }
 
-        var adaSet = loadWikipediaData("wikipedia_squad/100k");
-        gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-        cachedCompressors.clear();
+        if (pattern.matcher("wikipedia_squad/100k/ada_002").find()) {
+            DownloadHelper.maybeDownloadFvecs(List.of("ada_002_100000"));
+            var adaSet = loadWikipediaData("wikipedia_squad/100k");
+            gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+            cachedCompressors.clear();
+        }
 
         var files = List.of(
                 // large files not yet supported
@@ -225,9 +230,11 @@ public class Bench {
                 "nytimes-256-angular.hdf5",
                 "sift-128-euclidean.hdf5");
         for (var f : files) {
-            DownloadHelper.maybeDownloadHdf5(f);
-            gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-            cachedCompressors.clear();
+            if (pattern.matcher(f).find()) {
+                DownloadHelper.maybeDownloadHdf5(f);
+                gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+                cachedCompressors.clear();
+            }
         }
     }
 

@@ -140,4 +140,3 @@ for dataset in parsed_datasets:
     dataset['data'] = filter_pareto_optimal(dataset['data'])
 for dataset in parsed_datasets:
     plot_dataset(dataset)
-
