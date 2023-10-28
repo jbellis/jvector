@@ -98,7 +98,7 @@ public class DownloadHelper {
         }
 
         // Download from http://ann-benchmarks.com/datasetName
-        var url = "http://ann-benchmarks.com/" + datasetName;
+        var url = "https://ann-benchmarks.com/" + datasetName;
         System.out.println("Downloading: " + url);
 
         HttpURLConnection connection = null;
