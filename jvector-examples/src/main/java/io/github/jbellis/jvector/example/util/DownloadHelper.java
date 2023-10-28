@@ -23,32 +23,28 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class DownloadHelper {
-    private static String bucketName = "astra-vector";
+    private static final String bucketName = "astra-vector";
 
-    private static S3AsyncClientBuilder getS3AsyncClientBuilder() {
-        S3AsyncClientBuilder s3ClientBuilder = S3AsyncClient.builder()
+    private static S3AsyncClientBuilder s3AsyncClientBuilder() {
+        return S3AsyncClient.builder()
                 .region(Region.US_EAST_1)
                 .httpClient(AwsCrtAsyncHttpClient.builder()
                         .maxConcurrency(1)
                         .build())
                 .credentialsProvider(AnonymousCredentialsProvider.create());
-        return s3ClientBuilder;
     }
 
     public static void maybeDownloadFvecs(List<String> files) {
         List<String> keys;
         if (null == files || files.isEmpty()) {
-            keys = Arrays.asList(new String[] {
-                "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec",
-            });
+            keys = List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                           "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                           "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec");
         } else {
             keys = files;
         }
@@ -65,7 +61,7 @@ public class DownloadHelper {
             }
         }
 
-        try (S3AsyncClient s3Client = getS3AsyncClientBuilder().build()) {
+        try (S3AsyncClient s3Client = s3AsyncClientBuilder().build()) {
             S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
             for (String key : keys) {
                 Path path = Paths.get("fvec", key);
@@ -118,7 +114,7 @@ public class DownloadHelper {
         var url = "https://ann-benchmarks.com/" + datasetName;
         System.out.println("Downloading: " + url);
 
-        HttpURLConnection connection = null;
+        HttpURLConnection connection;
         while (true) {
             int responseCode;
             try {
@@ -143,16 +139,5 @@ public class DownloadHelper {
             System.out.println("Error downloading data: " + e.getMessage());
             System.exit(1);
         }
-    }
-
-    public static List<String> s3FileListing() {
-        S3Client s3 = S3Client.builder().region(Region.US_EAST_1).credentialsProvider(AnonymousCredentialsProvider.create()).build();
-        ListObjectsV2Request req = ListObjectsV2Request.builder().bucket(bucketName).build();
-        ListObjectsV2Response res = s3.listObjectsV2(req);
-        List<String> filenames = res.contents().stream().map(S3Object::key).collect(Collectors.toList());
-        /*for (String filename : filenames) {
-            System.out.println(filename);
-        }*/
-        return filenames;
     }
 }
