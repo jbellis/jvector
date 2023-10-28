@@ -5,6 +5,10 @@ import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
 import software.amazon.awssdk.transfer.s3.model.CompletedFileDownload;
 import software.amazon.awssdk.transfer.s3.model.DownloadFileRequest;
@@ -19,31 +23,39 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class DownloadHelper {
+    private static String bucketName = "astra-vector";
 
-    public static void maybeDownloadFvecs() {
-        // TODO how to detect and recover from incomplete downloads?
-        String[] keys = {
+    private static S3AsyncClientBuilder getS3AsyncClientBuilder() {
+        S3AsyncClientBuilder s3ClientBuilder = S3AsyncClient.builder()
+                .region(Region.US_EAST_1)
+                .httpClient(AwsCrtAsyncHttpClient.builder()
+                        .maxConcurrency(1)
+                        .build())
+                .credentialsProvider(AnonymousCredentialsProvider.create());
+        return s3ClientBuilder;
+    }
+
+    public static void maybeDownloadFvecs(List<String> files) {
+        List<String> keys;
+        if (null == files || files.isEmpty()) {
+            keys = Arrays.asList(new String[] {
                 "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
                 "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"
-        };
-
-        String bucketName = "astra-vector";
-
-        S3AsyncClientBuilder s3ClientBuilder = S3AsyncClient.builder()
-                .region(Region.of("us-east-1"))
-                .httpClient(AwsCrtAsyncHttpClient.builder()
-                                    .maxConcurrency(1)
-                                    .build())
-                .credentialsProvider(AnonymousCredentialsProvider.create());
+                "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec",
+            });
+        } else {
+            keys = files;
+        }
+        // TODO how to detect and recover from incomplete downloads?
 
         // get directory from paths in keys
-        List<String> dirs = Arrays.stream(keys).map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
+        List<String> dirs = keys.stream().map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
         for (String dir : dirs) {
             try {
                 dir = "fvec/" + dir;
@@ -53,7 +65,7 @@ public class DownloadHelper {
             }
         }
 
-        try (S3AsyncClient s3Client = s3ClientBuilder.build()) {
+        try (S3AsyncClient s3Client = getS3AsyncClientBuilder().build()) {
             S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
             for (String key : keys) {
                 Path path = Paths.get("fvec", key);
@@ -69,11 +81,20 @@ public class DownloadHelper {
                                 .destination(Paths.get(path.toString()))
                                 .build();
 
-                FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
+                // 3 retries
+                for (int i = 0; i < 3; i++) {
+                    FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
+                    CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
+                    long downloadedSize = Files.size(path);
 
-                CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
-                System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
-
+                    // Check if downloaded file size matches the expected size
+                    if (downloadedSize == downloadResult.response().contentLength()) {
+                        System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
+                        break;  // Successfully downloaded
+                    } else {
+                        System.out.println("Incomplete download. Retrying...");
+                    }
+                }
             }
             tm.close();
         } catch (Exception e) {
@@ -82,14 +103,19 @@ public class DownloadHelper {
         }
     }
 
+    public static void maybeDownloadFvecs() {
+        maybeDownloadFvecs(null);
+    }
+
     public static void maybeDownloadHdf5(String datasetName) {
-        var fullPath = Path.of(Hdf5Loader.HDF5_DIR).resolve(datasetName);
+        Path path = Path.of(Hdf5Loader.HDF5_DIR);
+        var fullPath = path.resolve(datasetName);
         if (Files.exists(fullPath)) {
             return;
         }
 
-        // Download from http://ann-benchmarks.com/datasetName
-        var url = "http://ann-benchmarks.com/" + datasetName;
+        // Download from https://ann-benchmarks.com/datasetName
+        var url = "https://ann-benchmarks.com/" + datasetName;
         System.out.println("Downloading: " + url);
 
         HttpURLConnection connection = null;
@@ -111,11 +137,22 @@ public class DownloadHelper {
         }
 
         try (InputStream in = connection.getInputStream()) {
-            Files.createDirectories(Path.of(Hdf5Loader.HDF5_DIR));
+            Files.createDirectories(path);
             Files.copy(in, fullPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             System.out.println("Error downloading data: " + e.getMessage());
             System.exit(1);
         }
+    }
+
+    public static List<String> s3FileListing() {
+        S3Client s3 = S3Client.builder().region(Region.US_EAST_1).credentialsProvider(AnonymousCredentialsProvider.create()).build();
+        ListObjectsV2Request req = ListObjectsV2Request.builder().bucket(bucketName).build();
+        ListObjectsV2Response res = s3.listObjectsV2(req);
+        List<String> filenames = res.contents().stream().map(S3Object::key).collect(Collectors.toList());
+        /*for (String filename : filenames) {
+            System.out.println(filename);
+        }*/
+        return filenames;
     }
 }
