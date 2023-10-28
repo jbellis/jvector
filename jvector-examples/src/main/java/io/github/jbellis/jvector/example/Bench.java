@@ -191,20 +191,19 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(16);
-        var efConstructionGrid = List.of(100);
-        var efSearchGrid = List.of(1, 2, 4);
-        List<Function<DataSet, VectorCompressor<?>>> pqGrid;
-        pqGrid = Arrays.asList(
-                null,
+        var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
+        var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var efSearchGrid = List.of(1, 2);
+        List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
+                null, // uncompressed
                 ds -> BinaryQuantization.compute(ds.getBaseRavv()),
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
-//        DownloadHelper.maybeDownloadFvecs();
-//        var adaSet = loadWikipediaData("wikipedia_squad/100k");
-//        gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, efSearchGrid);
-//        cachedCompressors.clear();
+        DownloadHelper.maybeDownloadFvecs();
+        var adaSet = loadWikipediaData("wikipedia_squad/100k");
+        gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+        cachedCompressors.clear();
 
         var files = List.of(
                 // large files not yet supported
@@ -219,7 +218,7 @@ public class Bench {
                 "sift-128-euclidean.hdf5");
         for (var f : files) {
             DownloadHelper.maybeDownloadHdf5(f);
-            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, efSearchGrid);
+            gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();
         }
     }
