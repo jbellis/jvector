@@ -18,14 +18,14 @@ package io.github.jbellis.jvector.example.util;
 import com.indeed.util.mmap.MMapBuffer;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 public class MMapReader implements RandomAccessReader {
     private final MMapBuffer buffer;
     private long position;
-    private byte[] floatsScratch = new byte[0];
-    private byte[] intsScratch = new byte[0];
+    private byte[] scratch = new byte[0];
 
     MMapReader(MMapBuffer buffer) {
         this.buffer = buffer;
@@ -59,23 +59,34 @@ public class MMapReader implements RandomAccessReader {
     @Override
     public void readFully(float[] floats) {
         int bytesToRead = floats.length * Float.BYTES;
-        if (floatsScratch.length < bytesToRead) {
-            floatsScratch = new byte[bytesToRead];
+        if (scratch.length < bytesToRead) {
+            scratch = new byte[bytesToRead];
         }
-        read(floatsScratch, 0, bytesToRead);
-        ByteBuffer byteBuffer = ByteBuffer.wrap(floatsScratch).order(ByteOrder.BIG_ENDIAN);
+        read(scratch, 0, bytesToRead);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.BIG_ENDIAN);
         byteBuffer.asFloatBuffer().get(floats);
     }
 
     @Override
     public void read(int[] ints, int offset, int count) {
         int bytesToRead = (count - offset) * Integer.BYTES;
-        if (intsScratch.length < bytesToRead) {
-            intsScratch = new byte[bytesToRead];
+        if (scratch.length < bytesToRead) {
+            scratch = new byte[bytesToRead];
         }
-        read(intsScratch, 0, bytesToRead);
-        ByteBuffer byteBuffer = ByteBuffer.wrap(intsScratch).order(ByteOrder.BIG_ENDIAN);
+        read(scratch, 0, bytesToRead);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.BIG_ENDIAN);
         byteBuffer.asIntBuffer().get(ints, offset, count);
+    }
+
+    @Override
+    public void readFully(long[] vector) {
+        int bytesToRead = vector.length * Long.BYTES;
+        if (scratch.length < bytesToRead) {
+            scratch = new byte[bytesToRead];
+        }
+        read(scratch, 0, bytesToRead);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.BIG_ENDIAN);
+        byteBuffer.asLongBuffer().get(vector);
     }
 
     @Override

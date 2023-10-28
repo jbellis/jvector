@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestCompressedVectors extends RandomizedTest {
     @Test
-    public void testSaveLoad() throws Exception {
+    public void testSaveLoadPQ() throws Exception {
         // Generate a PQ for random 2D vectors
         var vectors = createRandomVectors(512, 2);
         var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, false);
@@ -55,6 +55,28 @@ public class TestCompressedVectors extends RandomizedTest {
         // Read compressed vectors
         try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
             var cv2 = PQVectors.load(in, 0);
+            assertEquals(cv, cv2);
+        }
+    }
+
+    @Test
+    public void testSaveLoadBQ() throws Exception {
+        // Generate a PQ for random vectors
+        var vectors = createRandomVectors(512, 64);
+        var bq = BinaryQuantization.compute(new ListRandomAccessVectorValues(vectors, 2));
+
+        // Compress the vectors
+        var compressed = bq.encodeAll(vectors);
+        var cv = new BQVectors(bq, compressed);
+
+        // Write compressed vectors
+        File cvFile = File.createTempFile("bqtest", ".cv");
+        try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+            cv.write(out);
+        }
+        // Read compressed vectors
+        try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+            var cv2 = BQVectors.load(in, 0);
             assertEquals(cv, cv2);
         }
     }

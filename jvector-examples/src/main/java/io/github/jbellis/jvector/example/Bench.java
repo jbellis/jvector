@@ -37,6 +37,8 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
+
 import java.util.logging.Logger;
 
 import java.io.BufferedOutputStream;
@@ -78,7 +80,7 @@ public class Bench {
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
                 for (var pqFactor : List.of(8)) {
-                    var bq = new BinaryQuantization();
+                    var bq = BinaryQuantization.compute(new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length));
                     start = System.nanoTime();
                     var quantizedVectors = bq.encodeAll(ds.baseVectors);
                     var cv = new BQVectors(bq, quantizedVectors);

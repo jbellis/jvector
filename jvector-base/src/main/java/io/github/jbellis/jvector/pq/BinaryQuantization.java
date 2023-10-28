@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.Io;
+import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
@@ -95,5 +96,25 @@ public class BinaryQuantization {
     public void write(DataOutput out) throws IOException {
         out.writeInt(globalCentroid.length);
         Io.writeFloats(out, globalCentroid);
+    }
+
+    public static BinaryQuantization load(RandomAccessReader in) throws IOException {
+        int length = in.readInt();
+        var centroid = new float[length];
+        in.readFully(centroid);
+        return new BinaryQuantization(centroid);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BinaryQuantization that = (BinaryQuantization) o;
+        return Arrays.equals(globalCentroid, that.globalCentroid);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(globalCentroid);
     }
 }
