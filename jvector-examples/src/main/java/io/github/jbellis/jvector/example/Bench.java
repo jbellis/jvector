@@ -91,7 +91,7 @@ public class Bench {
                     start = System.nanoTime();
                     var quantizedVectors = compressor.encodeAll(ds.baseVectors);
                     var cv = compressor.createCompressedVectors(quantizedVectors);
-                    System.out.format("BQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (cv.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+                    System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs,%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
                     int queryRuns = 2;
                     for (int overquery : efSearchOptions) {
@@ -99,8 +99,8 @@ public class Bench {
                             start = System.nanoTime();
                             var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
                             var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query BQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                                              useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                                              useDisk ? compressor.toString() : "Uncompressed", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                         }
                     }
                 }
@@ -117,10 +117,7 @@ public class Bench {
         return cachedCompressors.computeIfAbsent(cf, __ -> {
             var start = System.nanoTime();
             var compressor = cf.apply(ds);
-            // Future work: create a RawCompressor that encapsulates uncompressed vectors
-            if (compressor != null) {
-                System.out.format("%s build %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
-            }
+            System.out.format("%s build %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
             return compressor;
         });
     }
@@ -181,15 +178,15 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
-        var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(1, 2);
+        var mGrid = List.of(16);
+        var efConstructionGrid = List.of(100);
+        var efSearchGrid = List.of(1, 2, 4);
         var diskGrid = List.of(false, true);
         List<Function<DataSet, VectorCompressor<?>>> pqGrid;
         pqGrid = List.of(
-                ds -> null,
                 ds -> BinaryQuantization.compute(ds.getBaseRavv()),
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 2, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         DownloadHelper.maybeDownloadFvecs();
         var adaSet = loadWikipediaData("wikipedia_squad/100k");
