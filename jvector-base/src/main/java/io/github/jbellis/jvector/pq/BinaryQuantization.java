@@ -36,7 +36,7 @@ import static java.lang.Math.min;
 /**
  * A Product Quantization implementation for float vectors.
  */
-public class BinaryQuantization {
+public class BinaryQuantization implements VectorCompressor<long[]> {
     private final float[] globalCentroid;
 
     public BinaryQuantization(float[] globalCentroid) {
@@ -63,8 +63,14 @@ public class BinaryQuantization {
         return new BinaryQuantization(globalCentroid);
     }
 
+    @Override
+    public CompressedVectors createCompressedVectors(Object[] quantizedVectors) {
+        return new BQVectors(this, (long[][]) quantizedVectors);
+    }
+
+    @Override
     public long[][] encodeAll(List<float[]> vectors) {
-        return PhysicalCoreExecutor.instance.submit(() -> vectors.stream().parallel().map(v -> encode(v)).toArray(long[][]::new));
+        return PhysicalCoreExecutor.instance.submit(() -> vectors.stream().parallel().map(this::encode).toArray(long[][]::new));
     }
 
     /**
@@ -72,6 +78,7 @@ public class BinaryQuantization {
      *
      * @return one bit per original f32
      */
+    @Override
     public long[] encode(float[] v) {
         var centered = VectorUtil.sub(v, globalCentroid);
 
@@ -93,6 +100,7 @@ public class BinaryQuantization {
         return encoded;
     }
 
+    @Override
     public void write(DataOutput out) throws IOException {
         out.writeInt(globalCentroid.length);
         Io.writeFloats(out, globalCentroid);
@@ -116,5 +124,10 @@ public class BinaryQuantization {
     @Override
     public int hashCode() {
         return Arrays.hashCode(globalCentroid);
+    }
+
+    @Override
+    public String toString() {
+        return "BinaryQuantization";
     }
 }

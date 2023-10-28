@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.example.util;
 
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.util.List;
@@ -27,6 +29,7 @@ public class DataSet {
     public final List<float[]> baseVectors;
     public final List<float[]> queryVectors;
     public final List<? extends Set<Integer>> groundTruth;
+    private RandomAccessVectorValues<float[]> baseRavv;
 
     public DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<? extends Set<Integer>> groundTruth) {
         if (baseVectors.isEmpty() || queryVectors.isEmpty() || groundTruth.isEmpty()) {
@@ -44,5 +47,16 @@ public class DataSet {
         this.baseVectors = baseVectors;
         this.queryVectors = queryVectors;
         this.groundTruth = groundTruth;
+    }
+
+    public int getDimension() {
+        return baseVectors.get(0).length;
+    }
+
+    public RandomAccessVectorValues<float[]> getBaseRavv() {
+        if (baseRavv == null) {
+            baseRavv = new ListRandomAccessVectorValues(baseVectors, getDimension());
+        }
+        return baseRavv;
     }
 }

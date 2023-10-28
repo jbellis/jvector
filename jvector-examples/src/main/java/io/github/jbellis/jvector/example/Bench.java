@@ -21,6 +21,7 @@ import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
+import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.GraphIndex;
@@ -30,16 +31,13 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.pq.BQVectors;
 import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorUtil;
-
-import java.util.logging.Logger;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -47,11 +45,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -62,7 +62,14 @@ public class Bench {
 
     private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
 
-    private static void testRecall(int M, int efConstruction, List<Integer> pqGrid, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, Path testDirectory) throws IOException {
+    private static void testRecall(int M,
+                                   int efConstruction,
+                                   List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
+                                   List<Boolean> diskOptions,
+                                   List<Integer> efSearchOptions,
+                                   DataSet ds,
+                                   Path testDirectory) throws IOException
+    {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
         var topK = ds.groundTruth.get(0).size();
 
@@ -79,11 +86,11 @@ public class Bench {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
-                for (var pqFactor : List.of(8)) {
-                    var bq = BinaryQuantization.compute(new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length));
+                for (var cf : compressionGrid) {
+                    var compressor = getCompressor(cf, ds);
                     start = System.nanoTime();
-                    var quantizedVectors = bq.encodeAll(ds.baseVectors);
-                    var cv = new BQVectors(bq, quantizedVectors);
+                    var quantizedVectors = compressor.encodeAll(ds.baseVectors);
+                    var cv = compressor.createCompressedVectors(quantizedVectors);
                     System.out.format("BQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (cv.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
 
                     int queryRuns = 2;
@@ -105,16 +112,16 @@ public class Bench {
     }
 
     // avoid recomputing the codebooks repeatedly (this is a relatively small memory footprint)
-    private static final Map<Integer, ProductQuantization> cachedPQ = new HashMap<>();
-    private static ProductQuantization getProductQuantization(DataSet ds, Integer pqFactor) {
-        return cachedPQ.computeIfAbsent(pqFactor, __ -> {
+    private static final Map<Function<DataSet, VectorCompressor<?>>, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
+    private static VectorCompressor<?> getCompressor(Function<DataSet, VectorCompressor<?>> cf, DataSet ds) {
+        return cachedCompressors.computeIfAbsent(cf, __ -> {
             var start = System.nanoTime();
-            int originalDimension = ds.baseVectors.get(0).length;
-            var pqDims = originalDimension / pqFactor;
-            ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
-            ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
-            System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
-            return pq;
+            var compressor = cf.apply(ds);
+            // Future work: create a RawCompressor that encapsulates uncompressed vectors
+            if (compressor != null) {
+                System.out.format("%s build %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
+            }
+            return compressor;
         });
     }
 
@@ -178,29 +185,33 @@ public class Bench {
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
         var diskGrid = List.of(false, true);
-        var pqGrid = List.of(2, 4, 8);
+        List<Function<DataSet, VectorCompressor<?>>> pqGrid;
+        pqGrid = List.of(
+                ds -> null,
+                ds -> BinaryQuantization.compute(ds.getBaseRavv()),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 2, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         DownloadHelper.maybeDownloadFvecs();
         var adaSet = loadWikipediaData("wikipedia_squad/100k");
         gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-        cachedPQ.clear();
+        cachedCompressors.clear();
 
-//        var files = List.of(
-//                // large files not yet supported
-//                // "hdf5/deep-image-96-angular.hdf5",
-//                // "hdf5/gist-960-euclidean.hdf5",
-//                "glove-25-angular.hdf5",
-//                "glove-50-angular.hdf5",
-//                "lastfm-64-dot.hdf5",
-//                "glove-100-angular.hdf5",
-//                "glove-200-angular.hdf5",
-//                "nytimes-256-angular.hdf5",
-//                "sift-128-euclidean.hdf5");
-//        for (var f : files) {
-//            DownloadHelper.maybeDownloadHdf5(f);
-//            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-//            cachedPQ.clear();
-//        }
+        var files = List.of(
+                // large files not yet supported
+                // "hdf5/deep-image-96-angular.hdf5",
+                // "hdf5/gist-960-euclidean.hdf5",
+                "glove-25-angular.hdf5",
+                "glove-50-angular.hdf5",
+                "lastfm-64-dot.hdf5",
+                "glove-100-angular.hdf5",
+                "glove-200-angular.hdf5",
+                "nytimes-256-angular.hdf5",
+                "sift-128-euclidean.hdf5");
+        for (var f : files) {
+            DownloadHelper.maybeDownloadHdf5(f);
+            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+            cachedCompressors.clear();
+        }
     }
 
     private static DataSet loadWikipediaData(String path) throws IOException {
@@ -218,7 +229,13 @@ public class Bench {
         return ds;
     }
 
-    private static void gridSearch(DataSet ds, List<Integer> pqGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
+    private static void gridSearch(DataSet ds,
+                                   List<Function<DataSet, VectorCompressor<?>>> pqGrid,
+                                   List<Integer> mGrid,
+                                   List<Integer> efConstructionGrid,
+                                   List<Boolean> diskOptions,
+                                   List<Integer> efSearchFactor) throws IOException
+    {
         var testDirectory = Files.createTempDirectory("BenchGraphDir");
         try {
             for (int M : mGrid) {
