@@ -69,11 +69,20 @@ public class DownloadHelper {
                                 .destination(Paths.get(path.toString()))
                                 .build();
 
-                FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
+                // 3 retries
+                for (int i = 0; i < 3; i++) {
+                    FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
+                    CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
+                    long downloadedSize = Files.size(path);
 
-                CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
-                System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
-
+                    // Check if downloaded file size matches the expected size
+                    if (downloadedSize == downloadResult.response().contentLength()) {
+                        System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
+                        break;  // Successfully downloaded
+                    } else {
+                        System.out.println("Incomplete download. Retrying...");
+                    }
+                }
             }
             tm.close();
         } catch (Exception e) {
