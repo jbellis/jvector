@@ -5,6 +5,10 @@ import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
 import software.amazon.awssdk.transfer.s3.model.CompletedFileDownload;
 import software.amazon.awssdk.transfer.s3.model.DownloadFileRequest;
@@ -24,26 +28,30 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class DownloadHelper {
+    private static final String bucketName = "astra-vector";
 
-    public static void maybeDownloadFvecs() {
-        // TODO how to detect and recover from incomplete downloads?
-        String[] keys = {
-                "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"
-        };
-
-        String bucketName = "astra-vector";
-
-        S3AsyncClientBuilder s3ClientBuilder = S3AsyncClient.builder()
-                .region(Region.of("us-east-1"))
+    private static S3AsyncClientBuilder s3AsyncClientBuilder() {
+        return S3AsyncClient.builder()
+                .region(Region.US_EAST_1)
                 .httpClient(AwsCrtAsyncHttpClient.builder()
-                                    .maxConcurrency(1)
-                                    .build())
+                        .maxConcurrency(1)
+                        .build())
                 .credentialsProvider(AnonymousCredentialsProvider.create());
+    }
+
+    public static void maybeDownloadFvecs(List<String> files) {
+        List<String> keys;
+        if (null == files || files.isEmpty()) {
+            keys = List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                           "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                           "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec");
+        } else {
+            keys = files;
+        }
+        // TODO how to detect and recover from incomplete downloads?
 
         // get directory from paths in keys
-        List<String> dirs = Arrays.stream(keys).map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
+        List<String> dirs = keys.stream().map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
         for (String dir : dirs) {
             try {
                 dir = "fvec/" + dir;
@@ -53,7 +61,7 @@ public class DownloadHelper {
             }
         }
 
-        try (S3AsyncClient s3Client = s3ClientBuilder.build()) {
+        try (S3AsyncClient s3Client = s3AsyncClientBuilder().build()) {
             S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
             for (String key : keys) {
                 Path path = Paths.get("fvec", key);
@@ -91,17 +99,22 @@ public class DownloadHelper {
         }
     }
 
+    public static void maybeDownloadFvecs() {
+        maybeDownloadFvecs(null);
+    }
+
     public static void maybeDownloadHdf5(String datasetName) {
-        var fullPath = Path.of(Hdf5Loader.HDF5_DIR).resolve(datasetName);
+        Path path = Path.of(Hdf5Loader.HDF5_DIR);
+        var fullPath = path.resolve(datasetName);
         if (Files.exists(fullPath)) {
             return;
         }
 
-        // Download from http://ann-benchmarks.com/datasetName
+        // Download from https://ann-benchmarks.com/datasetName
         var url = "https://ann-benchmarks.com/" + datasetName;
         System.out.println("Downloading: " + url);
 
-        HttpURLConnection connection = null;
+        HttpURLConnection connection;
         while (true) {
             int responseCode;
             try {
@@ -120,7 +133,7 @@ public class DownloadHelper {
         }
 
         try (InputStream in = connection.getInputStream()) {
-            Files.createDirectories(Path.of(Hdf5Loader.HDF5_DIR));
+            Files.createDirectories(path);
             Files.copy(in, fullPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             System.out.println("Error downloading data: " + e.getMessage());
