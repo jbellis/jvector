@@ -5,10 +5,6 @@ import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
-import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
 import software.amazon.awssdk.transfer.s3.model.CompletedFileDownload;
 import software.amazon.awssdk.transfer.s3.model.DownloadFileRequest;
@@ -23,7 +19,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -43,8 +38,8 @@ public class DownloadHelper {
         List<String> keys;
         if (null == files || files.isEmpty()) {
             keys = List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                           "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                           "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec");
+                    "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                    "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec");
         } else {
             keys = files;
         }
@@ -78,10 +73,13 @@ public class DownloadHelper {
                                 .build();
 
                 // 3 retries
+                FileDownload downloadFile;
+                CompletedFileDownload downloadResult;
+                long downloadedSize;
                 for (int i = 0; i < 3; i++) {
-                    FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
-                    CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
-                    long downloadedSize = Files.size(path);
+                    downloadFile = tm.downloadFile(downloadFileRequest);
+                    downloadResult = downloadFile.completionFuture().join();
+                    downloadedSize = Files.size(path);
 
                     // Check if downloaded file size matches the expected size
                     if (downloadedSize == downloadResult.response().contentLength()) {
