@@ -127,16 +127,12 @@ public class Bench {
         if (cf == null) {
             return null;
         }
-        var compressor = cachedCompressors.get(cf);
-        if (compressor == null) {
+        return cachedCompressors.computeIfAbsent(cf, __ -> {
             var start = System.nanoTime();
-            compressor = cf.apply(ds);
+            var compressor = cf.apply(ds);
             System.out.format("%s build in %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
-            cachedCompressors.put(cf, compressor);
-        } else {
-            System.out.format("%s (cached)%n", compressor);
-        }
-        return compressor;
+            return compressor;
+        });
     }
 
     static class ResultSummary {
