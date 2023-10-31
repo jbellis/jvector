@@ -224,9 +224,9 @@ public class Bench {
     }
 
     private static DataSet loadWikipediaData(String path) throws IOException {
-        var baseVectors = SiftLoader.readFvecs("fvec/"+path+"/ada_002_100000_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("fvec/"+path+"/ada_002_100000_query_vectors_10000.fvec");
-        var gt = SiftLoader.readIvecs("fvec/"+path+"/ada_002_100000_indices_query_10000.ivec");
+        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/ada_002_100000_base_vectors.fvec");
+        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/ada_002_100000_query_vectors_10000.fvec");
+        var gt = SiftLoader.readIvecs("fvec/" + path + "/ada_002_100000_indices_query_10000.ivec");
         String name = Path.of(path).getName(0).toString();
         var ds = new DataSet(name,
                              VectorSimilarityFunction.DOT_PRODUCT,
@@ -239,7 +239,7 @@ public class Bench {
     }
 
     private static void gridSearch(DataSet ds,
-                                   List<Function<DataSet, VectorCompressor<?>>> pqGrid,
+                                   List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
                                    List<Integer> mGrid,
                                    List<Integer> efConstructionGrid,
                                    List<Integer> efSearchFactor) throws IOException
@@ -248,7 +248,7 @@ public class Bench {
         try {
             for (int M : mGrid) {
                 for (int efC : efConstructionGrid) {
-                    testRecall(M, efC, pqGrid, efSearchFactor, ds, testDirectory);
+                    testRecall(M, efC, compressionGrid, efSearchFactor, ds, testDirectory);
                 }
             }
         } finally {
