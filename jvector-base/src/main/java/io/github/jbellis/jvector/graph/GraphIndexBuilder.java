@@ -20,13 +20,13 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.IOException;
-import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -221,6 +221,11 @@ public class GraphIndexBuilder<T> {
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, ep, bits);
 
             // Update neighbors with these candidates.
+            // The DiskANN paper calls for using the entire set of visited nodes along the search path as
+            // potential candidates, but in practice we observe neighbor lists being completely filled using
+            // just the topK results.  (Since the Robust Prune algorithm prioritizes closer neighbors,
+            // this means that considering additional nodes from the search path, that are by definition
+            // farther away than the ones in the topK, would not change the result.)
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
             var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
             var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
@@ -345,37 +350,28 @@ public class GraphIndexBuilder<T> {
     }
 
     private int approximateMedioid() {
-        try (var v1 = vectors.get(); var v2 = vectorsCopy.get()) {
-            GraphIndex.View<T> view = graph.getView();
-            var startNode = view.entryNode();
-            int newStartNode;
+        assert graph.size() > 0;
 
-            // Check start node's neighbors for a better candidate, until we reach a local minimum.
-            // This isn't a very good mediod approximation, but all we really need to accomplish is
-            // not to be stuck with the worst possible candidate -- searching isn't super sensitive
-            // to how good the mediod is, especially in higher dimensions
-            while (true) {
-                var startNeighbors = graph.getNeighbors(startNode).getCurrent();
-                // Map each neighbor node to a pair of node and its average distance score.
-                // (We use average instead of total, since nodes may have different numbers of neighbors.)
-                newStartNode = IntStream.concat(IntStream.of(startNode), Arrays.stream(startNeighbors.node(), 0, startNeighbors.size))
-                        .mapToObj(node -> {
-                            var nodeNeighbors = graph.getNeighbors(node).getCurrent();
-                            double score = Arrays.stream(nodeNeighbors.node(), 0, nodeNeighbors.size)
-                                    .mapToDouble(i -> scoreBetween(v1.get().vectorValue(node), v2.get().vectorValue(i)))
-                                    .sum();
-                            return new AbstractMap.SimpleEntry<>(node, score / v2.get().size());
-                        })
-                        // Find the entry with the minimum score
-                        .min(Comparator.comparingDouble(AbstractMap.SimpleEntry::getValue))
-                        // Extract the node of the minimum entry
-                        .map(AbstractMap.SimpleEntry::getKey).get();
-                if (startNode != newStartNode) {
-                    startNode = newStartNode;
-                } else {
-                    return newStartNode;
-                }
+        if (vectorEncoding != VectorEncoding.FLOAT32) {
+            // fill this in when/if we care about byte[] vectors
+            return graph.entry();
+        }
+
+        try (var gs = graphSearcher.get();
+             var vc = vectorsCopy.get())
+        {
+            // compute centroid
+            var centroid = new float[vc.get().dimension()];
+            for (var it = graph.getNodes(); it.hasNext(); ) {
+                var node = it.nextInt();
+                VectorUtil.addInPlace(centroid, (float[]) vc.get().vectorValue(node));
             }
+            VectorUtil.divInPlace(centroid, graph.size());
+
+            // search for the node closest to the centroid
+            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), Bits.ALL);
+            return result.getNodes()[0].node;
         }
     }
 

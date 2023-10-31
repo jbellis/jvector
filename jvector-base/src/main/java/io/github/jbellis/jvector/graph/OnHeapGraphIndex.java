@@ -242,6 +242,14 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
             .orElse(Double.NaN);
   }
 
+  public double getAverageDegree() {
+    return IntStream.range(0, getIdUpperBound())
+            .filter(this::containsNode)
+            .mapToDouble(i -> getNeighbors(i).size())
+            .average()
+            .orElse(Double.NaN);
+  }
+
   private class ConcurrentGraphIndexView implements GraphIndex.View<T> {
     @Override
     public T getVector(int node) {

@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,11 +74,10 @@ public class Bench {
         var topK = ds.groundTruth.get(0).size();
 
         var start = System.nanoTime();
-        var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.4f);
+        var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.2f);
         var onHeapGraph = builder.build();
-        var avgShortEdges = onHeapGraph.getAverageShortEdges();
-        System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
-                M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
+        System.out.format("Build M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+                          M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, onHeapGraph.getAverageDegree(), onHeapGraph.getAverageShortEdges());
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         try {
