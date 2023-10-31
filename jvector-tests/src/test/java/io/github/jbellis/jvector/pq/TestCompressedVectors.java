@@ -20,7 +20,6 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
-import io.github.jbellis.jvector.graph.GraphIndexTestCase;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
@@ -39,14 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestCompressedVectors extends RandomizedTest {
     @Test
-    public void testSaveLoad() throws Exception {
+    public void testSaveLoadPQ() throws Exception {
         // Generate a PQ for random 2D vectors
         var vectors = createRandomVectors(512, 2);
         var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, false);
 
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
-        var cv = new CompressedVectors(pq, compressed);
+        var cv = new PQVectors(pq, compressed);
 
         // Write compressed vectors
         File cvFile = File.createTempFile("pqtest", ".cv");
@@ -55,7 +54,29 @@ public class TestCompressedVectors extends RandomizedTest {
         }
         // Read compressed vectors
         try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-            var cv2 = CompressedVectors.load(in, 0);
+            var cv2 = PQVectors.load(in, 0);
+            assertEquals(cv, cv2);
+        }
+    }
+
+    @Test
+    public void testSaveLoadBQ() throws Exception {
+        // Generate a PQ for random vectors
+        var vectors = createRandomVectors(512, 64);
+        var bq = BinaryQuantization.compute(new ListRandomAccessVectorValues(vectors, 2));
+
+        // Compress the vectors
+        var compressed = bq.encodeAll(vectors);
+        var cv = new BQVectors(bq, compressed);
+
+        // Write compressed vectors
+        File cvFile = File.createTempFile("bqtest", ".cv");
+        try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+            cv.write(out);
+        }
+        // Read compressed vectors
+        try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+            var cv2 = BQVectors.load(in, 0);
             assertEquals(cv, cv2);
         }
     }
@@ -71,7 +92,7 @@ public class TestCompressedVectors extends RandomizedTest {
 
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
-        var cv = new CompressedVectors(pq, compressed);
+        var cv = new PQVectors(pq, compressed);
 
         // compare the encoded similarities to the raw
         for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {

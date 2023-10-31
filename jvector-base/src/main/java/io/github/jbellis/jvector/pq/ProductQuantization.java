@@ -37,12 +37,15 @@ import java.util.stream.IntStream;
 import static java.lang.Math.min;
 
 /**
- * A Product Quantization implementation for float vectors.
+ * Product Quantization for float vectors.  Supports arbitrary source and target dimensionality;
+ * in particular, the source does not need to be evenly divisible by the target.
+ * <p>
+ * Codebook cluster count is fixed at 256.
  */
-public class ProductQuantization {
+public class ProductQuantization implements VectorCompressor<byte[]> {
     static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
-    private static final int K_MEANS_ITERATIONS = 6;
-    private static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
+    static final int K_MEANS_ITERATIONS = 6;
+    static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
 
     final float[][][] codebooks;
     final int M;
@@ -105,6 +108,11 @@ public class ProductQuantization {
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
     }
 
+    @Override
+    public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
+        return new PQVectors(this, (byte[][]) compressedVectors);
+    }
+
     /**
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
@@ -151,13 +159,6 @@ public class ProductQuantization {
             float[] centroidSubvector = codebooks[m][centroidIndex];
             System.arraycopy(centroidSubvector, 0, target, subvectorSizesAndOffsets[m][1], subvectorSizesAndOffsets[m][0]);
         }
-    }
-
-    /**
-     * @return The dimension of the vectors being quantized.
-     */
-    public int getOriginalDimension() {
-        return originalDimension;
     }
 
     /**
@@ -328,10 +329,17 @@ public class ProductQuantization {
 
     public long memorySize() {
         long size = 0;
-        for (int i = 0; i < codebooks.length; i++)
-            for (int j = 0; j < codebooks[i].length; j++)
-                size += RamUsageEstimator.sizeOf(codebooks[i][j]);
+        for (float[][] codebook : codebooks) {
+            for (float[] floats : codebook) {
+                size += RamUsageEstimator.sizeOf(floats);
+            }
+        }
 
         return size;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("ProductQuantization(%s)", M);
     }
 }

@@ -31,6 +31,8 @@ public interface RandomAccessReader extends AutoCloseable {
 
     void readFully(float[] floats) throws IOException;
 
+    void readFully(long[] vector) throws IOException;
+
     void read(int[] ints, int offset, int count) throws IOException;
 
     void close() throws IOException;

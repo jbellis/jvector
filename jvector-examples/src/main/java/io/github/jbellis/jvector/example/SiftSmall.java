@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -35,7 +36,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.IntStream;
 
 public class SiftSmall {
@@ -53,7 +53,7 @@ public class SiftSmall {
         var quantizedVectors = pq.encodeAll(baseVectors);
         System.out.format("  PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        var compressedVectors = new CompressedVectors(pq, quantizedVectors);
+        var compressedVectors = new PQVectors(pq, quantizedVectors);
 
         start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100, 1.5f, 1.4f);

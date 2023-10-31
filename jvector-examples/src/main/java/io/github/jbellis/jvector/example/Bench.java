@@ -31,8 +31,10 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -43,11 +45,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -59,7 +62,13 @@ public class Bench {
 
     private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
 
-    private static void testRecall(int M, int efConstruction, List<Integer> pqGrid, List<Boolean> diskOptions, List<Integer> efSearchOptions, DataSet ds, Path testDirectory) throws IOException {
+    private static void testRecall(int M,
+                                   int efConstruction,
+                                   List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
+                                   List<Integer> efSearchOptions,
+                                   DataSet ds,
+                                   Path testDirectory) throws IOException
+    {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length);
         var topK = ds.groundTruth.get(0).size();
 
@@ -76,22 +85,33 @@ public class Bench {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
-                for (var pqFactor : pqGrid) {
-                    ProductQuantization pq = getProductQuantization(ds, pqFactor);
-                    start = System.nanoTime();
-                    var quantizedVectors = pq.encodeAll(ds.baseVectors);
-                    var cv = new CompressedVectors(pq, quantizedVectors);
-                    System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ds.baseVectors.size(), (cv.memorySize()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
+                for (var cf : compressionGrid) {
+                    var compressor = getCompressor(cf, ds);
+                    CompressedVectors cv;
+                    if (compressor == null) {
+                        cv = null;
+                        System.out.format("Uncompressed vectors%n");
+                    } else {
+                        start = System.nanoTime();
+                        var quantizedVectors = compressor.encodeAll(ds.baseVectors);
+                        cv = compressor.createCompressedVectors(quantizedVectors);
+                        System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
+                    }
 
                     int queryRuns = 2;
                     for (int overquery : efSearchOptions) {
-                        for (boolean useDisk : diskOptions) {
-                            start = System.nanoTime();
-                            var pqr = performQueries(ds, floatVectors, useDisk ? cv : null, useDisk ? onDiskGraph : onHeapGraph, topK, topK * overquery, queryRuns);
+                        start = System.nanoTime();
+                        if (compressor == null) {
+                            // include both in-memory and on-disk search of uncompressed vectors
+                            var pqr = performQueries(ds, floatVectors, cv, onHeapGraph, topK, topK * overquery, queryRuns);
                             var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query PQ=%b top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                                              useDisk, topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                                              "(memory)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                         }
+                        var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, topK * overquery, queryRuns);
+                        var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
+                        System.out.format("  Query %stop %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                                          compressor == null ? "(disk) " : "", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                     }
                 }
             }
@@ -102,16 +122,16 @@ public class Bench {
     }
 
     // avoid recomputing the codebooks repeatedly (this is a relatively small memory footprint)
-    private static final Map<Integer, ProductQuantization> cachedPQ = new HashMap<>();
-    private static ProductQuantization getProductQuantization(DataSet ds, Integer pqFactor) {
-        return cachedPQ.computeIfAbsent(pqFactor, __ -> {
+    private static final Map<Function<DataSet, VectorCompressor<?>>, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
+    private static VectorCompressor<?> getCompressor(Function<DataSet, VectorCompressor<?>> cf, DataSet ds) {
+        if (cf == null) {
+            return null;
+        }
+        return cachedCompressors.computeIfAbsent(cf, __ -> {
             var start = System.nanoTime();
-            int originalDimension = ds.baseVectors.get(0).length;
-            var pqDims = originalDimension / pqFactor;
-            ListRandomAccessVectorValues ravv = new ListRandomAccessVectorValues(ds.baseVectors, originalDimension);
-            ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
-            System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
-            return pq;
+            var compressor = cf.apply(ds);
+            System.out.format("%s build in %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
+            return compressor;
         });
     }
 
@@ -174,13 +194,16 @@ public class Bench {
         var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
         var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
-        var diskGrid = List.of(false, true);
-        var pqGrid = List.of(2, 4, 8);
+        List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
+                null, // uncompressed
+                ds -> BinaryQuantization.compute(ds.getBaseRavv()),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         DownloadHelper.maybeDownloadFvecs();
         var adaSet = loadWikipediaData("wikipedia_squad/100k");
-        gridSearch(adaSet, pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-        cachedPQ.clear();
+        gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+        cachedCompressors.clear();
 
         var files = List.of(
                 // large files not yet supported
@@ -195,8 +218,8 @@ public class Bench {
                 "sift-128-euclidean.hdf5");
         for (var f : files) {
             DownloadHelper.maybeDownloadHdf5(f);
-            gridSearch(Hdf5Loader.load(f), pqGrid, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-            cachedPQ.clear();
+            gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+            cachedCompressors.clear();
         }
     }
 
@@ -215,12 +238,17 @@ public class Bench {
         return ds;
     }
 
-    private static void gridSearch(DataSet ds, List<Integer> pqGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
+    private static void gridSearch(DataSet ds,
+                                   List<Function<DataSet, VectorCompressor<?>>> pqGrid,
+                                   List<Integer> mGrid,
+                                   List<Integer> efConstructionGrid,
+                                   List<Integer> efSearchFactor) throws IOException
+    {
         var testDirectory = Files.createTempDirectory("BenchGraphDir");
         try {
             for (int M : mGrid) {
                 for (int efC : efConstructionGrid) {
-                    testRecall(M, efC, pqGrid, diskOptions, efSearchFactor, ds, testDirectory);
+                    testRecall(M, efC, pqGrid, efSearchFactor, ds, testDirectory);
                 }
             }
         } finally {

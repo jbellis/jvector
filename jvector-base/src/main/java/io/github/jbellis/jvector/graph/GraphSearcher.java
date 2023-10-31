@@ -171,8 +171,7 @@ public class GraphSearcher<T> {
     }
     while (candidates.size() > 0 && !resultsQueue.incomplete()) {
       // get the best candidate (closest or best scoring)
-      float topCandidateSimilarity = candidates.topScore();
-      if (topCandidateSimilarity < minAcceptedSimilarity) {
+      if (candidates.topScore() < minAcceptedSimilarity) {
         break;
       }
 
