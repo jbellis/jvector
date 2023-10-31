@@ -44,6 +44,7 @@ import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
@@ -267,9 +268,9 @@ public class IPCService
             if (ctx.cv != null) {
                 NeighborSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
                 NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
-                r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, null);
+                r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, Bits.ALL);
             } else {
-                r = GraphSearcher.search(queryVector, topK, ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.index, null);
+                r = GraphSearcher.search(queryVector, topK, ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.index, Bits.ALL);
             }
 
             var resultNodes = r.getNodes();
