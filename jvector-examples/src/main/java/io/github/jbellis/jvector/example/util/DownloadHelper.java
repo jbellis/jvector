@@ -101,7 +101,7 @@ public class DownloadHelper {
 
                     // Check if downloaded file size matches the expected size
                     if (downloadedSize == downloadResult.response().contentLength()) {
-                        System.out.println("Downloaded file of length " + downloadResult.response().contentLength());
+                        System.out.println("Downloaded file of length " + downloadedSize);
                         break;  // Successfully downloaded
                     } else {
                         System.out.println("Incomplete download. Retrying...");
