@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.vector;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
@@ -623,6 +624,37 @@ final class SimdOps {
         // Process tail
         for (; i < baseOffsets.length; i++)
             res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
+    }
+
+    /**
+     * Vectorized calculation of Hamming distance for two arrays of long integers.
+     * Both arrays should have the same length.
+     *
+     * @param a The first array
+     * @param b The second array
+     * @return The Hamming distance
+     */
+    public static int hammingDistance(long[] a, long[] b) {
+        var sum = LongVector.zero(LongVector.SPECIES_PREFERRED);
+        int vectorizedLength = LongVector.SPECIES_PREFERRED.loopBound(a.length);
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += LongVector.SPECIES_PREFERRED.length()) {
+            var va = LongVector.fromArray(LongVector.SPECIES_PREFERRED, a, i);
+            var vb = LongVector.fromArray(LongVector.SPECIES_PREFERRED, b, i);
+
+            var xorResult = va.lanewise(VectorOperators.XOR, vb);
+            sum = sum.add(xorResult.lanewise(VectorOperators.BIT_COUNT));
+        }
+
+        int res = (int) sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (int i = vectorizedLength; i < a.length; i++) {
+            res += Long.bitCount(a[i] ^ b[i]);
+        }
 
         return res;
     }

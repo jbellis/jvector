@@ -87,4 +87,6 @@ public interface VectorUtilSupport {
    * @return the sum of the points
    */
   public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets);
+
+  public int hammingDistance(long[] v1, long[] v2);
 }

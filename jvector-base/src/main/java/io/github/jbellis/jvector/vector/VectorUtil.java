@@ -238,4 +238,8 @@ public final class VectorUtil {
   public static float assembleAndSum(float[] data, int dataBase, byte[] dataOffsets) {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }
+
+  public static int hammingDistance(long[] v1, long[] v2) {
+    return impl.hammingDistance(v1, v2);
+  }
 }

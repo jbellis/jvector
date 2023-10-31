@@ -84,6 +84,13 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     @Override
+    public void readFully(long[] vector) throws IOException {
+        for (int i = 0; i < vector.length; i++) {
+            vector[i] = mbb.getLong();
+        }
+    }
+
+    @Override
     public int readInt() {
         return mbb.getInt();
     }

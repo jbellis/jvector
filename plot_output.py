@@ -27,7 +27,6 @@ class Point:
     throughput: float
     M: int
     ef: int
-    disk: bool
     overquery: int
 
 def parse_data(description, data):
@@ -44,28 +43,35 @@ def parse_data(description, data):
     base_vector_count = int(re.search(r'(\d+) base', description).group(1))
     query_vector_count = int(re.search(r'(\d+) query', description).group(1))
     dimensions = int(re.search(r'dimensions (\d+)', description).group(1))
-    dataset_name = re.search(r'hdf5/(\S+).hdf5', description).group(1)
+    dataset_name = re.search(r'(\S+):', description).group(1)
 
     parsed_data = []
     current_pq = None
     M = None
     for line in data:
-        if "PQ@" in line:
-            current_pq = re.search(r'PQ@(\d+)', line).group(1)
+        if "ProductQuantization" in line:
+            current_pq = 'PQ@' + re.search(r'\((\d+)\)', line).group(1)
+        elif "BinaryQuantization" in line:
+            current_pq = 'BQ'
+        elif "Uncompressed" in line:
+            current_pq = 'UC'
         elif "Build M=" in line:
             M = int(re.search(r'M=(\d+)', line).group(1))
             ef = int(re.search(r'ef=(\d+)', line).group(1))
-        elif "Query PQ=" in line:
+        elif "  Query " in line:
+            if "(memory)" in line:
+                # in-memory (on-heap) graph + vectors are benched as a sanity check;
+                # we shouldn't include them in the plot of disk-based performance
+                continue
             recall = float(re.search(r'recall (\d+\.\d+)', line).group(1))
             query_time = float(re.search(r'in (\d+\.\d+)s', line).group(1))
-            pq_true = re.search(r'PQ=(\w+)', line).group(1) == 'true'
             overquery = int(re.search(r'top 100/(\d+) ', line).group(1))
 
             throughput = query_vector_count * 10 / query_time
 
             assert current_pq is not None
             assert M is not None
-            parsed_data.append(Point(current_pq, recall, throughput, M, ef, pq_true, overquery))
+            parsed_data.append(Point(current_pq, recall, throughput, M, ef, overquery))
 
     return {
         'name': dataset_name,
@@ -98,9 +104,9 @@ def plot_dataset(dataset, output_dir="."):
     
     # Create plot
     plt.figure(figsize=(15, 20))
-    for pq, recall, throughput, M, ef, disk, overquery in (astuple(p) for p in data):
-        plt.scatter(recall, throughput, label=f'pq={pq}, M={M}, ef={ef}, disk={disk}, oq={overquery}')
-        plt.annotate(f'pq={pq}, M={M}, ef={ef}, disk={disk}, oq={overquery}', (recall, throughput))
+    for pq, recall, throughput, M, ef, overquery in (astuple(p) for p in data):
+        plt.scatter(recall, throughput, label=f'Q={pq}, M={M}, ef={ef}, oq={overquery}')
+        plt.annotate(f'Q={pq}, M={M}, ef={ef}, oq={overquery}', (recall, throughput))
     
     # Set title and labels
     plt.title(f"Dataset: {name}\\nBase Vector Count: {base_vector_count}\\nDimensions: {dimensions}")

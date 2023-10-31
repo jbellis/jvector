@@ -101,4 +101,9 @@ PanamaVectorUtilSupport implements VectorUtilSupport {
         }
         return sum;
     }
+
+    @Override
+    public int hammingDistance(long[] v1, long[] v2) {
+        return SimdOps.hammingDistance(v1, v2);
+    }
 }
