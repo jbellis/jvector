@@ -34,7 +34,8 @@ import java.util.stream.IntStream;
 import static java.lang.Math.min;
 
 /**
- * A Product Quantization implementation for float vectors.
+ * Binary Quantization of float vectors: each float is compressed to a single bit,
+ * and similarity is computed with a simple Hamming distance.
  */
 public class BinaryQuantization implements VectorCompressor<long[]> {
     private final float[] globalCentroid;
@@ -64,8 +65,8 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     }
 
     @Override
-    public CompressedVectors createCompressedVectors(Object[] quantizedVectors) {
-        return new BQVectors(this, (long[][]) quantizedVectors);
+    public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
+        return new BQVectors(this, (long[][]) compressedVectors);
     }
 
     @Override

@@ -37,7 +37,10 @@ import java.util.stream.IntStream;
 import static java.lang.Math.min;
 
 /**
- * A Product Quantization implementation for float vectors.
+ * Product Quantization for float vectors.  Supports arbitrary source and target dimensionality;
+ * in particular, the source does not need to be evenly divisible by the target.
+ * <p>
+ * Codebook cluster count is fixed at 256.
  */
 public class ProductQuantization implements VectorCompressor<byte[]> {
     static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
@@ -106,8 +109,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     }
 
     @Override
-    public CompressedVectors createCompressedVectors(Object[] quantizedVectors) {
-        return new PQVectors(this, (byte[][]) quantizedVectors);
+    public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
+        return new PQVectors(this, (byte[][]) compressedVectors);
     }
 
     /**

@@ -32,9 +32,9 @@ public interface VectorCompressor<T> {
     void write(DataOutput out) throws IOException;
 
     /**
-     * @param quantizedVectors must match the type T for this VectorCompression, but
-     *                         it is declared as Object because we want callers to be able to use this
-     *                         without committing to a specific type T.
+     * @param compressedVectors must match the type T for this VectorCompressor, but
+     *                          it is declared as Object because we want callers to be able to use this
+     *                          without committing to a specific type T.
      */
-    CompressedVectors createCompressedVectors(Object[] quantizedVectors);
+    CompressedVectors createCompressedVectors(Object[] compressedVectors);
 }

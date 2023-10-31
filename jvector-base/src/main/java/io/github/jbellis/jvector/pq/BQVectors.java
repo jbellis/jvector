@@ -38,7 +38,7 @@ public class BQVectors implements CompressedVectors {
 
     @Override
     public void write(DataOutput out) throws IOException {
-        // pq codebooks
+        // BQ centering data
         bq.write(out);
 
         // compressed vectors
@@ -57,21 +57,24 @@ public class BQVectors implements CompressedVectors {
     public static BQVectors load(RandomAccessReader in, int offset) throws IOException {
         in.seek(offset);
 
-        // codebooks
+        // BQ
         var bq = BinaryQuantization.load(in);
 
-        // read the vectors
+        // check validity of compressed vectors header
         int size = in.readInt();
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
         var compressedVectors = new long[size][];
-
+        if (size == 0) {
+            return new BQVectors(bq, compressedVectors);
+        }
         int compressedLength = in.readInt();
         if (compressedLength < 0) {
             throw new IOException("Invalid compressed vector dimension " + compressedLength);
         }
 
+        // read the compressed vectors
         for (int i = 0; i < size; i++)
         {
             long[] vector = new long[compressedLength];
@@ -85,10 +88,9 @@ public class BQVectors implements CompressedVectors {
     @Override
     public NeighborSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
         var qBQ = bq.encode(q);
-        int bitLength = qBQ.length * Long.SIZE;
         return node2 -> {
             var vBQ = compressedVectors[node2];
-            return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / bitLength;
+            return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / q.length;
         };
     }
 
