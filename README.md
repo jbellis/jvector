@@ -62,12 +62,16 @@ JVector implements [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.p
 search, meaning that vectors can be compressed using product quantization so that searches
 can be performed using the compressed representation that is kept in memory.  You can enable
 this with the following steps:
-- Create a [`ProductQuantization`](./jvector-base/src/main/java/io/github/jbellis/jvector/pq/ProductQuantization.java) object with your vectors using `ProductQuantization.compute`.  This will take some time
-  to compute the codebooks.
-- Use `ProductQuantization::encode` or `encodeAll` to encode your vectors.
-- Create a [`CompressedVectors`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/CompressedVectors.java) object from the encoded vectors.
-- Create a [`NeighborSimilarity.ApproximateScoreFunction`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/NeighborSimilarity.java) for your query that uses the
-  `ProductQuantization` object and `CompressedVectors` to compute scores, and pass this
+- Create a [`VectorCompressor`](./jvector-base/src/main/java/io/github/jbellis/jvector/pq/VectorCompressor.java) object with your vectors using either `ProductQuantization.compute`
+- or `BinaryQuantization.compute`.  PQ is more flexible than BQ and is less lossy: even at the same compressed size, 
+  in the datasets tested by Bench, only the ada002 vectors in the wikipedia dataset
+  are large enough and/or overparameterized enough to benefit from BQ while achieving recall
+  competitive with PQ.  However, if you are dealing with very large vectors and/or your
+  recall requirement is not strict, you may still want to try BQ since it is MUCH faster to both compute and search with.
+- Use `VectorCompressor::encode` or `encodeAll` to encode your vectors, then call
+  `VectorCompressor::createCompressedVectors` to create a `CompressedVectors` object.
+- Call `CompressedVectors::approximateScoreFunctionFor` to create a [`NeighborSimilarity.ApproximateScoreFunction`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/NeighborSimilarity.java) for your query that uses the
+  compressed vectors to accelerate search, and pass this
   to the `GraphSearcher.search` method.
 
 ## Saving and loading indexes
@@ -77,7 +81,7 @@ this with the following steps:
   implementation of [`RandomAccessReader`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/RandomAccessReader.java) and the related `ReaderSupplier` to wrap your
   preferred i/o class for best performance. See `SimpleMappedReader` and `SimpleMappedReaderSupplier` for an example.
 - Building a graph does not technically require your RandomAccessVectorValues object
-  to live in memory, but it will perform much better if it does.  OnDiskGraphIndex,
+  to live in memory, but it will perform much better if it does.  `OnDiskGraphIndex`,
   by contrast, is designed to live on disk and use minimal memory otherwise.
 - You can optionally wrap `OnDiskGraphIndex` in a [`CachingGraphIndex`](./jvector-base/src/main/java/io/github/jbellis/jvector/disk/CachingGraphIndex.java) to keep the most commonly accessed
   nodes (the ones nearest to the graph entry point) in memory.
