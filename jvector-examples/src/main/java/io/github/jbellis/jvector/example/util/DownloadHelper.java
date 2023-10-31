@@ -73,13 +73,10 @@ public class DownloadHelper {
                                 .build();
 
                 // 3 retries
-                FileDownload downloadFile;
-                CompletedFileDownload downloadResult;
-                long downloadedSize;
                 for (int i = 0; i < 3; i++) {
-                    downloadFile = tm.downloadFile(downloadFileRequest);
-                    downloadResult = downloadFile.completionFuture().join();
-                    downloadedSize = Files.size(path);
+                    FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
+                    CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
+                    long downloadedSize = Files.size(path);
 
                     // Check if downloaded file size matches the expected size
                     if (downloadedSize == downloadResult.response().contentLength()) {
