@@ -218,7 +218,7 @@ public class GraphIndexBuilder<T> {
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, ep, bits);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, ep, bits);
 
             // Update neighbors with these candidates.
             // The DiskANN paper calls for using the entire set of visited nodes along the search path as
@@ -343,7 +343,7 @@ public class GraphIndexBuilder<T> {
         {
             var value = v1.get().vectorValue(node);
             NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits);
             var candidates = getPathCandidates(result.getVisited(), node, scoreFunction, scratch.get());
             updateNeighbors(graph.getNeighbors(node), candidates, NeighborArray.EMPTY);
         }
@@ -370,7 +370,7 @@ public class GraphIndexBuilder<T> {
 
             // search for the node closest to the centroid
             NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), Bits.ALL);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), Bits.ALL);
             return result.getNodes()[0].node;
         }
     }
