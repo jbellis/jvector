@@ -344,7 +344,9 @@ public class GraphIndexBuilder<T> {
             var value = v1.get().vectorValue(node);
             NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits);
-            var candidates = getPathCandidates(result.getVisited(), node, scoreFunction, scratch.get());
+            var candidates = toScratchCandidates(result.getNodes(), result.getNodes().length, scratch.get());
+            // We use just the topK results as candidates, which is much less expensive than computing scores for
+            // the other visited nodes.  See comments in addGraphNode.
             updateNeighbors(graph.getNeighbors(node), candidates, NeighborArray.EMPTY);
         }
     }
@@ -379,22 +381,6 @@ public class GraphIndexBuilder<T> {
     neighbors.insertDiverse(natural, concurrent);
     neighbors.backlink(graph::getNeighbors, neighborOverflow);
   }
-
-    /**
-     * compute the scores for the nodes set in `visited` and return them in a NeighborArray
-     */
-    private NeighborArray getPathCandidates(BitSet visited, int node, NeighborSimilarity.ExactScoreFunction scoreFunction, NeighborArray scratch) {
-        // doing a single sort is faster than repeatedly calling insertSorted
-        SearchResult.NodeScore[] candidates = new SearchResult.NodeScore[visited.cardinality()];
-        int j = 0;
-        for (int i = visited.nextSetBit(0); i != NO_MORE_DOCS; i = visited.nextSetBit(i + 1)) {
-            if (i != node) {
-                candidates[j++] = new SearchResult.NodeScore(i, scoreFunction.similarityTo(i));
-            }
-        }
-        Arrays.sort(candidates, 0, j, Comparator.comparingDouble(ns -> -ns.score));
-        return toScratchCandidates(candidates, j, scratch);
-    }
 
     private NeighborArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NeighborArray scratch) {
         scratch.clear();
