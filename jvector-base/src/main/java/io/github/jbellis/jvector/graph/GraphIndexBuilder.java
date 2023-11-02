@@ -181,8 +181,6 @@ public class GraphIndexBuilder<T> {
         // the maxConnections invariant.  In an extreme case, reconnecting node X disconnects Y, and reconnecting
         // Y disconnects X again.  So we do a best effort of 3 loops.
         for (int i = 0; i < 3; i++) {
-            var nReconnected = new AtomicInteger();
-
             // find all nodes reachable from the entry node
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
@@ -192,11 +190,12 @@ public class GraphIndexBuilder<T> {
             });
 
             // reconnect unreachable nodes
+            var nReconnected = new AtomicInteger();
             try (var gs = graphSearcher.get();
                  var v1 = vectors.get();
                  var v2 = vectorsCopy.get())
             {
-                var connectionTargets = new HashSet<Integer>(nReconnected.get());
+                var connectionTargets = new HashSet<Integer>();
                 for (int node = 0; node < graph.getIdUpperBound(); node++) {
                     if (!connectedNodes.get(node) && graph.containsNode(node)) {
                         // search for the closest neighbors
