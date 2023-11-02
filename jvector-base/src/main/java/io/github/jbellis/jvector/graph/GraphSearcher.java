@@ -197,7 +197,7 @@ public class GraphSearcher<T> {
       }
 
       // periodically check whether we're likely to find a node above the threshold in the future
-      if (threshold > 0 && numVisited % 100 == 0) {
+      if (threshold > 0 && numVisited >= recentScores.length && numVisited % 100 == 0) {
         double futureProbability = futureProbabilityAboveThreshold(recentScores, threshold);
         if (futureProbability < 0.01) {
           break;
