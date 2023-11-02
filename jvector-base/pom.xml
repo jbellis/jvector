@@ -11,6 +11,7 @@
     </parent>
     <artifactId>jvector-base</artifactId>
     <name>Base</name>
+
     <build>
         <plugins>
             <plugin>

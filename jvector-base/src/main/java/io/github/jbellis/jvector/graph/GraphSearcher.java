@@ -24,19 +24,27 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.util.*;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import org.apache.commons.math3.distribution.NormalDistribution;
+import org.apache.commons.math3.stat.StatUtils;
 
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
+
 
 /**
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher<T> {
+  @VisibleForTesting
+  // in TestSearchProbability, 100 is not enough to stay within a 10% error rate, but 200 is
+  static final int RECENT_SCORES_TRACKED = 200;
+
   private final GraphIndex.View<T> view;
 
   /**
@@ -105,6 +113,7 @@ public class GraphSearcher<T> {
    * @param reRanker if scoreFunction is approximate, this should be non-null and perform exact
    *                 comparisons of the vectors for re-ranking at the end of the search.
    * @param topK the number of results to look for
+   * @param threshold the minimum similarity (0..1) to accept; 0 will accept everything.
    * @param acceptOrds a Bits instance indicating which nodes are acceptable results.
    *                   If null, all nodes are acceptable.
    *                   It is caller's responsibility to ensure that there are enough acceptable nodes
@@ -115,9 +124,19 @@ public class GraphSearcher<T> {
       NeighborSimilarity.ScoreFunction scoreFunction,
       NeighborSimilarity.ReRanker<T> reRanker,
       int topK,
+      float threshold,
       Bits acceptOrds)
   {
-    return searchInternal(scoreFunction, reRanker, topK, view.entryNode(), acceptOrds);
+    return searchInternal(scoreFunction, reRanker, topK, threshold, view.entryNode(), acceptOrds);
+  }
+
+  public SearchResult search(
+          NeighborSimilarity.ScoreFunction scoreFunction,
+          NeighborSimilarity.ReRanker<T> reRanker,
+          int topK,
+          Bits acceptOrds)
+  {
+    return search(scoreFunction, reRanker, topK, 0.0f, acceptOrds);
   }
 
   /**
@@ -131,11 +150,12 @@ public class GraphSearcher<T> {
    */
   // TODO add back ability to re-use a results structure instead of allocating a new one each time?
   SearchResult searchInternal(
-      NeighborSimilarity.ScoreFunction scoreFunction,
-      NeighborSimilarity.ReRanker<T> reRanker,
-      int topK,
-      int ep,
-      Bits acceptOrds)
+          NeighborSimilarity.ScoreFunction scoreFunction,
+          NeighborSimilarity.ReRanker<T> reRanker,
+          int topK,
+          float threshold,
+          int ep,
+          Bits acceptOrds)
   {
     if (!scoreFunction.isExact() && reRanker == null) {
       throw new IllegalArgumentException("Either scoreFunction must be exact, or reRanker must not be null");
@@ -145,6 +165,8 @@ public class GraphSearcher<T> {
     }
 
     prepareScratchState(view.size());
+    double[] recentScores = threshold > 0 ? new double[RECENT_SCORES_TRACKED] : null;
+    int recentScoreIndex = 0; // circular buffer index
     if (ep < 0) {
       return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
     }
@@ -159,7 +181,7 @@ public class GraphSearcher<T> {
     visited.set(ep);
     numVisited++;
     candidates.add(ep, score);
-    if (acceptOrds.get(ep)) {
+    if (acceptOrds.get(ep) && score >= threshold) {
       resultsQueue.add(ep, score);
     }
 
@@ -169,10 +191,19 @@ public class GraphSearcher<T> {
     if (resultsQueue.size() >= topK) {
       minAcceptedSimilarity = resultsQueue.topScore();
     }
+
     while (candidates.size() > 0 && !resultsQueue.incomplete()) {
       // get the best candidate (closest or best scoring)
       if (candidates.topScore() < minAcceptedSimilarity) {
         break;
+      }
+
+      // periodically check whether we're likely to find a node above the threshold in the future
+      if (threshold > 0 && numVisited >= recentScores.length && numVisited % 100 == 0) {
+        double futureProbability = futureProbabilityAboveThreshold(recentScores, threshold);
+        if (futureProbability < 0.01) {
+          break;
+        }
       }
 
       int topCandidateNode = candidates.pop();
@@ -187,9 +218,14 @@ public class GraphSearcher<T> {
         numVisited++;
 
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
+        if (threshold > 0) {
+          recentScores[recentScoreIndex] = friendSimilarity;
+          recentScoreIndex = (recentScoreIndex + 1) % RECENT_SCORES_TRACKED;
+        }
+
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
-          if (acceptOrds.get(friendOrd)) {
+          if (acceptOrds.get(friendOrd) && friendSimilarity >= threshold) {
             if (resultsQueue.insertWithReplacement(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
               minAcceptedSimilarity = resultsQueue.topScore();
             }
@@ -213,6 +249,24 @@ public class GraphSearcher<T> {
     }
 
     return new SearchResult(nodes, visited, numVisited);
+  }
+
+  /**
+   * Return the probability of finding a node above the given threshold in the future,
+   * given the similarities observed recently.
+   */
+  @VisibleForTesting
+  static double futureProbabilityAboveThreshold(double[] recentSimilarities, double threshold) {
+    // Calculate sample mean and standard deviation
+    double sampleMean = StatUtils.mean(recentSimilarities);
+    double sampleStd = Math.sqrt(StatUtils.variance(recentSimilarities));
+
+    // Z-score for the threshold
+    double zScore = (threshold - sampleMean) / sampleStd;
+
+    // Probability of finding a node above the threshold in the future
+    NormalDistribution normalDistribution = new NormalDistribution(sampleMean, sampleStd);
+    return 1 - normalDistribution.cumulativeProbability(zScore);
   }
 
   private void prepareScratchState(int capacity) {
