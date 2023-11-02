@@ -177,7 +177,6 @@ public class GraphIndexBuilder<T> {
     }
 
     private void reconnectOrphanedNodes() {
-        var start = System.currentTimeMillis();
         // It's possible that reconnecting one node will result in disconnecting another, since we are maintaining
         // the maxConnections invariant.  In an extreme case, reconnecting node X disconnects Y, and reconnecting
         // Y disconnects X again.  So we do a best effort of 3 loops.
@@ -211,7 +210,6 @@ public class GraphIndexBuilder<T> {
                         for (var ns : result) {
                             if (connectionTargets.add(ns.node)) {
                                 graph.getNeighbors(ns.node).insertNotDiverse(node, ns.score, true);
-                                System.out.println("Reconnected " + node + " to " + ns.node);
                                 break;
                             }
                         }
@@ -222,9 +220,7 @@ public class GraphIndexBuilder<T> {
             if (nReconnected.get() == 0) {
                 break;
             }
-            System.out.println("Reconnected " + nReconnected.get() + " nodes");
         }
-        System.out.println("Reconnected all nodes in " + (System.currentTimeMillis() - start) + "ms");
     }
 
     private void findConnected(AtomicFixedBitSet connectedNodes, int start) {
