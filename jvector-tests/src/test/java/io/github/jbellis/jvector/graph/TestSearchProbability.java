@@ -16,12 +16,12 @@ public class TestSearchProbability extends LuceneTestCase {
 
         for (int i = 0; i < 10; i++) {
             // standard normal distribution
-            testFutureProbability(random::nextGaussian, 0.5f, GraphSearcher.RECENT_SCORES_TRACKED);
+            testFutureProbability(random::nextGaussian, 0.5f, ScoreTracker.NormalDistributionTracker.RECENT_SCORES_TRACKED);
 
             // normal dist w/ offset + scale
             int offset = random.nextInt(10);
             int scale = nextInt(5, 10);
-            testFutureProbability(() -> offset + scale * random.nextGaussian(), random.nextDouble(), GraphSearcher.RECENT_SCORES_TRACKED);
+            testFutureProbability(() -> offset + scale * random.nextGaussian(), random.nextDouble(), ScoreTracker.NormalDistributionTracker.RECENT_SCORES_TRACKED);
         }
     }
 
@@ -38,7 +38,7 @@ public class TestSearchProbability extends LuceneTestCase {
         double observedProbability = (double) n / numSamples;
 
         // check the prediction vs the observed
-        double predictedProbability = GraphSearcher.futureProbabilityAboveThreshold(recentSimilarities, threshold);
+        double predictedProbability = ScoreTracker.NormalDistributionTracker.futureProbabilityAboveThreshold(recentSimilarities, threshold);
         assertEquals(observedProbability, predictedProbability, 0.1);  // Allowing 10% error
     }
 }

@@ -24,12 +24,9 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.util.*;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import org.apache.commons.math3.distribution.NormalDistribution;
-import org.apache.commons.math3.stat.StatUtils;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -41,9 +38,6 @@ import java.util.Map;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher<T> {
-  @VisibleForTesting
-  // in TestSearchProbability, 100 is not enough to stay within a 10% error rate, but 200 is
-  static final int RECENT_SCORES_TRACKED = 200;
 
   private final GraphIndex.View<T> view;
 
@@ -148,7 +142,6 @@ public class GraphSearcher<T> {
    * <p>
    * This method never calls acceptOrds.length(), so the length-free Bits.ALL may be passed in.
    */
-  // TODO add back ability to re-use a results structure instead of allocating a new one each time?
   SearchResult searchInternal(
           NeighborSimilarity.ScoreFunction scoreFunction,
           NeighborSimilarity.ReRanker<T> reRanker,
@@ -165,8 +158,7 @@ public class GraphSearcher<T> {
     }
 
     prepareScratchState(view.size());
-    double[] recentScores = threshold > 0 ? new double[RECENT_SCORES_TRACKED] : null;
-    int recentScoreIndex = 0; // circular buffer index
+    var scoreTracker = threshold > 0 ? new ScoreTracker.NormalDistributionTracker(threshold) : new ScoreTracker.NoOpTracker();
     if (ep < 0) {
       return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
     }
@@ -199,11 +191,8 @@ public class GraphSearcher<T> {
       }
 
       // periodically check whether we're likely to find a node above the threshold in the future
-      if (threshold > 0 && numVisited >= recentScores.length && numVisited % 100 == 0) {
-        double futureProbability = futureProbabilityAboveThreshold(recentScores, threshold);
-        if (futureProbability < 0.01) {
-          break;
-        }
+      if (scoreTracker.shouldStop(numVisited)) {
+        break;
       }
 
       int topCandidateNode = candidates.pop();
@@ -218,10 +207,7 @@ public class GraphSearcher<T> {
         numVisited++;
 
         float friendSimilarity = scoreFunction.similarityTo(friendOrd);
-        if (threshold > 0) {
-          recentScores[recentScoreIndex] = friendSimilarity;
-          recentScoreIndex = (recentScoreIndex + 1) % RECENT_SCORES_TRACKED;
-        }
+        scoreTracker.track(friendSimilarity);
 
         if (friendSimilarity >= minAcceptedSimilarity) {
           candidates.add(friendOrd, friendSimilarity);
@@ -251,24 +237,6 @@ public class GraphSearcher<T> {
     return new SearchResult(nodes, visited, numVisited);
   }
 
-  /**
-   * Return the probability of finding a node above the given threshold in the future,
-   * given the similarities observed recently.
-   */
-  @VisibleForTesting
-  static double futureProbabilityAboveThreshold(double[] recentSimilarities, double threshold) {
-    // Calculate sample mean and standard deviation
-    double sampleMean = StatUtils.mean(recentSimilarities);
-    double sampleStd = Math.sqrt(StatUtils.variance(recentSimilarities));
-
-    // Z-score for the threshold
-    double zScore = (threshold - sampleMean) / sampleStd;
-
-    // Probability of finding a node above the threshold in the future
-    NormalDistribution normalDistribution = new NormalDistribution(sampleMean, sampleStd);
-    return 1 - normalDistribution.cumulativeProbability(zScore);
-  }
-
   private void prepareScratchState(int capacity) {
     candidates.clear();
     if (visited.length() < capacity) {
@@ -284,5 +252,4 @@ public class GraphSearcher<T> {
     }
     visited.clear();
   }
-
 }
