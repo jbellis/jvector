@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
+import static java.lang.Math.min;
+
 /** A concurrent set of neighbors that encapsulates diversity/pruning mechanics. */
 public class ConcurrentNeighborSet {
   /** the node id whose neighbors we are storing */
@@ -207,6 +209,18 @@ public class ConcurrentNeighborSet {
     // (it will be invoked when the cleanup code calls insertDiverse later
     // with the results of the nn descent rebuild)
     neighborsRef.getAndUpdate(current -> mergeNeighbors(current, connections));
+  }
+
+  void insertNotDiverse(int node, float score, boolean limitConnections) {
+    neighborsRef.getAndUpdate(current -> {
+      NeighborArray next = current.copy();
+      if (limitConnections) {
+        // remove the worst edge to make room for the new one
+        next.size = min(next.size, maxConnections - 1);
+      }
+      next.insertSorted(node, score);
+      return next;
+    });
   }
 
   /**

@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
@@ -27,6 +28,7 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -34,6 +36,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
@@ -165,9 +168,74 @@ public class GraphIndexBuilder<T> {
             }
         });
 
+        // reconnect any orphaned nodes.  this will maintain neighbors size
+        reconnectOrphanedNodes();
+
         // optimize entry node
         graph.updateEntryNode(approximateMedioid());
         graph.validateEntryNode(); // check again after updating
+    }
+
+    private void reconnectOrphanedNodes() {
+        // It's possible that reconnecting one node will result in disconnecting another, since we are maintaining
+        // the maxConnections invariant.  In an extreme case, reconnecting node X disconnects Y, and reconnecting
+        // Y disconnects X again.  So we do a best effort of 3 loops.
+        for (int i = 0; i < 3; i++) {
+            // find all nodes reachable from the entry node
+            var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
+            connectedNodes.set(graph.entry());
+            var entryNeighbors = graph.getNeighbors(graph.entry()).getCurrent();
+            IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
+                findConnected(connectedNodes, entryNeighbors.node[node]);
+            });
+
+            // reconnect unreachable nodes
+            var nReconnected = new AtomicInteger();
+            try (var gs = graphSearcher.get();
+                 var v1 = vectors.get();
+                 var v2 = vectorsCopy.get())
+            {
+                var connectionTargets = new HashSet<Integer>();
+                for (int node = 0; node < graph.getIdUpperBound(); node++) {
+                    if (!connectedNodes.get(node) && graph.containsNode(node)) {
+                        // search for the closest neighbors
+                        var notSelfBits = createNotSelfBits(node);
+                        var value = v1.get().vectorValue(node);
+                        NeighborSimilarity.ExactScoreFunction scoreFunction = i1 -> scoreBetween(v2.get().vectorValue(i1), value);
+                        var result = gs.get().searchInternal(scoreFunction, null, beamWidth, graph.entry(), notSelfBits).getNodes();
+                        // connect this node to the closest neighbor that hasn't already been used as a connection target
+                        // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
+                        // overwritten by the next node to need reconnection if we don't enforce uniqueness)
+                        for (var ns : result) {
+                            if (connectionTargets.add(ns.node)) {
+                                graph.getNeighbors(ns.node).insertNotDiverse(node, ns.score, true);
+                                break;
+                            }
+                        }
+                        nReconnected.incrementAndGet();
+                    }
+                }
+            }
+            if (nReconnected.get() == 0) {
+                break;
+            }
+        }
+    }
+
+    private void findConnected(AtomicFixedBitSet connectedNodes, int start) {
+        var queue = new ArrayDeque<Integer>();
+        queue.add(start);
+        var view = graph.getView();
+        while (!queue.isEmpty()) {
+            // DFS should result in less contention across findConnected threads than BFS
+            int next = queue.pop();
+            if (connectedNodes.getAndSet(next)) {
+                continue;
+            }
+            for (var it = view.getNeighborsIterator(next); it.hasNext(); ) {
+                queue.add(it.nextInt());
+            }
+        }
     }
 
     /**
@@ -323,18 +391,7 @@ public class GraphIndexBuilder<T> {
      * new neighbors.  Standard diversity pruning applies.
      */
     private void addNNDescentConnections(int node) {
-        var notSelfBits = new Bits() {
-            @Override
-            public boolean get(int index) {
-                return index != node;
-            }
-
-            @Override
-            public int length() {
-                // length is max node id, which could be larger than size after deletes
-                throw new UnsupportedOperationException();
-            }
-        };
+        var notSelfBits = createNotSelfBits(node);
 
         try (var gs = graphSearcher.get();
              var v1 = vectors.get();
@@ -349,6 +406,21 @@ public class GraphIndexBuilder<T> {
             // the other visited nodes.  See comments in addGraphNode.
             updateNeighbors(graph.getNeighbors(node), candidates, NeighborArray.EMPTY);
         }
+    }
+
+    private static Bits createNotSelfBits(int node) {
+        return new Bits() {
+            @Override
+            public boolean get(int index) {
+                return index != node;
+            }
+
+            @Override
+            public int length() {
+                // length is max node id, which could be larger than size after deletes
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
     private int approximateMedioid() {
