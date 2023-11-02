@@ -13,10 +13,16 @@ public class TestSearchProbability extends LuceneTestCase {
     @Test
     public void testFutureProbabilityAboveThreshold() {
         Random random = getRandom();
-        testFutureProbability(random::nextGaussian, 0.5f, 100);
-        int offset = random.nextInt(10);
-        int scale = nextInt(5, 10);
-        testFutureProbability(() -> offset + scale * random.nextGaussian(), random.nextDouble(), 100);
+
+        for (int i = 0; i < 10; i++) {
+            // standard normal distribution
+            testFutureProbability(random::nextGaussian, 0.5f, GraphSearcher.RECENT_SCORES_TRACKED);
+
+            // normal dist w/ offset + scale
+            int offset = random.nextInt(10);
+            int scale = nextInt(5, 10);
+            testFutureProbability(() -> offset + scale * random.nextGaussian(), random.nextDouble(), GraphSearcher.RECENT_SCORES_TRACKED);
+        }
     }
 
     private void testFutureProbability(Supplier<Double> generator, double threshold, int numSamples) {

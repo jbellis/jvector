@@ -41,7 +41,9 @@ import java.util.Map;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher<T> {
-  private static final int RECENT_SCORES_TRACKED = 200; // for threshold queries
+  @VisibleForTesting
+  // in TestSearchProbability, 100 is not enough to stay within a 10% error rate, but 200 is
+  static final int RECENT_SCORES_TRACKED = 200;
 
   private final GraphIndex.View<T> view;
 
