@@ -216,10 +216,19 @@ public class GraphSearcher<T> {
                 }
             }
         }
-        assert resultsQueue.size() <= topK;
 
+        assert resultsQueue.size() <= topK;
+        SearchResult.NodeScore[] nodes = extractScores(scoreFunction, reRanker, resultsQueue, vectorsEncountered);
+        return new SearchResult(nodes, visited, numVisited);
+    }
+
+    private static <T> SearchResult.NodeScore[] extractScores(NeighborSimilarity.ScoreFunction sf,
+                                                              NeighborSimilarity.ReRanker<T> reRanker,
+                                                              NeighborQueue resultsQueue,
+                                                              Map<Integer, T> vectorsEncountered)
+    {
         SearchResult.NodeScore[] nodes;
-        if (scoreFunction.isExact()) {
+        if (sf.isExact()) {
             nodes = new SearchResult.NodeScore[resultsQueue.size()];
             for (int i = nodes.length - 1; i >= 0; i--) {
                 var nScore = resultsQueue.topScore();
@@ -230,8 +239,7 @@ public class GraphSearcher<T> {
             nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
             Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
         }
-
-        return new SearchResult(nodes, visited, numVisited);
+        return nodes;
     }
 
     private void prepareScratchState(int capacity) {
