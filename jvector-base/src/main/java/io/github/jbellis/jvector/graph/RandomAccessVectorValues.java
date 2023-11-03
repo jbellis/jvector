@@ -30,42 +30,42 @@ package io.github.jbellis.jvector.graph;
  */
 public interface RandomAccessVectorValues<T> {
 
-  /**
-   * Return the number of vector values.
-   * <p>
-   * All copies of a given RAVV should have the same size.  Typically this is achieved by either
-   * (1) implementing a threadsafe, un-shared RAVV, where `copy` returns `this`, or
-   * (2) implementing a fixed-size RAVV.
-   */
-  int size();
+    /**
+     * Return the number of vector values.
+     * <p>
+     * All copies of a given RAVV should have the same size.  Typically this is achieved by either
+     * (1) implementing a threadsafe, un-shared RAVV, where `copy` returns `this`, or
+     * (2) implementing a fixed-size RAVV.
+     */
+    int size();
 
-  /** Return the dimension of the returned vector values */
-  int dimension();
+    /** Return the dimension of the returned vector values */
+    int dimension();
 
-  /**
-   * Return the vector value indexed at the given ordinal.
-   *
-   * <p>For performance, implementations are free to re-use the same object across invocations.
-   * That is, you will get back the same float[]
-   * reference (for instance) for every requested ordinal. If you want to use those values across
-   * calls, you should make a copy.
-   *
-   * @param targetOrd a valid ordinal, &ge; 0 and &lt; {@link #size()}.
-   */
-  T vectorValue(int targetOrd);
+    /**
+     * Return the vector value indexed at the given ordinal.
+     *
+     * <p>For performance, implementations are free to re-use the same object across invocations.
+     * That is, you will get back the same float[]
+     * reference (for instance) for every requested ordinal. If you want to use those values across
+     * calls, you should make a copy.
+     *
+     * @param targetOrd a valid ordinal, &ge; 0 and &lt; {@link #size()}.
+     */
+    T vectorValue(int targetOrd);
 
-  /**
-   * @return true iff the vector returned is shared.  A shared vector will
-   * only be valid until the next call to vectorValue overwrites it.
-   */
-  boolean isValueShared();
+    /**
+     * @return true iff the vector returned is shared.  A shared vector will
+     * only be valid until the next call to vectorValue overwrites it.
+     */
+    boolean isValueShared();
 
-  /**
-   * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
-   * access different values at once, to avoid overwriting the underlying float vector returned by
-   * a shared {@link RandomAccessVectorValues#vectorValue}.
-   * <p>
-   * Un-shared implementations may simply return `this`.
-   */
-  RandomAccessVectorValues<T> copy();
+    /**
+     * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
+     * access different values at once, to avoid overwriting the underlying float vector returned by
+     * a shared {@link RandomAccessVectorValues#vectorValue}.
+     * <p>
+     * Un-shared implementations may simply return `this`.
+     */
+    RandomAccessVectorValues<T> copy();
 }

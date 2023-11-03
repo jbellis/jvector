@@ -39,101 +39,101 @@ import java.io.IOException;
  * in a View that should be created per accessing thread.
  */
 public interface GraphIndex<T> extends AutoCloseable {
-  /** Returns the number of nodes in the graph */
-  int size();
-
-  /**
-   * Get all nodes on a given level as node 0th ordinals. The nodes are NOT guaranteed to be
-   * presented in any particular order.
-   *
-   * @return an iterator over nodes where {@code nextInt} returns a next node on the level.
-   */
-  NodesIterator getNodes();
-
-  /**
-   * Return a View with which to navigate the graph.  Views are not threadsafe.
-   */
-  View<T> getView();
-
-  /**
-   * @return the maximum number of edges per node
-   */
-  int maxDegree();
-
-  /**
-   * @return the maximum node id in the graph.  May be different from size() if nodes are
-   * being added concurrently, or if nodes have been deleted (and cleaned up).
-   */
-  default int getIdUpperBound() {
-    return size();
-  }
-
-  /**
-   * @return true iff the graph contains the node with the given ordinal id
-   */
-  default boolean containsNode(int nodeId) {
-    return nodeId >= 0 && nodeId < size();
-  }
-
-  @Override
-  void close() throws IOException;
-
-  interface View<T> extends AutoCloseable {
-    /**
-     * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
-     * is guaranteed to be valid.
-     */
-    NodesIterator getNeighborsIterator(int node);
-
-    /**
-     * @return the number of nodes in the graph
-     */
+    /** Returns the number of nodes in the graph */
     int size();
 
     /**
-     * @return the node of the graph to start searches at
+     * Get all nodes on a given level as node 0th ordinals. The nodes are NOT guaranteed to be
+     * presented in any particular order.
+     *
+     * @return an iterator over nodes where {@code nextInt} returns a next node on the level.
      */
-    int entryNode();
+    NodesIterator getNodes();
 
     /**
-     * Retrieve the vector associated with a given node.
-     * <p>
-     * This will only be called when a search is performed using approximate similarities.
-     * In that situation, we will want to reorder the results by the exact similarity
-     * at the end of the search.
+     * Return a View with which to navigate the graph.  Views are not threadsafe.
      */
-    T getVector(int node);
+    View<T> getView();
 
     /**
-     * Return a Bits instance indicating which nodes are live.  The result is undefined for
-     * ordinals that do not correspond to nodes in the graph.
+     * @return the maximum number of edges per node
      */
-    Bits liveNodes();
+    int maxDegree();
 
     /**
-     * @return the largest ordinal id in the graph.  May be different from size() if nodes have been deleted.
+     * @return the maximum node id in the graph.  May be different from size() if nodes are
+     * being added concurrently, or if nodes have been deleted (and cleaned up).
      */
     default int getIdUpperBound() {
-      return size();
-    }
-  }
-
-  static <T> String prettyPrint(GraphIndex<T> graph) {
-    StringBuilder sb = new StringBuilder();
-    sb.append(graph);
-    sb.append("\n");
-
-    var view = graph.getView();
-    NodesIterator it = graph.getNodes();
-    while (it.hasNext()) {
-      int node = it.nextInt();
-      sb.append("  ").append(node).append(" -> ");
-      for (var neighbors = view.getNeighborsIterator(node); neighbors.hasNext(); ) {
-        sb.append(" ").append(neighbors.nextInt());
-      }
-      sb.append("\n");
+        return size();
     }
 
-    return sb.toString();
-  }
+    /**
+     * @return true iff the graph contains the node with the given ordinal id
+     */
+    default boolean containsNode(int nodeId) {
+        return nodeId >= 0 && nodeId < size();
+    }
+
+    @Override
+    void close() throws IOException;
+
+    interface View<T> extends AutoCloseable {
+        /**
+         * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
+         * is guaranteed to be valid.
+         */
+        NodesIterator getNeighborsIterator(int node);
+
+        /**
+         * @return the number of nodes in the graph
+         */
+        int size();
+
+        /**
+         * @return the node of the graph to start searches at
+         */
+        int entryNode();
+
+        /**
+         * Retrieve the vector associated with a given node.
+         * <p>
+         * This will only be called when a search is performed using approximate similarities.
+         * In that situation, we will want to reorder the results by the exact similarity
+         * at the end of the search.
+         */
+        T getVector(int node);
+
+        /**
+         * Return a Bits instance indicating which nodes are live.  The result is undefined for
+         * ordinals that do not correspond to nodes in the graph.
+         */
+        Bits liveNodes();
+
+        /**
+         * @return the largest ordinal id in the graph.  May be different from size() if nodes have been deleted.
+         */
+        default int getIdUpperBound() {
+            return size();
+        }
+    }
+
+    static <T> String prettyPrint(GraphIndex<T> graph) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(graph);
+        sb.append("\n");
+
+        var view = graph.getView();
+        NodesIterator it = graph.getNodes();
+        while (it.hasNext()) {
+            int node = it.nextInt();
+            sb.append("  ").append(node).append(" -> ");
+            for (var neighbors = view.getNeighborsIterator(node); neighbors.hasNext(); ) {
+                sb.append(" ").append(neighbors.nextInt());
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
 }

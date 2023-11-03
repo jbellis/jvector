@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
-import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
@@ -29,8 +28,6 @@ import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Random;
@@ -270,9 +267,9 @@ public class GraphIndexBuilder<T> {
     public long addGraphNode(int node, RandomAccessVectorValues<T> vectors) {
         final T value = vectors.vectorValue(node);
 
-    // do this before adding to in-progress, so a concurrent writer checking
-    // the in-progress set doesn't have to worry about uninitialized neighbor sets
-    var newNodeNeighbors = graph.addNode(node);
+        // do this before adding to in-progress, so a concurrent writer checking
+        // the in-progress set doesn't have to worry about uninitialized neighbor sets
+        var newNodeNeighbors = graph.addNode(node);
 
         insertionsInProgress.add(node);
         ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
@@ -335,7 +332,7 @@ public class GraphIndexBuilder<T> {
         var affectedLiveNodes = new HashSet<Integer>();
         var R = new Random();
         try (var v1 = vectors.get();
-            var v2 = vectorsCopy.get())
+             var v2 = vectorsCopy.get())
         {
             for (var node : liveNodes) {
                 assert !deletedNodes.get(node);
@@ -449,10 +446,10 @@ public class GraphIndexBuilder<T> {
         }
     }
 
-  private void updateNeighbors(ConcurrentNeighborSet neighbors, NeighborArray natural, NeighborArray concurrent) {
-    neighbors.insertDiverse(natural, concurrent);
-    neighbors.backlink(graph::getNeighbors, neighborOverflow);
-  }
+    private void updateNeighbors(ConcurrentNeighborSet neighbors, NeighborArray natural, NeighborArray concurrent) {
+        neighbors.insertDiverse(natural, concurrent);
+        neighbors.backlink(graph::getNeighbors, neighborOverflow);
+    }
 
     private NeighborArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NeighborArray scratch) {
         scratch.clear();
