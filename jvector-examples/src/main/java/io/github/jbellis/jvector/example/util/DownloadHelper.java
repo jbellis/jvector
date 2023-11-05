@@ -39,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -55,14 +56,23 @@ public class DownloadHelper {
                 .credentialsProvider(AnonymousCredentialsProvider.create());
     }
 
-    public static void maybeDownloadFvecs(List<String> files) {
-        List<String> keys;
-        if (null == files || files.isEmpty()) {
-            keys = List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                           "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                           "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec");
-        } else {
-            keys = files;
+    public static void maybeDownloadFvecs(List<String> prefixes) {
+        List<String> keys = new ArrayList<>();
+        for (var prefix : prefixes) {
+            switch (prefix) {
+                case "ada_002_100000":
+                    keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                                        "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                                        "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
+                    break;
+                case "intfloat_e5-small-v2_100000":
+                    keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
+                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
+                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown prefix: " + prefix);
+            }
         }
         // TODO how to detect and recover from incomplete downloads?
 
@@ -116,7 +126,7 @@ public class DownloadHelper {
     }
 
     public static void maybeDownloadFvecs() {
-        maybeDownloadFvecs(null);
+        maybeDownloadFvecs(List.of("ada_002_100000", "intfloat_e5-small-v2_100000"));
     }
 
     public static void maybeDownloadHdf5(String datasetName) {

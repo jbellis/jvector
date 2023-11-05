@@ -45,7 +45,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -201,6 +200,11 @@ public class Bench {
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         DownloadHelper.maybeDownloadFvecs();
+
+        var e5set = loadE5SmallData("wikipedia_squad/100k");
+        gridSearch(e5set, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+        cachedCompressors.clear();
+
         var adaSet = loadWikipediaData("wikipedia_squad/100k");
         gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
         cachedCompressors.clear();
@@ -221,6 +225,21 @@ public class Bench {
             gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();
         }
+    }
+
+    private static DataSet loadE5SmallData(String path) throws IOException {
+        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/intfloat_e5-small-v2_100000_base_vectors.fvec");
+        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/intfloat_e5-small-v2_100000_query_vectors_10000.fvec");
+        var gt = SiftLoader.readIvecs("fvec/" + path + "/intfloat_e5-small-v2_100000_indices_query_10000.ivec");
+        String name = Path.of(path).getName(0).toString();
+        var ds = new DataSet(name,
+                             VectorSimilarityFunction.DOT_PRODUCT,
+                             baseVectors,
+                             queryVectors,
+                             gt);
+        System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
+                          name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
+        return ds;
     }
 
     private static DataSet loadWikipediaData(String path) throws IOException {
