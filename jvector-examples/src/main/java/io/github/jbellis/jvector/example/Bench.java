@@ -20,7 +20,6 @@ import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.example.util.DataSet;
-import io.github.jbellis.jvector.example.util.DataSetCreator;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
@@ -191,12 +190,14 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(16);
-        var efConstructionGrid = List.of(100);
-        var efSearchGrid = List.of(1, 2, 3);
+        var mGrid = List.of(16); // List.of(8, 12, 16, 24, 32, 48, 64);
+        var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var efSearchGrid = List.of(1, 2);
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
                 null, // uncompressed
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+                ds -> BinaryQuantization.compute(ds.getBaseRavv()),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
 //        var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
 //        gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
