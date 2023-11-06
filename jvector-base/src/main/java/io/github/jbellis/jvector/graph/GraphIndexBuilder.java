@@ -240,13 +240,6 @@ public class GraphIndexBuilder<T> {
         }
     }
 
-    /**
-     * @deprecated synonym for `cleanup`
-     */
-    public void complete() {
-        cleanup();
-    }
-
     public OnHeapGraphIndex<T> getGraph() {
         return graph;
     }
