@@ -122,7 +122,12 @@ Base code is in [jvector-base](./jvector-base) and will be built for Java 11 rel
 appropriately. Code in [jvector-twenty](./jvector-twenty) will be compiled for Java 20 language features/APIs and included in the final
 multirelease jar targetting supported JVMs. [jvector-multirelease](./jvector-multirelease) packages [jvector-base](./jvector-base) and [jvector-twenty](./jvector-twenty) as a
 multirelease jar for release. [jvector-examples](./jvector-examples) is an additional sibling module that uses the reactor-representation of
-jvector-base/jvector-twenty to run example code.
+jvector-base/jvector-twenty to run example code. [jvector-tests](./jvector-tests) contains tests for the project, capable of running against 
+both Java 11 and Java 20+ JVMs.
+
+To run tests, use `mvn test`. To run tests against Java 20+, use `mvn test`. To run tests against Java 11, use `mvn -Pjdk11 test`. To run a single test class, 
+use the Maven Surefire test filtering capability, e.g., `mvn -Dtest=TestNeighborArray test`. You may also use method-level filtering and patterns, e.g.,
+`mvn -Dtest=TestNeighborArray#testRetain* test`.
 
 You can run `SiftSmall` and `Bench` directly to get an idea of what all is going on here. `Bench`
 requires some datasets to be downloaded from [https://github.com/erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks/blob/main/README.md#data-sets). The files used by `SiftSmall`

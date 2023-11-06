@@ -25,16 +25,6 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.1.2</version>
-                <configuration>
-                    <skip>false</skip>
-                    <argLine>
-                        --add-modules=jdk.incubator.vector
-                    </argLine>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
     <dependencies>
