@@ -41,10 +41,10 @@ Building the index:
   up front, you can just call `build()` and it will parallelize the build across
   all available cores.  Otherwise you can call `addGraphNode` as you add vectors; 
   this is non-blocking and can be called concurrently from multiple threads.
-- Call `GraphIndexBuilder.complete` when you are done adding vectors.  This will
+- Call `GraphIndexBuilder.cleanup` when you are done adding vectors.  This will
   optimize the index and make it ready to write to disk.  (Graphs that are
   in the process of being built can be searched at any time; you do not have to call
-  *complete* first.)
+  `cleanup` first.)
 
 Searching the index:
 - [`GraphSearcher`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/GraphSearcher.java) is the entry point for searching.  Results come back as a [`SearchResult`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/SearchResult.java) object that contains node IDs and scores, in
