@@ -19,8 +19,8 @@ package io.github.jbellis.jvector.disk;
 import java.io.IOException;
 
 /**
- * This is a subset of DataInput, plus seek and readFully(float[]), which allows implementations
- * to use a more efficient option like FloatBuffer.
+ * This is a subset of DataInput, plus seek and readFully methods, which allows implementations
+ * to use more efficient options like FloatBuffer for bulk reads.
  */
 public interface RandomAccessReader extends AutoCloseable {
     void seek(long offset) throws IOException;

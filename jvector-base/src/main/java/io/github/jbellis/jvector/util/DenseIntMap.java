@@ -27,9 +27,11 @@ import java.util.concurrent.locks.StampedLock;
 import java.util.stream.IntStream;
 
 /**
- * A Map of int -> T where the int keys are dense and start at zero, but the
- * size of the map is not known in advance.  This provides fast, concurrent
+ * A map (but not a Map) of int -> T where the int keys are dense and start at zero,
+ * but the size of the map is not known in advance.  This provides fast, concurrent
  * updates and minimizes contention when the map is resized.
+ * <p>
+ * Once added via put(), the value associated with a key may be overwritten, but not removed.
  */
 public class DenseIntMap<T> {
     private volatile AtomicReferenceArray<T> objects;
