@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.GrowableBitSet;
@@ -108,13 +109,14 @@ public class GraphSearcher<T> {
      * @param reRanker      if scoreFunction is approximate, this should be non-null and perform exact
      *                      comparisons of the vectors for re-ranking at the end of the search.
      * @param topK          the number of results to look for
-     * @param threshold     the minimum similarity (0..1) to accept; 0 will accept everything.
+     * @param threshold     the minimum similarity (0..1) to accept; 0 will accept everything. (Experimental!)
      * @param acceptOrds    a Bits instance indicating which nodes are acceptable results.
      *                      If null, all nodes are acceptable.
      *                      It is caller's responsibility to ensure that there are enough acceptable nodes
      *                      that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
+    @Experimental
     public SearchResult search(NeighborSimilarity.ScoreFunction scoreFunction,
                                NeighborSimilarity.ReRanker<T> reRanker,
                                int topK,
@@ -123,6 +125,17 @@ public class GraphSearcher<T> {
         return searchInternal(scoreFunction, reRanker, topK, threshold, view.entryNode(), acceptOrds);
     }
 
+    /**
+     * @param scoreFunction a function returning the similarity of a given node to the query vector
+     * @param reRanker      if scoreFunction is approximate, this should be non-null and perform exact
+     *                      comparisons of the vectors for re-ranking at the end of the search.
+     * @param topK          the number of results to look for
+     * @param acceptOrds    a Bits instance indicating which nodes are acceptable results.
+     *                      If null, all nodes are acceptable.
+     *                      It is caller's responsibility to ensure that there are enough acceptable nodes
+     *                      that we don't search the entire graph trying to satisfy topK.
+     * @return a SearchResult containing the topK results and the number of nodes visited during the search.
+     */
     public SearchResult search(NeighborSimilarity.ScoreFunction scoreFunction,
                                NeighborSimilarity.ReRanker<T> reRanker,
                                int topK,
