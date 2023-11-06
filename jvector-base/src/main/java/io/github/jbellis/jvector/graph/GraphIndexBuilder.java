@@ -33,6 +33,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -65,7 +66,10 @@ public class GraphIndexBuilder<T> {
     // and `vectorsCopy` later on when defining the ScoreFunction for search.
     private final PoolingSupport<RandomAccessVectorValues<T>> vectors;
     private final PoolingSupport<RandomAccessVectorValues<T>> vectorsCopy;
+    private final int dimension; // for convenience so we don't have to go to the pool for this
     private final NeighborSimilarity similarity;
+
+    private final AtomicInteger updateEntryNodeIn = new AtomicInteger(10_000);
 
     /**
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
@@ -91,6 +95,7 @@ public class GraphIndexBuilder<T> {
             float alpha) {
         vectors = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
         vectorsCopy = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
+        dimension = vectorValues.dimension();
         this.vectorEncoding = Objects.requireNonNull(vectorEncoding);
         this.similarityFunction = Objects.requireNonNull(similarityFunction);
         this.neighborOverflow = neighborOverflow;
@@ -170,7 +175,7 @@ public class GraphIndexBuilder<T> {
 
         // optimize entry node
         graph.updateEntryNode(approximateMedioid());
-        graph.validateEntryNode(); // check again after updating
+        updateEntryNodeIn.set(graph.size()); // in case the user goes on to add more nodes after cleanup()
     }
 
     private void reconnectOrphanedNodes() {
@@ -276,7 +281,8 @@ public class GraphIndexBuilder<T> {
         try (var gs = graphSearcher.get();
              var vc = vectorsCopy.get();
              var naturalScratchPooled = naturalScratch.get();
-             var concurrentScratchPooled = concurrentScratch.get()) {
+             var concurrentScratchPooled = concurrentScratch.get())
+        {
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
             NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
@@ -295,12 +301,68 @@ public class GraphIndexBuilder<T> {
             var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
             var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
             updateNeighbors(newNodeNeighbors, natural, concurrent);
-            graph.markComplete(node);
+
+            maybeUpdateEntryPoint(node);
+            maybeImproveOlderNode();
         } finally {
             insertionsInProgress.remove(node);
         }
 
         return graph.ramBytesUsedOneNode(0);
+    }
+
+    /**
+     * Improve edge quality on very low-d indexes.  This makes a big difference
+     * in the ability of search to escape local maxima to find better options.
+     * <p>
+     * This has negligible effect on ML embedding-sized vectors, starting at least with GloVe-25, so we don't bother.
+     * (Dimensions between 4 and 25 are untested but they get left out too.)
+     * For 2D vectors, this takes us to over 99% recall up to at least 4M nodes.  (Higher counts untested.)
+    */
+    private void maybeImproveOlderNode() {
+        // pick a node added earlier at random to improve its connections
+        // 20k threshold chosen because that's where recall starts to fall off from 100% for 2D vectors
+        if (dimension <= 3 && graph.size() > 20_000) {
+            // if we can't find a candidate in 3 tries, the graph is too sparse,
+            // we'll have to wait for more nodes to be added (this threshold has been tested w/ parallel build,
+            // which generates very sparse ids due to how spliterator works)
+            for (int i = 0; i < 3; i++) {
+                var olderNode = ThreadLocalRandom.current().nextInt(graph.size());
+                if (graph.containsNode(olderNode)) {
+                    improveConnections(olderNode);
+                    break;
+                }
+            }
+        }
+    }
+
+    private void maybeUpdateEntryPoint(int node) {
+        graph.maybeSetInitialEntryNode(node); // TODO it seems silly to call this long after we've set it the first time
+
+        if (updateEntryNodeIn.decrementAndGet() == 0) {
+            int newEntryNode = approximateMedioid();
+            graph.updateEntryNode(newEntryNode);
+            improveConnections(newEntryNode);
+            updateEntryNodeIn.addAndGet(graph.size());
+        }
+    }
+
+    public void improveConnections(int node) {
+        try (var pv = vectors.get();
+             var gs = graphSearcher.get();
+             var vc = vectorsCopy.get();
+             var naturalScratchPooled = naturalScratch.get())
+        {
+            final T value = pv.get().vectorValue(node);
+
+            // find ANN of the new node by searching the graph
+            int ep = graph.entry();
+            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
+            var bits = new ExcludingBits(node);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, ep, bits);
+            var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
+            updateNeighbors(graph.getNeighbors(node), natural, NeighborArray.EMPTY);
+        }
     }
 
     public void markNodeDeleted(int node) {
@@ -432,7 +494,7 @@ public class GraphIndexBuilder<T> {
              var vc = vectorsCopy.get())
         {
             // compute centroid
-            var centroid = new float[vc.get().dimension()];
+            var centroid = new float[dimension];
             for (var it = graph.getNodes(); it.hasNext(); ) {
                 var node = it.nextInt();
                 VectorUtil.addInPlace(centroid, (float[]) vc.get().vectorValue(node));

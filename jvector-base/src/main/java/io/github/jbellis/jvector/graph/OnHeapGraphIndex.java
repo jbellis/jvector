@@ -115,7 +115,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     }
 
     /** must be called after addNode once neighbors are linked in all levels. */
-    void markComplete(int node) {
+    void maybeSetInitialEntryNode(int node) {
         entryPoint.accumulateAndGet(node,
                                     (oldEntry, newEntry) -> {
                                         if (oldEntry >= 0) {
