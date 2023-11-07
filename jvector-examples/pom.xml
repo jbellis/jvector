@@ -96,6 +96,7 @@
                                         <argument>-Xmx32G</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>${benchArgs}</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
@@ -148,6 +149,7 @@
                                         <argument>-Xmx12G</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>${benchArgs}</argument>
                                     </arguments>
                                 </configuration>
                             </execution>

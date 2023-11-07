@@ -129,9 +129,8 @@ To run tests, use `mvn test`. To run tests against Java 20+, use `mvn test`. To 
 use the Maven Surefire test filtering capability, e.g., `mvn -Dtest=TestNeighborArray test`. You may also use method-level filtering and patterns, e.g.,
 `mvn -Dtest=TestNeighborArray#testRetain* test`.
 
-You can run `SiftSmall` and `Bench` directly to get an idea of what all is going on here. `Bench`
-requires some datasets to be downloaded from [https://github.com/erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks/blob/main/README.md#data-sets). The files used by `SiftSmall`
-can be found in the [siftsmall directory](./siftsmall) in the project root.
+You can run `SiftSmall` and `Bench` directly to get an idea of what all is going on here. `Bench` will automatically download required datasets to the `fvec` and `hdf5` directories. 
+The files used by `SiftSmall` can be found in the [siftsmall directory](./siftsmall) in the project root.
 
 To run either class, you can use the Maven exec-plugin via the following incantations:
 
@@ -140,6 +139,12 @@ To run either class, you can use the Maven exec-plugin via the following incanta
 or for Sift:
 
 > `mvn compile exec:exec@sift`
+
+`Bench` takes an optional `benchArgs` argument that can be set to a list of whitespace-separated regexes. If any of the
+provided regexes match within a dataset name, that dataset will be included in the benchmark. For example, to run only the glove
+and nytimes datasets, you could use:
+
+> `mvn compile exec:exec@bench -DbenchArgs="glove nytimes"`
 
 To run Sift/Bench without the JVM vector module available, you can use the following invocations:
 

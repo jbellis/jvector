@@ -21,10 +21,6 @@ import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
-import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
 import software.amazon.awssdk.transfer.s3.model.CompletedFileDownload;
 import software.amazon.awssdk.transfer.s3.model.DownloadFileRequest;
@@ -40,7 +36,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,23 +51,21 @@ public class DownloadHelper {
                 .credentialsProvider(AnonymousCredentialsProvider.create());
     }
 
-    public static void maybeDownloadFvecs(List<String> prefixes) {
+    public static void maybeDownloadFvecs(String prefix) {
         List<String> keys = new ArrayList<>();
-        for (var prefix : prefixes) {
-            switch (prefix) {
-                case "ada_002_100000":
-                    keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                                        "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                                        "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
-                    break;
-                case "intfloat_e5-small-v2_100000":
-                    keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
-                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
-                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown prefix: " + prefix);
-            }
+        switch (prefix) {
+            case "ada_002_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
+                break;
+            case "intfloat_e5-small-v2_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown prefix: " + prefix);
         }
         // TODO how to detect and recover from incomplete downloads?
 
@@ -123,10 +116,6 @@ public class DownloadHelper {
             System.out.println("Error downloading data from S3: " + e.getMessage());
             System.exit(1);
         }
-    }
-
-    public static void maybeDownloadFvecs() {
-        maybeDownloadFvecs(List.of("ada_002_100000", "intfloat_e5-small-v2_100000"));
     }
 
     public static void maybeDownloadHdf5(String datasetName) {
