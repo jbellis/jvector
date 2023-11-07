@@ -107,6 +107,10 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
         Io.writeFloats(out, globalCentroid);
     }
 
+    public int getOriginalDimension() {
+        return globalCentroid.length;
+    }
+
     public static BinaryQuantization load(RandomAccessReader in) throws IOException {
         int length = in.readInt();
         var centroid = new float[length];

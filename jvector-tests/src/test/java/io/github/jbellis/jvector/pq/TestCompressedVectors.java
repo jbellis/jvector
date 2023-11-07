@@ -46,6 +46,8 @@ public class TestCompressedVectors extends RandomizedTest {
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
         var cv = new PQVectors(pq, compressed);
+        assertEquals(2 * Float.BYTES, cv.getOriginalSize());
+        assertEquals(1, cv.getCompressedSize());
 
         // Write compressed vectors
         File cvFile = File.createTempFile("pqtest", ".cv");
@@ -68,6 +70,8 @@ public class TestCompressedVectors extends RandomizedTest {
         // Compress the vectors
         var compressed = bq.encodeAll(vectors);
         var cv = new BQVectors(bq, compressed);
+        assertEquals(64 * Float.BYTES, cv.getOriginalSize());
+        assertEquals(8, cv.getCompressedSize());
 
         // Write compressed vectors
         File cvFile = File.createTempFile("bqtest", ".cv");

@@ -99,6 +99,16 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
+    public int getOriginalSize() {
+        return bq.getOriginalDimension() * Float.BYTES;
+    }
+
+    @Override
+    public int getCompressedSize() {
+        return compressedVectors[0].length * Long.BYTES;
+    }
+
+    @Override
     public long ramBytesUsed() {
         return compressedVectors.length * RamUsageEstimator.sizeOf(compressedVectors[0]);
     }

@@ -48,8 +48,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
 
     final float[][][] codebooks;
-    final int M;
-    private final int originalDimension;
+    private final int M; // codebooks.length, redundantly reproduced for convenience
+    final int originalDimension;
     private final float[] globalCentroid;
     final int[][] subvectorSizesAndOffsets;
 
