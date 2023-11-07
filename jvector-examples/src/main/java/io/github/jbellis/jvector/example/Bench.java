@@ -205,14 +205,14 @@ public class Bench {
         var pattern = Pattern.compile(regex);
 
         if (pattern.matcher("wikipedia_squad/100k/e5-small-v2").find()) {
-            DownloadHelper.maybeDownloadFvecs(List.of("intfloat_e5-small-v2_100000"));
+            DownloadHelper.maybeDownloadFvecs("intfloat_e5-small-v2_100000");
             var e5set = loadE5SmallData("wikipedia_squad/100k");
             gridSearch(e5set, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();
         }
 
         if (pattern.matcher("wikipedia_squad/100k/ada_002").find()) {
-            DownloadHelper.maybeDownloadFvecs(List.of("ada_002_100000"));
+            DownloadHelper.maybeDownloadFvecs("ada_002_100000");
             var adaSet = loadWikipediaData("wikipedia_squad/100k");
             gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();

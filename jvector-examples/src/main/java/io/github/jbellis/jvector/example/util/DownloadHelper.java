@@ -51,23 +51,21 @@ public class DownloadHelper {
                 .credentialsProvider(AnonymousCredentialsProvider.create());
     }
 
-    public static void maybeDownloadFvecs(List<String> prefixes) {
+    public static void maybeDownloadFvecs(String prefix) {
         List<String> keys = new ArrayList<>();
-        for (var prefix : prefixes) {
-            switch (prefix) {
-                case "ada_002_100000":
-                    keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                                        "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                                        "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
-                    break;
-                case "intfloat_e5-small-v2_100000":
-                    keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
-                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
-                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown prefix: " + prefix);
-            }
+        switch (prefix) {
+            case "ada_002_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
+                break;
+            case "intfloat_e5-small-v2_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown prefix: " + prefix);
         }
         // TODO how to detect and recover from incomplete downloads?
 
