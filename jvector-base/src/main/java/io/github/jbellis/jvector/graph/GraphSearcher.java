@@ -36,6 +36,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 
+import static java.lang.Math.min;
+
 
 /**
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
@@ -175,7 +177,9 @@ public class GraphSearcher<T> {
 
         acceptOrds = Bits.intersectionOf(acceptOrds, view.liveNodes());
 
-        var resultsQueue = new NeighborQueue(topK, false);
+        // Threshold callers (and perhaps others) will be tempted to pass in a huge topK.
+        // Let's not allocate a ridiculously large heap up front in that scenario.
+        var resultsQueue = new NeighborQueue(min(1024, topK), false);
         Map<Integer, T> vectorsEncountered = scoreFunction.isExact() ? null : new java.util.HashMap<>();
         int numVisited = 0;
 
