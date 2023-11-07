@@ -54,7 +54,7 @@ public class BQVectors implements CompressedVectors {
         }
     }
 
-    public static BQVectors load(RandomAccessReader in, int offset) throws IOException {
+    public static BQVectors load(RandomAccessReader in, long offset) throws IOException {
         in.seek(offset);
 
         // BQ
