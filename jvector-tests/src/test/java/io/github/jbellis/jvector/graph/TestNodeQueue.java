@@ -25,18 +25,20 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import io.github.jbellis.jvector.util.BoundedLongHeap;
+import io.github.jbellis.jvector.util.GrowableLongHeap;
 import org.junit.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class TestNeighborQueue extends RandomizedTest {
+public class TestNodeQueue extends RandomizedTest {
   @Test
   public void testNeighborsProduct() {
     // make sure we have the sign correct
-    NeighborQueue nn = new NeighborQueue(2, false);
-    assertTrue(nn.insertWithReplacement(2, 0.5f));
-    assertTrue(nn.insertWithReplacement(1, 0.2f));
-    assertTrue(nn.insertWithReplacement(3, 1f));
+    NodeQueue nn = new NodeQueue(new BoundedLongHeap(2), NodeQueue.Order.MIN_HEAP);
+    assertTrue(nn.push(2, 0.5f));
+    assertTrue(nn.push(1, 0.2f));
+    assertTrue(nn.push(3, 1f));
     assertEquals(0.5f, nn.topScore(), 0);
     nn.pop();
     assertEquals(1f, nn.topScore(), 0);
@@ -45,10 +47,10 @@ public class TestNeighborQueue extends RandomizedTest {
 
   @Test
   public void testNeighborsMaxHeap() {
-    NeighborQueue nn = new NeighborQueue(2, true);
-    assertTrue(nn.insertWithReplacement(2, 2));
-    assertTrue(nn.insertWithReplacement(1, 1));
-    assertFalse(nn.insertWithReplacement(3, 3));
+    NodeQueue nn = new NodeQueue(new BoundedLongHeap(2), NodeQueue.Order.MAX_HEAP);
+    assertTrue(nn.push(2, 2));
+    assertTrue(nn.push(1, 1));
+    assertFalse(nn.push(3, 3));
     assertEquals(2f, nn.topScore(), 0);
     nn.pop();
     assertEquals(1f, nn.topScore(), 0);
@@ -56,9 +58,9 @@ public class TestNeighborQueue extends RandomizedTest {
 
   @Test
   public void testTopMaxHeap() {
-    NeighborQueue nn = new NeighborQueue(2, true);
-    nn.add(1, 2);
-    nn.add(2, 1);
+    NodeQueue nn = new NodeQueue(new GrowableLongHeap(2), NodeQueue.Order.MAX_HEAP);
+    nn.push(1, 2);
+    nn.push(2, 1);
     // lower scores are better; highest score on top
     assertEquals(2, nn.topScore(), 0);
     assertEquals(1, nn.topNode());
@@ -66,9 +68,9 @@ public class TestNeighborQueue extends RandomizedTest {
 
   @Test
   public void testTopMinHeap() {
-    NeighborQueue nn = new NeighborQueue(2, false);
-    nn.add(1, 0.5f);
-    nn.add(2, -0.5f);
+    NodeQueue nn = new NodeQueue(new GrowableLongHeap(2), NodeQueue.Order.MIN_HEAP);
+    nn.push(1, 0.5f);
+    nn.push(2, -0.5f);
     // higher scores are better; lowest score on top
     assertEquals(-0.5f, nn.topScore(), 0);
     assertEquals(2, nn.topNode());
@@ -76,9 +78,9 @@ public class TestNeighborQueue extends RandomizedTest {
 
   @Test
   public void testClear() {
-    NeighborQueue nn = new NeighborQueue(2, false);
-    nn.add(1, 1.1f);
-    nn.add(2, -2.2f);
+    NodeQueue nn = new NodeQueue(new GrowableLongHeap(2), NodeQueue.Order.MIN_HEAP);
+    nn.push(1, 1.1f);
+    nn.push(2, -2.2f);
     nn.markIncomplete();
     nn.clear();
 
@@ -88,25 +90,21 @@ public class TestNeighborQueue extends RandomizedTest {
 
   @Test
   public void testMaxSizeQueue() {
-    NeighborQueue nn = new NeighborQueue(2, false);
-    nn.add(1, 1);
-    nn.add(2, 2);
+    NodeQueue nn = new NodeQueue(new BoundedLongHeap(2), NodeQueue.Order.MIN_HEAP);
+    nn.push(1, 1);
+    nn.push(2, 2);
     assertEquals(2, nn.size());
     assertEquals(1, nn.topNode());
 
-    // insertWithOverflow does not extend the queue
-    nn.insertWithReplacement(3, 3);
+    // BoundedLongHeap does not extend the queue
+    nn.push(3, 3);
     assertEquals(2, nn.size());
     assertEquals(2, nn.topNode());
-
-    // add does extend the queue beyond maxSize
-    nn.add(4, 1);
-    assertEquals(3, nn.size());
   }
 
   @Test
   public void testUnboundedQueue() {
-    NeighborQueue nn = new NeighborQueue(1, true);
+    NodeQueue nn = new NodeQueue(new GrowableLongHeap(1), NodeQueue.Order.MAX_HEAP);
     float maxScore = -2;
     int maxNode = -1;
     for (int i = 0; i < 256; i++) {
@@ -116,7 +114,7 @@ public class TestNeighborQueue extends RandomizedTest {
         maxScore = score;
         maxNode = i;
       }
-      nn.add(i, score);
+      nn.push(i, score);
     }
     assertEquals(maxScore, nn.topScore(), 0);
     assertEquals(maxNode, nn.topNode());
@@ -124,11 +122,11 @@ public class TestNeighborQueue extends RandomizedTest {
 
   @Test
   public void testInvalidArguments() {
-    assertThrows(IllegalArgumentException.class, () -> new NeighborQueue(0, false));
+    assertThrows(IllegalArgumentException.class, () -> new NodeQueue(new GrowableLongHeap(0), NodeQueue.Order.MIN_HEAP));
   }
 
   @Test
   public void testToString() {
-    assertEquals("Neighbors[0]", new NeighborQueue(2, false).toString());
+    assertEquals("Nodes[0]", new NodeQueue(new GrowableLongHeap(2), NodeQueue.Order.MIN_HEAP).toString());
   }
 }

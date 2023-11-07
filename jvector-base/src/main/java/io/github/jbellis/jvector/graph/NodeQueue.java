@@ -24,19 +24,19 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.util.LongHeap;
+import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 
 /**
- * NeighborQueue uses a {@link LongHeap} to store lists of arcs in a graph, represented as a
- * neighbor node id with an associated score packed together as a sortable long, which is sorted
+ * NeighborQueue uses a {@link io.github.jbellis.jvector.util.AbstractLongHeap} to store lists of nodes in a graph,
+ * represented as a node id with an associated score packed together as a sortable long, which is sorted
  * primarily by score. The queue provides both fixed-size and unbounded operations via {@link
- * #insertWithReplacement(int, float)} and {@link #add(int, float)}, and provides MIN and MAX heap
+ * #push(int, float)} and {@link #push(int, float)}, and provides MIN and MAX heap
  * subclasses.
  */
-public class NeighborQueue {
+public class NodeQueue {
 
-    private enum Order {
+    public enum Order {
         MIN_HEAP {
             @Override
             long apply(long v) {
@@ -55,15 +55,15 @@ public class NeighborQueue {
         abstract long apply(long v);
     }
 
-    private final LongHeap heap;
+    private final AbstractLongHeap heap;
     private final Order order;
 
     // Whether the search stopped early because it reached the visited nodes limit
     private boolean incomplete;
 
-    public NeighborQueue(int initialSize, boolean maxHeap) {
-        this.heap = new LongHeap(initialSize);
-        this.order = maxHeap ? Order.MAX_HEAP : Order.MIN_HEAP;
+    public NodeQueue(AbstractLongHeap heap, Order order) {
+        this.heap = heap;
+        this.order = order;
     }
 
     /**
@@ -74,25 +74,14 @@ public class NeighborQueue {
     }
 
     /**
-     * Adds a new graph arc, extending the storage as needed.
+     * Adds a new graph arc to the heap.  Will extend storage or replace the worst element
+     * depending on the type of heap it is.
      *
      * @param newNode  the neighbor node id
      * @param newScore the score of the neighbor, relative to some other node
      */
-    public void add(int newNode, float newScore) {
-        heap.push(encode(newNode, newScore));
-    }
-
-    /**
-     * If the heap is not full (size is less than the initialSize provided to the constructor), adds a
-     * new node-and-score element. If the heap is full, compares newScore against the current worst
-     * score; if newScore is better, the worst node+score is discarded and newNode+newScore is added.
-     *
-     * @param newNode  the neighbor node id
-     * @param newScore the score of the neighbor, relative to some other node
-     */
-    public boolean insertWithReplacement(int newNode, float newScore) {
-        return heap.insertWithReplacement(encode(newNode, newScore));
+    public boolean push(int newNode, float newScore) {
+        return heap.push(encode(newNode, newScore));
     }
 
     /**
@@ -181,12 +170,8 @@ public class NeighborQueue {
         this.incomplete = true;
     }
 
-    boolean isMinHeap() {
-        return order == Order.MIN_HEAP;
-    }
-
     @Override
     public String toString() {
-        return "Neighbors[" + heap.size() + "]";
+        return "Nodes[" + heap.size() + "]";
     }
 }

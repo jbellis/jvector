@@ -29,6 +29,7 @@ import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -358,18 +359,15 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
                                           acceptOrds
             ).getNodes();
 
-            NeighborQueue expected = new NeighborQueue(topK, false);
+            NodeQueue expected = new NodeQueue(new BoundedLongHeap(topK), NodeQueue.Order.MIN_HEAP);
             for (int j = 0; j < size; j++) {
                 if (vectors.vectorValue(j) != null && acceptOrds.get(j)) {
                     if (getVectorEncoding() == VectorEncoding.BYTE) {
                         assert query instanceof byte[];
-                        expected.add(j, similarityFunction.compare((byte[]) query, (byte[]) vectors.vectorValue(j)));
+                        expected.push(j, similarityFunction.compare((byte[]) query, (byte[]) vectors.vectorValue(j)));
                     } else {
                         assert query instanceof float[];
-                        expected.add(j, similarityFunction.compare((float[]) query, (float[]) vectors.vectorValue(j)));
-                    }
-                    if (expected.size() > topK) {
-                        expected.pop();
+                        expected.push(j, similarityFunction.compare((float[]) query, (float[]) vectors.vectorValue(j)));
                     }
                 }
             }

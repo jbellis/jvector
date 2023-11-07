@@ -27,7 +27,9 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.GrowableBitSet;
+import io.github.jbellis.jvector.util.GrowableLongHeap;
 import io.github.jbellis.jvector.util.SparseFixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -49,7 +51,7 @@ public class GraphSearcher<T> {
      * Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
      * to allocate, so they're cleared and reused across calls.
      */
-    private final NeighborQueue candidates;
+    private final NodeQueue candidates;
 
     private final BitSet visited;
 
@@ -60,7 +62,7 @@ public class GraphSearcher<T> {
      */
     GraphSearcher(GraphIndex.View<T> view, BitSet visited) {
         this.view = view;
-        this.candidates = new NeighborQueue(100, true);
+        this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.visited = visited;
     }
 
@@ -175,16 +177,16 @@ public class GraphSearcher<T> {
 
         acceptOrds = Bits.intersectionOf(acceptOrds, view.liveNodes());
 
-        var resultsQueue = new NeighborQueue(topK, false);
+        var resultsQueue = new NodeQueue(new BoundedLongHeap(topK), NodeQueue.Order.MIN_HEAP);
         Map<Integer, T> vectorsEncountered = scoreFunction.isExact() ? null : new java.util.HashMap<>();
         int numVisited = 0;
 
         float score = scoreFunction.similarityTo(ep);
         visited.set(ep);
         numVisited++;
-        candidates.add(ep, score);
+        candidates.push(ep, score);
         if (acceptOrds.get(ep) && score >= threshold) {
-            resultsQueue.add(ep, score);
+            resultsQueue.push(ep, score);
         }
 
         // A bound that holds the minimum similarity to the query vector that a candidate vector must
@@ -220,9 +222,9 @@ public class GraphSearcher<T> {
                 scoreTracker.track(friendSimilarity);
 
                 if (friendSimilarity >= minAcceptedSimilarity) {
-                    candidates.add(friendOrd, friendSimilarity);
+                    candidates.push(friendOrd, friendSimilarity);
                     if (acceptOrds.get(friendOrd) && friendSimilarity >= threshold) {
-                        if (resultsQueue.insertWithReplacement(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
+                        if (resultsQueue.push(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
                             minAcceptedSimilarity = resultsQueue.topScore();
                         }
                     }
@@ -237,7 +239,7 @@ public class GraphSearcher<T> {
 
     private static <T> SearchResult.NodeScore[] extractScores(NeighborSimilarity.ScoreFunction sf,
                                                               NeighborSimilarity.ReRanker<T> reRanker,
-                                                              NeighborQueue resultsQueue,
+                                                              NodeQueue resultsQueue,
                                                               Map<Integer, T> vectorsEncountered)
     {
         SearchResult.NodeScore[] nodes;
