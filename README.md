@@ -20,6 +20,10 @@ JVector vs Lucene searching the Deep100M dataset (about 35GB of vectors and 25GB
 JVector scales updates linearly to at least 32 threads:
 ![Screenshot from 2023-09-14 18-05-15](https://github.com/jbellis/jvector/assets/42158/f0127bfc-6c45-48b9-96ea-95b2120da0d9)
 
+## Upgrading from 1.0.x to 2.0.x
+
+See [UPGRADING.md](./UPGRADING.md).
+
 ## JVector basics
 Adding to your project. Replace `${latest-version}` with ![Maven Central](https://img.shields.io/maven-central/v/io.github.jbellis/jvector?color=green). Example `<version>1.0.1</version>`:
 
