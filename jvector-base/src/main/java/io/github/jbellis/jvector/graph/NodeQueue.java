@@ -31,8 +31,7 @@ import io.github.jbellis.jvector.util.NumericUtils;
  * NodeQueue uses a {@link io.github.jbellis.jvector.util.AbstractLongHeap} to store lists of nodes in a graph,
  * represented as a node id with an associated score packed together as a sortable long, which is sorted
  * primarily by score. The queue {@link * #push(int, float)} operation provides either fixed-size
- * or unbounded operations, depending on the implementation.
- * subclasses.
+ * or unbounded operations, depending on the implementation subclasses, and either maxheap or minheap behavior.
  */
 public class NodeQueue {
 

@@ -29,10 +29,10 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 /**
  * A min heap that stores longs; a primitive priority queue that like all priority queues maintains
  * a partial ordering of its elements such that the least element can always be found in constant
- * time. Put()'s and pop()'s require log(size). This heap provides unbounded growth via {@link
- * #push(long)}, and bounded-size insertion based on its nominal maxSize via {@link
- * #insertWithReplacement(long)}. The heap is a min heap, meaning that the top element is the lowest
- * value of the heap.
+ * time. Push()'s and pop()'s require log(size). {@link #push(long)} may either grow the heap or
+ * replace the worst element, depending on the subclass implementation.
+ * <p>
+ * The heap is a min heap, meaning that the top element is the lowest value.
  */
 public abstract class AbstractLongHeap {
 
