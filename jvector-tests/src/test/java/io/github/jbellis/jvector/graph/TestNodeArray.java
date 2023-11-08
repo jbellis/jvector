@@ -33,10 +33,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestNeighborArray extends RandomizedTest {
+public class TestNodeArray extends RandomizedTest {
   @Test
   public void testScoresDescOrder() {
-    NeighborArray neighbors = new NeighborArray(10);
+    NodeArray neighbors = new NodeArray(10);
     neighbors.addInOrder(0, 1);
     neighbors.addInOrder(1, 0.8f);
 
@@ -84,13 +84,13 @@ public class TestNeighborArray extends RandomizedTest {
     assertNodesEqual(new int[] {0, 3, 8, 1}, neighbors);
   }
 
-  private void assertScoresEqual(float[] scores, NeighborArray neighbors) {
+  private void assertScoresEqual(float[] scores, NodeArray neighbors) {
     for (int i = 0; i < scores.length; i++) {
       assertEquals(scores[i], neighbors.score[i], 0.01f);
     }
   }
 
-  private void assertNodesEqual(int[] nodes, NeighborArray neighbors) {
+  private void assertNodesEqual(int[] nodes, NodeArray neighbors) {
     for (int i = 0; i < nodes.length; i++) {
       assertEquals(nodes[i], neighbors.node[i]);
     }
@@ -98,7 +98,7 @@ public class TestNeighborArray extends RandomizedTest {
 
   @Test
   public void testRetainNoneSelected() {
-    var array = new NeighborArray(10);
+    var array = new NodeArray(10);
     for (int i = 1; i <= 10; i++) {
       array.addInOrder(i, 11 - i);
     }
@@ -109,7 +109,7 @@ public class TestNeighborArray extends RandomizedTest {
 
   @Test
   public void testRetainAllSelected() {
-    var array = new NeighborArray(10);
+    var array = new NodeArray(10);
     for (int i = 1; i <= 10; i++) {
       array.addInOrder(i, 11 - i);
     }
@@ -121,7 +121,7 @@ public class TestNeighborArray extends RandomizedTest {
 
   @Test
   public void testRetainSomeSelectedNotFront() {
-    var array = new NeighborArray(10);
+    var array = new NodeArray(10);
     for (int i = 1; i <= 10; i++) {
       array.addInOrder(i, 11 - i);
     }
@@ -136,7 +136,7 @@ public class TestNeighborArray extends RandomizedTest {
 
   @Test
   public void testRetainSomeSelectedAtFront() {
-    var array = new NeighborArray(10);
+    var array = new NodeArray(10);
     for (int i = 1; i <= 10; i++) {
       array.addInOrder(i, 11 - i);
     }

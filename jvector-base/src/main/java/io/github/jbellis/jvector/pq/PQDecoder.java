@@ -15,14 +15,14 @@
  */
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 /**
  * Performs similarity comparisons with compressed vectors without decoding them
  */
-abstract class PQDecoder implements NeighborSimilarity.ApproximateScoreFunction {
+abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
     protected final PQVectors cv;
 
     protected PQDecoder(PQVectors cv) {

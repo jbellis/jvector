@@ -47,8 +47,8 @@ import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  */
 public class GraphIndexBuilder<T> {
     private final int beamWidth;
-    private final PoolingSupport<NeighborArray> naturalScratch;
-    private final PoolingSupport<NeighborArray> concurrentScratch;
+    private final PoolingSupport<NodeArray> naturalScratch;
+    private final PoolingSupport<NodeArray> concurrentScratch;
 
     private final VectorSimilarityFunction similarityFunction;
     private final float neighborOverflow;
@@ -67,7 +67,7 @@ public class GraphIndexBuilder<T> {
     private final PoolingSupport<RandomAccessVectorValues<T>> vectors;
     private final PoolingSupport<RandomAccessVectorValues<T>> vectorsCopy;
     private final int dimension; // for convenience so we don't have to go to the pool for this
-    private final NeighborSimilarity similarity;
+    private final NodeSimilarity similarity;
 
     private final AtomicInteger updateEntryNodeIn = new AtomicInteger(10_000);
 
@@ -111,7 +111,7 @@ public class GraphIndexBuilder<T> {
         similarity = node1 -> {
             try (var v = vectors.get(); var vc = vectorsCopy.get()) {
                 T v1 = v.get().vectorValue(node1);
-                return (NeighborSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vc.get().vectorValue(node2));
+                return (NodeSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vc.get().vectorValue(node2));
             }
         };
         this.graph =
@@ -120,8 +120,8 @@ public class GraphIndexBuilder<T> {
         this.graphSearcher = PoolingSupport.newThreadBased(() -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
 
         // in scratch we store candidates in reverse order: worse candidates are first
-        this.naturalScratch = PoolingSupport.newThreadBased(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
-        this.concurrentScratch = PoolingSupport.newThreadBased(() -> new NeighborArray(Math.max(beamWidth, M + 1)));
+        this.naturalScratch = PoolingSupport.newThreadBased(() -> new NodeArray(Math.max(beamWidth, M + 1)));
+        this.concurrentScratch = PoolingSupport.newThreadBased(() -> new NodeArray(Math.max(beamWidth, M + 1)));
     }
 
     public OnHeapGraphIndex<T> build() {
@@ -203,7 +203,7 @@ public class GraphIndexBuilder<T> {
                         // search for the closest neighbors
                         var notSelfBits = createNotSelfBits(node);
                         var value = v1.get().vectorValue(node);
-                        NeighborSimilarity.ExactScoreFunction scoreFunction = i1 -> scoreBetween(v2.get().vectorValue(i1), value);
+                        NodeSimilarity.ExactScoreFunction scoreFunction = i1 -> scoreBetween(v2.get().vectorValue(i1), value);
                         var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits).getNodes();
                         // connect this node to the closest neighbor that hasn't already been used as a connection target
                         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
@@ -278,7 +278,7 @@ public class GraphIndexBuilder<T> {
         {
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
@@ -350,11 +350,11 @@ public class GraphIndexBuilder<T> {
 
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
             var bits = new ExcludingBits(node);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, ep, bits);
             var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
-            updateNeighbors(graph.getNeighbors(node), natural, NeighborArray.EMPTY);
+            updateNeighbors(graph.getNeighbors(node), natural, NodeArray.EMPTY);
         }
     }
 
@@ -401,7 +401,7 @@ public class GraphIndexBuilder<T> {
                 int minConnections = 1 + graph.maxDegree() / 2;
                 if (neighbors.size() < minConnections) {
                     // create a NeighborArray of random connections
-                    NeighborArray randomConnections = new NeighborArray(graph.maxDegree() - neighbors.size());
+                    NodeArray randomConnections = new NodeArray(graph.maxDegree() - neighbors.size());
                     // doing actual sampling-without-replacement is expensive so we'll loop a fixed number of times instead
                     for (int i = 0; i < 2 * graph.maxDegree(); i++) {
                         int randomNode = liveNodes[R.nextInt(liveNodes.length)];
@@ -451,12 +451,12 @@ public class GraphIndexBuilder<T> {
              var scratch = naturalScratch.get())
         {
             var value = v1.get().vectorValue(node);
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits);
             var candidates = toScratchCandidates(result.getNodes(), result.getNodes().length, scratch.get());
             // We use just the topK results as candidates, which is much less expensive than computing scores for
             // the other visited nodes.  See comments in addGraphNode.
-            updateNeighbors(graph.getNeighbors(node), candidates, NeighborArray.EMPTY);
+            updateNeighbors(graph.getNeighbors(node), candidates, NodeArray.EMPTY);
         }
     }
 
@@ -495,18 +495,18 @@ public class GraphIndexBuilder<T> {
             VectorUtil.divInPlace(centroid, graph.size());
 
             // search for the node closest to the centroid
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), Bits.ALL);
             return result.getNodes()[0].node;
         }
     }
 
-    private void updateNeighbors(ConcurrentNeighborSet neighbors, NeighborArray natural, NeighborArray concurrent) {
+    private void updateNeighbors(ConcurrentNeighborSet neighbors, NodeArray natural, NodeArray concurrent) {
         neighbors.insertDiverse(natural, concurrent);
         neighbors.backlink(graph::getNeighbors, neighborOverflow);
     }
 
-    private NeighborArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NeighborArray scratch) {
+    private NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NodeArray scratch) {
         scratch.clear();
         for (int i = 0; i < count; i++) {
             var candidate = candidates[i];
@@ -515,11 +515,11 @@ public class GraphIndexBuilder<T> {
         return scratch;
     }
 
-    private NeighborArray getConcurrentCandidates(int newNode,
-                                                  Set<Integer> inProgress,
-                                                  NeighborArray scratch,
-                                                  RandomAccessVectorValues<T> values,
-                                                  RandomAccessVectorValues<T> valuesCopy)
+    private NodeArray getConcurrentCandidates(int newNode,
+                                              Set<Integer> inProgress,
+                                              NodeArray scratch,
+                                              RandomAccessVectorValues<T> values,
+                                              RandomAccessVectorValues<T> valuesCopy)
     {
         scratch.clear();
         for (var n : inProgress) {
@@ -578,7 +578,7 @@ public class GraphIndexBuilder<T> {
         for (int i = 0; i < size; i++) {
             int node = in.readInt();
             int nNeighbors = in.readInt();
-            var ca = new NeighborArray(maxDegree);
+            var ca = new NodeArray(maxDegree);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();
                 ca.addInOrder(neighbor, similarity.score(node, neighbor));

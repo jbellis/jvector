@@ -40,11 +40,11 @@ public class ConcurrentNeighborSet {
      * faster: no boxing/unboxing, all the data is stored sequentially instead of having to follow
      * references, and no fancy encoding necessary for node/score.
      */
-    private final AtomicReference<NeighborArray> neighborsRef;
+    private final AtomicReference<NodeArray> neighborsRef;
 
     private final float alpha;
 
-    private final NeighborSimilarity similarity;
+    private final NodeSimilarity similarity;
 
     /** the maximum number of neighbors we can store */
     private final int maxConnections;
@@ -52,19 +52,19 @@ public class ConcurrentNeighborSet {
     /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
     private float shortEdges = Float.NaN;
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity) {
+    public ConcurrentNeighborSet(int nodeId, int maxConnections, NodeSimilarity similarity) {
         this(nodeId, maxConnections, similarity, 1.0f);
     }
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
-        this(nodeId, maxConnections, similarity, alpha, new NeighborArray(maxConnections));
+    public ConcurrentNeighborSet(int nodeId, int maxConnections, NodeSimilarity similarity, float alpha) {
+        this(nodeId, maxConnections, similarity, alpha, new NodeArray(maxConnections));
     }
 
     ConcurrentNeighborSet(int nodeId,
                           int maxConnections,
-                          NeighborSimilarity similarity,
+                          NodeSimilarity similarity,
                           float alpha,
-                          NeighborArray neighbors)
+                          NodeArray neighbors)
     {
         this.nodeId = nodeId;
         this.maxConnections = maxConnections;
@@ -94,7 +94,7 @@ public class ConcurrentNeighborSet {
      * If overflow is > 1.0, allow the number of neighbors to exceed maxConnections temporarily.
      */
     public void backlink(Function<Integer, ConcurrentNeighborSet> neighborhoodOf, float overflow) {
-        NeighborArray neighbors = neighborsRef.get();
+        NodeArray neighbors = neighborsRef.get();
         for (int i = 0; i < neighbors.size(); i++) {
             int nbr = neighbors.node[i];
             float nbrScore = neighbors.score[i];
@@ -142,10 +142,10 @@ public class ConcurrentNeighborSet {
     }
 
     private static class NeighborIterator extends NodesIterator {
-        private final NeighborArray neighbors;
+        private final NodeArray neighbors;
         private int i;
 
-        private NeighborIterator(NeighborArray neighbors) {
+        private NeighborIterator(NodeArray neighbors) {
             super(neighbors.size());
             this.neighbors = neighbors;
             i = 0;
@@ -176,14 +176,14 @@ public class ConcurrentNeighborSet {
      * were selected by this method, or were added as a "backlink" to a node inserted concurrently
      * that chose this one as a neighbor.
      */
-    public void insertDiverse(NeighborArray natural, NeighborArray concurrent) {
+    public void insertDiverse(NodeArray natural, NodeArray concurrent) {
         if (natural.size() == 0 && concurrent.size() == 0) {
             return;
         }
 
         neighborsRef.getAndUpdate(current -> {
             // if either natural or concurrent is empty, skip the merge
-            NeighborArray toMerge;
+            NodeArray toMerge;
             if (concurrent.size == 0) {
                 toMerge = natural;
             } else if (natural.size == 0) {
@@ -204,7 +204,7 @@ public class ConcurrentNeighborSet {
         });
     }
 
-    void padWithRandom(NeighborArray connections) {
+    void padWithRandom(NodeArray connections) {
         // we deliberately do not perform diversity checks here
         // (it will be invoked when the cleanup code calls insertDiverse later
         // with the results of the nn descent rebuild)
@@ -213,7 +213,7 @@ public class ConcurrentNeighborSet {
 
     void insertNotDiverse(int node, float score, boolean limitConnections) {
         neighborsRef.getAndUpdate(current -> {
-            NeighborArray next = current.copy();
+            NodeArray next = current.copy();
             if (limitConnections) {
                 // remove the worst edge to make room for the new one
                 next.size = min(next.size, maxConnections - 1);
@@ -226,8 +226,8 @@ public class ConcurrentNeighborSet {
     /**
      * Copies the selected neighbors from the merged array into a new array.
      */
-    private NeighborArray copyDiverse(NeighborArray merged, BitSet selected) {
-        NeighborArray next = new NeighborArray(maxConnections);
+    private NodeArray copyDiverse(NodeArray merged, BitSet selected) {
+        NodeArray next = new NodeArray(maxConnections);
         for (int i = 0; i < merged.size(); i++) {
             if (!selected.get(i)) {
                 continue;
@@ -241,7 +241,7 @@ public class ConcurrentNeighborSet {
         return next;
     }
 
-    private BitSet selectDiverse(NeighborArray neighbors) {
+    private BitSet selectDiverse(NodeArray neighbors) {
         BitSet selected = new FixedBitSet(neighbors.size());
         int nSelected = 0;
 
@@ -271,12 +271,12 @@ public class ConcurrentNeighborSet {
         return selected;
     }
 
-    NeighborArray getCurrent() {
+    NodeArray getCurrent() {
         return neighborsRef.get();
     }
 
-    static NeighborArray mergeNeighbors(NeighborArray a1, NeighborArray a2) {
-        NeighborArray merged = new NeighborArray(a1.size() + a2.size());
+    static NodeArray mergeNeighbors(NodeArray a1, NodeArray a2) {
+        NodeArray merged = new NodeArray(a1.size() + a2.size());
         int i = 0, j = 0;
 
         // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
@@ -365,7 +365,7 @@ public class ConcurrentNeighborSet {
         assert neighborId != nodeId : "can't add self as neighbor at node " + nodeId;
         neighborsRef.getAndUpdate(
                 current -> {
-                    NeighborArray next = current.copy();
+                    NodeArray next = current.copy();
                     next.insertSorted(neighborId, score);
                     // batch up the enforcement of the max connection limit, since otherwise
                     // we do a lot of duplicate work scanning nodes that we won't remove
@@ -380,7 +380,7 @@ public class ConcurrentNeighborSet {
     // is the candidate node with the given score closer to the base node than it is to any of the
     // existing neighbors
     private boolean isDiverse(
-            int node, float score, NeighborArray others, BitSet selected, float alpha) {
+            int node, float score, NodeArray others, BitSet selected, float alpha) {
         if (others.size() == 0) {
             return true;
         }
@@ -403,7 +403,7 @@ public class ConcurrentNeighborSet {
         return true;
     }
 
-    private NeighborArray removeAllNonDiverse(NeighborArray neighbors) {
+    private NodeArray removeAllNonDiverse(NodeArray neighbors) {
         if (neighbors.size <= maxConnections) {
             return neighbors;
         }

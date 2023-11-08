@@ -31,24 +31,25 @@ import io.github.jbellis.jvector.util.Bits;
 import java.util.Arrays;
 
 /**
- * NeighborArray encodes the neighbors of a node and their mutual scores in the graph as a pair
- * of growable arrays. Nodes are arranged in the sorted order of their scores in descending order,
- * i.e. the most-similar neighbors are first.
+ * NodeArray encodes nodeids and their scores relative to some other element 
+ * (a query vector, or another graph node) as a pair of growable arrays. 
+ * Nodes are arranged in the sorted order of their scores in descending order,
+ * i.e. the most-similar nodes are first.
  */
-public class NeighborArray {
-    public static final NeighborArray EMPTY = new NeighborArray(0);
+public class NodeArray {
+    public static final NodeArray EMPTY = new NodeArray(0);
 
     protected int size;
     float[] score;
     int[] node;
 
-    public NeighborArray(int maxSize) {
+    public NodeArray(int maxSize) {
         node = new int[maxSize];
         score = new float[maxSize];
     }
 
     /**
-     * Add a new node to the NeighborArray. The new node must be worse than all previously stored
+     * Add a new node to the NodeArray. The new node must be worse than all previously stored
      * nodes.
      */
     public void addInOrder(int newNode, float newScore) {
@@ -70,7 +71,7 @@ public class NeighborArray {
     }
 
     /**
-     * Add a new node to the NeighborArray into a correct sort position according to its score.
+     * Add a new node to the NodeArray into a correct sort position according to its score.
      * Duplicate node + score pairs are ignored.
      *
      * @return true if the new node + score pair did not already exist
@@ -111,14 +112,14 @@ public class NeighborArray {
     }
 
     /**
-     * Retains only the elements in the current NeighborArray whose corresponding index
+     * Retains only the elements in the current NodeArray whose corresponding index
      * is set in the given BitSet.
      * <p>
      * This modifies the array in place, preserving the relative order of the elements retained.
      * <p>
      *
      * @param selected A BitSet where the bit at index i is set if the i-th element should be retained.
-     *                 (Thus, the elements of selected represent positions in the NeighborArray, NOT node ids.)
+     *                 (Thus, the elements of selected represent positions in the NodeArray, NOT node ids.)
      */
     public void retain(Bits selected) {
         int writeIdx = 0; // index for where to write the next retained element
@@ -138,8 +139,8 @@ public class NeighborArray {
         size = writeIdx;
     }
 
-    public NeighborArray copy() {
-        NeighborArray copy = new NeighborArray(node.length);
+    public NodeArray copy() {
+        NodeArray copy = new NodeArray(node.length);
         copy.size = size;
         System.arraycopy(node, 0, copy.node, 0, size);
         System.arraycopy(score, 0, copy.score, 0, size);
@@ -182,7 +183,7 @@ public class NeighborArray {
 
     @Override
     public String toString() {
-        return "NeighborArray[" + size + "]";
+        return "NodeArray[" + size + "]";
     }
 
     protected final int descSortFindRightMostInsertionPoint(float newScore) {
