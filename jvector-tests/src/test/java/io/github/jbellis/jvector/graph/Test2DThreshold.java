@@ -46,7 +46,7 @@ public class Test2DThreshold extends LuceneTestCase {
         for (int i = 0; i < 10; i++) {
             TestParams tp = createTestParams(vectors);
 
-            NeighborSimilarity.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
+            NodeSimilarity.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
             var result = searcher.search(sf, null, vectors.length, tp.th, Bits.ALL);
 
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;

@@ -19,7 +19,7 @@ package io.github.jbellis.jvector.graph;
 import java.util.Map;
 
 /** Encapsulates comparing node distances. */
-public interface NeighborSimilarity {
+public interface NodeSimilarity {
     /** for one-off comparisons between nodes */
     default float score(int node1, int node2) {
         return scoreProvider(node1).similarityTo(node2);
@@ -33,7 +33,7 @@ public interface NeighborSimilarity {
 
     /**
      * Provides an API for encapsulating similarity to another node or vector.  Used both for
-     * building the graph (as part of NeighborSimilarity) or for searching it (used standalone,
+     * building the graph (as part of NodeSimilarity) or for searching it (used standalone,
      * with a reference to the query vector).
      * <p>
      * ExactScoreFunction and ApproximateScoreFunction are provided for convenience so they

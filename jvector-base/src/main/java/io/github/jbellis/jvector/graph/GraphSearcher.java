@@ -74,7 +74,7 @@ public class GraphSearcher<T> {
      */
     public static <T> SearchResult search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
         var searcher = new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build();
-        NeighborSimilarity.ExactScoreFunction scoreFunction = i -> {
+        NodeSimilarity.ExactScoreFunction scoreFunction = i -> {
             switch (vectorEncoding) {
                 case BYTE:
                     return similarityFunction.compare((byte[]) targetVector, (byte[]) vectors.vectorValue(i));
@@ -121,8 +121,8 @@ public class GraphSearcher<T> {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     @Experimental
-    public SearchResult search(NeighborSimilarity.ScoreFunction scoreFunction,
-                               NeighborSimilarity.ReRanker<T> reRanker,
+    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
+                               NodeSimilarity.ReRanker<T> reRanker,
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
@@ -140,8 +140,8 @@ public class GraphSearcher<T> {
      *                      that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(NeighborSimilarity.ScoreFunction scoreFunction,
-                               NeighborSimilarity.ReRanker<T> reRanker,
+    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
+                               NodeSimilarity.ReRanker<T> reRanker,
                                int topK,
                                Bits acceptOrds)
     {
@@ -157,8 +157,8 @@ public class GraphSearcher<T> {
      * <p>
      * This method never calls acceptOrds.length(), so the length-free Bits.ALL may be passed in.
      */
-    SearchResult searchInternal(NeighborSimilarity.ScoreFunction scoreFunction,
-                                NeighborSimilarity.ReRanker<T> reRanker,
+    SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
+                                NodeSimilarity.ReRanker<T> reRanker,
                                 int topK,
                                 float threshold,
                                 int ep,
@@ -241,8 +241,8 @@ public class GraphSearcher<T> {
         return new SearchResult(nodes, visited, numVisited);
     }
 
-    private static <T> SearchResult.NodeScore[] extractScores(NeighborSimilarity.ScoreFunction sf,
-                                                              NeighborSimilarity.ReRanker<T> reRanker,
+    private static <T> SearchResult.NodeScore[] extractScores(NodeSimilarity.ScoreFunction sf,
+                                                              NodeSimilarity.ReRanker<T> reRanker,
                                                               NodeQueue resultsQueue,
                                                               Map<Integer, T> vectorsEncountered)
     {

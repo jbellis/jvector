@@ -134,7 +134,7 @@ public class NodeQueue {
         return nodes;
     }
 
-    public SearchResult.NodeScore[] nodesCopy(NeighborSimilarity.ExactScoreFunction sf) {
+    public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.ExactScoreFunction sf) {
         int size = size();
         SearchResult.NodeScore[] ns = new SearchResult.NodeScore[size];
         for (int i = 0; i < size; i++) {

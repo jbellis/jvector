@@ -67,7 +67,7 @@ public class GraphIndexBuilder<T> {
     private final PoolingSupport<RandomAccessVectorValues<T>> vectors;
     private final PoolingSupport<RandomAccessVectorValues<T>> vectorsCopy;
     private final int dimension; // for convenience so we don't have to go to the pool for this
-    private final NeighborSimilarity similarity;
+    private final NodeSimilarity similarity;
 
     private final AtomicInteger updateEntryNodeIn = new AtomicInteger(10_000);
 
@@ -111,7 +111,7 @@ public class GraphIndexBuilder<T> {
         similarity = node1 -> {
             try (var v = vectors.get(); var vc = vectorsCopy.get()) {
                 T v1 = v.get().vectorValue(node1);
-                return (NeighborSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vc.get().vectorValue(node2));
+                return (NodeSimilarity.ExactScoreFunction) node2 -> scoreBetween(v1, vc.get().vectorValue(node2));
             }
         };
         this.graph =
@@ -203,7 +203,7 @@ public class GraphIndexBuilder<T> {
                         // search for the closest neighbors
                         var notSelfBits = createNotSelfBits(node);
                         var value = v1.get().vectorValue(node);
-                        NeighborSimilarity.ExactScoreFunction scoreFunction = i1 -> scoreBetween(v2.get().vectorValue(i1), value);
+                        NodeSimilarity.ExactScoreFunction scoreFunction = i1 -> scoreBetween(v2.get().vectorValue(i1), value);
                         var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits).getNodes();
                         // connect this node to the closest neighbor that hasn't already been used as a connection target
                         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
@@ -278,7 +278,7 @@ public class GraphIndexBuilder<T> {
         {
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
@@ -350,7 +350,7 @@ public class GraphIndexBuilder<T> {
 
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
             var bits = new ExcludingBits(node);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, ep, bits);
             var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
@@ -451,7 +451,7 @@ public class GraphIndexBuilder<T> {
              var scratch = naturalScratch.get())
         {
             var value = v1.get().vectorValue(node);
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits);
             var candidates = toScratchCandidates(result.getNodes(), result.getNodes().length, scratch.get());
             // We use just the topK results as candidates, which is much less expensive than computing scores for
@@ -495,7 +495,7 @@ public class GraphIndexBuilder<T> {
             VectorUtil.divInPlace(centroid, graph.size());
 
             // search for the node closest to the centroid
-            NeighborSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
             var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), Bits.ALL);
             return result.getNodes()[0].node;
         }

@@ -37,7 +37,7 @@ import io.github.jbellis.jvector.example.util.UpdatableRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
-import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
@@ -266,8 +266,8 @@ public class IPCService
 
             SearchResult r;
             if (ctx.cv != null) {
-                NeighborSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
-                NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
+                NodeSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
+                NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
                 r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, Bits.ALL);
             } else {
                 r = GraphSearcher.search(queryVector, topK, ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.index, Bits.ALL);

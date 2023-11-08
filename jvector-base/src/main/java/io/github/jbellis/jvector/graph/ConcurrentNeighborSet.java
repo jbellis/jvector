@@ -44,7 +44,7 @@ public class ConcurrentNeighborSet {
 
     private final float alpha;
 
-    private final NeighborSimilarity similarity;
+    private final NodeSimilarity similarity;
 
     /** the maximum number of neighbors we can store */
     private final int maxConnections;
@@ -52,17 +52,17 @@ public class ConcurrentNeighborSet {
     /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
     private float shortEdges = Float.NaN;
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity) {
+    public ConcurrentNeighborSet(int nodeId, int maxConnections, NodeSimilarity similarity) {
         this(nodeId, maxConnections, similarity, 1.0f);
     }
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, NeighborSimilarity similarity, float alpha) {
+    public ConcurrentNeighborSet(int nodeId, int maxConnections, NodeSimilarity similarity, float alpha) {
         this(nodeId, maxConnections, similarity, alpha, new NeighborArray(maxConnections));
     }
 
     ConcurrentNeighborSet(int nodeId,
                           int maxConnections,
-                          NeighborSimilarity similarity,
+                          NodeSimilarity similarity,
                           float alpha,
                           NeighborArray neighbors)
     {
