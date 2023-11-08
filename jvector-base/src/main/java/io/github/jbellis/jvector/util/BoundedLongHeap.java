@@ -27,7 +27,7 @@ package io.github.jbellis.jvector.util;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 
 /**
- * A LongHeap with a fixed maximum size, allocated at construction time.
+ * An AbstractLongHeap with a fixed maximum size, allocated at construction time.
  */
 public class BoundedLongHeap extends AbstractLongHeap {
 
@@ -76,7 +76,7 @@ public class BoundedLongHeap extends AbstractLongHeap {
      * pq.push(value);
      * </pre>
      * <p>
-     * Calling this method on an empty LongHeap has no visible effect.
+     * Calling this method on an empty BoundedLongHeap has no visible effect.
      *
      * @param value the new element that is less than the current top.
      * @return the new 'top' element after shuffling the heap.

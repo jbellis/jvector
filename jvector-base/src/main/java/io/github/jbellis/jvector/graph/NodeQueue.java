@@ -28,10 +28,10 @@ import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 
 /**
- * NeighborQueue uses a {@link io.github.jbellis.jvector.util.AbstractLongHeap} to store lists of nodes in a graph,
+ * NodeQueue uses a {@link io.github.jbellis.jvector.util.AbstractLongHeap} to store lists of nodes in a graph,
  * represented as a node id with an associated score packed together as a sortable long, which is sorted
- * primarily by score. The queue provides both fixed-size and unbounded operations via {@link
- * #push(int, float)} and {@link #push(int, float)}, and provides MIN and MAX heap
+ * primarily by score. The queue {@link * #push(int, float)} operation provides either fixed-size
+ * or unbounded operations, depending on the implementation.
  * subclasses.
  */
 public class NodeQueue {
@@ -74,11 +74,11 @@ public class NodeQueue {
     }
 
     /**
-     * Adds a new graph arc to the heap.  Will extend storage or replace the worst element
+     * Adds a new graph node to the heap.  Will extend storage or replace the worst element
      * depending on the type of heap it is.
      *
-     * @param newNode  the neighbor node id
-     * @param newScore the score of the neighbor, relative to some other node
+     * @param newNode  the node id
+     * @param newScore the relative similarity score to the node of the owner
      */
     public boolean push(int newNode, float newScore) {
         return heap.push(encode(newNode, newScore));
