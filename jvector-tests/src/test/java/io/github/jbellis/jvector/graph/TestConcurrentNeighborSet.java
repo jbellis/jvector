@@ -32,7 +32,7 @@ import static org.junit.Assert.assertTrue;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
 
-  private static void validateSortedByScore(NeighborArray na) {
+  private static void validateSortedByScore(NodeArray na) {
     for (int i = 0; i < na.size() - 1; i++) {
       assertTrue(na.score[i] >= na.score[i + 1]);
     }
@@ -44,7 +44,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
-    var candidates = new NeighborArray(10);
+    var candidates = new NodeArray(10);
     NodeSimilarity scoreBetween = a -> {
       return (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     };
@@ -59,7 +59,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
     // only nodes 6 and 8 are diverse wrt 7
     var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween);
-    var empty = new NeighborArray(0);
+    var empty = new NodeArray(0);
     neighbors.insertDiverse(candidates, empty);
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
@@ -73,8 +73,8 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
-    var natural = new NeighborArray(10);
-    var concurrent = new NeighborArray(10);
+    var natural = new NodeArray(10);
+    var concurrent = new NodeArray(10);
     NodeSimilarity scoreBetween = a -> {
       return (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     };
@@ -110,20 +110,20 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     };
 
     // check that the new neighbor doesn't replace the existing one (since both are diverse, and the max degree accommodates both)
-    var cna = new NeighborArray(1);
+    var cna = new NodeArray(1);
     cna.addInOrder(6, scoreBetween.score(7, 6));
 
-    var cna2 = new NeighborArray(1);
+    var cna2 = new NodeArray(1);
     cna2.addInOrder(8, scoreBetween.score(7, 6));
 
     var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween, 1.0f, cna);
-    neighbors.insertDiverse(cna2, NeighborArray.EMPTY);
+    neighbors.insertDiverse(cna2, NodeArray.EMPTY);
     assertEquals(2, neighbors.size());
   }
 
   @Test
   public void testNoDuplicatesDescOrder() {
-    NeighborArray cna = new NeighborArray(5);
+    NodeArray cna = new NodeArray(5);
     cna.insertSorted(1, 10.0f);
     cna.insertSorted(2, 9.0f);
     cna.insertSorted(3, 8.0f);
@@ -137,7 +137,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testNoDuplicatesSameScores() {
-    NeighborArray cna = new NeighborArray(5);
+    NodeArray cna = new NodeArray(5);
     cna.insertSorted(1, 10.0f);
     cna.insertSorted(2, 10.0f);
     cna.insertSorted(3, 10.0f);
@@ -150,10 +150,10 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testMergeCandidatesSimple() {
-    var arr1 = new NeighborArray(1);
+    var arr1 = new NodeArray(1);
     arr1.addInOrder(1, 1.0f);
 
-    var arr2 = new NeighborArray(1);
+    var arr2 = new NodeArray(1);
     arr2.addInOrder(0, 2.0f);
 
     var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
@@ -161,12 +161,12 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {0, 1}, Arrays.copyOf(merged.node(), 2));
 
-    arr1 = new NeighborArray(3);
+    arr1 = new NodeArray(3);
     arr1.addInOrder(3, 3.0f);
     arr1.addInOrder(2, 2.0f);
     arr1.addInOrder(1, 1.0f);
 
-    arr2 = new NeighborArray(3);
+    arr2 = new NodeArray(3);
     arr2.addInOrder(4, 4.0f);
     arr2.addInOrder(2, 2.0f);
     arr2.addInOrder(1, 1.0f);
@@ -178,11 +178,11 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     assertArrayEquals(new float[] {4.0f, 3.0f, 2.0f, 1.0f}, Arrays.copyOf(merged.score(), 4), 0.0f);
 
     // Testing boundary conditions
-    arr1 = new NeighborArray(2);
+    arr1 = new NodeArray(2);
     arr1.addInOrder(3, 3.0f);
     arr1.addInOrder(2, 2.0f);
 
-    arr2 = new NeighborArray(1);
+    arr2 = new NodeArray(1);
     arr2.addInOrder(2, 2.0f);
 
     merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
@@ -198,7 +198,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     int maxSize = 1 + getRandom().nextInt(5);
 
     // fill arr1 with nodes from 0..size, with random scores assigned (so random order of nodes)
-    NeighborArray arr1 = new NeighborArray(maxSize);
+    NodeArray arr1 = new NodeArray(maxSize);
     int a1Size = getRandom().nextBoolean() ? maxSize : 1 + getRandom().nextInt(maxSize);
     for (int i = 0; i < a1Size; i++) {
       arr1.insertSorted(i, getRandom().nextFloat());
@@ -208,7 +208,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     // -- an exact duplicates of the corresponding node in arr1, or
     // -- a random score chosen from arr1
     // this is designed to maximize the need for correct handling of corner cases in the merge
-    NeighborArray arr2 = new NeighborArray(maxSize);
+    NodeArray arr2 = new NodeArray(maxSize);
     int a2Size = getRandom().nextBoolean() ? maxSize : 1 + getRandom().nextInt(maxSize);
     for (int i = 0; i < a2Size; i++) {
       if (i < a1Size && getRandom().nextBoolean()) {
