@@ -8,6 +8,7 @@
   to change the remaining node ids to -- on-disk graphs may not contain "holes" in the ordinal sequence.
 - `GraphSearcher.search` now has an experimental overload that takes a
   `float threshold` parameter that may be used instead of topK; (approximately) all the nodes with simlarities greater than the given threshold will be returned.
+- Binary Quantization is available as an alternative to Product Quantization. Our tests show that it's primarily suitable for ada002 embedding vectors and loses too much accuracy with smaller embeddings.
 
 ## Primary API changes
 
