@@ -30,7 +30,7 @@ jobs:
           distribution: temurin
           cache: maven
       - name: Compile, run tests, and package (JDK 20)
-        run: mvn -B package
+        run: mvn -B verify
         if: matrix.jdk == '20'
       - name: Compile and run tests (JDK 11)
         run: mvn -B -Pjdk11 -am -pl jvector-tests test
