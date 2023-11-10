@@ -189,20 +189,15 @@ public class GraphSearcher<T> {
         visited.set(ep);
         numVisited++;
         candidates.push(ep, score);
-        if (acceptOrds.get(ep) && score >= threshold) {
-            resultsQueue.push(ep, score);
-        }
 
         // A bound that holds the minimum similarity to the query vector that a candidate vector must
         // have to be considered.
         float minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
-        if (resultsQueue.size() >= topK) {
-            minAcceptedSimilarity = resultsQueue.topScore();
-        }
 
         while (candidates.size() > 0 && !resultsQueue.incomplete()) {
-            // get the best candidate (closest or best scoring)
-            if (candidates.topScore() < minAcceptedSimilarity) {
+            // done when best candidate is worse than the worst result so far
+            float topCandidateScore = candidates.topScore();
+            if (topCandidateScore < minAcceptedSimilarity) {
                 break;
             }
 
@@ -211,10 +206,21 @@ public class GraphSearcher<T> {
                 break;
             }
 
+            // add the top candidate to the resultset
             int topCandidateNode = candidates.pop();
-            if (!scoreFunction.isExact()) {
-                vectorsEncountered.put(topCandidateNode, view.getVector(topCandidateNode));
+            if (acceptOrds.get(topCandidateNode)
+                && topCandidateScore >= threshold
+                && resultsQueue.push(topCandidateNode, topCandidateScore))
+            {
+                if (resultsQueue.size() >= topK) {
+                    minAcceptedSimilarity = resultsQueue.topScore();
+                }
+                if (!scoreFunction.isExact()) {
+                    vectorsEncountered.put(topCandidateNode, view.getVector(topCandidateNode));
+                }
             }
+
+            // add its neighbors to the candidates queue
             for (var it = view.getNeighborsIterator(topCandidateNode); it.hasNext(); ) {
                 int friendOrd = it.nextInt();
                 if (visited.getAndSet(friendOrd)) {
@@ -224,14 +230,8 @@ public class GraphSearcher<T> {
 
                 float friendSimilarity = scoreFunction.similarityTo(friendOrd);
                 scoreTracker.track(friendSimilarity);
-
                 if (friendSimilarity >= minAcceptedSimilarity) {
                     candidates.push(friendOrd, friendSimilarity);
-                    if (acceptOrds.get(friendOrd) && friendSimilarity >= threshold) {
-                        if (resultsQueue.push(friendOrd, friendSimilarity) && resultsQueue.size() >= topK) {
-                            minAcceptedSimilarity = resultsQueue.topScore();
-                        }
-                    }
                 }
             }
         }
