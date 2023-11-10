@@ -64,6 +64,21 @@ public class DownloadHelper {
                                     "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
                                     "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
                 break;
+            case "intfloat_e5-base-v2_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-base-v2_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-base-v2_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-base-v2_100000_indices_query_10000.ivec"));
+                break;
+            case "intfloat_e5-large-v2_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-large-v2_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-large-v2_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/intfloat_e5-large-v2_100000_indices_query_10000.ivec"));
+                break;
+            case "textembedding-gecko_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/textembedding-gecko_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/textembedding-gecko_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/textembedding-gecko_100000_indices_query_10000.ivec"));
+                break;
             default:
                 throw new IllegalArgumentException("Unknown prefix: " + prefix);
         }

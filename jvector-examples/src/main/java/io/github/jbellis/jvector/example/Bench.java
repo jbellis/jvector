@@ -204,21 +204,23 @@ public class Bench {
         // compile regex and do substring matching using find
         var pattern = Pattern.compile(regex);
 
-        if (pattern.matcher("wikipedia_squad/100k/e5-small-v2").find()) {
-            DownloadHelper.maybeDownloadFvecs("intfloat_e5-small-v2_100000");
-            var e5set = loadE5SmallData("wikipedia_squad/100k");
-            gridSearch(e5set, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-            cachedCompressors.clear();
+        // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
+        var nwFiles = List.of(
+                "intfloat_e5-small-v2_100000",
+                "intfloat_e5-base-v2_100000",
+                "intfloat_e5-large-v2_100000",
+                "textembedding-gecko_100000",
+                "ada_002_100000");
+        for (var nwDatasetName : nwFiles) {
+            if (pattern.matcher(nwDatasetName).find()) {
+                DownloadHelper.maybeDownloadFvecs(nwDatasetName);
+                gridSearch(loadNWDataData(nwDatasetName), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+                cachedCompressors.clear();
+            }
         }
 
-        if (pattern.matcher("wikipedia_squad/100k/ada_002").find()) {
-            DownloadHelper.maybeDownloadFvecs("ada_002_100000");
-            var adaSet = loadWikipediaData("wikipedia_squad/100k");
-            gridSearch(adaSet, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-            cachedCompressors.clear();
-        }
-
-        var files = List.of(
+        // smaller vectors from ann-benchmarks
+        var hdf5Files = List.of(
                 // large files not yet supported
                 // "hdf5/deep-image-96-angular.hdf5",
                 // "hdf5/gist-960-euclidean.hdf5",
@@ -229,7 +231,7 @@ public class Bench {
                 "glove-200-angular.hdf5",
                 "nytimes-256-angular.hdf5",
                 "sift-128-euclidean.hdf5");
-        for (var f : files) {
+        for (var f : hdf5Files) {
             if (pattern.matcher(f).find()) {
                 DownloadHelper.maybeDownloadHdf5(f);
                 gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
@@ -238,26 +240,11 @@ public class Bench {
         }
     }
 
-    private static DataSet loadE5SmallData(String path) throws IOException {
-        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/intfloat_e5-small-v2_100000_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/intfloat_e5-small-v2_100000_query_vectors_10000.fvec");
-        var gt = SiftLoader.readIvecs("fvec/" + path + "/intfloat_e5-small-v2_100000_indices_query_10000.ivec");
-        String name = Path.of(path).getName(0).toString();
-        var ds = new DataSet(name,
-                             VectorSimilarityFunction.DOT_PRODUCT,
-                             baseVectors,
-                             queryVectors,
-                             gt);
-        System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
-                          name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
-        return ds;
-    }
-
-    private static DataSet loadWikipediaData(String path) throws IOException {
-        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/ada_002_100000_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/ada_002_100000_query_vectors_10000.fvec");
-        var gt = SiftLoader.readIvecs("fvec/" + path + "/ada_002_100000_indices_query_10000.ivec");
-        String name = Path.of(path).getName(0).toString();
+    private static DataSet loadNWDataData(String name) throws IOException {
+        var path = "wikipedia_squad/100k";
+        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_base_vectors.fvec");
+        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_query_vectors_10000.fvec");
+        var gt = SiftLoader.readIvecs("fvec/" + path + "/" + name + "_indices_query_10000.ivec");
         var ds = new DataSet(name,
                              VectorSimilarityFunction.DOT_PRODUCT,
                              baseVectors,
