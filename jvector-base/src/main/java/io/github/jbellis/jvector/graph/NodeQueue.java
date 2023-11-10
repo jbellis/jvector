@@ -78,6 +78,8 @@ public class NodeQueue {
      *
      * @param newNode  the node id
      * @param newScore the relative similarity score to the node of the owner
+     *
+     * @return true if the new value was added.
      */
     public boolean push(int newNode, float newScore) {
         return heap.push(encode(newNode, newScore));
