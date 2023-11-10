@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.example;
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.DataSet;
+import io.github.jbellis.jvector.example.util.DataSetCreator;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
@@ -194,15 +195,18 @@ public class Bench {
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
-//        var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
-//        gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-//        cachedCompressors.clear();
-
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything
         var regex = args.length == 0 ? ".*" : Arrays.stream(args).flatMap(s -> Arrays.stream(s.split("\\s"))).map(s -> "(?:" + s + ")").collect(Collectors.joining("|"));
         // compile regex and do substring matching using find
         var pattern = Pattern.compile(regex);
+
+        // 2D grid, built and calculated at runtime
+        if (pattern.matcher("2dgrid").find()) {
+            var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
+            gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+            cachedCompressors.clear();
+        }
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
