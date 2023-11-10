@@ -81,35 +81,7 @@ public class Bench {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
-                for (var cf : compressionGrid) {
-                    var compressor = getCompressor(cf, ds);
-                    CompressedVectors cv;
-                    if (compressor == null) {
-                        cv = null;
-                        System.out.format("Uncompressed vectors%n");
-                    } else {
-                        start = System.nanoTime();
-                        var quantizedVectors = compressor.encodeAll(ds.baseVectors);
-                        cv = compressor.createCompressedVectors(quantizedVectors);
-                        System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
-                    }
-
-                    int queryRuns = 2;
-                    for (int overquery : efSearchOptions) {
-                        start = System.nanoTime();
-                        if (compressor == null) {
-                            // include both in-memory and on-disk search of uncompressed vectors
-                            var pqr = performQueries(ds, floatVectors, cv, onHeapGraph, topK, topK * overquery, queryRuns);
-                            var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                                              "(memory)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-                        }
-                        var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, topK * overquery, queryRuns);
-                        var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                        System.out.format("  Query %stop %d/%d recall %.4f in %.2fs after %s nodes visited%n",
-                                          compressor == null ? "(disk) " : "", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-                    }
-                }
+                VectorCompressor.guessCompressorFor(onDiskGraph, ds.baseVectors, ds.similarityFunction);
             }
         } finally {
             Files.deleteIfExists(graphPath);
@@ -202,11 +174,11 @@ public class Bench {
         var pattern = Pattern.compile(regex);
 
         // 2D grid, built and calculated at runtime
-        if (pattern.matcher("2dgrid").find()) {
-            var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
-            gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-            cachedCompressors.clear();
-        }
+//        if (pattern.matcher("2dgrid").find()) {
+//            var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
+//            gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+//            cachedCompressors.clear();
+//        }
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
