@@ -25,9 +25,11 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import org.apache.commons.math3.stat.StatUtils;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
@@ -35,6 +37,7 @@ import java.util.stream.IntStream;
 
 import static java.lang.Math.min;
 import static java.lang.Math.pow;
+import static java.lang.Math.sqrt;
 
 /**
  * Interface for vector compression.  T is the encoded (compressed) vector type;
@@ -64,34 +67,36 @@ public interface VectorCompressor<T> {
 
         // first, find the score for uncompressed queries
         int K = 100;
-        var baseDelta = 0.0;
-        for (var qv : queryVectors) {
+        var baseResults = new double[queryVectors.length][];
+        for (int i = 0; i < queryVectors.length; i++) {
+            var qv = queryVectors[i];
             var sr = GraphSearcher.search(qv, K, ravv, VectorEncoding.FLOAT32, similarityFunction, index, Bits.ALL);
-            for (int j = 0; j < min(K, sr.getNodes().length); j++) {
-                baseDelta += pow(sr.getNodes()[j].score, 2);
-            }
+            baseResults[i] = Arrays.stream(sr.getNodes(), 0, min(K, sr.getNodes().length)).mapToDouble(ns -> pow(ns.score, 2)).toArray();
         }
-        System.out.printf("score for uncompressed queries: %.2f%n", baseDelta / queryVectors.length);
+        var baseMean = StatUtils.mean(Arrays.stream(baseResults).mapToDouble(StatUtils::mean).toArray()); // the average mean
+        var baseVariance = StatUtils.mean(Arrays.stream(baseResults).mapToDouble(StatUtils::variance).toArray()); // the average variance
+        System.out.printf("score for uncompressed queries: %.4f +- %2f%n", baseMean, sqrt(baseVariance));
 
         // see if we can get BQ to work
         var bq = BinaryQuantization.compute(ravv);
         var bqVectors = bq.encodeAll(vectors);
         var cv = bq.createCompressedVectors(bqVectors);
         for (int oq = 3; oq <= 5; oq++) {
-            var bqDelta = 0.0;
-            for (var qv : queryVectors) {
+            var bqResults = new double[queryVectors.length][];
+            for (int i = 0; i < queryVectors.length; i++) {
+                var qv = queryVectors[i];
                 var view = index.getView();
                 NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(qv, similarityFunction);
                 NodeSimilarity.ReRanker<float[]> rr = (j, vv) -> similarityFunction.compare(qv, vv.get(j));
                 var sr = new GraphSearcher.Builder<>(view)
                         .build()
                         .search(sf, rr, oq * K, Bits.ALL);
-                for (int j = 0; j < min(K, sr.getNodes().length); j++) {
-                    bqDelta += pow(sr.getNodes()[j].score, 2);
-                }
+                bqResults[i] = Arrays.stream(sr.getNodes(), 0, min(K, sr.getNodes().length)).mapToDouble(ns -> pow(ns.score, 2)).toArray();
             }
-            System.out.printf("score for bq oq=%s queries: %.2f%n", oq, bqDelta / queryVectors.length);
-            if (bqDelta >= 0.991 * baseDelta) {
+            var bqMean = StatUtils.mean(Arrays.stream(bqResults).mapToDouble(StatUtils::mean).toArray());
+            var bqVariance = StatUtils.mean(Arrays.stream(bqResults).mapToDouble(StatUtils::variance).toArray());
+            System.out.printf("score for bq oq=%s queries: %.4f +- %2f%n", oq, bqMean, sqrt(bqVariance));
+            if (baseMean - bqMean < 0.5 * sqrt(bqVariance)) {
                 return bq;
             }
         }
