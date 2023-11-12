@@ -26,11 +26,16 @@ import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import org.apache.commons.math3.stat.StatUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.DataOutput;
+import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
@@ -57,7 +62,7 @@ public interface VectorCompressor<T> {
      */
     CompressedVectors createCompressedVectors(Object[] compressedVectors);
 
-    static VectorCompressor<?> guessCompressorFor(GraphIndex<float[]> index, List<float[]> vectors, VectorSimilarityFunction similarityFunction) {
+    static void guessCompressorFor(GraphIndex<float[]> index, String dsName, List<float[]> vectors, VectorSimilarityFunction similarityFunction) {
         var ravv = new ListRandomAccessVectorValues(vectors, vectors.get(0).length);
 
         // create the query vectors
@@ -73,36 +78,37 @@ public interface VectorCompressor<T> {
             var sr = GraphSearcher.search(qv, K, ravv, VectorEncoding.FLOAT32, similarityFunction, index, Bits.ALL);
             baseResults[i] = Arrays.stream(sr.getNodes(), 0, min(K, sr.getNodes().length)).mapToDouble(ns -> pow(ns.score, 2)).toArray();
         }
-        var baseMean = StatUtils.mean(Arrays.stream(baseResults).mapToDouble(StatUtils::mean).toArray()); // the average mean
-        var baseVariance = StatUtils.mean(Arrays.stream(baseResults).mapToDouble(StatUtils::variance).toArray()); // the average variance
-        System.out.printf("score for uncompressed queries: %.4f +- %2f%n", baseMean, sqrt(baseVariance));
 
         // see if we can get BQ to work
         var bq = BinaryQuantization.compute(ravv);
         var bqVectors = bq.encodeAll(vectors);
         var cv = bq.createCompressedVectors(bqVectors);
-        for (int oq = 3; oq <= 5; oq++) {
-            var bqResults = new double[queryVectors.length][];
-            for (int i = 0; i < queryVectors.length; i++) {
-                var qv = queryVectors[i];
-                var view = index.getView();
-                NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(qv, similarityFunction);
-                NodeSimilarity.ReRanker<float[]> rr = (j, vv) -> similarityFunction.compare(qv, vv.get(j));
-                var sr = new GraphSearcher.Builder<>(view)
-                        .build()
-                        .search(sf, rr, oq * K, Bits.ALL);
-                bqResults[i] = Arrays.stream(sr.getNodes(), 0, min(K, sr.getNodes().length)).mapToDouble(ns -> pow(ns.score, 2)).toArray();
-            }
-            var bqMean = StatUtils.mean(Arrays.stream(bqResults).mapToDouble(StatUtils::mean).toArray());
-            var bqVariance = StatUtils.mean(Arrays.stream(bqResults).mapToDouble(StatUtils::variance).toArray());
-            System.out.printf("score for bq oq=%s queries: %.4f +- %2f%n", oq, bqMean, sqrt(bqVariance));
-            if (baseMean - bqMean < 0.5 * sqrt(bqVariance)) {
-                return bq;
-            }
+        int OQ = 5;
+        var bqResults = new double[queryVectors.length][];
+        for (int i = 0; i < queryVectors.length; i++) {
+            var qv = queryVectors[i];
+            var view = index.getView();
+            NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(qv, similarityFunction);
+            NodeSimilarity.ReRanker<float[]> rr = (j, vv) -> similarityFunction.compare(qv, vv.get(j));
+            var sr = new GraphSearcher.Builder<>(view)
+                    .build()
+                    .search(sf, rr, OQ * K, Bits.ALL);
+            bqResults[i] = Arrays.stream(sr.getNodes(), 0, min(K, sr.getNodes().length)).mapToDouble(ns -> pow(ns.score, 2)).toArray();
         }
 
-        System.out.println("no good bq found");
-        return null;
+        // Convert results to JSON format using Jackson
+        Map<String, Object> allResults = new HashMap<>();
+        allResults.put("uncompressed", baseResults);
+        allResults.put("bq", bqResults);
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        // Save to file
+        try {
+            mapper.writeValue(new File(dsName + ".json"), allResults);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     // completely random vectors don't match the actual distribution well enough,

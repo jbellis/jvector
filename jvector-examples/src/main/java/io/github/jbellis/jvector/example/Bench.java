@@ -81,7 +81,7 @@ public class Bench {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
             try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0))) {
-                VectorCompressor.guessCompressorFor(onDiskGraph, ds.baseVectors, ds.similarityFunction);
+                VectorCompressor.guessCompressorFor(onDiskGraph, ds.name, ds.baseVectors, ds.similarityFunction);
             }
         } finally {
             Files.deleteIfExists(graphPath);
