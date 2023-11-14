@@ -24,6 +24,7 @@ import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -86,12 +87,12 @@ public class SiftSmall {
             var searcher = new GraphSearcher.Builder<>(view).build();
             if (compressedVectors == null) {
                 NodeSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
-                nn = searcher.search(sf, null, 100, null).getNodes();
+                nn = searcher.search(sf, null, 100, Bits.ALL).getNodes();
             }
             else {
                 NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
-                nn = searcher.search(sf, rr, 100, null).getNodes();
+                nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
             }
 
             var gt = groundTruth.get(i);
