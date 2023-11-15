@@ -84,14 +84,10 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(8, 12, 16, 24, 32, 48, 64);
-        var efConstructionGrid = List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(1, 2);
+        var mGrid = List.of(16);
+        var efConstructionGrid = List.of(100);
+        var efSearchGrid = List.of(1);
         var diskGrid = List.of(false, true);
-
-        // this dataset contains more than 10k query vectors, so we limit it with .subList
-        var adaSet = loadWikipediaData();
-        gridSearch(adaSet, mGrid, efConstructionGrid, diskGrid, efSearchGrid);
 
         var files = List.of(
                 // large files not yet supported
@@ -129,7 +125,7 @@ public class Bench {
     }
 
     private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
-        for (int i = 1024; i < ds.baseVectors.size(); i *= 2) {
+        for (int i = ds.baseVectors.size(); i < ds.baseVectors.size(); i *= 2) {
             testOneGraph(i, 16, 100, ds);
         }
         testOneGraph(ds.baseVectors.size(), 16, 100, ds);
