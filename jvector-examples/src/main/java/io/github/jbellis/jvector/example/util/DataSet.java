@@ -53,11 +53,14 @@ public class DataSet {
         this.queryVectors = queryVectors;
         this.groundTruth = groundTruth;
 
-        System.out.format("%s: %d base and %d query vectors loaded, dimensions %d%n",
+        System.out.format("%n%s: %d base and %d query vectors created, dimensions %d%n",
                 name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
     }
 
-    // NOTE: This only scrubs and normalizes for dot product similarity
+    /**
+     * Return a dataset containing the given vectors, scrubbed free from zero vectors and normalized to unit length.
+     * Note: This only scrubs and normalizes for dot product similarity.
+     */
     public static DataSet getScrubbedDataSet(String pathStr, VectorSimilarityFunction similarityFunction,
                                              List<float[]> baseVectors, List<float[]> queryVectors, List<HashSet<Integer>> groundTruth) {
         List<float[]> scrubbedBaseVectors;

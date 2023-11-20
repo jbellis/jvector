@@ -91,7 +91,7 @@ public class Bench {
                         start = System.nanoTime();
                         var quantizedVectors = compressor.encodeAll(ds.baseVectors);
                         cv = compressor.createCompressedVectors(quantizedVectors);
-                        System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
+                        System.out.format("%s encoded %,d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
                     }
 
                     int queryRuns = 2;
@@ -101,12 +101,12 @@ public class Bench {
                             // include both in-memory and on-disk search of uncompressed vectors
                             var pqr = performQueries(ds, floatVectors, cv, onHeapGraph, topK, topK * overquery, queryRuns);
                             var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                                               "(memory)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                         }
                         var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, topK * overquery, queryRuns);
                         var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                        System.out.format("  Query %stop %d/%d recall %.4f in %.2fs after %s nodes visited%n",
+                        System.out.format("  Query %stop %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                                           compressor == null ? "(disk) " : "", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                     }
                 }
