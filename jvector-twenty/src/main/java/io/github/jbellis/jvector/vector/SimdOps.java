@@ -269,8 +269,8 @@ final class SimdOps {
             var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, i);
             var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, i);
             vsum = a.fma(b, vsum);
-            vaMagnitude = vaMagnitude.add(a.mul(a));
-            vbMagnitude = vbMagnitude.add(b.mul(b));
+            vaMagnitude = a.fma(a, vaMagnitude);
+            vbMagnitude = b.fma(b, vbMagnitude);
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
@@ -379,7 +379,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -406,7 +406,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -434,7 +434,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -462,7 +462,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
