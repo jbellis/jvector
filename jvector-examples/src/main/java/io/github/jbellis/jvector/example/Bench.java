@@ -249,13 +249,11 @@ public class Bench {
         var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_base_vectors.fvec");
         var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_query_vectors_10000.fvec");
         var gt = SiftLoader.readIvecs("fvec/" + path + "/" + name + "_indices_query_10000.ivec");
-        var ds = new DataSet(name,
+        var ds = DataSet.getScrubbedDataSet(name,
                              VectorSimilarityFunction.DOT_PRODUCT,
                              baseVectors,
                              queryVectors,
                              gt);
-        System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
-                          name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
         return ds;
     }
 
