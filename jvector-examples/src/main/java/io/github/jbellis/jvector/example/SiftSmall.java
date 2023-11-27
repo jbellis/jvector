@@ -62,15 +62,18 @@ public class SiftSmall {
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var graphPath = testDirectory.resolve("graph_test");
-        try {
-            DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
-            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
+        CachingGraphIndex onDiskGraph = null;
+        try (DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()))){
 
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
+            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
+            onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
             testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
         } finally {
+            if (onDiskGraph!= null) {
+                onDiskGraph.close();
+            }
             Files.deleteIfExists(graphPath);
         }
     }
