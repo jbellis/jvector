@@ -33,9 +33,14 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
 
     public CachingGraphIndex(OnDiskGraphIndex<float[]> graph)
     {
+        this(graph, CACHE_DISTANCE);
+    }
+
+    public CachingGraphIndex(OnDiskGraphIndex<float[]> graph, int cacheDistance)
+    {
         this.graph = graph;
         try {
-            this.cache = GraphCache.load(graph, CACHE_DISTANCE);
+            this.cache = GraphCache.load(graph, cacheDistance);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

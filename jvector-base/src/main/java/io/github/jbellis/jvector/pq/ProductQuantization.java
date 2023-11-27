@@ -66,7 +66,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
-        var vectors = IntStream.range(0, ravv.size()).parallel()
+        var vectors = PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, ravv.size())
+                .parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
                     try (var pooledRavv = ravvCopy.get()) {
@@ -75,7 +76,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
                         return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
                     }
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
 
         // subtract the centroid from each training vector
         float[] globalCentroid;

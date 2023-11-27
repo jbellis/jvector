@@ -163,12 +163,12 @@ public class GraphIndexBuilder<T> {
         removeDeletedNodes();
 
         // clean up overflowed neighbor lists
-        IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
+        PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
             var neighbors = graph.getNeighbors(i);
             if (neighbors != null) {
                 neighbors.cleanup();
             }
-        });
+        }));
 
         // reconnect any orphaned nodes.  this will maintain neighbors size
         reconnectOrphanedNodes();
@@ -187,9 +187,9 @@ public class GraphIndexBuilder<T> {
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
             var entryNeighbors = graph.getNeighbors(graph.entry()).getCurrent();
-            IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
+            PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
                 findConnected(connectedNodes, entryNeighbors.node[node]);
-            });
+            }));
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();

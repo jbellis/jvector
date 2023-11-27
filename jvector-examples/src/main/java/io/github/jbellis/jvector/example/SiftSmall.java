@@ -25,6 +25,7 @@ import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -80,7 +81,7 @@ public class SiftSmall {
         var topK = 100;
         var graphType = graph.getClass().getSimpleName();
         var start = System.nanoTime();
-        IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
+        PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
             SearchResult.NodeScore[] nn;
             var view = graph.getView();
@@ -88,8 +89,7 @@ public class SiftSmall {
             if (compressedVectors == null) {
                 NodeSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
                 nn = searcher.search(sf, null, 100, Bits.ALL).getNodes();
-            }
-            else {
+            } else {
                 NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
                 nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
@@ -98,7 +98,7 @@ public class SiftSmall {
             var gt = groundTruth.get(i);
             var n = IntStream.range(0, topK).filter(j -> gt.contains(nn[j].node)).count();
             topKfound.addAndGet((int) n);
-        });
+        }));
         System.out.printf("  (%s) Querying %d vectors in parallel took %s seconds%n", graphType, queryVectors.size(), (System.nanoTime() - start) / 1_000_000_000.0);
         System.out.printf("(%s) Recall: %.4f%n", graphType, (double) topKfound.get() / (queryVectors.size() * topK));
     }

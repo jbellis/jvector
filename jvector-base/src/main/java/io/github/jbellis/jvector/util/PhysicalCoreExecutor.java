@@ -15,6 +15,7 @@
  */
 package io.github.jbellis.jvector.util;
 
+import java.io.Closeable;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
 
@@ -31,7 +32,7 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
  *
  * Knowing how many physical cores a machine has is left to the operator (however the default of 1/2 cores is today often correct).
  */
-public class PhysicalCoreExecutor {
+public class PhysicalCoreExecutor implements Closeable {
     private static final int physicalCoreCount = Integer.getInteger("jvector.physical_core_count", Math.max(1, Runtime.getRuntime().availableProcessors()/2));
 
     public static final PhysicalCoreExecutor instance = new PhysicalCoreExecutor(physicalCoreCount);
@@ -53,5 +54,10 @@ public class PhysicalCoreExecutor {
 
     public static int getPhysicalCoreCount() {
         return physicalCoreCount;
+    }
+    
+    @Override
+    public void close() {
+        pool.shutdownNow();
     }
 }
