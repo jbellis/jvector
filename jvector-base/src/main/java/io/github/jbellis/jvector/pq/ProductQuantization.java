@@ -19,9 +19,9 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -62,11 +63,31 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      *                       (not recommended when using the quantization for dot product)
      */
     public static ProductQuantization compute(RandomAccessVectorValues<float[]> ravv, int M, boolean globallyCenter) {
+        return compute(ravv, M, globallyCenter, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+    }
+
+    /**
+     * Initializes the codebooks by clustering the input data using Product Quantization.
+     *
+     * @param ravv the vectors to quantize
+     * @param M number of subspaces
+     * @param globallyCenter whether to center the vectors globally before quantization
+     *                       (not recommended when using the quantization for dot product)
+     * @param simdExecutor     ForkJoinPool instance for SIMD operations, best is to use a pool with the size of
+     *                         the number of physical cores.
+     * @param parallelExecutor ForkJoinPool instance for parallel stream operations
+     */
+    public static ProductQuantization compute(
+            RandomAccessVectorValues<float[]> ravv,
+            int M,
+            boolean globallyCenter,
+            ForkJoinPool simdExecutor,
+            ForkJoinPool parallelExecutor) {
         // limit the number of vectors we train on
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
-        var vectors = IntStream.range(0, ravv.size()).parallel()
+        var vectors = parallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
                     try (var pooledRavv = ravvCopy.get()) {
@@ -75,7 +96,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
                         return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
                     }
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()))
+                .join();
 
         // subtract the centroid from each training vector
         float[] globalCentroid;
@@ -83,13 +105,13 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
             List<float[]> finalVectors = vectors;
-            vectors = PhysicalCoreExecutor.instance.submit(() -> finalVectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList()));
+            vectors = simdExecutor.submit(() -> finalVectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList())).join();
         } else {
             globalCentroid = null;
         }
 
         // derive the codebooks
-        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets);
+        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets, simdExecutor);
         return new ProductQuantization(codebooks, globalCentroid);
     }
 
@@ -116,8 +138,9 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     /**
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
-    public byte[][] encodeAll(List<float[]> vectors) {
-        return PhysicalCoreExecutor.instance.submit(() ->vectors.stream().parallel().map(this::encode).toArray(byte[][]::new));
+    @Override
+    public byte[][] encodeAll(List<float[]> vectors, ForkJoinPool simdExecutor) {
+        return simdExecutor.submit(() ->vectors.stream().parallel().map(this::encode).toArray(byte[][]::new)).join();
     }
 
     /**
@@ -125,6 +148,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      *
      * @return one byte per subspace
      */
+    @Override
     public byte[] encode(float[] vector) {
         if (globalCentroid != null) {
             vector = VectorUtil.sub(vector, globalCentroid);
@@ -190,8 +214,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         return "[" + String.join(", ", b) + "]";
     }
 
-    static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset) {
-        return PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, M).parallel()
+    static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset, ForkJoinPool simdExecutor) {
+        return simdExecutor.submit(() -> IntStream.range(0, M).parallel()
                 .mapToObj(m -> {
                     float[][] subvectors = vectors.stream().parallel()
                             .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
@@ -199,7 +223,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
                     var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::squareDistance);
                     return clusterer.cluster(K_MEANS_ITERATIONS);
                 })
-                .toArray(float[][][]::new));
+                .toArray(float[][][]::new))
+                .join();
     }
     
     static int closetCentroidIndex(float[] subvector, float[][] codebook) {
