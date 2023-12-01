@@ -19,9 +19,9 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.util.ParallelExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
@@ -66,7 +66,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
-        var vectors = IntStream.range(0, ravv.size()).parallel()
+        var vectors = ParallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
                     try (var pooledRavv = ravvCopy.get()) {
@@ -75,7 +75,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
                         return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
                     }
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
 
         // subtract the centroid from each training vector
         float[] globalCentroid;
@@ -83,7 +83,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
             List<float[]> finalVectors = vectors;
-            vectors = PhysicalCoreExecutor.instance.submit(() -> finalVectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList()));
+            vectors = ParallelExecutor.submit(() -> finalVectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList()));
         } else {
             globalCentroid = null;
         }
@@ -117,7 +117,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
     public byte[][] encodeAll(List<float[]> vectors) {
-        return PhysicalCoreExecutor.instance.submit(() ->vectors.stream().parallel().map(this::encode).toArray(byte[][]::new));
+        return ParallelExecutor.submit(() ->vectors.stream().parallel().map(this::encode).toArray(byte[][]::new));
     }
 
     /**
@@ -191,7 +191,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     }
 
     static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset) {
-        return PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, M).parallel()
+        return ParallelExecutor.submit(() -> IntStream.range(0, M).parallel()
                 .mapToObj(m -> {
                     float[][] subvectors = vectors.stream().parallel()
                             .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))

@@ -20,7 +20,7 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.util.ParallelExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -130,7 +130,7 @@ public class GraphIndexBuilder<T> {
             size = v.get().size();
         }
 
-        PhysicalCoreExecutor.instance.execute(() -> {
+        ParallelExecutor.execute(() -> {
             IntStream.range(0, size).parallel().forEach(i -> {
                 try (var v1 = vectors.get()) {
                     addGraphNode(i, v1.get());
@@ -163,12 +163,12 @@ public class GraphIndexBuilder<T> {
         removeDeletedNodes();
 
         // clean up overflowed neighbor lists
-        IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
+        ParallelExecutor.execute(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
             var neighbors = graph.getNeighbors(i);
             if (neighbors != null) {
                 neighbors.cleanup();
             }
-        });
+        }));
 
         // reconnect any orphaned nodes.  this will maintain neighbors size
         reconnectOrphanedNodes();
@@ -187,9 +187,9 @@ public class GraphIndexBuilder<T> {
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
             var entryNeighbors = graph.getNeighbors(graph.entry()).getCurrent();
-            IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
+            ParallelExecutor.execute(() -> IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
                 findConnected(connectedNodes, entryNeighbors.node[node]);
-            });
+            }));
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();

@@ -19,7 +19,7 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.util.ParallelExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
@@ -48,7 +48,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
         // limit the number of vectors we train on
         var P = min(1.0f, ProductQuantization.MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
-        var vectors = IntStream.range(0, ravv.size()).parallel()
+        var vectors = ParallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
                     try (var pooledRavv = ravvCopy.get()) {
@@ -57,7 +57,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
                         return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
                     }
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
 
         // compute the centroid of the training set
         float[] globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
@@ -71,7 +71,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
 
     @Override
     public long[][] encodeAll(List<float[]> vectors) {
-        return PhysicalCoreExecutor.instance.submit(() -> vectors.stream().parallel().map(this::encode).toArray(long[][]::new));
+        return ParallelExecutor.submit(() -> vectors.stream().parallel().map(this::encode).toArray(long[][]::new));
     }
 
     /**
