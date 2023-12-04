@@ -27,6 +27,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -39,16 +40,22 @@ import static java.lang.Math.min;
  */
 public class BinaryQuantization implements VectorCompressor<long[]> {
     private final float[] globalCentroid;
+    private final ForkJoinPool forkJoinPool;
 
-    public BinaryQuantization(float[] globalCentroid) {
+    public BinaryQuantization(float[] globalCentroid, ForkJoinPool forkJoinPool) {
         this.globalCentroid = globalCentroid;
+        this.forkJoinPool = forkJoinPool;
     }
 
     public static BinaryQuantization compute(RandomAccessVectorValues<float[]> ravv) {
+        return compute(ravv, PhysicalCoreExecutor.instance.getForkJoinPool());
+    }
+    
+    public static BinaryQuantization compute(RandomAccessVectorValues<float[]> ravv, ForkJoinPool forkJoinPool) {
         // limit the number of vectors we train on
         var P = min(1.0f, ProductQuantization.MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
-        var vectors = PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, ravv.size())
+        var vectors = forkJoinPool.submit(() -> IntStream.range(0, ravv.size())
                 .parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
@@ -58,11 +65,12 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
                         return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
                     }
                 })
-                .collect(Collectors.toList()));
+                .collect(Collectors.toList()))
+                .join();
 
         // compute the centroid of the training set
         float[] globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
-        return new BinaryQuantization(globalCentroid);
+        return new BinaryQuantization(globalCentroid, forkJoinPool);
     }
 
     @Override
@@ -72,7 +80,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
 
     @Override
     public long[][] encodeAll(List<float[]> vectors) {
-        return PhysicalCoreExecutor.instance.submit(() -> vectors.stream().parallel().map(this::encode).toArray(long[][]::new));
+        return forkJoinPool.submit(() -> vectors.stream().parallel().map(this::encode).toArray(long[][]::new)).join();
     }
 
     /**
@@ -112,11 +120,11 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
         return globalCentroid.length;
     }
 
-    public static BinaryQuantization load(RandomAccessReader in) throws IOException {
+    public static BinaryQuantization load(RandomAccessReader in, ForkJoinPool forkJoinPool) throws IOException {
         int length = in.readInt();
         var centroid = new float[length];
         in.readFully(centroid);
-        return new BinaryQuantization(centroid);
+        return new BinaryQuantization(centroid, forkJoinPool);
     }
 
     @Override

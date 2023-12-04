@@ -55,7 +55,11 @@ public class PhysicalCoreExecutor implements Closeable {
     public static int getPhysicalCoreCount() {
         return physicalCoreCount;
     }
-    
+
+    public ForkJoinPool getForkJoinPool() {
+        return pool;
+    }
+
     @Override
     public void close() {
         pool.shutdownNow();

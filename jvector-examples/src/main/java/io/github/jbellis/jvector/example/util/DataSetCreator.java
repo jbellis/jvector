@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.example.util;
 
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.util.AbstractMap;
@@ -51,23 +50,23 @@ public class DataSetCreator {
         }
 
         // Create query vectors and compute ground truth
-        var queries = PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, nQueries).parallel().mapToObj(i -> {
+        var queries = IntStream.range(0, nQueries).parallel().mapToObj(i -> {
             var R = ThreadLocalRandom.current();
-            float[] q = new float[]{gridWidth * R.nextFloat(), gridWidth * R.nextFloat()};
+            float[] q = new float[] {gridWidth * R.nextFloat(), gridWidth * R.nextFloat()};
 
             // Compute the ground truth within a bounding box around the query point
             Set<Integer> gt = IntStream.range(0, baseVectors.size())
-                    .filter(j -> {
-                        float[] v = baseVectors.get(j);
-                        return v[0] >= q[0] - topK && v[0] <= q[0] + topK && v[1] >= q[1] - topK && v[1] <= q[1] + topK;
-                    })
-                    .boxed() // allows sorting with custom comparator
-                    .sorted(Comparator.comparingDouble((Integer j) -> VectorSimilarityFunction.EUCLIDEAN.compare(q, baseVectors.get(j))).reversed())
-                    .limit(topK)
-                    .collect(Collectors.toSet());
+                .filter(j -> {
+                    float[] v = baseVectors.get(j);
+                    return v[0] >= q[0] - topK && v[0] <= q[0] + topK && v[1] >= q[1] - topK && v[1] <= q[1] + topK;
+                })
+                .boxed() // allows sorting with custom comparator
+                .sorted(Comparator.comparingDouble((Integer j) -> VectorSimilarityFunction.EUCLIDEAN.compare(q, baseVectors.get(j))).reversed())
+                .limit(topK)
+                .collect(Collectors.toSet());
 
             return new AbstractMap.SimpleEntry<>(q, gt);
-        }).collect(Collectors.toConcurrentMap(Map.Entry::getKey, Map.Entry::getValue)).entrySet());
+        }).collect(Collectors.toConcurrentMap(Map.Entry::getKey, Map.Entry::getValue)).entrySet();
         var queryVectors = queries.stream().map(Map.Entry::getKey).collect(Collectors.toList());
         var groundTruth = queries.stream().map(Map.Entry::getValue).collect(Collectors.toList());
 

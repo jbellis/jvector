@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.example.util;
 
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.jhdf.HdfFile;
 import io.jhdf.api.Dataset;
@@ -53,13 +52,13 @@ public class Hdf5Loader {
             if (((FloatingPoint) queryDataset.getDataType()).getBitPrecision() == 64) {
                 // lastfm dataset contains f64 queries but f32 everything else
                 var doubles = ((double[][]) queryDataset.getData());
-                queryVectors = PhysicalCoreExecutor.instance.submit(() -> IntStream.range(0, doubles.length).parallel().mapToObj(i -> {
+                queryVectors = IntStream.range(0, doubles.length).parallel().mapToObj(i -> {
                     var a = new float[doubles[i].length];
                     for (int j = 0; j < doubles[i].length; j++) {
                         a[j] = (float) doubles[i][j];
                     }
                     return a;
-                }).toArray(float[][]::new));
+                }).toArray(float[][]::new);
             } else {
                 queryVectors = (float[][]) queryDataset.getData();
             }

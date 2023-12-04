@@ -36,7 +36,6 @@ import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -161,7 +160,7 @@ public class Bench {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
-            PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
+            IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = ds.queryVectors.get(i);
                 SearchResult sr;
                 if (cv != null) {
@@ -179,7 +178,7 @@ public class Bench {
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
                 nodesVisited.add(sr.getVisitedCount());
-            }));
+            });
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum()); // TODO do we care enough about visited count to hack it back into searcher?
     }

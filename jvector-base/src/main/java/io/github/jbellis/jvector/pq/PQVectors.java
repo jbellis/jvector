@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -25,6 +26,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.ForkJoinPool;
 
 public class PQVectors implements CompressedVectors {
     final ProductQuantization pq;
@@ -54,12 +56,15 @@ public class PQVectors implements CompressedVectors {
         }
     }
 
-    public static CompressedVectors load(RandomAccessReader in, long offset) throws IOException
-    {
+    public static CompressedVectors load(RandomAccessReader in, long offset) throws IOException {
+        return load(in, offset, PhysicalCoreExecutor.instance.getForkJoinPool());
+    }
+
+    public static CompressedVectors load(RandomAccessReader in, long offset, ForkJoinPool forkJoinPool) throws IOException {
         in.seek(offset);
 
         // pq codebooks
-        var pq = ProductQuantization.load(in);
+        var pq = ProductQuantization.load(in, forkJoinPool);
 
         // read the vectors
         int size = in.readInt();

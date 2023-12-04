@@ -16,8 +16,6 @@
 
 package io.github.jbellis.jvector.example.util;
 
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -42,7 +40,7 @@ public class Deep1BLoader {
         int perThread = count / threadCount;
         int remainder = count % threadCount;
 
-        PhysicalCoreExecutor.instance.execute(() -> IntStream.range(0, threadCount).parallel().forEach(threadNum -> {
+        IntStream.range(0, threadCount).parallel().forEach(threadNum -> {
             try (var raf = new RandomAccessFile(filePath, "r")) {
                 long startPosition = 8L + ((long) threadNum * perThread + Math.min(threadNum, remainder)) * dimension * Float.BYTES;
                 raf.seek(startPosition);
@@ -58,10 +56,11 @@ public class Deep1BLoader {
                     floatBuffer.get(vector);
                     vectors[threadNum * perThread + (Math.min(threadNum, remainder)) + j] = vector;
                 }
-            } catch (IOException e) {
+            }
+            catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-        }));
+        });
 
         System.out.println("Completed reading " + filePath);
         return List.of(vectors);
