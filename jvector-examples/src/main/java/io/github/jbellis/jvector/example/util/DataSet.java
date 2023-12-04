@@ -52,9 +52,6 @@ public class DataSet {
         this.baseVectors = baseVectors;
         this.queryVectors = queryVectors;
         this.groundTruth = groundTruth;
-
-        System.out.format("%n%s: %d base and %d query vectors created, dimensions %d%n",
-                name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
     }
 
     /**
@@ -107,6 +104,8 @@ public class DataSet {
             gtSet = groundTruth;
         }
 
+        System.out.format("%n%s: %d base and %d query vectors loaded, dimensions %d%n",
+                          pathStr, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
         return new DataSet(pathStr, similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
 
