@@ -18,15 +18,15 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
-import io.github.jbellis.jvector.example.util.SiftLoader;
-import io.github.jbellis.jvector.graph.*;
-import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
+import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
-import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.LongAdder;
@@ -40,7 +40,12 @@ import static java.lang.Math.max;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-    private static void testOneGraph(int nVectors, int M, int efConstruction, DataSet ds) throws IOException {
+    /**
+     * build a graph and generate datapoints for acceptable ordinal counts ranging from
+     * 1% of the DataSet size, to 1/2 of the graph size, and for topK from 1 .. 1000
+     */
+    private static void testOneGraph(int M, int efConstruction, DataSet ds) throws IOException {
+        int nVectors = ds.baseVectors.size();
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors.subList(0, nVectors), ds.baseVectors.get(0).length);
 
         var start = System.nanoTime();
@@ -53,11 +58,11 @@ public class Bench {
         var queryCount = 1000;
         var bits = new FixedBitSet(nVectors);
         var R = new Random();
-        for (int i = (int) max(8, nVectors * 0.001); i <= nVectors / 2; i *= 2) {
+        for (int i = (int) max(8, nVectors * 0.01); i <= nVectors / 2; i *= 2) {
             while (bits.cardinality() < i) {
                 bits.set(R.nextInt(nVectors));
             }
-            for (var topK : List.of(5, 10, 20, 30, 50, 75, 100)) {
+            for (var topK : List.of(1, 3, 5, 10, 20, 30, 50, 75, 100, 200, 500, 1000)) {
                 if (topK >= i) {
                     break;
                 }
@@ -84,50 +89,25 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(16);
-        var efConstructionGrid = List.of(100);
-        var efSearchGrid = List.of(1);
-        var diskGrid = List.of(false, true);
-
         var files = List.of(
-                // large files not yet supported
-                // "hdf5/deep-image-96-angular.hdf5",
-                // "hdf5/gist-960-euclidean.hdf5",
                 "hdf5/nytimes-256-angular.hdf5",
                 "hdf5/glove-100-angular.hdf5",
                 "hdf5/glove-200-angular.hdf5",
-                "hdf5/sift-128-euclidean.hdf5");
+                "hdf5/sift-128-euclidean.hdf5",
+                "hdf5/fashion-mnist-784-euclidean.hdf5");
         for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
-        }
-
-        // tiny dataset, don't waste time building a huge index
-        files = List.of("hdf5/fashion-mnist-784-euclidean.hdf5");
-        mGrid = List.of(8, 12, 16, 24);
-        efConstructionGrid = List.of(40, 60, 80, 100, 120, 160);
-        for (var f : files) {
-            gridSearch(Hdf5Loader.load(f), mGrid, efConstructionGrid, diskGrid, efSearchGrid);
+            gridSearch(Hdf5Loader.load(f));
         }
     }
 
-    private static DataSet loadWikipediaData() throws IOException {
-        var baseVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("fvec/pages_ada_002_100k_query_vectors_10k.fvec").subList(0, 10_000);
-        var gt = SiftLoader.readIvecs("fvec/pages_ada_002_100k_indices_query_vectors_10k.ivec").subList(0, 10_000);
-        var ds = new DataSet("wikipedia",
-                             VectorSimilarityFunction.DOT_PRODUCT,
-                             baseVectors,
-                             queryVectors,
-                             gt);
-        System.out.format("%nWikipedia: %d base and %d query vectors loaded, dimensions %d%n",
-                          baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
-        return ds;
-    }
-
-    private static void gridSearch(DataSet ds, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Boolean> diskOptions, List<Integer> efSearchFactor) throws IOException {
-        for (int i = ds.baseVectors.size(); i < ds.baseVectors.size(); i *= 2) {
-            testOneGraph(i, 16, 100, ds);
+    private static void gridSearch(DataSet fullDataSet) throws IOException {
+        for (int N = 2048; N <= fullDataSet.baseVectors.size(); N *= 2) {
+            var ds = new DataSet(fullDataSet.name + "/" + N,
+                                 fullDataSet.similarityFunction,
+                                 fullDataSet.baseVectors.subList(0, N),
+                                 fullDataSet.queryVectors,
+                                 fullDataSet.groundTruth);
+            testOneGraph(16, 100, ds);
         }
-        testOneGraph(ds.baseVectors.size(), 16, 100, ds);
     }
 }
