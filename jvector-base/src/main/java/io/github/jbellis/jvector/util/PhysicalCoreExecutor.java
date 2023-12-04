@@ -36,6 +36,10 @@ public class PhysicalCoreExecutor {
 
     public static final PhysicalCoreExecutor instance = new PhysicalCoreExecutor(physicalCoreCount);
 
+    public static ForkJoinPool pool() {
+        return instance.pool;
+    }
+    
     private final ForkJoinPool pool;
 
     private PhysicalCoreExecutor(int cores) {

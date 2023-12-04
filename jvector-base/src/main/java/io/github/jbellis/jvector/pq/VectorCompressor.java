@@ -16,16 +16,24 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * Interface for vector compression.  T is the encoded (compressed) vector type;
  * it will be an array type.
  */
 public interface VectorCompressor<T> {
-    T[] encodeAll(List<float[]> vectors);
+
+    default T[] encodeAll(List<float[]> vectors) {
+        return encodeAll(vectors, PhysicalCoreExecutor.pool());
+    }
+
+    T[] encodeAll(List<float[]> vectors, ForkJoinPool simdExecutor);
 
     T encode(float[] v);
 
