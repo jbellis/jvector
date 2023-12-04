@@ -1,0 +1,10 @@
+.github/workflows/unit-tests.yaml
+.mvn/wrapper/maven-wrapper.properties
+.mvn/jvm.config
+README.md
+UPGRADING.md
+rat-excludes.txt
+pom.xml
+src/main/assembly/test-jar-with-dependencies.xml
+src/assembly/mrjar.xml
+src/assembly/sourcesjar.xml

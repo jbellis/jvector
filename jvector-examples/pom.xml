@@ -7,11 +7,13 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector-examples</artifactId>
-    <version>${jvector.version}</version>
     <name>JVector Examples</name>
+    <properties>
+        <awssdk.version>2.21.10</awssdk.version>
+    </properties>
     <build>
         <plugins>
             <plugin>
@@ -28,7 +30,7 @@
         <dependency>
             <groupId>io.github.jbellis</groupId>
             <artifactId>jvector-base</artifactId>
-            <version>${jvector.version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jhdf</groupId>
@@ -39,6 +41,53 @@
             <groupId>com.indeed</groupId>
             <artifactId>util-mmap</artifactId>
             <version>1.0.52-3042601</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>slf4j-api</artifactId>
+                    <groupId>org.slf4j</groupId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3-transfer-manager</artifactId>
+            <version>${awssdk.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>slf4j-api</artifactId>
+                    <groupId>org.slf4j</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>aws-crt-client</artifactId>
+            <version>${awssdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>${awssdk.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>slf4j-api</artifactId>
+                    <groupId>org.slf4j</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>commons-codec</artifactId>
+                    <groupId>commons-codec</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.kohlschutter.junixsocket</groupId>
+            <artifactId>junixsocket-core</artifactId>
+            <version>2.8.1</version>
+            <type>pom</type>
         </dependency>
     </dependencies>
     <profiles>
@@ -73,6 +122,7 @@
                                         <argument>-Xmx32G</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>${benchArgs}</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
@@ -90,7 +140,7 @@
                 <dependency>
                     <groupId>io.github.jbellis</groupId>
                     <artifactId>jvector-twenty</artifactId>
-                    <version>${jvector.version}</version>
+                    <version>${project.version}</version>
                     <scope>compile</scope>
                 </dependency>
             </dependencies>
@@ -125,6 +175,33 @@
                                         <argument>-Xmx12G</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>${benchArgs}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>ipcserve</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-ea</argument>
+                                        <argument>io.github.jbellis.jvector.example.IPCService</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>ipcserve-1core</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-Djava.util.concurrent.ForkJoinPool.common.parallelism=1</argument>
+                                        <argument>-Djvector.physical_core_count=1</argument>
+                                        <argument>-ea</argument>
+                                        <argument>io.github.jbellis.jvector.example.IPCService</argument>
                                     </arguments>
                                 </configuration>
                             </execution>

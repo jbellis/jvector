@@ -18,12 +18,19 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.IntStream;
 
 public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
 {
@@ -31,7 +38,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     private final long neighborsOffset;
     private final int size;
     private final int entryNode;
-    private final int M;
+    private final int maxDegree;
     private final int dimension;
 
     public OnDiskGraphIndex(ReaderSupplier readerSupplier, long offset)
@@ -43,9 +50,29 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
             size = reader.readInt();
             dimension = reader.readInt();
             entryNode = reader.readInt();
-            M = reader.readInt();
+            maxDegree = reader.readInt();
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
+        }
+    }
+
+    /**
+     * @return a Map of old to new graph ordinals where the new ordinals are sequential starting at 0,
+     * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
+     * if i &lt; j in `graph` then map[i] &lt; map[j] in the returned map.
+     */
+    public static <T> Map<Integer, Integer> getSequentialRenumbering(GraphIndex<T> graph) {
+        try (var view = graph.getView()) {
+            Map<Integer, Integer> oldToNewMap = new HashMap<>();
+            int nextOrdinal = 0;
+            for (int i = 0; i < view.getIdUpperBound(); i++) {
+                if (graph.containsNode(i)) {
+                    oldToNewMap.put(i, nextOrdinal++);
+                }
+            }
+            return oldToNewMap;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -55,8 +82,8 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     }
 
     @Override
-    public int maxEdgesPerNode() {
-        return M;
+    public int maxDegree() {
+        return maxDegree;
     }
 
     /** return a Graph that can be safely queried concurrently */
@@ -69,17 +96,19 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     public class OnDiskView implements GraphIndex.View<T>, AutoCloseable
     {
         private final RandomAccessReader reader;
+        private final int[] neighbors;
 
         public OnDiskView(RandomAccessReader reader)
         {
             super();
             this.reader = reader;
+            this.neighbors = new int[maxDegree];
         }
 
         public T getVector(int node) {
             try {
                 long offset = neighborsOffset +
-                        node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (M + 1)) // earlier entries
+                        node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
                         + Integer.BYTES; // skip the ID
                 float[] vector = new float[dimension];
                 reader.seek(offset);
@@ -95,31 +124,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
             try {
                 reader.seek(neighborsOffset +
                         (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) +
-                        (node * (long) Integer.BYTES * (M + 1)));
+                        (node * (long) Integer.BYTES * (maxDegree + 1)));
                 int neighborCount = reader.readInt();
-                assert neighborCount <= M : String.format("neighborCount %d > M %d", neighborCount, M);
-                return new NodesIterator(neighborCount)
-                {
-                    int currentNeighborsRead = 0;
-
-                    @Override
-                    public int nextInt() {
-                        currentNeighborsRead++;
-                        try {
-                            int ordinal = reader.readInt();
-                            assert ordinal <= OnDiskGraphIndex.this.size : String.format("ordinal %d > size %d", ordinal, size);
-                            return ordinal;
-                        }
-                        catch (IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return currentNeighborsRead < neighborCount;
-                    }
-                };
+                assert neighborCount <= maxDegree : String.format("neighborCount %d > M %d", neighborCount, maxDegree);
+                reader.read(neighbors, 0, neighborCount);
+                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -137,6 +146,11 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         }
 
         @Override
+        public Bits liveNodes() {
+            return Bits.ALL;
+        }
+
+        @Override
         public void close() throws IOException {
             reader.close();
         }
@@ -145,7 +159,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     @Override
     public NodesIterator getNodes()
     {
-        throw new UnsupportedOperationException();
+        return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
     }
 
     @Override
@@ -157,37 +171,92 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
         readerSupplier.close();
     }
 
-    // takes Graph and Vectors separately since I'm reluctant to introduce a Vectors reference
-    // to OnHeapGraphIndex just for this method.  Maybe that will end up the best solution,
-    // but I'm not sure yet.
-    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out) throws IOException {
-        assert graph.size() == vectors.size() : String.format("graph size %d != vectors size %d", graph.size(), vectors.size());
-
-        var view = graph.getView();
-
-        // graph-level properties
-        out.writeInt(graph.size());
-        out.writeInt(vectors.dimension());
-        out.writeInt(view.entryNode());
-        out.writeInt(graph.maxEdgesPerNode());
-
-        // for each graph node, write the associated vector and its neighbors
-        for (int node = 0; node < graph.size(); node++) {
-            out.writeInt(node); // unnecessary, but a reasonable sanity check
-            Io.writeFloats(out, (float[]) vectors.vectorValue(node));
-
-            var neighbors = view.getNeighborsIterator(node);
-            out.writeInt(neighbors.size());
-            int n = 0;
-            for ( ; n < neighbors.size(); n++) {
-                out.writeInt(neighbors.nextInt());
+    /**
+     * @param graph the graph to write
+     * @param vectors the vectors associated with each node
+     * @param out the output to write to
+     *
+     * If any nodes have been deleted, you must use the overload specifying `oldToNewOrdinals` instead.
+     */
+    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out)
+            throws IOException
+    {
+        try (var view = graph.getView()) {
+            if (view.getIdUpperBound() > graph.size()) {
+                throw new IllegalArgumentException("Graph contains deletes, must specify oldToNewOrdinals map");
             }
-            assert !neighbors.hasNext();
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+        write(graph, vectors, getSequentialRenumbering(graph), out);
+    }
 
-            // pad out to maxEdgesPerNode
-            for ( ; n < graph.maxEdgesPerNode(); n++) {
-                out.writeInt(-1);
+    /**
+     * @param graph the graph to write
+     * @param vectors the vectors associated with each node
+     * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
+     *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
+     *                         any deleted nodes.
+     * @param out the output to write to
+     */
+    public static <T> void write(GraphIndex<T> graph,
+                                 RandomAccessVectorValues<T> vectors,
+                                 Map<Integer, Integer> oldToNewOrdinals,
+                                 DataOutput out)
+            throws IOException
+    {
+        if (graph instanceof OnHeapGraphIndex) {
+            var ohgi = (OnHeapGraphIndex<T>) graph;
+            if (ohgi.getDeletedNodes().cardinality() > 0) {
+                throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
             }
+        }
+        if (oldToNewOrdinals.size() != graph.size()) {
+            throw new IllegalArgumentException(String.format("ordinalMapper size %d does not match graph size %d",
+                                                             oldToNewOrdinals.size(), graph.size()));
+        }
+
+        var entriesByNewOrdinal = new ArrayList<>(oldToNewOrdinals.entrySet());
+        entriesByNewOrdinal.sort(Comparator.comparingInt(Map.Entry::getValue));
+        // the last new ordinal should be size-1
+        if (graph.size() > 0 && entriesByNewOrdinal.get(entriesByNewOrdinal.size() - 1).getValue() != graph.size() - 1) {
+            throw new IllegalArgumentException("oldToNewOrdinals produced out-of-range entries");
+        }
+
+        try (var view = graph.getView()) {
+            // graph-level properties
+            out.writeInt(graph.size());
+            out.writeInt(vectors.dimension());
+            out.writeInt(view.entryNode());
+            out.writeInt(graph.maxDegree());
+
+            // for each graph node, write the associated vector and its neighbors
+            for (int i = 0; i < oldToNewOrdinals.size(); i++) {
+                var entry = entriesByNewOrdinal.get(i);
+                int originalOrdinal = entry.getKey();
+                int newOrdinal = entry.getValue();
+                if (!graph.containsNode(originalOrdinal)) {
+                    continue;
+                }
+
+                out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
+                Io.writeFloats(out, (float[]) vectors.vectorValue(originalOrdinal));
+
+                var neighbors = view.getNeighborsIterator(originalOrdinal);
+                out.writeInt(neighbors.size());
+                int n = 0;
+                for (; n < neighbors.size(); n++) {
+                    out.writeInt(oldToNewOrdinals.get(neighbors.nextInt()));
+                }
+                assert !neighbors.hasNext();
+
+                // pad out to maxEdgesPerNode
+                for (; n < graph.maxDegree(); n++) {
+                    out.writeInt(-1);
+                }
+            }
+        } catch (Exception e) {
+            throw new IOException(e);
         }
     }
 }

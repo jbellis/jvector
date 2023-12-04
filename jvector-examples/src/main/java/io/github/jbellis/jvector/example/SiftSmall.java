@@ -22,7 +22,9 @@ import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.*;
 import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
@@ -52,7 +54,7 @@ public class SiftSmall {
         var quantizedVectors = pq.encodeAll(baseVectors);
         System.out.format("  PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        var compressedVectors = new CompressedVectors(pq, quantizedVectors);
+        var compressedVectors = new PQVectors(pq, quantizedVectors);
 
         start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100, 1.5f, 1.4f);
@@ -60,15 +62,18 @@ public class SiftSmall {
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var graphPath = testDirectory.resolve("graph_test");
-        try {
-            DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()));
-            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
+        CachingGraphIndex onDiskGraph = null;
+        try (DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()))){
 
-            var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
+            OnDiskGraphIndex.write(onHeapGraph, ravv, outputFile);
+            onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
             testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
         } finally {
+            if (onDiskGraph!= null) {
+                onDiskGraph.close();
+            }
             Files.deleteIfExists(graphPath);
         }
     }
@@ -82,15 +87,15 @@ public class SiftSmall {
             var queryVector = queryVectors.get(i);
             SearchResult.NodeScore[] nn;
             var view = graph.getView();
-            var searcher = new GraphSearcher.Builder(view).build();
+            var searcher = new GraphSearcher.Builder<>(view).build();
             if (compressedVectors == null) {
-                NeighborSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
-                nn = searcher.search(sf, null, 100, null).getNodes();
+                NodeSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
+                nn = searcher.search(sf, null, 100, Bits.ALL).getNodes();
             }
             else {
-                NeighborSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                NeighborSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
-                nn = searcher.search(sf, rr, 100, null).getNodes();
+                NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
+                nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
             }
 
             var gt = groundTruth.get(i);

@@ -7,10 +7,9 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector-tests</artifactId>
-    <version>${jvector.version}</version>
     <name>Tests</name>
     <properties>
         <skipJdk11Tests>true</skipJdk11Tests>
@@ -19,10 +18,54 @@
     <build>
         <plugins>
             <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.0.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <addClasspath>true</addClasspath>
+                                    <mainClass>org.openjdk.jmh.Main</mainClass>
+                                </manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/test-jar-with-dependencies.xml</descriptor>
+                    </descriptors>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>org.openjdk.jmh.Main</mainClass>
+                                </manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.1.2</version>
                 <configuration>
-                    <forkCount>1</forkCount>
+                    <forkCount>1C</forkCount>
                 </configuration>
                 <dependencies>
                     <dependency>
@@ -85,6 +128,12 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>io.github.jbellis</groupId>
+            <artifactId>jvector-examples</artifactId>
+            <version>${project.version}</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
     <profiles>
         <profile>
@@ -96,7 +145,7 @@
                 <dependency>
                     <groupId>io.github.jbellis</groupId>
                     <artifactId>jvector-twenty</artifactId>
-                    <version>${jvector.version}</version>
+                    <version>${project.version}</version>
                     <scope>compile</scope>
                 </dependency>
             </dependencies>

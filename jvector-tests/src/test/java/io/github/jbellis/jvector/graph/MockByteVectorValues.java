@@ -24,69 +24,38 @@
 
 package io.github.jbellis.jvector.graph;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
 
 class MockByteVectorValues extends AbstractMockVectorValues<byte[]> {
-  private final byte[] scratch;
-  private final byte[] denseScratch;
+    private final byte[] denseScratch;
 
-  static MockByteVectorValues fromValues(byte[][] values) {
-    int dimension = values[0].length;
-    int maxDoc = values.length;
-    byte[][] denseValues = new byte[maxDoc][];
-    int count = 0;
-    for (int i = 0; i < maxDoc; i++) {
-      if (values[i] != null) {
-        denseValues[count++] = values[i];
-      }
+    static MockByteVectorValues fromValues(byte[][] values) {
+        return new MockByteVectorValues(values[0].length, values);
     }
-    return new MockByteVectorValues(values, dimension, denseValues, count);
-  }
 
-  MockByteVectorValues(byte[][] values, int dimension, byte[][] denseValues, int numVectors) {
-    super(values, dimension, denseValues, numVectors);
-    scratch = new byte[dimension];
-    denseScratch = new byte[dimension];
-  }
-
-  @Override
-  public MockByteVectorValues copy() {
-    return new MockByteVectorValues(
-        ArrayUtil.copyOfSubArray(values, 0, values.length),
-        dimension,
-        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length),
-        numVectors);
-  }
-
-  @Override
-  public byte[] vectorValue() {
-    if (RandomizedTest.getRandom().nextBoolean()) {
-      return values[pos];
-    } else {
-      // Sometimes use the same scratch array repeatedly, mimicing what the codec will do.
-      // This should help us catch cases of aliasing where the same ByteVectorValues source is used
-      // twice in a
-      // single computation.
-      System.arraycopy(values[pos], 0, scratch, 0, dimension);
-      return scratch;
+    MockByteVectorValues(int dimension, byte[][] denseValues) {
+        super(dimension, denseValues);
+        denseScratch = new byte[dimension];
     }
-  }
 
-  @Override
-  public boolean isValueShared() {
-    return true;
-  }
-
-  @Override
-  public byte[] vectorValue(int targetOrd) {
-    byte[] original = super.vectorValue(targetOrd);
-    if (original == null) {
-      return null;
+    @Override
+    public MockByteVectorValues copy() {
+        return new MockByteVectorValues(dimension,
+                                        ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length)
+        );
     }
-    // present a single vector reference to callers like the disk-backed RAVV implmentations,
-    // to catch cases where they are not making a copy
-    System.arraycopy(original, 0, denseScratch, 0, dimension);
-    return denseScratch;
-  }
+
+    @Override
+    public boolean isValueShared() {
+        return true;
+    }
+
+    @Override
+    public byte[] vectorValue(int targetOrd) {
+        byte[] original = super.vectorValue(targetOrd);
+        // present a single vector reference to callers like the disk-backed RAVV implmentations,
+        // to catch cases where they are not making a copy
+        System.arraycopy(original, 0, denseScratch, 0, dimension);
+        return denseScratch;
+    }
 }

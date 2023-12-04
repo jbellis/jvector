@@ -19,14 +19,20 @@ package io.github.jbellis.jvector.vector;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
 
 final class SimdOps {
-    static {
-        System.setProperty("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", "0");
-    }
+
+    static final boolean HAS_AVX512 = IntVector.SPECIES_PREFERRED == IntVector.SPECIES_512;
+    static final IntVector BYTE_TO_INT_MASK_512 = IntVector.broadcast(IntVector.SPECIES_512, 0xff);
+    static final IntVector BYTE_TO_INT_MASK_256 = IntVector.broadcast(IntVector.SPECIES_256, 0xff);
+
+    static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
+    static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
+
 
     static float sum(float[] vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -136,7 +142,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -161,7 +167,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -187,7 +193,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -212,7 +218,7 @@ final class SimdOps {
         for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, v2offset + i);
-            sum = sum.add(a.mul(b));
+            sum = a.fma(b, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -262,9 +268,9 @@ final class SimdOps {
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, i);
             var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, i);
-            vsum = vsum.add(a.mul(b));
-            vaMagnitude = vaMagnitude.add(a.mul(a));
-            vbMagnitude = vbMagnitude.add(b.mul(b));
+            vsum = a.fma(b, vsum);
+            vaMagnitude = a.fma(a, vaMagnitude);
+            vbMagnitude = b.fma(b, vbMagnitude);
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
@@ -373,7 +379,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -400,7 +406,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -428,7 +434,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -456,7 +462,7 @@ final class SimdOps {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, v1offset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, v2offset + i);
             var diff = a.sub(b);
-            sum = sum.add(diff.mul(diff));
+            sum = diff.fma(diff, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -517,6 +523,26 @@ final class SimdOps {
         }
     }
 
+    static void subInPlace(float[] v1, float[] v2) {
+        if (v1.length != v2.length) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length);
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1, i);
+            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2, i);
+            a.sub(b).intoArray(v1, i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length; i++) {
+            v1[i] = v1[i] - v2[i];
+        }
+    }
+
     static float[] sub(float[] lhs, float[] rhs) {
         if (lhs.length != rhs.length) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -539,5 +565,97 @@ final class SimdOps {
         }
 
         return result;
+    }
+
+    static float assembleAndSum(float[] data, int dataBase, byte[] baseOffsets) {
+        return HAS_AVX512 ? assembleAndSum512(data, dataBase, baseOffsets)
+               : assembleAndSum256(data, dataBase, baseOffsets);
+    }
+
+    static float assembleAndSum512(float[] data, int dataBase, byte[] baseOffsets) {
+        int[] convOffsets = scratchInt512.get();
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        int i = 0;
+        int limit = ByteVector.SPECIES_128.loopBound(baseOffsets.length);
+
+        for (; i < limit; i += ByteVector.SPECIES_128.length()) {
+            var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(1).add(i).mul(dataBase);
+
+            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
+                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
+                    .reinterpretAsInts()
+                    .add(scale)
+                    .intoArray(convOffsets,0);
+
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, data, 0, convOffsets, 0));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        //Process tail
+        for (; i < baseOffsets.length; i++)
+            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
+    }
+
+    static float assembleAndSum256(float[] data, int dataBase, byte[] baseOffsets) {
+        int[] convOffsets = scratchInt256.get();
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        int i = 0;
+        int limit = ByteVector.SPECIES_64.loopBound(baseOffsets.length);
+
+        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+            var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(1).add(i).mul(dataBase);
+
+            ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
+                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
+                    .reinterpretAsInts()
+                    .add(scale)
+                    .intoArray(convOffsets,0);
+
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_256, data, 0, convOffsets, 0));
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process tail
+        for (; i < baseOffsets.length; i++)
+            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
+
+        return res;
+    }
+
+    /**
+     * Vectorized calculation of Hamming distance for two arrays of long integers.
+     * Both arrays should have the same length.
+     *
+     * @param a The first array
+     * @param b The second array
+     * @return The Hamming distance
+     */
+    public static int hammingDistance(long[] a, long[] b) {
+        var sum = LongVector.zero(LongVector.SPECIES_PREFERRED);
+        int vectorizedLength = LongVector.SPECIES_PREFERRED.loopBound(a.length);
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += LongVector.SPECIES_PREFERRED.length()) {
+            var va = LongVector.fromArray(LongVector.SPECIES_PREFERRED, a, i);
+            var vb = LongVector.fromArray(LongVector.SPECIES_PREFERRED, b, i);
+
+            var xorResult = va.lanewise(VectorOperators.XOR, vb);
+            sum = sum.add(xorResult.lanewise(VectorOperators.BIT_COUNT));
+        }
+
+        int res = (int) sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (int i = vectorizedLength; i < a.length; i++) {
+            res += Long.bitCount(a[i] ^ b[i]);
+        }
+
+        return res;
     }
 }

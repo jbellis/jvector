@@ -67,6 +67,26 @@ public interface VectorUtilSupport {
   /** Adds v2 into v1, in place (v1 will be modified) */
   public void addInPlace(float[] v1, float[] v2);
 
+  /** Subtracts v2 from v1, in place (v1 will be modified) */
+  public void subInPlace(float[] v1, float[] v2);
+
   /** @return lhs - rhs, element-wise */
   public float[] sub(float[] lhs, float[] rhs);
+
+  /**
+   * Calculates the sum of sparse points in a vector.
+   *
+   * This assumes the data vector is a 2d matrix which has been flattened into 1 dimension
+   * so rather than data[n][m] it's data[n * m].  With this layout this method can quickly
+   * assemble the data from this heap and sum it.
+   *
+   * @param data the vector of all datapoints
+   * @param baseIndex the start of the data in the offset table
+   *                  (scaled by the index of the lookup table)
+   * @param baseOffsets bytes that represent offsets from the baseIndex
+   * @return the sum of the points
+   */
+  public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets);
+
+  public int hammingDistance(long[] v1, long[] v2);
 }

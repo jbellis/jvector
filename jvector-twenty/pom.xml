@@ -7,10 +7,9 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector-twenty</artifactId>
-    <version>${jvector.version}</version>
     <name>Twenty</name>
     <build>
         <plugins>
@@ -26,23 +25,19 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.1.2</version>
-                <configuration>
-                    <skip>false</skip>
-                    <argLine>
-                        --add-modules=jdk.incubator.vector
-                    </argLine>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
     <dependencies>
         <dependency>
             <groupId>io.github.jbellis</groupId>
             <artifactId>jvector-base</artifactId>
-            <version>${jvector.version}</version>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>commons-math3</artifactId>
+                    <groupId>org.apache.commons</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -58,6 +53,12 @@
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-core</artifactId>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <artifactId>commons-math3</artifactId>
+                    <groupId>org.apache.commons</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.openjdk.jmh</groupId>

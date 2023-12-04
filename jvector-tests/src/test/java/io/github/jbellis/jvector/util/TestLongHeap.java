@@ -35,151 +35,114 @@ import static org.junit.Assert.*;
 
 public class TestLongHeap extends LuceneTestCase {
 
-  private static void checkValidity(LongHeap heap) {
-    long[] heapArray = heap.getHeapArray();
-    for (int i = 2; i <= heap.size(); i++) {
-      int parent = i >>> 1;
-      assert heapArray[parent] <= heapArray[i];
-    }
-  }
-
-  @Test
-  public void testPQ() {
-    testPQ(atLeast(1000), random());
-  }
-
-  public static void testPQ(int count, Random gen) {
-    LongHeap pq = new LongHeap(count);
-    long sum = 0, sum2 = 0;
-
-    for (int i = 0; i < count; i++) {
-      long next = gen.nextLong();
-      sum += next;
-      pq.push(next);
-    }
-
-    long last = Long.MIN_VALUE;
-    for (long i = 0; i < count; i++) {
-      long next = pq.pop();
-      assertTrue(next >= last);
-      last = next;
-      sum2 += last;
-    }
-
-    assertEquals(sum, sum2);
-  }
-
-  @Test
-  public void testClear() {
-    LongHeap pq = new LongHeap(3);
-    pq.push(2);
-    pq.push(3);
-    pq.push(1);
-    assertEquals(3, pq.size());
-    pq.clear();
-    assertEquals(0, pq.size());
-  }
-
-  @Test
-  public void testExceedBounds() {
-    LongHeap pq = new LongHeap(1);
-    pq.push(2);
-    pq.push(0);
-    // expectThrows(ArrayIndexOutOfBoundsException.class, () -> pq.push(0));
-    assertEquals(2, pq.size()); // the heap has been extended to a new max size
-    assertEquals(0, pq.top());
-  }
-
-  @Test
-  public void testFixedSize() {
-    LongHeap pq = new LongHeap(3);
-    pq.insertWithReplacement(2);
-    pq.insertWithReplacement(3);
-    pq.insertWithReplacement(1);
-    pq.insertWithReplacement(5);
-    pq.insertWithReplacement(7);
-    pq.insertWithReplacement(1);
-    assertEquals(3, pq.size());
-    assertEquals(3, pq.top());
-  }
-
-  @Test
-  public void testDuplicateValues() {
-    LongHeap pq = new LongHeap(3);
-    pq.push(2);
-    pq.push(3);
-    pq.push(1);
-    assertEquals(1, pq.top());
-    pq.updateTop(3);
-    assertEquals(3, pq.size());
-    assertArrayEquals(new long[] {0, 2, 3, 3}, pq.getHeapArray());
-  }
-
-  @Test
-  public void testInsertions() {
-    Random random = random();
-    int numDocsInPQ = TestUtil.nextInt(random, 1, 100);
-    LongHeap pq = new LongHeap(numDocsInPQ);
-    Long lastLeast = null;
-
-    // Basic insertion of new content
-    ArrayList<Long> sds = new ArrayList<Long>(numDocsInPQ);
-    for (int i = 0; i < numDocsInPQ * 10; i++) {
-      long newEntry = Math.abs(random.nextLong());
-      sds.add(newEntry);
-      pq.insertWithReplacement(newEntry);
-      checkValidity(pq);
-      long newLeast = pq.top();
-      if ((lastLeast != null) && (newLeast != newEntry) && (newLeast != lastLeast)) {
-        // If there has been a change of least entry and it wasn't our new
-        // addition we expect the scores to increase
-        assertTrue(newLeast <= newEntry);
-        assertTrue(newLeast >= lastLeast);
-      }
-      lastLeast = newLeast;
-    }
-  }
-
-  @Test
-  public void testInvalid() {
-    assertThrows(IllegalArgumentException.class, () -> new LongHeap(-1));
-    assertThrows(IllegalArgumentException.class, () -> new LongHeap(0));
-    assertThrows(IllegalArgumentException.class, () -> new LongHeap(ArrayUtil.MAX_ARRAY_LENGTH));
-  }
-
-  @Test
-  public void testUnbounded() {
-    int initialSize = random().nextInt(10) + 1;
-    LongHeap pq = new LongHeap(initialSize);
-    int num = random().nextInt(100) + 1;
-    long maxValue = Long.MIN_VALUE;
-    int count = 0;
-    for (int i = 0; i < num; i++) {
-      long value = random().nextLong();
-      if (random().nextBoolean()) {
-        pq.push(value);
-        count++;
-      } else {
-        boolean full = pq.size() >= initialSize;
-        if (pq.insertWithReplacement(value)) {
-          if (!full) {
-            count++;
-          }
+    private static void checkValidity(AbstractLongHeap heap) {
+        long[] heapArray = heap.getHeapArray();
+        for (int i = 2; i <= heap.size(); i++) {
+            int parent = i >>> 1;
+            assert heapArray[parent] <= heapArray[i];
         }
-      }
-      maxValue = Math.max(maxValue, value);
     }
-    assertEquals(count, pq.size());
-    long last = Long.MIN_VALUE;
-    while (pq.size() > 0) {
-      long top = pq.top();
-      long next = pq.pop();
-      assertEquals(top, next);
-      --count;
-      assertTrue(next >= last);
-      last = next;
+
+    @Test
+    public void testPQ() {
+        testPQ(atLeast(1000), random());
     }
-    assertEquals(0, count);
-    assertEquals(maxValue, last);
-  }
+
+    public static void testPQ(int count, Random gen) {
+        var pq = new GrowableLongHeap(count);
+        long sum = 0, sum2 = 0;
+
+        for (int i = 0; i < count; i++) {
+            long next = gen.nextLong();
+            sum += next;
+            pq.push(next);
+        }
+
+        long last = Long.MIN_VALUE;
+        for (long i = 0; i < count; i++) {
+            long next = pq.pop();
+            assertTrue(next >= last);
+            last = next;
+            sum2 += last;
+        }
+
+        assertEquals(sum, sum2);
+    }
+
+    @Test
+    public void testClear() {
+        var pq = new GrowableLongHeap(3);
+        pq.push(2);
+        pq.push(3);
+        pq.push(1);
+        assertEquals(3, pq.size());
+        pq.clear();
+        assertEquals(0, pq.size());
+    }
+
+    @Test
+    public void testExceedBounds() {
+        var pq = new GrowableLongHeap(1);
+        pq.push(2);
+        pq.push(0);
+        assertEquals(2, pq.size()); // the heap has been extended to a new max size
+        assertEquals(0, pq.top());
+    }
+
+    @Test
+    public void testFixedSize() {
+        var pq = new BoundedLongHeap(3);
+        pq.push(2);
+        pq.push(3);
+        pq.push(1);
+        pq.push(5);
+        pq.push(7);
+        pq.push(1);
+        assertEquals(3, pq.size());
+        assertEquals(3, pq.top());
+    }
+
+    @Test
+    public void testDuplicateValues() {
+        var pq = new BoundedLongHeap(3);
+        pq.push(2);
+        pq.push(3);
+        pq.push(1);
+        assertEquals(1, pq.top());
+        pq.updateTop(3);
+        assertEquals(3, pq.size());
+        assertArrayEquals(new long[]{0, 2, 3, 3}, pq.getHeapArray());
+    }
+
+    @Test
+    public void testInsertions() {
+        Random random = random();
+        int numDocsInPQ = TestUtil.nextInt(random, 1, 100);
+        var pq = new BoundedLongHeap(numDocsInPQ);
+        Long lastLeast = null;
+
+        // Basic insertion of new content
+        var sds = new ArrayList<Long>(numDocsInPQ);
+        for (int i = 0; i < numDocsInPQ * 10; i++) {
+            long newEntry = Math.abs(random.nextLong());
+            sds.add(newEntry);
+            pq.push(newEntry);
+            checkValidity(pq);
+            long newLeast = pq.top();
+            if ((lastLeast != null) && (newLeast != newEntry) && (newLeast != lastLeast)) {
+                // If there has been a change of least entry and it wasn't our new
+                // addition we expect the scores to increase
+                assertTrue(newLeast <= newEntry);
+                assertTrue(newLeast >= lastLeast);
+            }
+            lastLeast = newLeast;
+        }
+    }
+
+    @Test
+    public void testInvalid() {
+        assertThrows(IllegalArgumentException.class, () -> new GrowableLongHeap(-1));
+        assertThrows(IllegalArgumentException.class, () -> new GrowableLongHeap(0));
+        assertThrows(IllegalArgumentException.class, () -> new GrowableLongHeap(ArrayUtil.MAX_ARRAY_LENGTH));
+    }
 }

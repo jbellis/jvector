@@ -16,16 +16,28 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.util.BitSet;
+
 /**
  * Container class for results of an ANN search, along with associated metrics about the behavior of the search.
  */
 public final class SearchResult {
     private final NodeScore[] nodes;
+    private final BitSet visited;
     private final int visitedCount;
 
-    public SearchResult(NodeScore[] nodes, int visitedCount) {
+    public SearchResult(NodeScore[] nodes, BitSet visited, int visitedCount) {
         this.nodes = nodes;
+        this.visited = visited;
         this.visitedCount = visitedCount;
+    }
+
+    /**
+     * @return the set of graph nodes visited while performing the search.
+     * Deliberately not public -- used to "repair" holes left by removing a node.
+     */
+    BitSet getVisited() {
+        return visited;
     }
 
     /**

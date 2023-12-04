@@ -7,9 +7,20 @@
     <parent>
         <groupId>io.github.jbellis</groupId>
         <artifactId>jvector-parent</artifactId>
-        <version>dev</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>jvector-base</artifactId>
-    <version>${jvector.version}</version>
     <name>Base</name>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+                <configuration>
+                    <excludesFile>${project.parent.basedir}/rat-excludes.txt</excludesFile>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

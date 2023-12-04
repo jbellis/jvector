@@ -40,7 +40,7 @@ public abstract class GraphCache implements Accountable
 
     public static GraphCache load(GraphIndex<float[]> graph, int distance) throws IOException
     {
-        if (distance <= 0)
+        if (distance < 0)
             return new EmptyGraphCache();
         return new CHMGraphCache(graph, distance);
     }

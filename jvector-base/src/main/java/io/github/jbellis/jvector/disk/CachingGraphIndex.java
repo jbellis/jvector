@@ -19,22 +19,28 @@ package io.github.jbellis.jvector.disk;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.Bits;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
 public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Accountable
 {
-    private static final int BFS_DISTANCE = 3;
+    private static final int CACHE_DISTANCE = 3;
 
     private final GraphCache cache;
     private final OnDiskGraphIndex<float[]> graph;
 
     public CachingGraphIndex(OnDiskGraphIndex<float[]> graph)
     {
+        this(graph, CACHE_DISTANCE);
+    }
+
+    public CachingGraphIndex(OnDiskGraphIndex<float[]> graph, int cacheDistance)
+    {
         this.graph = graph;
         try {
-            this.cache = GraphCache.load(graph, BFS_DISTANCE);
+            this.cache = GraphCache.load(graph, cacheDistance);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -56,8 +62,8 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
     }
 
     @Override
-    public int maxEdgesPerNode() {
-        return graph.maxEdgesPerNode();
+    public int maxDegree() {
+        return graph.maxDegree();
     }
 
     @Override
@@ -106,13 +112,8 @@ public class CachingGraphIndex implements GraphIndex<float[]>, AutoCloseable, Ac
         }
 
         @Override
-        public int[] getSortedNodes() {
-            return View.super.getSortedNodes();
-        }
-
-        @Override
-        public int getNeighborCount(int node) {
-            return View.super.getNeighborCount(node);
+        public Bits liveNodes() {
+            return view.liveNodes();
         }
 
         @Override

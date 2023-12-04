@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.vector.VectorEncoding.FLOAT32;
 import static io.github.jbellis.jvector.vector.VectorSimilarityFunction.EUCLIDEAN;
@@ -51,7 +50,7 @@ public class Bench {
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(floatVectors, VectorEncoding.FLOAT32, ds.similarityFunction, M, efConstruction, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
-        var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
+        var avgShortEdges = onHeapGraph.getAverageShortEdges();
         System.out.format("Build N=%d M=%d ef=%d in %.2fs with %.2f short edges%n",
                 floatVectors.size(), M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
 

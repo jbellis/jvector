@@ -19,9 +19,7 @@ package io.github.jbellis.jvector.vector;
 import java.util.List;
 
 final class
-PanamaVectorUtilSupport implements VectorUtilSupport
-{
-
+PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public float dotProduct(float[] a, float[] b) {
         return SimdOps.dotProduct(a, b);
@@ -83,7 +81,29 @@ PanamaVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public void subInPlace(float[] v1, float[] v2) {
+        SimdOps.subInPlace(v1, v2);
+    }
+
+    @Override
     public float[] sub(float[] lhs, float[] rhs) {
         return SimdOps.sub(lhs, rhs);
+    }
+
+    @Override
+    public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets) {
+        //TODO: Re-enable once Jdk bug is fixed
+        //return SimdOps.assembleAndSum(data, baseIndex, baseOffsets);
+
+        float sum = 0f;
+        for (int i = 0; i < baseOffsets.length; i++) {
+            sum += data[baseIndex * i + Byte.toUnsignedInt(baseOffsets[i])];
+        }
+        return sum;
+    }
+
+    @Override
+    public int hammingDistance(long[] v1, long[] v2) {
+        return SimdOps.hammingDistance(v1, v2);
     }
 }
