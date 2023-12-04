@@ -49,7 +49,7 @@ public class Haystack2D {
         var start = System.nanoTime();
         var builder = new GraphIndexBuilder<>(floatVectors, FLOAT32, EUCLIDEAN, M, efConstruction, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
-        var avgShortEdges = IntStream.range(0, onHeapGraph.size()).mapToDouble(i -> onHeapGraph.getNeighbors(i).getShortEdges()).average().orElseThrow();
+        var avgShortEdges = onHeapGraph.getAverageShortEdges();
         System.out.format("%nBuild nVectors=%d, M=%d ef=%d in %.2fs with %.2f short edges%n",
                 nVectors, M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);
 

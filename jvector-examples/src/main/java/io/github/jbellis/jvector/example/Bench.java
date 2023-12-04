@@ -25,6 +25,7 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -71,21 +72,17 @@ public class Bench {
                 runQueries(ds.queryVectors.subList(0, queryCount), topK, floatVectors, onHeapGraph, bits);
             }
         }
-        runQueries(ds.queryVectors.subList(0, queryCount), 100, floatVectors, onHeapGraph, null);
+        runQueries(ds.queryVectors.subList(0, queryCount), 100, floatVectors, onHeapGraph, Bits.ALL);
     }
 
-    private static void runQueries(List<float[]> queries, int topK, ListRandomAccessVectorValues floatVectors, OnHeapGraphIndex<float[]> onHeapGraph, FixedBitSet bits) {
-        int nBitsSet = bits == null ? onHeapGraph.size() : bits.cardinality();
+    private static void runQueries(List<float[]> queries, int topK, ListRandomAccessVectorValues floatVectors, OnHeapGraphIndex<float[]> onHeapGraph, Bits bits) {
+        int nBitsSet = bits instanceof Bits.MatchAllBits ? onHeapGraph.size() : ((FixedBitSet) bits).cardinality();
         LongAdder visited = new LongAdder();
         queries.stream().parallel().forEach(queryVector -> {
             SearchResult sr = GraphSearcher.search(queryVector, topK, floatVectors, FLOAT32, EUCLIDEAN, onHeapGraph, bits);
             visited.add(sr.getVisitedCount());
         });
-        if (bits == null) {
-            System.out.printf("Looking for top %d of %d ordinals required visiting %d nodes%n", topK, onHeapGraph.size(), visited.sum() / queries.size());
-        } else {
-            System.out.printf("Looking for top %d of %d ordinals required visiting %d nodes%n", topK, nBitsSet, visited.sum() / queries.size());
-        }
+        System.out.printf("Looking for top %d of %d ordinals required visiting %d nodes%n", topK, nBitsSet, visited.sum() / queries.size());
     }
 
     public static void main(String[] args) throws IOException {
