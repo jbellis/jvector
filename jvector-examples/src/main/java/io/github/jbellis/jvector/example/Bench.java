@@ -17,7 +17,9 @@
 package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.example.util.DataSet;
+import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
+import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
@@ -25,6 +27,7 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
 import java.util.List;
@@ -88,6 +91,15 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
+        var nwFiles = List.of(
+                "intfloat_e5-small-v2_100000",
+                "textembedding-gecko_100000",
+                "ada_002_100000");
+        for (var nwDatasetName : nwFiles) {
+            DownloadHelper.maybeDownloadFvecs(nwDatasetName);
+            gridSearch(loadNWDataData(nwDatasetName));
+        }
+
         var files = List.of(
                 "hdf5/nytimes-256-angular.hdf5",
                 "hdf5/glove-100-angular.hdf5",
@@ -95,8 +107,22 @@ public class Bench {
                 "hdf5/sift-128-euclidean.hdf5",
                 "hdf5/fashion-mnist-784-euclidean.hdf5");
         for (var f : files) {
+            DownloadHelper.maybeDownloadHdf5(f);
             gridSearch(Hdf5Loader.load(f));
         }
+    }
+
+    private static DataSet loadNWDataData(String name) throws IOException {
+        var path = "wikipedia_squad/100k";
+        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_base_vectors.fvec");
+        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_query_vectors_10000.fvec");
+        var gt = SiftLoader.readIvecs("fvec/" + path + "/" + name + "_indices_query_10000.ivec");
+        var ds = DataSet.getScrubbedDataSet(name,
+                                            VectorSimilarityFunction.DOT_PRODUCT,
+                                            baseVectors,
+                                            queryVectors,
+                                            gt);
+        return ds;
     }
 
     private static void gridSearch(DataSet fullDataSet) throws IOException {
