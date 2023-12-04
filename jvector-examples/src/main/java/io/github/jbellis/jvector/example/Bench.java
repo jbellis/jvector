@@ -72,7 +72,9 @@ public class Bench {
                 runQueries(ds.queryVectors.subList(0, queryCount), topK, floatVectors, onHeapGraph, bits);
             }
         }
-        runQueries(ds.queryVectors.subList(0, queryCount), 100, floatVectors, onHeapGraph, Bits.ALL);
+        for (var topK : List.of(1, 3, 5, 10, 20, 30, 50, 75, 100, 200, 500, 1000)) {
+            runQueries(ds.queryVectors.subList(0, queryCount), topK, floatVectors, onHeapGraph, Bits.ALL);
+        }
     }
 
     private static void runQueries(List<float[]> queries, int topK, ListRandomAccessVectorValues floatVectors, OnHeapGraphIndex<float[]> onHeapGraph, Bits bits) {
@@ -131,5 +133,6 @@ public class Bench {
                                  fullDataSet.groundTruth);
             testOneGraph(16, 100, ds);
         }
+        testOneGraph(16, 100, fullDataSet);
     }
 }
