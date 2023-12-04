@@ -33,7 +33,6 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -71,19 +70,7 @@ public class GraphIndexBuilder<T> {
     private final NodeSimilarity similarity;
 
     private final AtomicInteger updateEntryNodeIn = new AtomicInteger(10_000);
-    private final ForkJoinPool forkJoinPool;
 
-    public GraphIndexBuilder(
-            RandomAccessVectorValues<T> vectorValues,
-            VectorEncoding vectorEncoding,
-            VectorSimilarityFunction similarityFunction,
-            int M,
-            int beamWidth,
-            float neighborOverflow,
-            float alpha) {
-        this(vectorValues, vectorEncoding, similarityFunction, M, beamWidth, neighborOverflow, alpha, PhysicalCoreExecutor.instance.getForkJoinPool());
-    }
-    
     /**
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
      * ordinals, using the given hyperparameter settings, and returns the resulting graph.
@@ -97,8 +84,6 @@ public class GraphIndexBuilder<T> {
      * @param alpha            how aggressive pruning diverse neighbors should be.  Set alpha &gt; 1.0 to
      *                         allow longer edges.  If alpha = 1.0 then the equivalent of the lowest level of
      *                         an HNSW graph will be created, which is usually not what you want.
-     * @param forkJoinPool     A fork join pool which is sized to match the number of physical cores
-     *                         on the machine (avoiding hyper-thread count)
      */
     public GraphIndexBuilder(
             RandomAccessVectorValues<T> vectorValues,
@@ -107,8 +92,7 @@ public class GraphIndexBuilder<T> {
             int M,
             int beamWidth,
             float neighborOverflow,
-            float alpha,
-            final ForkJoinPool forkJoinPool) {
+            float alpha) {
         vectors = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
         vectorsCopy = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
         dimension = vectorValues.dimension();
@@ -138,7 +122,6 @@ public class GraphIndexBuilder<T> {
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = PoolingSupport.newThreadBased(() -> new NodeArray(Math.max(beamWidth, M + 1)));
         this.concurrentScratch = PoolingSupport.newThreadBased(() -> new NodeArray(Math.max(beamWidth, M + 1)));
-        this.forkJoinPool = forkJoinPool;
     }
 
     public OnHeapGraphIndex<T> build() {
@@ -147,11 +130,13 @@ public class GraphIndexBuilder<T> {
             size = v.get().size();
         }
 
-        forkJoinPool.submit(() -> IntStream.range(0, size).parallel().forEach(i -> {
-            try (var v1 = vectors.get()) {
-                addGraphNode(i, v1.get());
-            }
-        })).join();
+        PhysicalCoreExecutor.instance.execute(() -> {
+            IntStream.range(0, size).parallel().forEach(i -> {
+                try (var v1 = vectors.get()) {
+                    addGraphNode(i, v1.get());
+                }
+            });
+        });
 
         cleanup();
         return graph;
@@ -178,12 +163,12 @@ public class GraphIndexBuilder<T> {
         removeDeletedNodes();
 
         // clean up overflowed neighbor lists
-        forkJoinPool.submit(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
+        IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
             var neighbors = graph.getNeighbors(i);
             if (neighbors != null) {
                 neighbors.cleanup();
             }
-        })).join();
+        });
 
         // reconnect any orphaned nodes.  this will maintain neighbors size
         reconnectOrphanedNodes();
@@ -202,9 +187,9 @@ public class GraphIndexBuilder<T> {
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
             var entryNeighbors = graph.getNeighbors(graph.entry()).getCurrent();
-            forkJoinPool.submit(() -> IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
+            IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> {
                 findConnected(connectedNodes, entryNeighbors.node[node]);
-            })).join();
+            });
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();
