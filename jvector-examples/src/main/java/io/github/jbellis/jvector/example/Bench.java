@@ -31,13 +31,17 @@ import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.LongAdder;
 
 import static io.github.jbellis.jvector.vector.VectorEncoding.FLOAT32;
 import static io.github.jbellis.jvector.vector.VectorSimilarityFunction.EUCLIDEAN;
+import static java.lang.Math.ceil;
 import static java.lang.Math.max;
+import static java.lang.Math.min;
+import static java.util.Collections.min;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
@@ -61,18 +65,22 @@ public class Bench {
         var queryCount = 1000;
         var bits = new FixedBitSet(nVectors);
         var R = new Random();
-        for (int i = (int) max(8, nVectors * 0.01); i <= nVectors / 2; i *= 2) {
+        var topKGrid = new ArrayList<Integer>();
+        for (int i = 1; i < min(1000, (int) (0.01 * nVectors)); i = (int) ceil(i * 1.1)) {
+            topKGrid.add(i);
+        }
+        for (int i = (int) max(8, nVectors * 0.01); i <= nVectors / 2; i = (int) ceil(i * 1.1)) {
             while (bits.cardinality() < i) {
                 bits.set(R.nextInt(nVectors));
             }
-            for (var topK : List.of(1, 3, 5, 10, 20, 30, 50, 75, 100, 200, 500, 1000)) {
+            for (var topK : topKGrid) {
                 if (topK >= i) {
                     break;
                 }
                 runQueries(ds.queryVectors.subList(0, queryCount), topK, floatVectors, onHeapGraph, bits);
             }
         }
-        for (var topK : List.of(1, 3, 5, 10, 20, 30, 50, 75, 100, 200, 500, 1000)) {
+        for (var topK : topKGrid) {
             runQueries(ds.queryVectors.subList(0, queryCount), topK, floatVectors, onHeapGraph, Bits.ALL);
         }
     }
@@ -100,11 +108,11 @@ public class Bench {
         }
 
         var files = List.of(
-                "hdf5/nytimes-256-angular.hdf5",
-                "hdf5/glove-100-angular.hdf5",
-                "hdf5/glove-200-angular.hdf5",
-                "hdf5/sift-128-euclidean.hdf5",
-                "hdf5/fashion-mnist-784-euclidean.hdf5");
+                "nytimes-256-angular.hdf5",
+                "glove-100-angular.hdf5",
+                "glove-200-angular.hdf5",
+                "sift-128-euclidean.hdf5",
+                "fashion-mnist-784-euclidean.hdf5");
         for (var f : files) {
             DownloadHelper.maybeDownloadHdf5(f);
             gridSearch(Hdf5Loader.load(f));
@@ -125,7 +133,7 @@ public class Bench {
     }
 
     private static void gridSearch(DataSet fullDataSet) throws IOException {
-        for (int N = 2048; N <= fullDataSet.baseVectors.size(); N *= 2) {
+        for (int N = 2048; N <= fullDataSet.baseVectors.size(); N = (int) ceil(N * 1.1)) {
             var ds = new DataSet(fullDataSet.name + "/" + N,
                                  fullDataSet.similarityFunction,
                                  fullDataSet.baseVectors.subList(0, N),
