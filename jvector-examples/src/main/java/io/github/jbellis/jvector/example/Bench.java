@@ -65,11 +65,12 @@ public class Bench {
         var queryCount = 1000;
         var bits = new FixedBitSet(nVectors);
         var R = new Random();
-        var topKGrid = new ArrayList<Integer>();
-        for (int i = 1; i < min(1000, (int) (0.01 * nVectors)); i = (int) ceil(i * 1.1)) {
-            topKGrid.add(i);
-        }
-        for (int i = (int) max(8, nVectors * 0.01); i <= nVectors / 2; i = (int) ceil(i * 1.1)) {
+//        var topKGrid = new ArrayList<Integer>();
+//        for (int i = 1; i < min(1000, (int) (0.01 * nVectors)); i = (int) ceil(i * 1.1)) {
+//            topKGrid.add(i);
+//        }
+        var topKGrid = List.of(1);
+        for (int i = (int) max(8, nVectors * 0.0001); i <= nVectors / 2; i = (int) ceil(i * 1.1)) {
             while (bits.cardinality() < i) {
                 bits.set(R.nextInt(nVectors));
             }
@@ -133,14 +134,14 @@ public class Bench {
     }
 
     private static void gridSearch(DataSet fullDataSet) throws IOException {
-        for (int N = 2048; N <= fullDataSet.baseVectors.size(); N = (int) ceil(N * 1.1)) {
-            var ds = new DataSet(fullDataSet.name + "/" + N,
-                                 fullDataSet.similarityFunction,
-                                 fullDataSet.baseVectors.subList(0, N),
-                                 fullDataSet.queryVectors,
-                                 fullDataSet.groundTruth);
-            testOneGraph(16, 100, ds);
-        }
+//        for (int N = 2048; N <= fullDataSet.baseVectors.size(); N = (int) ceil(N * 1.1)) {
+//            var ds = new DataSet(fullDataSet.name + "/" + N,
+//                                 fullDataSet.similarityFunction,
+//                                 fullDataSet.baseVectors.subList(0, N),
+//                                 fullDataSet.queryVectors,
+//                                 fullDataSet.groundTruth);
+//            testOneGraph(16, 100, ds);
+//        }
         testOneGraph(16, 100, fullDataSet);
     }
 }
