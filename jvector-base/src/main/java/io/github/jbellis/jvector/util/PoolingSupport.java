@@ -135,7 +135,7 @@ public abstract class PoolingSupport<T> {
 
         @Override
         protected void onClosed(Pooled<T> value) {
-
+            threadLocal.remove();
         }
     }
 
