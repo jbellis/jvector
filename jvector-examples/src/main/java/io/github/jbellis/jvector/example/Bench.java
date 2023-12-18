@@ -180,7 +180,7 @@ public class Bench {
                 nodesVisited.add(sr.getVisitedCount());
             });
         }
-        return new ResultSummary((int) topKfound.sum(), nodesVisited.sum()); // TODO do we care enough about visited count to hack it back into searcher?
+        return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
 
     public static void main(String[] args) throws IOException {
