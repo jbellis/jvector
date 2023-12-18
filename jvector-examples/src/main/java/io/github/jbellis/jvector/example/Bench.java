@@ -166,7 +166,7 @@ public class Bench {
                 if (cv != null) {
                     var view = index.getView();
                     NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-                    NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> ds.similarityFunction.compare(queryVector, vectors.get(j));
+                    NodeSimilarity.ReRanker rr = (j) -> ds.similarityFunction.compare(queryVector, exactVv.vectorValue(j));
                     sr = new GraphSearcher.Builder<>(view)
                             .build()
                             .search(sf, rr, efSearch, Bits.ALL);

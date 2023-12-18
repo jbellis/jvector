@@ -267,7 +267,7 @@ public class IPCService
             SearchResult r;
             if (ctx.cv != null) {
                 NodeSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
-                NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> ctx.similarityFunction.compare(queryVector, vectors.get(j));
+                NodeSimilarity.ReRanker rr = (j) -> ctx.similarityFunction.compare(queryVector, ctx.ravv.vectorValue(j));
                 r = new GraphSearcher.Builder<>(ctx.index.getView()).build().search(sf, rr, searchEf, Bits.ALL);
             } else {
                 r = GraphSearcher.search(queryVector, topK, ctx.ravv, VectorEncoding.FLOAT32, ctx.similarityFunction, ctx.index, Bits.ALL);

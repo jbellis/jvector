@@ -94,7 +94,7 @@ public class SiftSmall {
             }
             else {
                 NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                NodeSimilarity.ReRanker<float[]> rr = (j, vectors) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, vectors.get(j));
+                NodeSimilarity.ReRanker rr = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
                 nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
             }
 
