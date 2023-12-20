@@ -128,7 +128,7 @@ public class GraphSearcher<T> {
      */
     @Experimental
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.ReRanker reRanker,
+                               NodeSimilarity.ReRanker<T> reRanker,
                                int topK,
                                float threshold,
                                float similarityFloor,
@@ -150,7 +150,7 @@ public class GraphSearcher<T> {
      */
     @Experimental
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.ReRanker reRanker,
+                               NodeSimilarity.ReRanker<T> reRanker,
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
@@ -170,7 +170,7 @@ public class GraphSearcher<T> {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.ReRanker reRanker,
+                               NodeSimilarity.ReRanker<T> reRanker,
                                int topK,
                                Bits acceptOrds)
     {
@@ -178,7 +178,7 @@ public class GraphSearcher<T> {
     }
 
     SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
-                                NodeSimilarity.ReRanker reRanker,
+                                NodeSimilarity.ReRanker<T> reRanker,
                                 int topK,
                                 float threshold,
                                 int ep,
@@ -197,7 +197,7 @@ public class GraphSearcher<T> {
      * This method never calls acceptOrds.length(), so the length-free Bits.ALL may be passed in.
      */
     SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
-                                NodeSimilarity.ReRanker reRanker,
+                                NodeSimilarity.ReRanker<T> reRanker,
                                 int topK,
                                 float threshold,
                                 float similarityFloor,
@@ -222,6 +222,7 @@ public class GraphSearcher<T> {
         // Threshold callers (and perhaps others) will be tempted to pass in a huge topK.
         // Let's not allocate a ridiculously large heap up front in that scenario.
         var resultsQueue = new NodeQueue(new BoundedLongHeap(min(1024, topK), topK), NodeQueue.Order.MIN_HEAP);
+        Map<Integer, T> vectorsEncountered = scoreFunction.isExact() ? null : new java.util.HashMap<>();
         int numVisited = 0;
 
         float score = scoreFunction.similarityTo(ep);
@@ -257,6 +258,9 @@ public class GraphSearcher<T> {
                         resultsQueue.pop();
                     }
                 }
+                if (!scoreFunction.isExact()) {
+                    vectorsEncountered.put(topCandidateNode, view.getVector(topCandidateNode));
+                }
             }
 
             // add its neighbors to the candidates queue
@@ -276,13 +280,14 @@ public class GraphSearcher<T> {
         }
 
         assert resultsQueue.size() <= topK;
-        SearchResult.NodeScore[] nodes = extractScores(scoreFunction, reRanker, resultsQueue);
+        SearchResult.NodeScore[] nodes = extractScores(scoreFunction, reRanker, resultsQueue, vectorsEncountered);
         return new SearchResult(nodes, visited, numVisited);
     }
 
     private static <T> SearchResult.NodeScore[] extractScores(NodeSimilarity.ScoreFunction sf,
-                                                              NodeSimilarity.ReRanker reRanker,
-                                                              NodeQueue resultsQueue)
+                                                              NodeSimilarity.ReRanker<T> reRanker,
+                                                              NodeQueue resultsQueue,
+                                                              Map<Integer, T> vectorsEncountered)
     {
         SearchResult.NodeScore[] nodes;
         if (sf.isExact()) {
@@ -293,7 +298,7 @@ public class GraphSearcher<T> {
                 nodes[i] = new SearchResult.NodeScore(n, nScore);
             }
         } else {
-            nodes = resultsQueue.nodesCopy(reRanker::similarityTo);
+            nodes = resultsQueue.nodesCopy(i -> reRanker.similarityTo(i, vectorsEncountered));
             Arrays.sort(nodes, 0, resultsQueue.size(), Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
         }
         return nodes;
