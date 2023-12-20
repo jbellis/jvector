@@ -252,11 +252,8 @@ public class GraphSearcher<T> {
                 && topCandidateScore >= threshold
                 && resultsQueue.push(topCandidateNode, topCandidateScore))
             {
-                if (resultsQueue.size() >= topK) {
-                    minAcceptedSimilarity = Math.max(similarityFloor, resultsQueue.topScore());
-                    while (resultsQueue.topScore() < minAcceptedSimilarity) {
-                        resultsQueue.pop();
-                    }
+                if (resultsQueue.size() >= topK || similarityFloor > 0) {
+                    minAcceptedSimilarity = resultsQueue.topScore();
                 }
                 if (!scoreFunction.isExact()) {
                     vectorsEncountered.put(topCandidateNode, view.getVector(topCandidateNode));
