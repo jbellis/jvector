@@ -102,7 +102,8 @@ public abstract class PoolingSupport<T> {
 
         @Override
         public void close() {
-            owner.onClosed(this);
+            if (owner != null)
+                owner.onClosed(this);
         }
     }
 
@@ -123,7 +124,11 @@ public abstract class PoolingSupport<T> {
             if (val != null)
                 return val;
 
-            val = new Pooled<>(this, initialValue.get());
+            // We pass null as the owner to prevent a memory leak. If we passed 'this' as the owner and then put val
+            // into the threadLocal, then even after 'this' is inaccessable from the application code, it would still
+            // have a strong reference in the ThreadLocalMap, thus preventing this object from being garbage collected
+            // and preventing the value in threadLocal from being garbage collected.
+            val = new Pooled<>(null, initialValue.get());
             threadLocal.set(val);
             return val;
         }
