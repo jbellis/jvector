@@ -466,9 +466,7 @@ public class GraphIndexBuilder<T> {
         }
 
         // repair affected nodes
-        for (var node : affectedLiveNodes) {
-            addNNDescentConnections(node);
-        }
+        simdExecutor.submit(() -> affectedLiveNodes.stream().parallel().forEach(this::addNNDescentConnections)).join();
 
         // reset deleted collection
         deletedNodes.clear();
