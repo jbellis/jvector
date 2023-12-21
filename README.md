@@ -54,12 +54,12 @@ Searching the index:
 - [`GraphSearcher`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/GraphSearcher.java) is the entry point for searching.  Results come back as a [`SearchResult`](./jvector-base/src/main/java/io/github/jbellis/jvector/graph/SearchResult.java) object that contains node IDs and scores, in
   descending order of similarity to the query vector.  `GraphSearcher` objects are re-usable,
   so unless you have a very simple use case you should use `GraphSearcher.Builder` to
-  create them; `GraphSearcher::search` is also available with simple defaults, but calling it
+  create them; `GraphSearcher.search` is also available with simple defaults, but calling it
   will instantiate a new `GraphSearcher` every time so performance will be worse.
 - JVector represents vectors in the index as the ordinal (int) corresponding to their
   index in the `RandomAccessVectorValues` you provided.  You can get the original vector
   back with `GraphIndex.getVector`, if necessary, but since this is a disk-backed index
-  you should design your application to avoid doing so if possible.
+  you should design your application to avoid doing so unnecessarily.
 
 ## DiskANN and Product Quantization 
 JVector implements [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf)-style 
