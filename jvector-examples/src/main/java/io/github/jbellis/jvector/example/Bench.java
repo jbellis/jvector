@@ -191,22 +191,15 @@ public class Bench {
         var efSearchGrid = List.of(1, 2);
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
                 null, // uncompressed
-                ds -> BinaryQuantization.compute(ds.getBaseRavv()),
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+                // ds -> BinaryQuantization.compute(ds.getBaseRavv()),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4,
+                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything
         var regex = args.length == 0 ? ".*" : Arrays.stream(args).flatMap(s -> Arrays.stream(s.split("\\s"))).map(s -> "(?:" + s + ")").collect(Collectors.joining("|"));
         // compile regex and do substring matching using find
         var pattern = Pattern.compile(regex);
-
-        // 2D grid, built and calculated at runtime
-        if (pattern.matcher("2dgrid").find()) {
-            var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
-            gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-            cachedCompressors.clear();
-        }
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
@@ -241,6 +234,13 @@ public class Bench {
                 gridSearch(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
                 cachedCompressors.clear();
             }
+        }
+
+        // 2D grid, built and calculated at runtime
+        if (pattern.matcher("2dgrid").find()) {
+            var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
+            gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+            cachedCompressors.clear();
         }
     }
 
