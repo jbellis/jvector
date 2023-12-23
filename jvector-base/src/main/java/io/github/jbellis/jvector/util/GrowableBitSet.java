@@ -21,6 +21,8 @@ package io.github.jbellis.jvector.util;
  * does so, it will grow its internal storage multiplicatively, assuming that more growth will be
  * needed in the future. This is the important difference from FixedBitSet + FBS.ensureCapacity,
  * which grows the minimum necessary each time.
+ * <p>
+ * For thread-safe version see {@link SynchronizedGrowableBitSet}.
  */
 public class GrowableBitSet extends BitSet {
 
