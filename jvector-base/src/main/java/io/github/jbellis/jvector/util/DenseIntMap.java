@@ -49,12 +49,15 @@ public class DenseIntMap<T> {
     public void put(int key, T value) {
         ensureCapacity(key);
         long stamp;
+        boolean isInsert = false;
         do {
             stamp = sl.tryOptimisticRead();
-            objects.set(key, value);
+            isInsert = objects.getAndSet(key, value) == null || isInsert;
         } while (!sl.validate(stamp));
 
-        size.incrementAndGet();
+        if (isInsert) {
+            size.incrementAndGet();
+        }
     }
 
     /**
