@@ -27,11 +27,12 @@ import java.util.concurrent.locks.StampedLock;
 import java.util.stream.IntStream;
 
 /**
- * A map (but not a Map) of int -> T where the int keys are dense and start at zero,
+ * A map (but not a Map) of int -> T where the int keys are dense-ish and start at zero,
  * but the size of the map is not known in advance.  This provides fast, concurrent
  * updates and minimizes contention when the map is resized.
  * <p>
- * Once added via put(), the value associated with a key may be overwritten, but not removed.
+ * "Dense-ish" means that space is allocated for all keys from 0 to the highest key, but
+ * it is valid to have gaps in the keys.  The value associated with "gap" keys is null.
  */
 public class DenseIntMap<T> {
     private volatile AtomicReferenceArray<T> objects;
@@ -47,6 +48,10 @@ public class DenseIntMap<T> {
      * @param key ordinal
      */
     public void put(int key, T value) {
+        if (value == null) {
+            throw new IllegalArgumentException("put() value cannot be null -- use remove() instead");
+        }
+
         ensureCapacity(key);
         long stamp;
         boolean isInsert = false;
