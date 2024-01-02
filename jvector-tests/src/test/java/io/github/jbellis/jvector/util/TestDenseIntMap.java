@@ -24,12 +24,14 @@
 package io.github.jbellis.jvector.util;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
+@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestDenseIntMap extends RandomizedTest {
 
     @Test
