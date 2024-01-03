@@ -21,6 +21,9 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.stat.StatUtils;
 
 interface ScoreTracker {
+
+    ScoreTracker NO_OP = new NoOpTracker();
+
     void track(float score);
 
     boolean shouldStop(int numVisited);
