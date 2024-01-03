@@ -171,7 +171,7 @@ public class GraphSearcher<T> {
         }
 
         prepareScratchState(view.size());
-        var scoreTracker = threshold > 0 ? new ScoreTracker.NormalDistributionTracker(threshold) : new ScoreTracker.NoOpTracker();
+        var scoreTracker = threshold > 0 ? new ScoreTracker.NormalDistributionTracker(threshold) : ScoreTracker.NO_OP;
         if (ep < 0) {
             return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
         }
