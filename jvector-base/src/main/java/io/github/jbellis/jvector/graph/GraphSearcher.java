@@ -204,15 +204,14 @@ public class GraphSearcher<T> {
                 break;
             }
 
-            // add the top candidate to the resultset
+            // add the top candidate to the resultset if it qualifies, and update minAcceptedSimilarity
             int topCandidateNode = candidates.pop();
             if (acceptOrds.get(topCandidateNode)
                 && topCandidateScore >= threshold
-                && resultsQueue.push(topCandidateNode, topCandidateScore))
+                && resultsQueue.push(topCandidateNode, topCandidateScore)
+                && resultsQueue.size() >= topK)
             {
-                if (resultsQueue.size() >= topK) {
-                    minAcceptedSimilarity = resultsQueue.topScore();
-                }
+                minAcceptedSimilarity = resultsQueue.topScore();
             }
 
             // add its neighbors to the candidates queue
