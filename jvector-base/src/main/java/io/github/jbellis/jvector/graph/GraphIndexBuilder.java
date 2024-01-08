@@ -344,7 +344,7 @@ public class GraphIndexBuilder<T> {
             insertionsInProgress.remove(node);
         }
 
-        return graph.ramBytesUsedOneNode(0);
+        return graph.ramBytesUsedOneNode();
     }
 
     /**
@@ -477,7 +477,7 @@ public class GraphIndexBuilder<T> {
         // reset deleted collection
         deletedNodes.clear();
 
-        return nRemoved * graph.ramBytesUsedOneNode(0);
+        return nRemoved * graph.ramBytesUsedOneNode();
     }
 
     /**

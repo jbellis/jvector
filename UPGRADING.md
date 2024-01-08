@@ -1,3 +1,23 @@
+# Upgrading from 2.0.x to 3.0.x
+
+## Primary API changes
+
+- `GraphIndexBuilder` `M` parameter now represents the maximum degree of the graph,
+  instead of half the maximum degree.  (The former behavior was motivated by making
+  it easy to make apples-to-apples comparisons with Lucene HNSW graphs.)  So,
+  if you were building a graph of M=16 with JVector2, you should build it with M=32
+  with JVector3.
+- `NodeSimilarity.ReRanker` api has changed.  The interface is no longer parameterized,
+  and the `similarityTo` method no longer takes a Map parameter (provided by `search` with
+  the full vectors associated with the nodes returned).  This is because we discovered that
+  (in contrast with the original DiskANN design) it is more performant to read vectors lazily 
+  from disk at reranking time, since this will only have to fetch vectors for the topK nodes 
+  instead of all nodes visited.
+
+## Other changes to public classes
+
+- `OnHeapGraphIndex::ramBytesUsedOneNode` no longer takes an `int nodeLevel` parameter
+
 # Upgrading from 1.0.x to 2.0.x
 
 ## New features

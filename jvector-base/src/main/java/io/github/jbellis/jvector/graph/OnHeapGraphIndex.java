@@ -47,7 +47,7 @@ import java.util.stream.IntStream;
  */
 public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
-    // the current graph entry node on the top level. -1 if not set
+    // the current graph entry node, -1 if not set
     private final AtomicInteger entryPoint = new AtomicInteger(-1);
 
     private final DenseIntMap<ConcurrentNeighborSet> nodes;
@@ -60,14 +60,14 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
     OnHeapGraphIndex(int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
         this.neighborFactory = neighborFactory;
-        this.maxDegree = 2 * M;
+        this.maxDegree = M;
         this.nodes = new DenseIntMap<>(1024);
     }
 
     /**
      * Returns the neighbors connected to the given node, or null if the node does not exist.
      *
-     * @param node the node whose neighbors are returned, represented as an ordinal on the level 0.
+     * @param node the node whose neighbors are returned, represented as an ordinal.
      */
     ConcurrentNeighborSet getNeighbors(int node) {
         return nodes.get(node);
@@ -80,7 +80,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
     }
 
     /**
-     * Add node on the given level with an empty set of neighbors.
+     * Add the given node ordinal with an empty set of neighbors.
      *
      * <p>Nodes can be inserted out of order, but it requires that the nodes preceded by the node
      * inserted out of order are eventually added.
@@ -90,7 +90,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
      *
      * <p>It is also the responsibility of the caller to ensure that each node is only added once.
      *
-     * @param node the node to add, represented as an ordinal on the level 0.
+     * @param node the node to add, represented as an ordinal
      * @return the neighbor set for this node
      */
     public ConcurrentNeighborSet addNode(int node) {
@@ -115,7 +115,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         deletedNodes.set(node);
     }
 
-    /** must be called after addNode once neighbors are linked in all levels. */
+    /** must be called after addNode once neighbors are linked */
     void maybeSetInitialEntryNode(int node) {
         entryPoint.accumulateAndGet(node,
                                     (oldEntry, newEntry) -> {
@@ -153,10 +153,9 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         return total + neighborSize + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
     }
 
-    public long ramBytesUsedOneNode(int nodeLevel) {
+    public long ramBytesUsedOneNode() {
         var graphBytesUsed =
-                neighborsRamUsed(maxDegree())
-                        + nodeLevel * neighborsRamUsed(maxDegree());
+                neighborsRamUsed(maxDegree());
         var clockBytesUsed = Integer.BYTES;
         return graphBytesUsed + clockBytesUsed;
     }

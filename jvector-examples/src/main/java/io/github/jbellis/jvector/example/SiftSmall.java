@@ -57,7 +57,7 @@ public class SiftSmall {
         var compressedVectors = new PQVectors(pq, quantizedVectors);
 
         start = System.nanoTime();
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 16, 100, 1.5f, 1.4f);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 32, 100, 1.5f, 1.4f);
         var onHeapGraph = builder.build();
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
