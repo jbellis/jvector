@@ -2,6 +2,12 @@
 
 ## Primary API changes
 
+- GraphIndexBuilder M parameter now represents the maximum degree of the graph,
+  instead of half the maximum degree.  (The former behavior was motivated by making
+  it easy to make apples-to-apples comparisons with Lucene HNSW graphs.)  So,
+  if you were building a graph of M=16 with JVector2, you should build it with M=32
+  with JVector3.
+
 ## Other changes to public classes
 
 - `OnHeapGraphIndex::ramBytesUsedOneNode` no longer takes an `int nodeLevel` parameter

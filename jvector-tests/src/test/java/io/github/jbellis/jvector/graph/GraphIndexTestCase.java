@@ -70,7 +70,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 100, 1.0f, 1.4f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 20, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // run some searches
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
@@ -108,7 +108,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 64, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // the first 10 docs must not be deleted to ensure the expected recall
         Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
@@ -139,7 +139,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 16, 100, 1.0f, 1.4f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 64, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // Only mark a few vectors as accepted
         var acceptOrds = new FixedBitSet(nDoc);
@@ -214,7 +214,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10, 1.0f, 1.0f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 4, 10, 1.0f, 1.0f);
         // node 0 is added by the builder constructor
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
@@ -270,7 +270,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10, 1.0f, 1.0f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10, 1.0f, 1.0f);
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
         builder.addGraphNode(2, vectors);
@@ -302,7 +302,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 1, 10, 1.0f, 1.0f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10, 1.0f, 1.0f);
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
         builder.addGraphNode(2, vectors);
@@ -341,7 +341,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         int topK = 5;
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 30, 1.0f, 1.4f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 20, 30, 1.0f, 1.4f);
         var graph = builder.build();
         Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
@@ -405,7 +405,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     public void testConcurrentNeighbors() {
         RandomAccessVectorValues<T> vectors = circularVectorValues(3);
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 1, 30, 1.0f, 1.0f) {
+                new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 2, 30, 1.0f, 1.0f) {
                     @Override
                     protected float scoreBetween(T v1, T v2) {
                         try {
@@ -418,7 +418,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
                 };
         var graph = builder.build();
         for (int i = 0; i < vectors.size(); i++) {
-            assertTrue(graph.getNeighbors(i).size() <= 2); // Level 0 gets 2x neighbors
+            assertTrue(graph.getNeighbors(i).size() <= 2);
         }
     }
 

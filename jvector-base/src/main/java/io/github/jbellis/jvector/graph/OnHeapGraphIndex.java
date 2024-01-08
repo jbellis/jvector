@@ -60,7 +60,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
 
     OnHeapGraphIndex(int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
         this.neighborFactory = neighborFactory;
-        this.maxDegree = 2 * M;
+        this.maxDegree = M;
         this.nodes = new DenseIntMap<>(1024);
     }
 

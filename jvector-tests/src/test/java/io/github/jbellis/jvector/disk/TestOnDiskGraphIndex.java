@@ -165,7 +165,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     @Test
     public void testLargeGraph() throws Exception
     {
-        var graph = new TestUtil.RandomlyConnectedGraphIndex<float[]>(100_000, 16, getRandom());
+        var graph = new TestUtil.RandomlyConnectedGraphIndex<float[]>(100_000, 32, getRandom());
         var outputPath = testDirectory.resolve("large_graph");
         var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
         TestUtil.writeGraph(graph, ravv, outputPath);
