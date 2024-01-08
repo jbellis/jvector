@@ -114,4 +114,20 @@ public class TestDeletions extends LuceneTestCase {
         var reloadedGraph = b2.getGraph();
         assertGraphEquals(graph, reloadedGraph);
     }
+
+    @Test
+    public void testCleanupAfterMarkingAllNodesAsDeleted() {
+        int dimension = 2;
+        var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var graph = TestUtil.buildSequentially(builder, ravv);
+
+        for (var i = 0; i < graph.size(); i++) {
+            graph.markDeleted(i);
+        }
+
+        builder.cleanup();
+
+        assertEquals(0, graph.size());
+    }
 }
