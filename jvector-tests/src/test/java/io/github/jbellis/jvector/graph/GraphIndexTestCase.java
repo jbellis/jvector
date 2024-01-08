@@ -108,7 +108,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 64, 100, 1.0f, 1.4f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 32, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // the first 10 docs must not be deleted to ensure the expected recall
         Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
@@ -139,7 +139,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         VectorEncoding vectorEncoding = getVectorEncoding();
         GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 64, 100, 1.0f, 1.4f);
+                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 32, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // Only mark a few vectors as accepted
         var acceptOrds = new FixedBitSet(nDoc);
