@@ -221,35 +221,35 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         builder.addGraphNode(2, vectors);
         // now every node has tried to attach every other node as a neighbor, but
         // some were excluded based on diversity check.
-        assertLevel0Neighbors(builder.graph, 0, 1, 2);
-        assertLevel0Neighbors(builder.graph, 1, 0);
-        assertLevel0Neighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 0, 1, 2);
+        assertNeighbors(builder.graph, 1, 0);
+        assertNeighbors(builder.graph, 2, 0);
 
         builder.addGraphNode(3, vectors);
-        assertLevel0Neighbors(builder.graph, 0, 1, 2);
+        assertNeighbors(builder.graph, 0, 1, 2);
         // we added 3 here
-        assertLevel0Neighbors(builder.graph, 1, 0, 3);
-        assertLevel0Neighbors(builder.graph, 2, 0);
-        assertLevel0Neighbors(builder.graph, 3, 1);
+        assertNeighbors(builder.graph, 1, 0, 3);
+        assertNeighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 3, 1);
 
         // supplant an existing neighbor
         builder.addGraphNode(4, vectors);
         // 4 is the same distance from 0 that 2 is; we leave the existing node in place
-        assertLevel0Neighbors(builder.graph, 0, 1, 2);
-        assertLevel0Neighbors(builder.graph, 1, 0, 3, 4);
-        assertLevel0Neighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 0, 1, 2);
+        assertNeighbors(builder.graph, 1, 0, 3, 4);
+        assertNeighbors(builder.graph, 2, 0);
         // 1 survives the diversity check
-        assertLevel0Neighbors(builder.graph, 3, 1, 4);
-        assertLevel0Neighbors(builder.graph, 4, 1, 3);
+        assertNeighbors(builder.graph, 3, 1, 4);
+        assertNeighbors(builder.graph, 4, 1, 3);
 
         builder.addGraphNode(5, vectors);
-        assertLevel0Neighbors(builder.graph, 0, 1, 2);
-        assertLevel0Neighbors(builder.graph, 1, 0, 3, 4, 5);
-        assertLevel0Neighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 0, 1, 2);
+        assertNeighbors(builder.graph, 1, 0, 3, 4, 5);
+        assertNeighbors(builder.graph, 2, 0);
         // even though 5 is closer, 3 is not a neighbor of 5, so no update to *its* neighbors occurs
-        assertLevel0Neighbors(builder.graph, 3, 1, 4);
-        assertLevel0Neighbors(builder.graph, 4, 1, 3, 5);
-        assertLevel0Neighbors(builder.graph, 5, 1, 4);
+        assertNeighbors(builder.graph, 3, 1, 4);
+        assertNeighbors(builder.graph, 4, 1, 3, 5);
+        assertNeighbors(builder.graph, 5, 1, 4);
     }
 
     @Test
@@ -274,18 +274,18 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
         builder.addGraphNode(2, vectors);
-        assertLevel0Neighbors(builder.graph, 0, 1, 2);
+        assertNeighbors(builder.graph, 0, 1, 2);
         // 2 is closer to 0 than 1, so it is excluded as non-diverse
-        assertLevel0Neighbors(builder.graph, 1, 0);
+        assertNeighbors(builder.graph, 1, 0);
         // 1 is closer to 0 than 2, so it is excluded as non-diverse
-        assertLevel0Neighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 2, 0);
 
         builder.addGraphNode(3, vectors);
         // this is one case we are testing; 2 has been displaced by 3
-        assertLevel0Neighbors(builder.graph, 0, 1, 3);
-        assertLevel0Neighbors(builder.graph, 1, 0);
-        assertLevel0Neighbors(builder.graph, 2, 0);
-        assertLevel0Neighbors(builder.graph, 3, 0);
+        assertNeighbors(builder.graph, 0, 1, 3);
+        assertNeighbors(builder.graph, 1, 0);
+        assertNeighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 3, 0);
     }
 
     @Test
@@ -306,21 +306,21 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
         builder.addGraphNode(2, vectors);
-        assertLevel0Neighbors(builder.graph, 0, 1, 2);
+        assertNeighbors(builder.graph, 0, 1, 2);
         // 2 is closer to 0 than 1, so it is excluded as non-diverse
-        assertLevel0Neighbors(builder.graph, 1, 0);
+        assertNeighbors(builder.graph, 1, 0);
         // 1 is closer to 0 than 2, so it is excluded as non-diverse
-        assertLevel0Neighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 2, 0);
 
         builder.addGraphNode(3, vectors);
         // this is one case we are testing; 1 has been displaced by 3
-        assertLevel0Neighbors(builder.graph, 0, 2, 3);
-        assertLevel0Neighbors(builder.graph, 1, 0, 3);
-        assertLevel0Neighbors(builder.graph, 2, 0);
-        assertLevel0Neighbors(builder.graph, 3, 0, 1);
+        assertNeighbors(builder.graph, 0, 2, 3);
+        assertNeighbors(builder.graph, 1, 0, 3);
+        assertNeighbors(builder.graph, 2, 0);
+        assertNeighbors(builder.graph, 3, 0, 1);
     }
 
-    private void assertLevel0Neighbors(OnHeapGraphIndex<T> graph, int node, int... expected) {
+    private void assertNeighbors(OnHeapGraphIndex<T> graph, int node, int... expected) {
         Arrays.sort(expected);
         ConcurrentNeighborSet nn = graph.getNeighbors(node);
         Iterator<Integer> it = nn.iterator();

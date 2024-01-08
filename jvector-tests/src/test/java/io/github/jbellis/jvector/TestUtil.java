@@ -133,10 +133,10 @@ public class TestUtil {
     }
 
     static List<Integer> sortedNodes(GraphIndex<?> h) {
-          var nodesOnLevel = h.getNodes();
+          var graphNodes = h.getNodes();
           List<Integer> nodes = new ArrayList<>();
-          while (nodesOnLevel.hasNext()) {
-              nodes.add(nodesOnLevel.next());
+          while (graphNodes.hasNext()) {
+              nodes.add(graphNodes.next());
           }
           Collections.sort(nodes);
           return nodes;
@@ -152,7 +152,7 @@ public class TestUtil {
                        g.size(),
                        h.size());
 
-          // assert equal nodes on each level
+          // assert equal nodes in each graph
           List<Integer> hNodes = sortedNodes(h);
           List<Integer> gNodes = sortedNodes(g);
           assertEquals(String.format("nodes in the graphs are different:%n%s%n%s",
@@ -161,12 +161,12 @@ public class TestUtil {
                        gNodes,
                        hNodes);
 
-          // assert equal nodes' neighbours on each level
-          NodesIterator nodesOnLevel = g.getNodes();
+          // assert equal nodes' neighbours in each graph
+          NodesIterator gNodesIterator = g.getNodes();
           var gv = g.getView();
           var hv = h.getView();
-          while (nodesOnLevel.hasNext()) {
-              int node = nodesOnLevel.nextInt();
+          while (gNodesIterator.hasNext()) {
+              int node = gNodesIterator.nextInt();
               assertEqualsLazy(() -> String.format("arcs differ for node %d%n%s%n%s",
                                                    node,
                                                    prettyG,

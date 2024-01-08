@@ -43,10 +43,10 @@ public interface GraphIndex<T> extends AutoCloseable {
     int size();
 
     /**
-     * Get all nodes on a given level as node 0th ordinals. The nodes are NOT guaranteed to be
+     * Get all node ordinals included in the graph. The nodes are NOT guaranteed to be
      * presented in any particular order.
      *
-     * @return an iterator over nodes where {@code nextInt} returns a next node on the level.
+     * @return an iterator over nodes where {@code nextInt} returns the next node.
      */
     NodesIterator getNodes();
 

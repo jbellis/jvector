@@ -1,3 +1,11 @@
+# Upgrading from 2.0.x to 3.0.x
+
+## Primary API changes
+
+## Other changes to public classes
+
+- `OnHeapGraphIndex::ramBytesUsedOneNode` no longer takes an `int nodeLevel` parameter
+
 # Upgrading from 1.0.x to 2.0.x
 
 ## New features
