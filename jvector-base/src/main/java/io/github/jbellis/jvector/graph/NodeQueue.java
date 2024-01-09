@@ -27,6 +27,8 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 
+import java.util.stream.IntStream;
+
 /**
  * NodeQueue uses a {@link io.github.jbellis.jvector.util.AbstractLongHeap} to store lists of nodes in a graph,
  * represented as a node id with an associated score packed together as a sortable long, which is sorted
@@ -135,14 +137,12 @@ public class NodeQueue {
         return nodes;
     }
 
-    public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.ExactScoreFunction sf) {
-        int size = size();
-        SearchResult.NodeScore[] ns = new SearchResult.NodeScore[size];
-        for (int i = 0; i < size; i++) {
-            var node = decodeNodeId(heap.get(i + 1));
-            ns[i] = new SearchResult.NodeScore(node, sf.similarityTo(node));
-        }
-        return ns;
+    public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.ExactScoreFunction sf, float rerankFloor) {
+        return IntStream.range(0, size())
+                .mapToObj(i -> heap.get(i + 1))
+                .filter(m -> decodeScore(m) >= rerankFloor)
+                .map(m -> new SearchResult.NodeScore(decodeNodeId(m), sf.similarityTo(decodeNodeId(m))))
+                .toArray(SearchResult.NodeScore[]::new);
     }
 
     /** Returns the top element's node id. */
