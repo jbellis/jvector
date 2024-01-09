@@ -247,7 +247,8 @@ public class GraphIndexBuilder<T> {
                         var notSelfBits = createNotSelfBits(node);
                         var value = v1.get().vectorValue(node);
                         NodeSimilarity.ExactScoreFunction scoreFunction = i1 -> scoreBetween(v2.get().vectorValue(i1), value);
-                        var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits).getNodes();
+                        int ep = graph.entry();
+                        var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, notSelfBits).getNodes();
                         // connect this node to the closest neighbor that hasn't already been used as a connection target
                         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
                         // overwritten by the next node to need reconnection if we don't enforce uniqueness)
@@ -325,7 +326,7 @@ public class GraphIndexBuilder<T> {
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, ep, bits);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
 
             // Update neighbors with these candidates.
             // The DiskANN paper calls for using the entire set of visited nodes along the search path as
@@ -395,7 +396,7 @@ public class GraphIndexBuilder<T> {
             int ep = graph.entry();
             NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), value);
             var bits = new ExcludingBits(node);
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, ep, bits);
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
             var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
             updateNeighbors(graph.getNeighbors(node), natural, NodeArray.EMPTY);
         }
@@ -494,7 +495,8 @@ public class GraphIndexBuilder<T> {
         {
             var value = v1.get().vectorValue(node);
             NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(v2.get().vectorValue(i), value);
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), notSelfBits);
+            int ep = graph.entry();
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
             var candidates = toScratchCandidates(result.getNodes(), result.getNodes().length, scratch.get());
             // We use just the topK results as candidates, which is much less expensive than computing scores for
             // the other visited nodes.  See comments in addGraphNode.
@@ -538,7 +540,8 @@ public class GraphIndexBuilder<T> {
 
             // search for the node closest to the centroid
             NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.get().vectorValue(i), (T) centroid);
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, graph.entry(), Bits.ALL);
+            int ep = graph.entry();
+            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
             return result.getNodes()[0].node;
         }
     }

@@ -184,16 +184,6 @@ public class GraphSearcher<T> {
         return search(scoreFunction, reRanker, topK, 0.0f, acceptOrds);
     }
 
-    SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
-                                NodeSimilarity.ReRanker reRanker,
-                                int topK,
-                                float threshold,
-                                int ep,
-                                Bits acceptOrds)
-    {
-        return searchInternal(scoreFunction, reRanker, topK, threshold, 0, ep, acceptOrds);
-    }
-
     /**
      * Add the closest neighbors found to a priority queue (heap). These are returned in
      * proximity order -- the closest neighbor of the topK found, i.e. the one with the highest
