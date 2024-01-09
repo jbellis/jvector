@@ -112,11 +112,17 @@ public class GraphSearcher<T> {
      * @param scoreFunction   a function returning the similarity of a given node to the query vector
      * @param reRanker        if scoreFunction is approximate, this should be non-null and perform exact
      *                        comparisons of the vectors for re-ranking at the end of the search.
-     * @param topK            the number of results to look for
-     * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. (Experimental!)
-     * @param rerankFloor     (Experimental!) Candidates whose approximate similarity is below this value
-     *                        will not be reranked with the exact score (which requires loading the raw vector).
-     *                        This is intended for use when your dataset is split across multiple indices.
+     * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
+     *                        `topK` results have been found, or until the entire graph has been searched.
+     * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
+     *                        with a large topK to find (approximately) all nodes above the given threshold.
+     *                        If threshold > 0 then the search will stop when it is probabilistically unlikely
+     *                        to find more nodes above the threshold, even if `topK` results have not yet been found.
+     * @param rerankFloor     (Experimental!) Candidates whose approximate similarity is at least this value
+     *                        will not be reranked with the exact score (which requires loading the raw vector)
+     *                        and included in the final results.  (Potentially leaving fewer than topK entries
+     *                        in the results.)  Other candidates will be discarded.  This is intended for use
+     *                        when combining results from multiple indexes.
      * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
      *                        If {@link Bits#ALL}, all nodes are acceptable.
      *                        It is caller's responsibility to ensure that there are enough acceptable nodes
@@ -134,18 +140,21 @@ public class GraphSearcher<T> {
     }
 
     /**
-     * @param scoreFunction a function returning the similarity of a given node to the query vector
-     * @param reRanker      if scoreFunction is approximate, this should be non-null and perform exact
-     *                      comparisons of the vectors for re-ranking at the end of the search.
-     * @param topK          the number of results to look for
-     * @param threshold     the minimum similarity (0..1) to accept; 0 will accept everything. (Experimental!)
-     * @param acceptOrds    a Bits instance indicating which nodes are acceptable results.
-     *                      If {@link Bits#ALL}, all nodes are acceptable.
-     *                      It is caller's responsibility to ensure that there are enough acceptable nodes
-     *                      that we don't search the entire graph trying to satisfy topK.
+     * @param scoreFunction   a function returning the similarity of a given node to the query vector
+     * @param reRanker        if scoreFunction is approximate, this should be non-null and perform exact
+     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
+     *                        `topK` results have been found, or until the entire graph has been searched.
+     * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
+     *                        with a large topK to find (approximately) all nodes above the given threshold.
+     *                        If threshold > 0 then the search will stop when it is probabilistically unlikely
+     *                        to find more nodes above the threshold, even if `topK` results have not yet been found.
+     * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
+     *                        If {@link Bits#ALL}, all nodes are acceptable.
+     *                        It is caller's responsibility to ensure that there are enough acceptable nodes
+     *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    @Experimental
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
                                NodeSimilarity.ReRanker reRanker,
                                int topK,
@@ -156,14 +165,15 @@ public class GraphSearcher<T> {
 
 
     /**
-     * @param scoreFunction a function returning the similarity of a given node to the query vector
-     * @param reRanker      if scoreFunction is approximate, this should be non-null and perform exact
-     *                      comparisons of the vectors for re-ranking at the end of the search.
-     * @param topK          the number of results to look for
-     * @param acceptOrds    a Bits instance indicating which nodes are acceptable results.
-     *                      If {@link Bits#ALL}, all nodes are acceptable.
-     *                      It is caller's responsibility to ensure that there are enough acceptable nodes
-     *                      that we don't search the entire graph trying to satisfy topK.
+     * @param scoreFunction   a function returning the similarity of a given node to the query vector
+     * @param reRanker        if scoreFunction is approximate, this should be non-null and perform exact
+     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
+     *                        `topK` results have been found, or until the entire graph has been searched.
+     * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
+     *                        If {@link Bits#ALL}, all nodes are acceptable.
+     *                        It is caller's responsibility to ensure that there are enough acceptable nodes
+     *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
