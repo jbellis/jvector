@@ -7,7 +7,8 @@
   it easy to make apples-to-apples comparisons with Lucene HNSW graphs.)  So,
   if you were building a graph of M=16 with JVector2, you should build it with M=32
   with JVector3.
-- `NodeSimilarity.ReRanker` api has changed.  The interface is no longer parameterized,
+- `NodeSimilarity.ReRanker` renamed to `Reranker`
+- `NodeSimilarity.Reranker` api has changed.  The interface is no longer parameterized,
   and the `similarityTo` method no longer takes a Map parameter (provided by `search` with
   the full vectors associated with the nodes returned).  This is because we discovered that
   (in contrast with the original DiskANN design) it is more performant to read vectors lazily 
