@@ -207,21 +207,39 @@ public class GraphSearcher<T> {
             throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
         }
 
+        // save search parameters for potential later resume
         this.scoreFunction = scoreFunction;
         this.reranker = reranker;
+        this.acceptOrds = Bits.intersectionOf(rawAcceptOrds, view.liveNodes());
 
-        prepareScratchState(view.size());
+        // reset the scratch data structures
+        int capacity = view.size();
+        evictedResults.clear();
+        candidates.clear();
+        if (visited.length() < capacity) {
+            // this happens during graph construction; otherwise the size of the vector values should
+            // be constant, and it will be a SparseFixedBitSet instead of FixedBitSet
+            if (!(visited instanceof GrowableBitSet)) {
+                throw new IllegalArgumentException(
+                        String.format("Unexpected visited type: %s. Encountering this means that the graph changed " +
+                                              "while being searched, and the Searcher was not built withConcurrentUpdates()",
+                                      visited.getClass().getName()));
+            }
+            // else GrowableBitSet knows how to grow itself safely
+        }
+        visited.clear();
+
+        // no entry point -> empty results
         if (ep < 0) {
             return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
         }
 
-        this.acceptOrds = Bits.intersectionOf(rawAcceptOrds, view.liveNodes());
-
+        // kick off the actual search at the entry point
         float score = scoreFunction.similarityTo(ep);
         visited.set(ep);
         candidates.push(ep, score);
-
         var sr = resume(topK, threshold, rerankFloor);
+
         // include the entry node in visitedCount
         return new SearchResult(sr.getNodes(), sr.getVisited(), sr.getVisitedCount() + 1);
     }
@@ -267,9 +285,11 @@ public class GraphSearcher<T> {
                 break;
             }
 
-            // add the top candidate to the resultset if it qualifies, and update minAcceptedSimilarity
+            // process the top candidate
             int topCandidateNode = candidates.pop();
             if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
+                // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
+                // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
                 boolean added;
                 if (resultsQueue.size() < additionalK) {
                     resultsQueue.push(topCandidateNode, topCandidateScore);
@@ -283,6 +303,8 @@ public class GraphSearcher<T> {
                 } else {
                     added = false;
                 }
+
+                // update minAcceptedSimilarity if we've found K results
                 if (added && resultsQueue.size() >= additionalK) {
                     minAcceptedSimilarity = resultsQueue.topScore();
                 }
@@ -345,20 +367,4 @@ public class GraphSearcher<T> {
         return nodes;
     }
 
-    private void prepareScratchState(int capacity) {
-        evictedResults.clear();
-        candidates.clear();
-        if (visited.length() < capacity) {
-            // this happens during graph construction; otherwise the size of the vector values should
-            // be constant, and it will be a SparseFixedBitSet instead of FixedBitSet
-            if (!(visited instanceof GrowableBitSet)) {
-                throw new IllegalArgumentException(
-                        String.format("Unexpected visited type: %s. Encountering this means that the graph changed " +
-                                              "while being searched, and the Searcher was not built withConcurrentUpdates()",
-                                      visited.getClass().getName()));
-            }
-            // else GrowableBitSet knows how to grow itself safely
-        }
-        visited.clear();
-    }
 }
