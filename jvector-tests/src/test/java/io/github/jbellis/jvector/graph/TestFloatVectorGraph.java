@@ -26,12 +26,18 @@ package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Before;
+import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -111,5 +117,42 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
         // We still expect to get reasonable recall. The lowest non-skipped docIds
         // are closest to the query vector: sum(500,509) = 5045
         assertTrue("sum(result docs)=" + sum, sum < 5100);
+    }
+
+    @Test
+    // build a random graph and check that resuming a search finds the same nodes as an equivalent from-search search
+    // this test is float-specific because random byte vectors are far more likely to have tied similarities,
+    // which throws off our assumption that resume picks back up with the same state that the original search
+    // left off in (because evictedResults from the first search may not end up in the same order in the
+    // candidates queue)
+    public void testResume() {
+        int size = 1000;
+        int dim = 2;
+        var vectors = vectorValues(size, dim);
+        var builder = new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 20, 30, 1.0f, 1.4f);
+        var graph = builder.build();
+        Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
+
+        int initialTopK = 10;
+        int resumeTopK = 15;
+        var query = randomVector(dim);
+        var searcher = new GraphSearcher.Builder<>(graph.getView()).build();
+
+        var initial = searcher.search(getScoreFunction(query, vectors), null, initialTopK, acceptOrds);
+        assertEquals(initialTopK, initial.getNodes().length);
+
+        var resumed = searcher.resume(resumeTopK);
+        assertEquals(resumeTopK, resumed.getNodes().length);
+
+        var expected = searcher.search(getScoreFunction(query, vectors), null, initialTopK + resumeTopK, acceptOrds);
+        assertEquals(expected.getVisitedCount(), initial.getVisitedCount() + resumed.getVisitedCount());
+        assertEquals(expected.getNodes().length, initial.getNodes().length + resumed.getNodes().length);
+        var initialResumedResults = Stream.concat(Arrays.stream(initial.getNodes()), Arrays.stream(resumed.getNodes()))
+                .sorted(Comparator.comparingDouble(ns -> -ns.score))
+                .collect(Collectors.toList());
+        var expectedResults = List.of(expected.getNodes());
+        for (int i = 0; i < expectedResults.size(); i++) {
+            assertEquals(expectedResults.get(i).score, initialResumedResults.get(i).score, 1E-6);
+        }
     }
 }
