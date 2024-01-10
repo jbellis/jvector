@@ -266,10 +266,12 @@ public class GraphSearcher<T> {
         var scoreTracker = threshold > 0 ? new ScoreTracker.NormalDistributionTracker(threshold) : ScoreTracker.NO_OP;
 
         // add evicted results from the last call back to the candidates
+        var previouslyEvicted = evictedResults.size() > 0 ? new GrowableBitSet(view.size()) : Bits.NONE;
         while (evictedResults.size() > 0) {
             float score = evictedResults.topScore();
             int node = evictedResults.pop();
             candidates.push(node, score);
+            ((GrowableBitSet) previouslyEvicted).set(node);
         }
         evictedResults.clear();
 
@@ -308,6 +310,11 @@ public class GraphSearcher<T> {
                 if (added && resultsQueue.size() >= additionalK) {
                     minAcceptedSimilarity = resultsQueue.topScore();
                 }
+            }
+
+            // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
+            if (previouslyEvicted.get(topCandidateNode)) {
+                continue;
             }
 
             // add its neighbors to the candidates queue
