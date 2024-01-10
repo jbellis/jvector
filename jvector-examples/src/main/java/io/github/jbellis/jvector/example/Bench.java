@@ -31,7 +31,6 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -166,7 +165,7 @@ public class Bench {
                 if (cv != null) {
                     var view = index.getView();
                     NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-                    NodeSimilarity.ReRanker rr = (j) -> ds.similarityFunction.compare(queryVector, exactVv.vectorValue(j));
+                    NodeSimilarity.Reranker rr = (j) -> ds.similarityFunction.compare(queryVector, exactVv.vectorValue(j));
                     sr = new GraphSearcher.Builder<>(view)
                             .build()
                             .search(sf, rr, efSearch, Bits.ALL);

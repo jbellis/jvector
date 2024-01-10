@@ -57,7 +57,7 @@ public class GraphSearcher<T> {
 
     // Search parameters that we save here for use by resume()
     private NodeSimilarity.ScoreFunction scoreFunction;
-    private NodeSimilarity.ReRanker reranker;
+    private NodeSimilarity.Reranker reranker;
     private Bits acceptOrds;
 
     /**
@@ -115,7 +115,7 @@ public class GraphSearcher<T> {
 
     /**
      * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reRanker        if scoreFunction is approximate, this should be non-null and perform exact
+     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
      *                        comparisons of the vectors for re-ranking at the end of the search.
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
@@ -136,17 +136,17 @@ public class GraphSearcher<T> {
      */
     @Experimental
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.ReRanker reRanker,
+                               NodeSimilarity.Reranker reranker,
                                int topK,
                                float threshold,
                                float rerankFloor,
                                Bits acceptOrds) {
-        return searchInternal(scoreFunction, reRanker, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
+        return searchInternal(scoreFunction, reranker, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
     }
 
     /**
      * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reRanker        if scoreFunction is approximate, this should be non-null and perform exact
+     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
      *                        comparisons of the vectors for re-ranking at the end of the search.
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
@@ -161,17 +161,17 @@ public class GraphSearcher<T> {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.ReRanker reRanker,
+                               NodeSimilarity.Reranker reranker,
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
-        return search(scoreFunction, reRanker, topK, threshold, 0.0f, acceptOrds);
+        return search(scoreFunction, reranker, topK, threshold, 0.0f, acceptOrds);
     }
 
 
     /**
      * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reRanker        if scoreFunction is approximate, this should be non-null and perform exact
+     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
      *                        comparisons of the vectors for re-ranking at the end of the search.
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
@@ -182,18 +182,18 @@ public class GraphSearcher<T> {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.ReRanker reRanker,
+                               NodeSimilarity.Reranker reranker,
                                int topK,
                                Bits acceptOrds)
     {
-        return search(scoreFunction, reRanker, topK, 0.0f, acceptOrds);
+        return search(scoreFunction, reranker, topK, 0.0f, acceptOrds);
     }
 
     /**
      * Set up the state for a new search and kick it off
      */
     SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
-                                NodeSimilarity.ReRanker reranker,
+                                NodeSimilarity.Reranker reranker,
                                 int topK,
                                 float threshold,
                                 float rerankFloor,
@@ -347,7 +347,7 @@ public class GraphSearcher<T> {
      * Empty resultsQueue and rerank its contents, if necessary, and return them in sorted order.
      */
     private static SearchResult.NodeScore[] extractScores(NodeSimilarity.ScoreFunction sf,
-                                                          NodeSimilarity.ReRanker reRanker,
+                                                          NodeSimilarity.Reranker reranker,
                                                           NodeQueue resultsQueue,
                                                           float rerankFloor)
     {
@@ -360,7 +360,7 @@ public class GraphSearcher<T> {
                 nodes[i] = new SearchResult.NodeScore(n, nScore);
             }
         } else {
-            nodes = resultsQueue.nodesCopy(reRanker::similarityTo, rerankFloor);
+            nodes = resultsQueue.nodesCopy(reranker::similarityTo, rerankFloor);
             Arrays.sort(nodes, 0, nodes.length, Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
             resultsQueue.clear();
         }
