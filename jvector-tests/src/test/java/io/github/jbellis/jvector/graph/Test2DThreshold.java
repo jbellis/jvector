@@ -90,7 +90,7 @@ public class Test2DThreshold extends LuceneTestCase {
         float[][] vectors = new float[10000][2];
         for (int i = 0; i < vectors.length; i++) {
             vectors[i][0] = biasedFloatBetween(-90f,90f);
-            vectors[i][1] = biasedFloatBetween(-180f, 180f);
+            vectors[i][1] = biasedFloatBetween(-180f,180f);
         }
 
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
@@ -123,6 +123,9 @@ public class Test2DThreshold extends LuceneTestCase {
                 var result = searcher.search(asf, null, vectors.length, tp.th, Bits.ALL);
 
                 assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
+                assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length
+                        + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount
+                        + " visited " + result.getVisitedCount();
             }
         }
     }
@@ -135,7 +138,13 @@ public class Test2DThreshold extends LuceneTestCase {
         float[] q;
         float th;
         do {
-            q = new float[]{R.nextFloat(), R.nextFloat()};
+            if (similarityFunction == VectorSimilarityFunction.HAVERSINE) {
+                q = new float[]{biasedFloatBetween(-90f,90f), biasedFloatBetween(-180f,180f)};
+            } else if (similarityFunction == VectorSimilarityFunction.EUCLIDEAN) {
+                q = new float[]{R.nextFloat(), R.nextFloat()};
+            } else {
+                throw new IllegalArgumentException("unsupported similarity function " + similarityFunction);
+            }
             th = (float) (0.2 + 0.8 * R.nextDouble());
             float[] finalQ = q;
             float finalTh = th;
