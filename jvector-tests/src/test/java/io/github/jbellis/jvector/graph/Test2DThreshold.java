@@ -79,6 +79,9 @@ public class Test2DThreshold extends LuceneTestCase {
                 var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
 
                 assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
+                assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length
+                        + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount
+                        + " visited " + result.getVisitedCount();
             }
         }
 
@@ -89,8 +92,8 @@ public class Test2DThreshold extends LuceneTestCase {
         // generate 2D vectors
         float[][] vectors = new float[10000][2];
         for (int i = 0; i < vectors.length; i++) {
-            vectors[i][0] = biasedFloatBetween(-90f,90f);
-            vectors[i][1] = biasedFloatBetween(-180f,180f);
+            vectors[i][0] = randomFloatBetween(-90, 90);
+            vectors[i][1] = randomFloatBetween(-180, 180);
         }
 
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
@@ -130,6 +133,10 @@ public class Test2DThreshold extends LuceneTestCase {
         }
     }
 
+    private float randomFloatBetween(float min, float max) {
+        return min + (max - min) * randomFloat();
+    }
+
     // it's not an interesting test if all the vectors are within the threshold
     private TestParams createTestParams(float[][] vectors, VectorSimilarityFunction similarityFunction) {
         var R = getRandom();
@@ -139,13 +146,16 @@ public class Test2DThreshold extends LuceneTestCase {
         float th;
         do {
             if (similarityFunction == VectorSimilarityFunction.HAVERSINE) {
-                q = new float[]{biasedFloatBetween(-90f,90f), biasedFloatBetween(-180f,180f)};
+                // Distance from 1 meter to 100 km.
+                float distance = randomFloatBetween(1, 100000);
+                q = new float[]{randomFloatBetween(-90f,90f), randomFloatBetween(-180f,180f)};
+                th = 1f / (1f + distance);
             } else if (similarityFunction == VectorSimilarityFunction.EUCLIDEAN) {
                 q = new float[]{R.nextFloat(), R.nextFloat()};
+                th = (float) (0.2 + 0.8 * R.nextDouble());
             } else {
                 throw new IllegalArgumentException("unsupported similarity function " + similarityFunction);
             }
-            th = (float) (0.2 + 0.8 * R.nextDouble());
             float[] finalQ = q;
             float finalTh = th;
             exactCount = Arrays.stream(vectors).filter(v -> similarityFunction.compare(finalQ, v) >= finalTh).count();
