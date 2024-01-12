@@ -21,19 +21,27 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.github.jbellis.jvector.vector.VectorSimilarityFunction.EUCLIDEAN;
 import static java.lang.Math.abs;
 import static java.lang.Math.log;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestCompressedVectors extends RandomizedTest {
@@ -132,5 +140,58 @@ public class TestCompressedVectors extends RandomizedTest {
     @Test
     public void testCenteringDisturbance() {
 
+    }
+
+    @Test
+    public void testEncodeAllToOffHeapAndSaveLoadBQ() throws IOException {
+        int dim = randomIntBetween(16, 768);
+        int pqFactor = randomIntBetween(2, 10);
+        List<float[]> vectors = createRandomVectors(randomIntBetween(1000, 10000), dim);
+        var pqDims = Math.max(4, dim / pqFactor);
+        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, dim), pqDims, false);
+        byte[][] compressedVectors = pq.encodeAll(vectors);
+
+        ByteBuffer cv = ByteBuffer.allocateDirect(compressedVectors.length * compressedVectors[0].length).order(ByteOrder.LITTLE_ENDIAN);
+        for (byte[] bytes : compressedVectors) {
+            cv.put(bytes);
+        }
+        cv.flip();
+
+        ByteBuffer offHeapCv = pq.encodeAllToOffHeap(vectors, PhysicalCoreExecutor.pool());
+        assertEquals(offHeapCv.limit(), cv.limit());
+        for (int i = 0; i < offHeapCv.limit(); i++) {
+            assertEquals(offHeapCv.get(i), cv.get(i));
+        }
+
+        PQVectors pqVectorsHeap1 = new PQVectors(pq, compressedVectors);
+        PQVectors pqVectorsHeap2;
+        File cvFile = File.createTempFile("pq_off_heap_test", ".cv");
+        try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+            pqVectorsHeap1.write(out);
+        }
+        try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+            pqVectorsHeap2 = PQVectors.load(in, 0);
+            assertEquals(pqVectorsHeap1, pqVectorsHeap2);
+        }
+
+        PQVectors pqVectorsOffHeap1 = new PQVectors(pq, offHeapCv, vectors.size());
+        PQVectors pqVectorsOffHeap2;
+        File cvFile2 = File.createTempFile("pq_off_heap_test", ".cv");
+        try (var out = new DataOutputStream(new FileOutputStream(cvFile2))) {
+            pqVectorsOffHeap1.write(out);
+        }
+        try (var in = new SimpleMappedReader(cvFile2.getAbsolutePath())) {
+            pqVectorsOffHeap2 = PQVectors.load(in, 0,true);
+            assertEquals(pqVectorsOffHeap1, pqVectorsOffHeap2);
+        }
+
+        float[] queryVector = TestUtil.randomVector(getRandom(), dim);
+        NodeSimilarity.ApproximateScoreFunction heapScoreFunction = pqVectorsHeap2.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.DOT_PRODUCT);
+        NodeSimilarity.ApproximateScoreFunction offHeapScoreFunction = pqVectorsOffHeap2.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.DOT_PRODUCT);
+        for (int i = 0; i < vectors.size(); i++) {
+            float score1 = heapScoreFunction.similarityTo(i);
+            float score2 = offHeapScoreFunction.similarityTo(i);
+            assertEquals(score1, score2, 0.0001);
+        }
     }
 }

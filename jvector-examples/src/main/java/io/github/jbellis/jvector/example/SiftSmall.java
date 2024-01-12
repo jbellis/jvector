@@ -69,7 +69,7 @@ public class SiftSmall {
             onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex<>(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
-            testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
+            testRecallInternal(onDiskGraph, ravv, queryVectors, groundTruth, compressedVectors);
         } finally {
             if (onDiskGraph!= null) {
                 onDiskGraph.close();

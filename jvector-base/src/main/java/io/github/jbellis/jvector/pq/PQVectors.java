@@ -19,23 +19,44 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
+import io.github.jbellis.jvector.util.UnsafeUtils;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Objects;
 
 public class PQVectors implements CompressedVectors {
     final ProductQuantization pq;
     private final byte[][] compressedVectors;
+    private final ByteBuffer compressedBuffer;
+    private final long cbOffHeapAddress;
+    private final int vectorsSize;
+    private final int vectorDim;
     private final ThreadLocal<float[]> partialSums; // for dot product, euclidean, and cosine
     private final ThreadLocal<float[]> partialMagnitudes; // for cosine
 
-    public PQVectors(ProductQuantization pq, byte[][] compressedVectors)
-    {
-        this.pq = pq;
+    public PQVectors(ProductQuantization pq, byte[][] compressedVectors) {
+        this.vectorsSize = compressedVectors.length;
+        this.vectorDim = compressedVectors[0].length;
+        this.compressedBuffer = null;
+        this.cbOffHeapAddress = -1;
         this.compressedVectors = compressedVectors;
+        this.pq = pq;
+        this.partialSums = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
+        this.partialMagnitudes = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
+    }
+
+    public PQVectors(ProductQuantization pq, ByteBuffer compressedVectors, int vectorsSize) {
+        this.vectorsSize = vectorsSize;
+        this.vectorDim = compressedVectors.limit() / vectorsSize;
+        this.compressedBuffer = compressedVectors;
+        this.cbOffHeapAddress = UnsafeUtils.getDirectBufferAddress(this.compressedBuffer);
+        this.compressedVectors = null;
+        this.pq = pq;
         this.partialSums = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
         this.partialMagnitudes = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
     }
@@ -47,14 +68,31 @@ public class PQVectors implements CompressedVectors {
         pq.write(out);
 
         // compressed vectors
-        out.writeInt(compressedVectors.length);
+        out.writeInt(vectorsSize);
         out.writeInt(pq.getSubspaceCount());
-        for (var v : compressedVectors) {
-            out.write(v);
+
+        if (compressedVectors != null) {
+            for (var v : compressedVectors) {
+                out.write(v);
+            }
+        } else {
+            compressedBuffer.position(0);
+            int chunkSize = 4 * 1024 * 1024;
+            byte[] chunk = new byte[chunkSize];
+            while (compressedBuffer.hasRemaining()) {
+                int remaining = compressedBuffer.remaining();
+                int readSize = Math.min(remaining, chunkSize);
+                compressedBuffer.get(chunk, 0, readSize);
+                out.write(chunk, 0, readSize);
+            }
         }
     }
 
-    public static CompressedVectors load(RandomAccessReader in, long offset) throws IOException
+    public static PQVectors load(RandomAccessReader in, long offset) throws IOException {
+        return load(in, offset, false);
+    }
+
+    public static PQVectors load(RandomAccessReader in, long offset, boolean offHeap) throws IOException
     {
         in.seek(offset);
 
@@ -66,21 +104,31 @@ public class PQVectors implements CompressedVectors {
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
-        var compressedVectors = new byte[size][];
 
         int compressedDimension = in.readInt();
         if (compressedDimension < 0) {
             throw new IOException("Invalid compressed vector dimension " + compressedDimension);
         }
 
-        for (int i = 0; i < size; i++)
-        {
+        if (offHeap) {
+            ByteBuffer cv = ByteBuffer.allocateDirect(compressedDimension * size).order(ByteOrder.LITTLE_ENDIAN);
             byte[] vector = new byte[compressedDimension];
-            in.readFully(vector);
-            compressedVectors[i] = vector;
-        }
+            for (int i = 0; i < size; i++) {
+                in.readFully(vector);
+                cv.put(vector);
+            }
+            cv.flip();
+            return new PQVectors(pq, cv, size);
 
-        return new PQVectors(pq, compressedVectors);
+        } else {
+            var compressedVectors = new byte[size][];
+            for (int i = 0; i < size; i++) {
+                byte[] vector = new byte[compressedDimension];
+                in.readFully(vector);
+                compressedVectors[i] = vector;
+            }
+            return new PQVectors(pq, compressedVectors);
+        }
     }
 
     @Override
@@ -90,13 +138,24 @@ public class PQVectors implements CompressedVectors {
 
         PQVectors that = (PQVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
-        if (compressedVectors.length != that.compressedVectors.length) return false;
-        return Arrays.deepEquals(compressedVectors, that.compressedVectors);
+        if (compressedBuffer != null) {
+            if (compressedBuffer.limit() != that.compressedBuffer.limit()) {
+                return false;
+            }
+            for (int i = 0; i < compressedBuffer.limit(); i++) {
+                if (compressedBuffer.get(i) != that.compressedBuffer.get(i)) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            return Arrays.deepEquals(compressedVectors, that.compressedVectors);
+        }
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pq, Arrays.deepHashCode(compressedVectors));
+        return Objects.hash(pq, Arrays.deepHashCode(compressedVectors), compressedBuffer);
     }
 
     @Override
@@ -114,7 +173,12 @@ public class PQVectors implements CompressedVectors {
     }
 
     byte[] get(int ordinal) {
-        return compressedVectors[ordinal];
+        if (compressedVectors != null) {
+            return compressedVectors[ordinal];
+        }
+        byte[] bytes = new byte[vectorDim];
+        UnsafeUtils.getBytes(this.cbOffHeapAddress + (long) ordinal * vectorDim, bytes, 0, vectorDim);
+        return bytes;
     }
 
     float[] reusablePartialSums() {
@@ -138,7 +202,10 @@ public class PQVectors implements CompressedVectors {
     @Override
     public long ramBytesUsed() {
         long codebooksSize = pq.memorySize();
-        long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors[0]);
-        return codebooksSize + (compressedVectorSize * compressedVectors.length);
+        if (compressedVectors != null) {
+            long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors[0]);
+            return codebooksSize + (compressedVectorSize * compressedVectors.length);
+        }
+        return codebooksSize + compressedBuffer.limit();
     }
 }

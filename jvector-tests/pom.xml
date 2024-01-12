@@ -84,6 +84,7 @@
                             <argLine>
                                 --add-modules=jdk.incubator.vector
                                 --enable-preview
+                                --add-opens java.base/java.nio=ALL-UNNAMED
                             </argLine>
                             <skip>${skipJdk20Tests}</skip>
                         </configuration>

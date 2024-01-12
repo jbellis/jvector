@@ -22,10 +22,13 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
+import io.github.jbellis.jvector.util.UnsafeUtils;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -141,6 +144,17 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     @Override
     public byte[][] encodeAll(List<float[]> vectors, ForkJoinPool simdExecutor) {
         return simdExecutor.submit(() ->vectors.stream().parallel().map(this::encode).toArray(byte[][]::new)).join();
+    }
+
+    public ByteBuffer encodeAllToOffHeap(List<float[]> vectors, ForkJoinPool simdExecutor) {
+        int size = vectors.size();
+        ByteBuffer cv = ByteBuffer.allocateDirect(size * M).order(ByteOrder.LITTLE_ENDIAN);
+        long targetAddress = UnsafeUtils.getDirectBufferAddress(cv);
+        simdExecutor.submit(() -> IntStream.range(0, size).parallel().forEach(i -> {
+            byte[] encoded = encode(vectors.get(i));
+            UnsafeUtils.copyBytes(encoded, 0, encoded.length, targetAddress+ (long) M *i);
+        })).join();
+        return cv;
     }
 
     /**
