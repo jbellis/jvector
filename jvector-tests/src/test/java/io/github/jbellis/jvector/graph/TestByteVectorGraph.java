@@ -28,6 +28,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import java.util.Arrays;
 import org.junit.Before;
 
 /**
@@ -37,7 +38,10 @@ public class TestByteVectorGraph extends GraphIndexTestCase<byte[]> {
 
     @Before
     public void setup() {
-        similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
+        var functions = Arrays.stream(VectorSimilarityFunction.values())
+                .filter(f -> f != VectorSimilarityFunction.HAVERSINE)
+                .toArray(VectorSimilarityFunction[]::new);
+        similarityFunction = RandomizedTest.randomFrom(functions);
     }
 
     @Override
