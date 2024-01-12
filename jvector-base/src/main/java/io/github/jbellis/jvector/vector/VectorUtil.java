@@ -114,6 +114,18 @@ public final class VectorUtil {
   }
 
   /**
+   * Verifies that the latitude and longitude are each within their respective boundaries.
+   * @throws IllegalArgumentException if a value is out of bounds.
+   */
+  public static void verifyLatitudeAndLongitudeBoundaries(double latitude, double longitude)
+  {
+    if (latitude < -90 || 90 < latitude)
+      throw new IllegalArgumentException("Latitude must be between -90 and 90, inclusive. Found " + latitude);
+    if (longitude < -180 || 180 < longitude)
+      throw new IllegalArgumentException("Longitude must be between -180 and 180, inclusive. Found " + longitude);
+  }
+
+  /**
    * Modifies the argument to be unit length, dividing by its l2-norm. IllegalArgumentException is
    * thrown for zero vectors.
    *

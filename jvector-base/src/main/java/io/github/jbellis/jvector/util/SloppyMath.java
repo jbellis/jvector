@@ -1,4 +1,12 @@
-/* some code derived from jodk: http://code.google.com/p/jodk/ (apache 2.0)
+/*
+ * All changes to the original code are Copyright DataStax, Inc.
+ *
+ * Please see the included license file for details.
+ */
+
+/*
+ * Original license:
+ * some code derived from jodk: http://code.google.com/p/jodk/ (apache 2.0)
  * asin() derived from fdlibm: http://www.netlib.org/fdlibm/e_asin.c (public domain):
  * =============================================================================
  * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
@@ -11,6 +19,8 @@
  */
 
 package io.github.jbellis.jvector.util;
+
+import io.github.jbellis.jvector.vector.VectorUtil;
 
 /** Math functions that trade off accuracy for speed. */
 public class SloppyMath {
@@ -29,6 +39,8 @@ public class SloppyMath {
      * @return distance in meters.
      */
     public static double haversinMeters(double lat1, double lon1, double lat2, double lon2) {
+        VectorUtil.verifyLatitudeAndLongitudeBoundaries(lat1, lon1);
+        VectorUtil.verifyLatitudeAndLongitudeBoundaries(lat2, lon2);
         return haversinMeters(haversinSortKey(lat1, lon1, lat2, lon2));
     }
 
