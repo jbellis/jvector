@@ -108,6 +108,8 @@ public class PQVectors implements CompressedVectors {
                 return new PQDecoder.EuclideanDecoder(this, q);
             case COSINE:
                 return new PQDecoder.CosineDecoder(this, q);
+            case HAVERSINE:
+                throw new IllegalArgumentException("Haversine not supported for PQ vectors due to low dimensionality.");
             default:
                 throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
         }

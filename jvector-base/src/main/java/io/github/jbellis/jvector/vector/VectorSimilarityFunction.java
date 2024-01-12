@@ -24,6 +24,8 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.util.SloppyMath;
+
 /**
  * Vector similarity function; used in search to return top K most similar vectors to a target
  * vector. This is a label describing the method used during indexing and searching of the vectors
@@ -78,6 +80,21 @@ public enum VectorSimilarityFunction {
     @Override
     public float compare(byte[] v1, byte[] v2) {
       return (1 + VectorUtil.cosine(v1, v2)) / 2;
+    }
+  },
+
+  /**
+   * Haversine distance. Requires vectors are formatted as [latitude, longitude]
+   */
+  HAVERSINE {
+    @Override
+    public float compare(float[] v1, float[] v2) {
+      return (float) (1 / (1 + SloppyMath.haversinMeters(v1[0], v1[1], v2[0], v2[1])));
+    }
+
+    @Override
+    public float compare(byte[] v1, byte[] v2) {
+      throw new RuntimeException("not implemented");
     }
   };
 
