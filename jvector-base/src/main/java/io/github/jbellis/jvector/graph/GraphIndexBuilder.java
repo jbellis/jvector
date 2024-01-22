@@ -187,7 +187,8 @@ public class GraphIndexBuilder<T> {
      * <p>
      * Must be called before writing to disk.
      * <p>
-     * May be called multiple times, but should not be called during concurrent modifications to the graph.
+     * May be called multiple times, but should not be called during concurrent modifications to the graph
+     * or while executing concurrent searches on the graph.
      */
     public void cleanup() {
         if (graph.size() == 0) {
