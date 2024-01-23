@@ -229,4 +229,8 @@ public class KMeansPlusPlusClusterer {
 
         return centroid;
     }
+
+    public float[][] getCentroids() {
+        return centroids;
+    }
 }
