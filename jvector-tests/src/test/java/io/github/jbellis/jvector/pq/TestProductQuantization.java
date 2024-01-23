@@ -19,29 +19,102 @@ package io.github.jbellis.jvector.pq;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.github.jbellis.jvector.TestUtil.randomVector;
+import static java.lang.Math.min;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestProductQuantization extends RandomizedTest {
     @Test
+    // special cases where each vector maps exactly to a centroid
     public void testPerfectReconstruction() {
-        var vectors = IntStream.range(0,ProductQuantization.CLUSTERS).mapToObj(
-                i -> new float[] {getRandom().nextInt(100000), getRandom().nextInt(100000), getRandom().nextInt(100000) })
+        Random R = getRandom();
+
+        // exactly the same number of random vectors as clusters
+        var v1 = IntStream.range(0, ProductQuantization.CLUSTERS).mapToObj(
+                i -> new float[] { R.nextInt(100_000), R.nextInt(100_000), R.nextInt(100_000) })
                 .collect(Collectors.toList());
+        assertPerfectQuantization(v1);
+
+        // 10x the number of random vectors as clusters (with duplicates)
+        var v2 = v1.stream().flatMap(v -> IntStream.range(0, 10).mapToObj(i -> v))
+                .collect(Collectors.toList());
+        assertPerfectQuantization(v2);
+    }
+
+    private static void assertPerfectQuantization(List<float[]> vectors) {
         var ravv = new ListRandomAccessVectorValues(vectors, 3);
         var pq = ProductQuantization.compute(ravv, 2, false);
         var encoded = pq.encodeAll(vectors);
         var decodedScratch = new float[3];
-        // if the number of vectors is equal to the number of clusters, we should perfectly reconstruct vectors
         for (int i = 0; i < vectors.size(); i++) {
             pq.decode(encoded[i], decodedScratch);
             assertArrayEquals(Arrays.toString(vectors.get(i)) + "!=" + Arrays.toString(decodedScratch), vectors.get(i), decodedScratch, 0);
         }
+    }
+
+    @Test
+    // validate that iterating on our cluster centroids improves the encoding
+    public void testIterativeImprovement() {
+        for (int i = 0; i < 10; i++) {
+            testIterativeImprovementOnce();
+        }
+    }
+
+    public void testIterativeImprovementOnce() {
+        Random R = getRandom();
+        float[][] vectors = generate(ProductQuantization.CLUSTERS + R.nextInt(10*ProductQuantization.CLUSTERS),
+                                     2 + R.nextInt(10),
+                                     1_000 + R.nextInt(10_000));
+
+        var clusterer = new KMeansPlusPlusClusterer(vectors, ProductQuantization.CLUSTERS, VectorUtil::dotProduct);
+        var initialLoss = loss(clusterer, vectors);
+
+        assert clusterer.clusterOnce() > 0;
+        var improvedLoss = loss(clusterer, vectors);
+
+        assertTrue(improvedLoss < initialLoss, "improvedLoss=" + improvedLoss + " initialLoss=" + initialLoss);
+    }
+
+    private static double loss(KMeansPlusPlusClusterer clusterer, float[][] vectors) {
+        var pq = new ProductQuantization(new float[][][] { clusterer.getCentroids() }, null);
+        byte[][] encoded = pq.encodeAll(List.of(vectors));
+
+        var decodedScratch = new float[vectors[0].length];
+        var loss = 0.0;
+        for (int i = 0; i < vectors.length; i++) {
+            pq.decode(encoded[i], decodedScratch);
+            loss += 1 - VectorSimilarityFunction.COSINE.compare(vectors[i], decodedScratch);
+        }
+        return loss;
+    }
+
+    private static float[][] generate(int nClusters, int nDimensions, int nVectors) {
+        Random R = getRandom();
+
+        // generate clusters
+        var clusters = IntStream.range(0, nClusters)
+                .mapToObj(i -> randomVector(R, nDimensions))
+                .collect(Collectors.toList());
+
+        // generate vectors by perturbing clusters
+        return IntStream.range(0, nVectors).mapToObj(__ -> {
+            var cluster = clusters.get(R.nextInt(nClusters));
+            var v = randomVector(R, nDimensions);
+            VectorUtil.scale(v, 0.1f + 0.9f * R.nextFloat());
+            VectorUtil.addInPlace(v, cluster);
+            return v;
+        }).toArray(float[][]::new);
     }
 }
