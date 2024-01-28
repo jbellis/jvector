@@ -219,7 +219,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
                     float[][] subvectors = vectors.stream().parallel()
                             .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
                             .toArray(float[][]::new);
-                    var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS, VectorUtil::squareDistance);
+                    var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS);
                     return clusterer.cluster(K_MEANS_ITERATIONS);
                 })
                 .toArray(float[][][]::new))
