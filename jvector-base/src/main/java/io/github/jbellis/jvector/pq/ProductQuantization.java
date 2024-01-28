@@ -275,7 +275,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         // vectorFloat will have n subvectors, each of length subvectorSizeAndOffset[0]
         var clusterCount = codebook.length() / subvectorSizeAndOffset[0];
         for (int i = 0; i < clusterCount; i++) {
-            float dist = VectorUtil.squareDistance(vector, subvectorSizeAndOffset[1], codebook, i * subvectorSizeAndOffset[0], subvectorSizeAndOffset[0]);
+            float dist = VectorUtil.squareL2Distance(vector, subvectorSizeAndOffset[1], codebook, i * subvectorSizeAndOffset[0], subvectorSizeAndOffset[0]);
             if (dist < minDist) {
                 minDist = dist;
                 index = i;

@@ -128,7 +128,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    public void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
         NativeSimdOps.square_distance_multi_f32_512(((OffHeapVectorFloat)v1).get(), ((OffHeapVectorFloat)v2).get(), v1.length(), results.length(), ((OffHeapVectorFloat)results).get());
     }
 }

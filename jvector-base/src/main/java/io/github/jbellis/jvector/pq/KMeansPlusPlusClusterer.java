@@ -124,7 +124,7 @@ public class KMeansPlusPlusClusterer {
         VectorFloat<?> firstCentroid = points[random.nextInt(points.length)];
         centroids.copyFrom(firstCentroid, 0, 0, firstCentroid.length());
         for (int i = 0; i < points.length; i++) {
-            float distance1 = VectorUtil.squareDistance(points[i], firstCentroid);
+            float distance1 = VectorUtil.squareL2Distance(points[i], firstCentroid);
             distances[i] = Math.min(distances[i], distance1);
         }
 
@@ -154,7 +154,7 @@ public class KMeansPlusPlusClusterer {
 
             // Update distances, but only if the new centroid provides a closer distance
             for (int j = 0; j < points.length; j++) {
-                float newDistance = VectorUtil.squareDistance(points[j], nextCentroid);
+                float newDistance = VectorUtil.squareL2Distance(points[j], nextCentroid);
                 distances[j] = Math.min(distances[j], newDistance);
             }
         }
@@ -212,7 +212,7 @@ public class KMeansPlusPlusClusterer {
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            float distance = VectorUtil.squareDistance(point, 0, centroids, i * point.length(), point.length());
+            float distance = VectorUtil.squareL2Distance(point, 0, centroids, i * point.length(), point.length());
             if (distance < minDistance) {
                 minDistance = distance;
                 nearestCluster = i;

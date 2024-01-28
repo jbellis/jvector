@@ -109,7 +109,7 @@ public interface VectorUtilSupport {
     }
   }
 
-  default void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+  default void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
     for (int i = 0; i < results.length(); i++) {
       results.set(i, 1 / (1 + squareDistance(v1, 0, v2, i * v1.length(), v1.length())));
     }
