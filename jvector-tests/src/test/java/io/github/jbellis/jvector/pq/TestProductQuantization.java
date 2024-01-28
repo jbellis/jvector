@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.TestUtil.randomVector;
-import static java.lang.Math.min;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,7 +77,7 @@ public class TestProductQuantization extends RandomizedTest {
                                      2 + R.nextInt(10),
                                      1_000 + R.nextInt(10_000));
 
-        var clusterer = new KMeansPlusPlusClusterer(vectors, ProductQuantization.CLUSTERS, VectorUtil::dotProduct);
+        var clusterer = new KMeansPlusPlusClusterer(vectors, ProductQuantization.CLUSTERS);
         var initialLoss = loss(clusterer, vectors);
 
         assert clusterer.clusterOnce() > 0;
