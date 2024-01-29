@@ -79,6 +79,7 @@ public class SiftSmall {
     }
 
     private static void testRecallInternal(GraphIndex<float[]> graph, RandomAccessVectorValues<float[]> ravv, ArrayList<float[]> queryVectors, ArrayList<HashSet<Integer>> groundTruth, CompressedVectors compressedVectors) {
+        assert !(compressedVectors == null && ravv == null);
         var topKfound = new AtomicInteger(0);
         var topK = 100;
         var graphType = graph.getClass().getSimpleName();
@@ -94,7 +95,7 @@ public class SiftSmall {
             }
             else {
                 NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                NodeSimilarity.Reranker rr = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
+                NodeSimilarity.Reranker rr = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, view.getVector(j));
                 nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
             }
 
