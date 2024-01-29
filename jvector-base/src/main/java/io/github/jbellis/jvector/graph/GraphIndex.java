@@ -123,15 +123,18 @@ public interface GraphIndex<T> extends AutoCloseable {
         sb.append(graph);
         sb.append("\n");
 
-        var view = graph.getView();
-        NodesIterator it = graph.getNodes();
-        while (it.hasNext()) {
-            int node = it.nextInt();
-            sb.append("  ").append(node).append(" -> ");
-            for (var neighbors = view.getNeighborsIterator(node); neighbors.hasNext(); ) {
-                sb.append(" ").append(neighbors.nextInt());
+        try (var view = graph.getView()) {
+            NodesIterator it = graph.getNodes();
+            while (it.hasNext()) {
+                int node = it.nextInt();
+                sb.append("  ").append(node).append(" -> ");
+                for (var neighbors = view.getNeighborsIterator(node); neighbors.hasNext(); ) {
+                    sb.append(" ").append(neighbors.nextInt());
+                }
+                sb.append("\n");
             }
-            sb.append("\n");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
 
         return sb.toString();

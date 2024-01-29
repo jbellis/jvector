@@ -28,7 +28,6 @@ import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
-import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.SynchronizedGrowableBitSet;
 
@@ -297,7 +296,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         }
 
         // graph-level properties
-        var view = getView();
+        var view = getView(); // won't get closed, but this is a no-op close
         out.writeInt(size());
         out.writeInt(view.entryNode());
         out.writeInt(maxDegree());
