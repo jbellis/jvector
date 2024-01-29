@@ -69,11 +69,14 @@ public abstract class GraphCache implements Accountable
         private long ramBytesUsed = 0;
 
         public HMGraphCache(GraphIndex<float[]> graph, int distance) {
-            var view = graph.getView();
-            HashMap<Integer, CachedNode> tmpCache = new HashMap<>();
-            cacheNeighborsOf(tmpCache, view, view.entryNode(), distance);
-            // Assigning to a final value ensure it is safely published
-            cache = tmpCache;
+            try (var view = graph.getView()) {
+                HashMap<Integer, CachedNode> tmpCache = new HashMap<>();
+                cacheNeighborsOf(tmpCache, view, view.entryNode(), distance);
+                // Assigning to a final value ensure it is safely published
+                cache = tmpCache;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         private void cacheNeighborsOf(HashMap<Integer, CachedNode> tmpCache, GraphIndex.View<float[]> view, int ordinal, int distance) {

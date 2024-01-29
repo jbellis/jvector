@@ -31,7 +31,6 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -164,12 +163,15 @@ public class Bench {
                 var queryVector = ds.queryVectors.get(i);
                 SearchResult sr;
                 if (cv != null) {
-                    var view = index.getView();
-                    NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-                    NodeSimilarity.Reranker rr = (j) -> ds.similarityFunction.compare(queryVector, view.getVector(j));
-                    sr = new GraphSearcher.Builder<>(view)
-                            .build()
-                            .search(sf, rr, efSearch, Bits.ALL);
+                    try (var view = index.getView()) {
+                        NodeSimilarity.ApproximateScoreFunction sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+                        NodeSimilarity.Reranker rr = (j) -> ds.similarityFunction.compare(queryVector, view.getVector(j));
+                        sr = new GraphSearcher.Builder<>(view)
+                                .build()
+                                .search(sf, rr, efSearch, Bits.ALL);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 } else {
                     sr = GraphSearcher.search(queryVector, efSearch, exactVv, VectorEncoding.FLOAT32, ds.similarityFunction, index, Bits.ALL);
                 }

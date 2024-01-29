@@ -154,6 +154,7 @@ public class GraphIndexBuilder<T> {
         this.graph =
                 new OnHeapGraphIndex<>(
                         M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
+        // this view will never get closed, but it's okay because we know it's an OHGI view, which has a no-op close
         this.graphSearcher = PoolingSupport.newThreadBased(() -> new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build());
 
         // in scratch we store candidates in reverse order: worse candidates are first
@@ -272,7 +273,7 @@ public class GraphIndexBuilder<T> {
     private void findConnected(AtomicFixedBitSet connectedNodes, int start) {
         var queue = new ArrayDeque<Integer>();
         queue.add(start);
-        var view = graph.getView();
+        var view = graph.getView(); // won't get closed, but this is a no-op close
         while (!queue.isEmpty()) {
             // DFS should result in less contention across findConnected threads than BFS
             int next = queue.pop();

@@ -77,18 +77,23 @@ public class GraphSearcher<T> {
      * is the unique owner of the vectors instance passed in here.
      */
     public static <T> SearchResult search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
-        var searcher = new GraphSearcher.Builder<>(graph.getView()).withConcurrentUpdates().build();
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> {
-            switch (vectorEncoding) {
-                case BYTE:
-                    return similarityFunction.compare((byte[]) targetVector, (byte[]) vectors.vectorValue(i));
-                case FLOAT32:
-                    return similarityFunction.compare((float[]) targetVector, (float[]) vectors.vectorValue(i));
-                default:
-                    throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
-            }
-        };
-        return searcher.search(scoreFunction, null, topK, acceptOrds);
+        try (var view = graph.getView()) {
+            var searcher = new GraphSearcher.Builder<>(view).withConcurrentUpdates().build();
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> {
+                switch (vectorEncoding) {
+                    case BYTE:
+                        return similarityFunction.compare((byte[]) targetVector, (byte[]) vectors.vectorValue(i));
+                    case FLOAT32:
+                        return similarityFunction.compare((float[]) targetVector, (float[]) vectors.vectorValue(i));
+                    default:
+                        throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
+                }
+            };
+            return searcher.search(scoreFunction, null, topK, acceptOrds);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     /** Builder */
