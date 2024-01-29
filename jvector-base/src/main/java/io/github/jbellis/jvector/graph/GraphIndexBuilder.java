@@ -273,16 +273,19 @@ public class GraphIndexBuilder<T> {
     private void findConnected(AtomicFixedBitSet connectedNodes, int start) {
         var queue = new ArrayDeque<Integer>();
         queue.add(start);
-        var view = graph.getView(); // won't get closed, but this is a no-op close
-        while (!queue.isEmpty()) {
-            // DFS should result in less contention across findConnected threads than BFS
-            int next = queue.pop();
-            if (connectedNodes.getAndSet(next)) {
-                continue;
+        try (var view = graph.getView()) {
+            while (!queue.isEmpty()) {
+                // DFS should result in less contention across findConnected threads than BFS
+                int next = queue.pop();
+                if (connectedNodes.getAndSet(next)) {
+                    continue;
+                }
+                for (var it = view.getNeighborsIterator(next); it.hasNext(); ) {
+                    queue.add(it.nextInt());
+                }
             }
-            for (var it = view.getNeighborsIterator(next); it.hasNext(); ) {
-                queue.add(it.nextInt());
-            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

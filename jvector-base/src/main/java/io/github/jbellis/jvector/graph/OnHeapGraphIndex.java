@@ -296,22 +296,25 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         }
 
         // graph-level properties
-        var view = getView(); // won't get closed, but this is a no-op close
-        out.writeInt(size());
-        out.writeInt(view.entryNode());
-        out.writeInt(maxDegree());
+        try (var view = getView()) {
+            out.writeInt(size());
+            out.writeInt(view.entryNode());
+            out.writeInt(maxDegree());
 
-        // neighbors
-        for (var entry : nodes.entrySet()) {
-            var i = (int) (long) entry.getKey();
-            var neighbors = entry.getValue().iterator();
-            out.writeInt(i);
+            // neighbors
+            for (var entry : nodes.entrySet()) {
+                var i = (int) (long) entry.getKey();
+                var neighbors = entry.getValue().iterator();
+                out.writeInt(i);
 
-            out.writeInt(neighbors.size());
-            for (int n = 0; n < neighbors.size(); n++) {
-                out.writeInt(neighbors.nextInt());
+                out.writeInt(neighbors.size());
+                for (int n = 0; n < neighbors.size(); n++) {
+                    out.writeInt(neighbors.nextInt());
+                }
+                assert !neighbors.hasNext();
             }
-            assert !neighbors.hasNext();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }
