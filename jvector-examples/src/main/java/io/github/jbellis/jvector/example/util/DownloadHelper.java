@@ -54,6 +54,21 @@ public class DownloadHelper {
     public static void maybeDownloadFvecs(String prefix) {
         List<String> keys = new ArrayList<>();
         switch (prefix) {
+            case "text-embedding-3-large_3072_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/text-embedding-3-large_3072_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/text-embedding-3-large_3072_100000_indices_query_10000.ivec"));
+                break;
+            case "text-embedding-3-large_1536_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/text-embedding-3-large_1536_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/text-embedding-3-large_1536_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/text-embedding-3-large_1536_100000_indices_query_10000.ivec"));
+                break;
+            case "text-embedding-3-small_1536_100000":
+                keys.addAll(List.of("wikipedia_squad/100k/text-embedding-3-small_1536_100000_base_vectors.fvec",
+                                    "wikipedia_squad/100k/text-embedding-3-small_1536_100000_query_vectors_10000.fvec",
+                                    "wikipedia_squad/100k/text-embedding-3-small_1536_100000_indices_query_10000.ivec"));
+                break;
             case "ada_002_100000":
                 keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
                                     "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",

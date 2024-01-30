@@ -205,6 +205,9 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
+                "text-embedding-3-large_3072_100000",
+                "text-embedding-3-large_1536_100000",
+                "text-embedding-3-small_1536_100000",
                 "intfloat_e5-small-v2_100000",
                 "intfloat_e5-base-v2_100000",
                 "intfloat_e5-large-v2_100000",
