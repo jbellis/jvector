@@ -108,7 +108,7 @@ This may not be correct in all setups (e.g. no hyperthreading or hybrid architec
 Some sample KNN datasets for testing based on ada-002 embeddings generated on wikipedia data are available in ivec/fvec format for testing at:
 
 ```
-aws s3 ls s3://astra-vector/wikipedia_scout/ --no-sign-request 
+aws s3 ls s3://astra-vector/wikipedia_squad/ --no-sign-request 
                            PRE 100k/
                            PRE 1M/
                            PRE 4M/
