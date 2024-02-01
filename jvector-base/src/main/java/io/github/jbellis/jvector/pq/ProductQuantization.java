@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
@@ -28,6 +29,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
@@ -35,49 +37,45 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.util.MathUtil.square;
+import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
+import static io.github.jbellis.jvector.vector.VectorUtil.sub;
 import static java.lang.Math.min;
+import static java.lang.Math.sqrt;
 
 /**
  * Product Quantization for float vectors.  Supports arbitrary source and target dimensionality;
  * in particular, the source does not need to be evenly divisible by the target.
- * <p>
- * Codebook cluster count is fixed at 256.
  */
 public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     static final int DEFAULT_CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     static final int K_MEANS_ITERATIONS = 6;
     public static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
-    final VectorFloat<?>[] codebooks; // array of codebooks, where each codebook is a VectorFloat consisting of contiguous subvectors
+
+    final VectorFloat<?>[] codebooks; // array of codebooks, where each codebook is a VectorFloat consisting of k contiguous subvectors each of length M
     private final int M; // codebooks.length, redundantly reproduced for convenience
     private final int clusterCount; // codebooks[0].length, redundantly reproduced for convenience
     final int originalDimension;
     private final VectorFloat<?> globalCentroid;
     final int[][] subvectorSizesAndOffsets;
+    private final float anisotropicThreshold; // parallel cost multiplier
 
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
      *
      * @param ravv the vectors to quantize
      * @param M number of subspaces
-     * @param clusterCount number of clusters per subspace
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
      */
     public static ProductQuantization compute(RandomAccessVectorValues ravv, int M, int clusterCount, boolean globallyCenter) {
-        return compute(ravv, M, clusterCount, globallyCenter, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        return compute(ravv, M, clusterCount, globallyCenter, UNWEIGHTED, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
     }
 
-    /**
-     * Initializes the codebooks by clustering the input data using Product Quantization. Defaults to 256 clusters per subspace.
-     *
-     * @param ravv the vectors to quantize
-     * @param M number of subspaces
-     * @param globallyCenter whether to center the vectors globally before quantization
-     *                       (not recommended when using the quantization for dot product)
-     */
-    public static ProductQuantization compute(RandomAccessVectorValues ravv, int M, boolean globallyCenter) {
-        return compute(ravv, M, DEFAULT_CLUSTERS, globallyCenter);
+    public static ProductQuantization compute(RandomAccessVectorValues ravv, int M, int clusterCount, boolean globallyCenter, float anisotropicThreshold) {
+        return compute(ravv, M, clusterCount, globallyCenter, anisotropicThreshold, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
     }
 
     /**
@@ -88,6 +86,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
      * @param clusterCount number of clusters per subspace
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
+     * @param anisotropicThreshold the threshold of relevance for anisotropic angular distance shaping, giving
+     *        higher priority to parallel error.  Anisotropic shaping requires that your dataset be normalized
+     *        to unit length.  Use a threshold of UNWEIGHTED for isotropic distance
+     *        (i.e. normal, unweighted L2 distance).
      * @param simdExecutor     ForkJoinPool instance for SIMD operations, best is to use a pool with the size of
      *                         the number of physical cores.
      * @param parallelExecutor ForkJoinPool instance for parallel stream operations
@@ -97,6 +99,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             int M,
             int clusterCount,
             boolean globallyCenter,
+            float anisotropicThreshold,
             ForkJoinPool simdExecutor,
             ForkJoinPool parallelExecutor)
     {
@@ -115,8 +118,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         }
 
         // derive the codebooks
-        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets, clusterCount, simdExecutor, parallelExecutor);
-        return new ProductQuantization(codebooks, clusterCount, subvectorSizesAndOffsets, globalCentroid);
+        var codebooks = createCodebooks(vectors, subvectorSizesAndOffsets, clusterCount, anisotropicThreshold, simdExecutor);
+        return new ProductQuantization(codebooks, clusterCount, subvectorSizesAndOffsets, globalCentroid, anisotropicThreshold);
     }
 
     static List<VectorFloat<?>> extractTrainingVectors(RandomAccessVectorValues ravv, ForkJoinPool parallelExecutor) {
@@ -124,13 +127,13 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.threadLocalSupplier();
         return parallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
-                .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
-                .mapToObj(targetOrd -> {
-                    var localRavv = ravvCopy.get();
-                    VectorFloat<?> v = localRavv.vectorValue(targetOrd);
-                    return localRavv.isValueShared() ? v.copy() : v;
-                })
-                .collect(Collectors.toList()))
+                        .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
+                        .mapToObj(targetOrd -> {
+                            var localRavv = ravvCopy.get();
+                            VectorFloat<?> v = localRavv.vectorValue(targetOrd);
+                            return localRavv.isValueShared() ? v.copy() : v;
+                        })
+                        .collect(Collectors.toList()))
                 .join();
     }
 
@@ -138,7 +141,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
      * Create a new PQ by fine-tuning this one with the data in `ravv`
      */
     public ProductQuantization refine(RandomAccessVectorValues ravv) {
-        return refine(ravv, 1, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        return refine(ravv, 1, UNWEIGHTED, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
     }
 
     /**
@@ -149,6 +152,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
      */
     public ProductQuantization refine(RandomAccessVectorValues ravv,
                                       int lloydsRounds,
+                                      float anisotropicThreshold,
                                       ForkJoinPool simdExecutor,
                                       ForkJoinPool parallelExecutor)
     {
@@ -165,21 +169,23 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         var vectors = vectorsMutable; // "effectively final" to make the closure happy
 
         var refinedCodebooks = simdExecutor.submit(() -> IntStream.range(0, M).parallel().mapToObj(m -> {
-            VectorFloat<?>[] subvectors = extractSubvectors(vectors, m, subvectorSizesAndOffsets, parallelExecutor);
-            var clusterer = new KMeansPlusPlusClusterer(subvectors, codebooks[m]);
-            return clusterer.cluster(lloydsRounds);
+            VectorFloat<?>[] subvectors = extractSubvectors(vectors, m, subvectorSizesAndOffsets);
+            var clusterer = new KMeansPlusPlusClusterer(subvectors, codebooks[m], anisotropicThreshold);
+            return clusterer.cluster(anisotropicThreshold == UNWEIGHTED ? lloydsRounds : 0,
+                                     anisotropicThreshold == UNWEIGHTED ? 0 : lloydsRounds);
         }).toArray(VectorFloat<?>[]::new)).join();
 
-        return new ProductQuantization(refinedCodebooks, clusterCount, subvectorSizesAndOffsets, globalCentroid);
+        return new ProductQuantization(refinedCodebooks, clusterCount, subvectorSizesAndOffsets, globalCentroid, anisotropicThreshold);
     }
 
-    ProductQuantization(VectorFloat<?>[] codebooks, int clusterCount, int[][] subvectorSizesAndOffsets, VectorFloat<?> globalCentroid) {
+    ProductQuantization(VectorFloat<?>[] codebooks, int clusterCount, int[][] subvectorSizesAndOffsets, VectorFloat<?> globalCentroid, float anisotropicThreshold) {
         this.codebooks = codebooks;
         this.globalCentroid = globalCentroid;
         this.M = codebooks.length;
         this.clusterCount = clusterCount;
         this.subvectorSizesAndOffsets = subvectorSizesAndOffsets;
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
+        this.anisotropicThreshold = anisotropicThreshold;
     }
 
     @Override
@@ -196,22 +202,181 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     }
 
     /**
+     * Encodes the input vector using the PQ codebooks, weighing parallel loss more than orthogonal loss.
+     * @return one byte per subspace
+     */
+    private ByteSequence<?> encodeAnisotropic(VectorFloat<?> vector) {
+        // compute the residuals from each subvector to each corresponding codebook centroid
+        Residual[][] residuals = computeResiduals(vector);
+        // start with centroids that minimize the residual norms
+        var result = initializeToMinResidualNorms(residuals);
+        // sum the initial parallel residual component
+        float parallelResidualComponentSum = 0;
+        for (int i = 0; i < result.length(); i++) {
+            int centroidIdx = Byte.toUnsignedInt(result.get(i));
+            parallelResidualComponentSum += residuals[i][centroidIdx].parallelResidualComponent;
+        }
+
+        // TODO SCANN sorts by residual norm (and adds a sorted->original subspace index map),
+        // presumably because that helps this converge faster
+
+        // Optimize until convergence
+        int MAX_ITERATIONS = 10; // borrowed from SCANN code without experimenting w/ other values
+        for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+            // loop over each subspace
+            boolean changed = false;
+            for (int i = 0; i < residuals.length; i++) {
+                int oldIdx = Byte.toUnsignedInt(result.get(i));
+                CoordinateDescentResult cdr = optimizeSingleSubspace(residuals[i], oldIdx, parallelResidualComponentSum);
+                if (cdr.newCenterIdx != oldIdx) {
+                    parallelResidualComponentSum = cdr.newParallelResidualComponent;
+                    result.set(i, (byte) cdr.newCenterIdx);
+                    changed = true;
+                }
+            }
+            // Done if nothing changed this iteration
+            if (!changed) {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    private CoordinateDescentResult optimizeSingleSubspace(Residual[] residuals, int oldIdx, float oldParallelResidualSum) {
+        // (this is global to all subspaces but it's not worth stashing in a field)
+        float pcm = KMeansPlusPlusClusterer.computeParallelCostMultiplier(anisotropicThreshold, originalDimension);
+
+        float oldResidualNormSquared = residuals[oldIdx].residualNormSquared;
+        float oldParallelComponent = residuals[oldIdx].parallelResidualComponent;
+
+        float bestCostDelta = 0;
+        int bestIndex = oldIdx;
+        float bestParallelResidualSum = oldParallelResidualSum;
+
+        // loop over potential new centers
+        for (int thisIdx = 0; thisIdx < residuals.length; thisIdx++) {
+            if (thisIdx == oldIdx) {
+                continue;
+            }
+
+            // compute the new parallel residual sum and parallel norm delta
+            Residual rs = residuals[thisIdx];
+            float thisParallelResidualSum = oldParallelResidualSum - oldParallelComponent + rs.parallelResidualComponent;
+            float parallelNormDelta = square(thisParallelResidualSum) - square(oldParallelResidualSum);
+            // quit early if new parallel norm is worse than the old
+            if (parallelNormDelta > 0) {
+                continue;
+            }
+
+            // compute the total cost delta
+            float residualNormDelta = rs.residualNormSquared - oldResidualNormSquared;
+            float perpendicularNormDelta = residualNormDelta - parallelNormDelta;
+            float costDelta = pcm * parallelNormDelta + perpendicularNormDelta;
+
+            // save the new center if it's the best so far
+            if (costDelta < bestCostDelta) {
+                bestCostDelta = costDelta;
+                bestIndex = thisIdx;
+                bestParallelResidualSum = thisParallelResidualSum;
+            }
+        }
+
+        return new CoordinateDescentResult(bestIndex, bestParallelResidualSum);
+    }
+
+    /**
+     * Wraps the two values we want to return from optimizeSingleSubspace
+     */
+    private static class CoordinateDescentResult {
+        final int newCenterIdx;
+        final float newParallelResidualComponent;
+
+        CoordinateDescentResult(int newCenterIdx, float newParallelResidualComponent) {
+            this.newCenterIdx = newCenterIdx;
+            this.newParallelResidualComponent = newParallelResidualComponent;
+        }
+    }
+
+    /**
+     * @return codebooks representing the cluster centroids for each subspace that minimize the residual norm
+     */
+    private ByteSequence<?> initializeToMinResidualNorms(Residual[][] residualStats) {
+        var result = vectorTypeSupport.createByteSequence(residualStats.length);
+        IntStream.range(0, residualStats.length).forEach(i -> {
+            var b = (byte) IntStream.range(0, residualStats[i].length)
+                    .boxed()
+                    .min(Comparator.comparingDouble(j -> residualStats[i][j].residualNormSquared))
+                    .orElseThrow().intValue();
+            result.set(i, b);
+        });
+        return result;
+    }
+
+    /**
+     * @return the parallel-cost residuals for each subspace and cluster
+     */
+    private Residual[][] computeResiduals(VectorFloat<?> vector) {
+        Residual[][] residuals = new Residual[codebooks.length][];
+
+        float inverseNorm = (float) (1.0 / sqrt(dotProduct(vector, vector)));
+        for (int i = 0; i < codebooks.length; i++) {
+            var subVector = getSubVector(vector, i, subvectorSizesAndOffsets);
+            residuals[i] = new Residual[clusterCount];
+
+            for (int j = 0; j < clusterCount; j++) {
+                residuals[i][j] = computeResidual(subVector, i, j, inverseNorm);
+            }
+        }
+
+        return residuals;
+    }
+
+    /**
+     * Represents the residual after subtracting a cluster centroid from a [sub]vector.
+     */
+    private static class Residual {
+        final float residualNormSquared;
+        final float parallelResidualComponent;
+
+        Residual(float residualNormSquared, float parallelResidualComponent) {
+            this.residualNormSquared = residualNormSquared;
+            this.parallelResidualComponent = parallelResidualComponent;
+        }
+    }
+
+    private Residual computeResidual(VectorFloat<?> subvector, int m, int centroid, float inverseNorm) {
+        float residualNormSquared = 0.0f;
+        float parallelResidualComponent = 0.0f;
+        int subvectorSize = subvectorSizesAndOffsets[m][0];
+        var codebook = codebooks[m];
+        for (int i = 0; i < subvector.length(); i++) {
+            float residual = subvector.get(i) - codebook.get(centroid * subvectorSize + i);
+            residualNormSquared += square(residual);
+            parallelResidualComponent += residual * subvector.get(i) * inverseNorm;
+        }
+        return new Residual(residualNormSquared, parallelResidualComponent);
+    }
+
+    private ByteSequence<?> encodeUnweighted(VectorFloat<?> vector) {
+        var encoded = vectorTypeSupport.createByteSequence(M);
+        for (int m = 0; m < M; m++) {
+            encoded.set(m, (byte) closestCentroidIndex(vector, m, codebooks[m]));
+        }
+        return encoded;
+    }
+
+    /**
      * Encodes the input vector using the PQ codebooks.
-     *
      * @return one byte per subspace
      */
     @Override
     public ByteSequence<?> encode(VectorFloat<?> vector) {
         if (globalCentroid != null) {
-            vector = VectorUtil.sub(vector, globalCentroid);
+            vector = sub(vector, globalCentroid);
         }
 
-        VectorFloat<?> finalVector = vector;
-        ByteSequence<?> encoded = vectorTypeSupport.createByteSequence(M);
-        for (int m = 0; m < M; m++) {
-            encoded.set(m, (byte) closestCentroidIndex(finalVector, subvectorSizesAndOffsets[m], codebooks[m]));
-        }
-        return encoded;
+        return anisotropicThreshold > UNWEIGHTED ? encodeAnisotropic(vector) : encodeUnweighted(vector);
     }
 
     /**
@@ -251,11 +416,12 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return clusterCount;
     }
 
-    static VectorFloat<?>[] createCodebooks(List<VectorFloat<?>> vectors, int M, int[][] subvectorSizeAndOffset, int clusters, ForkJoinPool simdExecutor, ForkJoinPool parallelExecutor) {
+    static VectorFloat<?>[] createCodebooks(List<VectorFloat<?>> vectors, int[][] subvectorSizeAndOffset, int clusters, float anisotropicThreshold, ForkJoinPool simdExecutor) {
+        int M = subvectorSizeAndOffset.length;
         return simdExecutor.submit(() -> IntStream.range(0, M).parallel().mapToObj(m -> {
-            VectorFloat<?>[] subvectors = extractSubvectors(vectors, m, subvectorSizeAndOffset, parallelExecutor);
-            var clusterer = new KMeansPlusPlusClusterer(subvectors, clusters);
-            return clusterer.cluster(K_MEANS_ITERATIONS);
+            VectorFloat<?>[] subvectors = extractSubvectors(vectors, m, subvectorSizeAndOffset);
+            var clusterer = new KMeansPlusPlusClusterer(subvectors, clusters, anisotropicThreshold);
+            return clusterer.cluster(K_MEANS_ITERATIONS, anisotropicThreshold == UNWEIGHTED ? 0 : K_MEANS_ITERATIONS);
         }).toArray(VectorFloat<?>[]::new)).join();
     }
 
@@ -263,19 +429,19 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
      * Extract VectorFloat subvectors corresponding to the m'th subspace.
      * This is NOT done in parallel (since the callers are themselves running in parallel).
      */
-    private static VectorFloat<?>[] extractSubvectors(List<VectorFloat<?>> vectors, int m, int[][] subvectorSizeAndOffset, ForkJoinPool parallelExecutor) {
+    private static VectorFloat<?>[] extractSubvectors(List<VectorFloat<?>> vectors, int m, int[][] subvectorSizeAndOffset) {
         return vectors.stream()
                 .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
                 .toArray(VectorFloat<?>[]::new);
     }
-    
-    static int closestCentroidIndex(VectorFloat<?> vector, int[] subvectorSizeAndOffset, VectorFloat<?> codebook) {
+
+    int closestCentroidIndex(VectorFloat<?> subvector, int m, VectorFloat<?> codebook) {
         int index = 0;
         float minDist = Integer.MAX_VALUE;
-        // vectorFloat will have n subvectors, each of length subvectorSizeAndOffset[0]
-        var clusterCount = codebook.length() / subvectorSizeAndOffset[0];
+        int subvectorSize = subvectorSizesAndOffsets[m][0];
+        int subvectorOffset = subvectorSizesAndOffsets[m][1];
         for (int i = 0; i < clusterCount; i++) {
-            float dist = VectorUtil.squareL2Distance(vector, subvectorSizeAndOffset[1], codebook, i * subvectorSizeAndOffset[0], subvectorSizeAndOffset[0]);
+            float dist = VectorUtil.squareL2Distance(subvector, subvectorOffset, codebook, i * subvectorSize, subvectorSize);
             if (dist < minDist) {
                 minDist = dist;
                 index = i;
@@ -296,6 +462,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     /**
      * Splits the vector dimension into M subvectors of roughly equal size.
      */
+    @VisibleForTesting
     static int[][] getSubvectorSizesAndOffsets(int dimensions, int M) {
         int[][] sizes = new int[M][];
         int baseSize = dimensions / M;
@@ -360,7 +527,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             codebooks[m] = codebook;
         }
 
-        return new ProductQuantization(codebooks, clusters, subvectorSizes, globalCentroid);
+        // TODO save and load the anisotropic threshold
+        return new ProductQuantization(codebooks, clusters, subvectorSizes, globalCentroid, UNWEIGHTED);
     }
 
     @Override
@@ -399,6 +567,12 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
 
     @Override
     public String toString() {
-        return String.format("ProductQuantization(%s,%s)", M, clusterCount);
+        if (anisotropicThreshold == UNWEIGHTED) {
+            return String.format("ProductQuantization(M=%d)", M);
+        }
+        return String.format("ProductQuantization(M=%d, T=%.3f, eta=%.1f)",
+                             M,
+                             anisotropicThreshold,
+                             KMeansPlusPlusClusterer.computeParallelCostMultiplier(anisotropicThreshold, originalDimension));
     }
 }

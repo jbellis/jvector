@@ -16,40 +16,57 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import io.github.jbellis.jvector.vector.Matrix;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static io.github.jbellis.jvector.util.MathUtil.square;
+import static io.github.jbellis.jvector.vector.VectorUtil.*;
+import static java.lang.Math.max;
 
 /**
  * A KMeans++ implementation for float vectors.  Optimizes to use SIMD vector instructions if available.
  */
 public class KMeansPlusPlusClusterer {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     // number of centroids to compute
     private final int k;
+
     // the points to train on
     private final VectorFloat<?>[] points;
     // the cluster each point is assigned to
     private final int[] assignments;
-    // the centroids of each cluster
+    // the centroids of each cluster, as one big k*M-dimension vector
     private final VectorFloat<?> centroids;
-    // the number of points assigned to each cluster
-    private final int[] centroidDenoms;
-    private final VectorFloat<?>[] centroidNums;
+
+    // the threshold of relevance for anisotropic angular distance shaping, -1.0 < anisotropicThreshold <= 1.0
+    private final float anisotropicThreshold;
+    static final float UNWEIGHTED = -1.0f;
+
+    // used to accelerate updating clusters by unweighted L2 distance.  (not used for anisotropic clustering)
+    private final int[] centroidDenoms; // the number of points assigned to each cluster
+    private final VectorFloat<?>[] centroidNums; // the sum of all points assigned to each cluster
 
     /**
      * Constructs a KMeansPlusPlusFloatClusterer with the specified points and number of clusters.
      *
-     * @param points the points to cluster.
+     * @param points the points to cluster (points[n][i] is the ith component of the nth point)
      * @param k number of clusters.
      */
     public KMeansPlusPlusClusterer(VectorFloat<?>[] points, int k) {
-        this(points, chooseInitialCentroids(points, k));
+        this(points, chooseInitialCentroids(points, k), UNWEIGHTED);
+    }
+
+    public KMeansPlusPlusClusterer(VectorFloat<?>[] points, int k, float anisotropicThreshold) {
+        this(points, chooseInitialCentroids(points, k), anisotropicThreshold);
     }
 
     /**
@@ -57,13 +74,26 @@ public class KMeansPlusPlusClusterer {
      * <p>
      * The initial centroids provided as a parameter are copied before modification.
      *
-     * @param points the points to cluster.
+     * @param points the points to cluster (points[n][i] is the ith component of the nth point)
      * @param centroids the initial centroids.
+     * @param anisotropicThreshold the threshold of relevance for anisotropic angular distance shaping, giving
+     *        higher priority to parallel error.  Anisotropic shaping requires that your dataset be normalized
+     *        to unit length.  Use a threshold of `UNWEIGHTED` for normal isotropic L2 distance.
+     *        anisotropicThreshold is only valid when the supplied points are normalized to unit length.
      */
-    public KMeansPlusPlusClusterer(VectorFloat<?>[] points, VectorFloat<?> centroids) {
+    public KMeansPlusPlusClusterer(VectorFloat<?>[] points, VectorFloat<?> centroids, float anisotropicThreshold) {
+        if (Float.isNaN(anisotropicThreshold) || anisotropicThreshold < -1.0 || anisotropicThreshold >= 1.0) {
+            // We use the weight function I(t >= T) from section 3.2 of the AVQ paper, which only considers
+            // quantization loss when the dot product is above a threshold T.  For unit vectors, the dot product
+            // is between -1 and 1, so the valid range for T is -1 <= t < 1.
+            throw new IllegalArgumentException("Valid range for anisotropic threshold T is -1.0 <= t < 1.0");
+        }
+
         this.points = points;
         this.k = centroids.length() / points[0].length();
         this.centroids = centroids.copy();
+        this.anisotropicThreshold = anisotropicThreshold;
+
         centroidDenoms = new int[k];
         // initialize with empty vectors
         centroidNums = new VectorFloat<?>[k];
@@ -76,24 +106,54 @@ public class KMeansPlusPlusClusterer {
     }
 
     /**
+     * Compute the parallel cost multiplier for a given threshold and squared norm.
+     * <p>
+     * This uses the approximation derived in Theorem 3.4 of
+     * "Accelerating Large-Scale Inference with Anisotropic Vector Quantization".
+     */
+    static float computeParallelCostMultiplier(double threshold, int dimensions) {
+        assert Double.isFinite(threshold) : "threshold=" + threshold;
+        // It's not completely clear that computing the PCM from a dot product threshold is better
+        // than just allowing the user to specify the PCM directly, but it works well enough,
+        // and it's arguably easier to reason about.
+        double parallelCost = threshold * threshold; // we would divide by norm squared if we supported non-unit vectors
+        double perpendicularCost = (1 - parallelCost) / (dimensions - 1);
+        return (float) max(1.0, (parallelCost / perpendicularCost));
+    }
+
+    /**
      * Performs clustering on the provided set of points.
      *
      * @return a VectorFloat of cluster centroids.
      */
-    public VectorFloat<?> cluster(int maxIterations) {
-        for (int i = 0; i < maxIterations; i++) {
-            int changedCount = clusterOnce();
+    public VectorFloat<?> cluster(int unweightedIterations, int anisotropicIterations) {
+        // Always cluster unweighted first, it is significantly faster
+        for (int i = 0; i < unweightedIterations; i++) {
+            int changedCount = clusterOnceUnweighted();
             if (changedCount <= 0.01 * points.length) {
                 break;
             }
         }
+
+        // Optionally, refine using anisotropic clustering
+        for (int i = 0; i < anisotropicIterations; i++) {
+            int changedCount = clusterOnceAnisotropic();
+            if (changedCount <= 0.01 * points.length) {
+                break;
+            }
+        }
+
         return centroids;
     }
 
     // This is broken out as a separate public method to allow implementing OPQ efficiently
-    public int clusterOnce() {
-        updateCentroids();
-        return updateAssignedPoints();
+    public int clusterOnceUnweighted() {
+        updateCentroidsUnweighted();
+        return updateAssignedPointsUnweighted();
+    }
+    public int clusterOnceAnisotropic() {
+        updateCentroidsAnisotropic();
+        return updateAssignedPointsAnisotropic();
     }
 
     /**
@@ -124,7 +184,7 @@ public class KMeansPlusPlusClusterer {
         VectorFloat<?> firstCentroid = points[random.nextInt(points.length)];
         centroids.copyFrom(firstCentroid, 0, 0, firstCentroid.length());
         for (int i = 0; i < points.length; i++) {
-            float distance1 = VectorUtil.squareL2Distance(points[i], firstCentroid);
+            float distance1 = squareL2Distance(points[i], firstCentroid);
             distances[i] = Math.min(distances[i], distance1);
         }
 
@@ -154,7 +214,7 @@ public class KMeansPlusPlusClusterer {
 
             // Update distances, but only if the new centroid provides a closer distance
             for (int j = 0; j < points.length; j++) {
-                float newDistance = VectorUtil.squareL2Distance(points[j], nextCentroid);
+                float newDistance = squareL2Distance(points[j], nextCentroid);
                 distances[j] = Math.min(distances[j], newDistance);
             }
         }
@@ -171,19 +231,21 @@ public class KMeansPlusPlusClusterer {
             VectorFloat<?> point = points[i];
             var newAssignment = getNearestCluster(point);
             centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
-            VectorUtil.addInPlace(centroidNums[newAssignment], point);
+            addInPlace(centroidNums[newAssignment], point);
             assignments[i] = newAssignment;
         }
     }
 
     /**
-     * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`.
+     * Assigns points to the nearest cluster.  The results are stored as ordinals in `assignments`,
+     * and `centroidNums` and `centroidDenoms` are updated to accelerate centroid recomputation.
+     * <p>
      * This method relies on valid assignments existing from either initializeAssignedPoints or
      * a previous invocation of this method.
      *
      * @return the number of points that changed clusters
      */
-    private int updateAssignedPoints() {
+    private int updateAssignedPointsUnweighted() {
         int changedCount = 0;
 
         for (int i = 0; i < points.length; i++) {
@@ -193,15 +255,66 @@ public class KMeansPlusPlusClusterer {
 
             if (newAssignment != oldAssignment) {
                 centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
-                VectorUtil.subInPlace(centroidNums[oldAssignment], point);
+                subInPlace(centroidNums[oldAssignment], point);
                 centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
-                VectorUtil.addInPlace(centroidNums[newAssignment], point);
+                addInPlace(centroidNums[newAssignment], point);
                 assignments[i] = newAssignment;
                 changedCount++;
             }
         }
 
         return changedCount;
+    }
+
+    /**
+     * Assigns points to the nearest cluster.  Only `assignments` are updated, there is no precomputation
+     * done for the centroid updates.
+     *
+     * @return the number of points that changed clusters
+     */
+    private int updateAssignedPointsAnisotropic() {
+        float pcm = computeParallelCostMultiplier(anisotropicThreshold, points[0].length());
+
+        int changedCount = 0;
+        for (int i = 0; i < points.length; i++) {
+            var point = points[i];
+
+            int index = assignments[i];
+            float minDist = Float.MAX_VALUE;
+            for (int j = 0; j < k; j++) {
+                float dist = weightedDistance(point, j, pcm);
+                if (dist < minDist) {
+                    minDist = dist;
+                    index = j;
+                }
+            }
+
+            if (index != assignments[i]) {
+                changedCount++;
+                assignments[i] = index;
+            }
+        }
+
+        return changedCount;
+    }
+
+    /**
+     * Calculates the weighted distance between two data points.
+     */
+    private float weightedDistance(VectorFloat<?> x, int m, float parallelCostMultiplier) {
+        // sum up the contributions of each component
+        float parallelErrorSubtotal = 0.0f;
+        float residualSquaredNorm = 0.0f;
+        for (int i = 0; i < x.length(); i++) {
+            // TODO simd this
+            float residualCoord = centroids.get(m * x.length() + i) - x.get(i);
+            parallelErrorSubtotal += residualCoord * x.get(i);
+            residualSquaredNorm += square(residualCoord);
+        }
+        float parallelError = square(parallelErrorSubtotal);
+        float perpendicularError = residualSquaredNorm - parallelError;
+
+        return parallelCostMultiplier * parallelError + perpendicularError;
     }
 
     /**
@@ -212,7 +325,7 @@ public class KMeansPlusPlusClusterer {
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            float distance = VectorUtil.squareL2Distance(point, 0, centroids, i * point.length(), point.length());
+            float distance = squareL2Distance(point, 0, centroids, i * point.length(), point.length());
             if (distance < minDistance) {
                 minDistance = distance;
                 nearestCluster = i;
@@ -237,17 +350,77 @@ public class KMeansPlusPlusClusterer {
     /**
      * Calculates centroids from centroidNums/centroidDenoms updated during point assignment
      */
-    private void updateCentroids() {
-        var random = ThreadLocalRandom.current();
+    private void updateCentroidsUnweighted() {
         for (int i = 0; i < k; i++) {
             var denom = centroidDenoms[i];
             if (denom == 0) {
-                centroids.copyFrom(points[random.nextInt(points.length)], 0, i * points[0].length(), points[0].length());
+                // no points assigned to this cluster
+                initializeCentroidToRandomPoint(i);
             } else {
                 var centroid = centroidNums[i].copy();
-                VectorUtil.scale(centroid, 1.0f / centroidDenoms[i]);
+                scale(centroid, 1.0f / centroidDenoms[i]);
                 centroids.copyFrom(centroid, 0, i * centroid.length(), centroid.length());
             }
+        }
+    }
+
+    private void initializeCentroidToRandomPoint(int i) {
+        var random = ThreadLocalRandom.current();
+        centroids.copyFrom(points[random.nextInt(points.length)], 0, i * points[0].length(), points[0].length());
+    }
+
+    // Uses the algorithm given in appendix 7.5 of "Accelerating Large-Scale Inference with Anisotropic Vector Quantization"
+    private void updateCentroidsAnisotropic() {
+        int dimensions = points[0].length();
+        float pcm = computeParallelCostMultiplier(anisotropicThreshold, dimensions);
+        // in most places we simplify
+        //   loss = pcm' * parallel + ocm' * orthogonal
+        // with pcm = pcm' / ocm', so
+        //   loss ~ pcm * parallel + orthogonal
+        // here we invert that as ocm = 1 / pcm
+        float orthogonalCostMultiplier = 1.0f / pcm;
+
+        // turn the point -> cluster assignments into cluster -> list of points so we don't
+        // have to make `k` passes over `assignments`
+        var pointsByCluster = new HashMap<Integer, List<Integer>>();
+        for (int i = 0; i < assignments.length; i++) {
+            pointsByCluster.computeIfAbsent(assignments[i], __ -> new ArrayList<>()).add(i);
+        }
+
+        for (int i = 0; i < k; i++) {
+            var L = pointsByCluster.getOrDefault(i, List.of());
+            if (L.isEmpty()) {
+                // no points assigned to this cluster
+                initializeCentroidToRandomPoint(i);
+                continue;
+            }
+
+            // Calculate the mean and outer product sums for all points in the cluster k
+            var mean = vectorTypeSupport.createFloatVector(dimensions);
+            var outerProdSums = new Matrix(dimensions, dimensions);
+            for (int j : L) {
+                var point = points[j];
+                // update mean
+                addInPlace(mean, point);
+                // update outer product sum
+                float denom = dotProduct(point, point);
+                if (denom > 0) {
+                    var op = Matrix.outerProduct(point, point);
+                    op.scale(1.0f / denom);
+                    outerProdSums.addInPlace(op);
+                }
+            }
+            outerProdSums.scale((1 - orthogonalCostMultiplier) / L.size());
+            scale(mean, 1.0f / L.size());
+
+            // Add (orthogonalCostMultiplier * I) factor
+            for (int j = 0; j < dimensions; j++) {
+                outerProdSums.addTo(j, j, orthogonalCostMultiplier);
+            }
+
+            // Invert the matrix and multiply with the mean to find the new centroid
+            var invertedMatrix = outerProdSums.invert();
+            centroids.copyFrom(invertedMatrix.multiply(mean), 0, i * dimensions, dimensions);
         }
     }
 
@@ -259,8 +432,8 @@ public class KMeansPlusPlusClusterer {
             throw new IllegalArgumentException("Can't compute centroid of empty points list");
         }
 
-        VectorFloat<?> centroid = VectorUtil.sum(points);
-        VectorUtil.scale(centroid, 1.0f / points.size());
+        VectorFloat<?> centroid = sum(points);
+        scale(centroid, 1.0f / points.size());
 
         return centroid;
     }
