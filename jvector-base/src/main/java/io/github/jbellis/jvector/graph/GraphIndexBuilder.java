@@ -25,10 +25,10 @@ import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import org.agrona.collections.IntArrayQueue;
+import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
@@ -242,7 +242,7 @@ public class GraphIndexBuilder<T> {
                  var v1 = vectors.get();
                  var v2 = vectorsCopy.get())
             {
-                var connectionTargets = new HashSet<Integer>();
+                var connectionTargets = new IntHashSet();
                 for (int node = 0; node < graph.getIdUpperBound(); node++) {
                     if (!connectedNodes.get(node) && graph.containsNode(node)) {
                         // search for the closest neighbors
@@ -271,17 +271,17 @@ public class GraphIndexBuilder<T> {
     }
 
     private void findConnected(AtomicFixedBitSet connectedNodes, int start) {
-        var queue = new ArrayDeque<Integer>();
+        var queue = new IntArrayQueue();
         queue.add(start);
         try (var view = graph.getView()) {
             while (!queue.isEmpty()) {
                 // DFS should result in less contention across findConnected threads than BFS
-                int next = queue.pop();
+                int next = queue.pollInt();
                 if (connectedNodes.getAndSet(next)) {
                     continue;
                 }
                 for (var it = view.getNeighborsIterator(next); it.hasNext(); ) {
-                    queue.add(it.nextInt());
+                    queue.addInt(it.nextInt());
                 }
             }
         } catch (Exception e) {
@@ -433,7 +433,7 @@ public class GraphIndexBuilder<T> {
 
         // remove deleted nodes from neighbor lists.  If neighbor count drops below a minimum,
         // add random connections to preserve connectivity
-        var affectedLiveNodes = new HashSet<Integer>();
+        var affectedLiveNodes = new IntHashSet();
         var R = new Random();
         try (var v1 = vectors.get();
              var v2 = vectorsCopy.get())
@@ -556,7 +556,7 @@ public class GraphIndexBuilder<T> {
         neighbors.backlink(graph::getNeighbors, neighborOverflow);
     }
 
-    private NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NodeArray scratch) {
+    private static NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, int count, NodeArray scratch) {
         scratch.clear();
         for (int i = 0; i < count; i++) {
             var candidate = candidates[i];

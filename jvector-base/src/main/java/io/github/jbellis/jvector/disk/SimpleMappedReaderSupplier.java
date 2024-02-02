@@ -34,4 +34,4 @@ public class SimpleMappedReaderSupplier implements ReaderSupplier {
     public void close() {
         smr.close();
     }
-};
+}
