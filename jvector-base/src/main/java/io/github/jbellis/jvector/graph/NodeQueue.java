@@ -136,9 +136,9 @@ public class NodeQueue {
 
     public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.ExactScoreFunction sf, float rerankFloor) {
         return IntStream.range(0, size())
-                .mapToObj(i -> heap.get(i + 1))
+                .mapToLong(i -> heap.get(i + 1))
                 .filter(m -> decodeScore(m) >= rerankFloor)
-                .map(m -> new SearchResult.NodeScore(decodeNodeId(m), sf.similarityTo(decodeNodeId(m))))
+                .mapToObj(m -> new SearchResult.NodeScore(decodeNodeId(m), sf.similarityTo(decodeNodeId(m))))
                 .toArray(SearchResult.NodeScore[]::new);
     }
 

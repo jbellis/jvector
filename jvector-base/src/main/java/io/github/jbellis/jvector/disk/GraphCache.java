@@ -19,10 +19,9 @@ package io.github.jbellis.jvector.disk;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
+import org.agrona.collections.Int2ObjectHashMap;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 public abstract class GraphCache implements Accountable
 {
@@ -65,12 +64,12 @@ public abstract class GraphCache implements Accountable
     private static final class HMGraphCache extends GraphCache
     {
         // Map is created on construction and never modified
-        private final Map<Integer, CachedNode> cache;
+        private final Int2ObjectHashMap<CachedNode> cache;
         private long ramBytesUsed = 0;
 
         public HMGraphCache(GraphIndex<float[]> graph, int distance) {
             try (var view = graph.getView()) {
-                HashMap<Integer, CachedNode> tmpCache = new HashMap<>();
+                var tmpCache = new Int2ObjectHashMap<CachedNode>();
                 cacheNeighborsOf(tmpCache, view, view.entryNode(), distance);
                 // Assigning to a final value ensure it is safely published
                 cache = tmpCache;
@@ -79,17 +78,17 @@ public abstract class GraphCache implements Accountable
             }
         }
 
-        private void cacheNeighborsOf(HashMap<Integer, CachedNode> tmpCache, GraphIndex.View<float[]> view, int ordinal, int distance) {
+        private void cacheNeighborsOf(Int2ObjectHashMap<CachedNode> tmpCache, GraphIndex.View<float[]> view, int ordinal, int distance) {
             // cache this node
             var it = view.getNeighborsIterator(ordinal);
             int[] neighbors = new int[it.size()];
             int i = 0;
             while (it.hasNext()) {
-                neighbors[i++] = it.next();
+                neighbors[i++] = it.nextInt();
             }
             var node = new CachedNode(view.getVector(ordinal), neighbors);
             tmpCache.put(ordinal, node);
-            ramBytesUsed += RamUsageEstimator.HASHTABLE_RAM_BYTES_PER_ENTRY + RamUsageEstimator.sizeOf(node.vector) + RamUsageEstimator.sizeOf(node.neighbors);
+            ramBytesUsed += 4 + RamUsageEstimator.NUM_BYTES_OBJECT_REF + RamUsageEstimator.sizeOf(node.vector) + RamUsageEstimator.sizeOf(node.neighbors);
 
             // call recursively on neighbors
             if (distance > 0) {

@@ -409,7 +409,7 @@ public class SparseFixedBitSet extends BitSet {
   }
 
   /** Return the long bits at the given <code>i64</code> index. */
-  private long longBits(long index, long[] bits, int i64) {
+  private static long longBits(long index, long[] bits, int i64) {
     if ((index & (1L << i64)) == 0) {
       return 0L;
     } else {

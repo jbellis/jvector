@@ -22,13 +22,13 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
+import org.agrona.collections.Int2IntHashMap;
 
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.IntStream;
 
@@ -63,7 +63,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
      */
     public static <T> Map<Integer, Integer> getSequentialRenumbering(GraphIndex<T> graph) {
         try (var view = graph.getView()) {
-            Map<Integer, Integer> oldToNewMap = new HashMap<>();
+            Int2IntHashMap oldToNewMap = new Int2IntHashMap(-1);
             int nextOrdinal = 0;
             for (int i = 0; i < view.getIdUpperBound(); i++) {
                 if (graph.containsNode(i)) {

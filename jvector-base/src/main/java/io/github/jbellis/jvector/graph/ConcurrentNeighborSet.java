@@ -20,11 +20,11 @@ import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
+import org.agrona.collections.IntHashSet;
 
-import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.function.IntFunction;
 
 import static java.lang.Math.min;
 
@@ -93,7 +93,7 @@ public class ConcurrentNeighborSet {
      * For every neighbor X that this node Y connects to, add a reciprocal link from X to Y.
      * If overflow is > 1.0, allow the number of neighbors to exceed maxConnections temporarily.
      */
-    public void backlink(Function<Integer, ConcurrentNeighborSet> neighborhoodOf, float overflow) {
+    public void backlink(IntFunction<ConcurrentNeighborSet> neighborhoodOf, float overflow) {
         NodeArray neighbors = neighborsRef.get();
         for (int i = 0; i < neighbors.size(); i++) {
             int nbr = neighbors.node[i];
@@ -281,7 +281,7 @@ public class ConcurrentNeighborSet {
 
         // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
         // we need to remember all the nodes with the current score to avoid adding duplicates
-        var nodesWithLastScore = new HashSet<>();
+        var nodesWithLastScore = new IntHashSet();
         float lastAddedScore = Float.NaN;
 
         // loop through both source arrays, adding the highest score element to the merged array,
