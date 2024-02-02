@@ -59,9 +59,6 @@ public class NodeQueue {
     private final AbstractLongHeap heap;
     private final Order order;
 
-    // Whether the search stopped early because it reached the visited nodes limit
-    private boolean incomplete;
-
     public NodeQueue(AbstractLongHeap heap, Order order) {
         this.heap = heap;
         this.order = order;
@@ -96,7 +93,7 @@ public class NodeQueue {
      * <p>The less significant 32 bits represent the node ID.
      *
      * <p>The bits representing the node ID are complemented to guarantee the win for the smaller node
-     * Id.
+     * ID.
      *
      * <p>The AND with 0xFFFFFFFFL (a long with first 32 bit as 1) is necessary to obtain a long that
      * has
@@ -160,15 +157,6 @@ public class NodeQueue {
 
     public void clear() {
         heap.clear();
-        incomplete = false;
-    }
-
-    public boolean incomplete() {
-        return incomplete;
-    }
-
-    public void markIncomplete() {
-        this.incomplete = true;
     }
 
     @Override

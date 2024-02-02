@@ -81,11 +81,9 @@ public class TestNodeQueue extends RandomizedTest {
     NodeQueue nn = new NodeQueue(new GrowableLongHeap(2), NodeQueue.Order.MIN_HEAP);
     nn.push(1, 1.1f);
     nn.push(2, -2.2f);
-    nn.markIncomplete();
     nn.clear();
 
     assertEquals(0, nn.size());
-    assertFalse(nn.incomplete());
   }
 
   @Test

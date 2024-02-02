@@ -280,7 +280,7 @@ public class GraphSearcher<T> {
         }
         evictedResults.clear();
 
-        while (candidates.size() > 0 && !resultsQueue.incomplete()) {
+        while (candidates.size() > 0) {
             // done when best candidate is worse than the worst result so far
             float topCandidateScore = candidates.topScore();
             if (topCandidateScore < minAcceptedSimilarity) {
