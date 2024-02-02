@@ -21,12 +21,16 @@ import io.github.jbellis.jvector.disk.SimpleMappedReaderSupplier;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.logging.Logger;
 
 public class ReaderSupplierFactory {
+    private static final Logger LOG = Logger.getLogger(ReaderSupplierFactory.class.getName());
+
     public static ReaderSupplier open(Path path) throws IOException {
         try {
             return new MMapReaderSupplier(path);
         } catch (UnsatisfiedLinkError|NoClassDefFoundError e) {
+            LOG.log(java.util.logging.Level.WARNING, "MMapReaderSupplier not available, falling back to SimpleMappedReaderSupplier", e);
             if (Files.size(path) > Integer.MAX_VALUE) {
                 throw new RuntimeException("File sizes greater than 2GB are not supported on Windows--contributions welcome");
             }
