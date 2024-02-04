@@ -110,27 +110,15 @@ public abstract class PoolingSupport<T> {
 
     final static class ThreadPooling<T> extends PoolingSupport<T>
     {
-        private final ThreadLocal<Pooled<T>> threadLocal;
-        private final Supplier<T> initialValue;
+        private final ExplicitThreadLocal<Pooled<T>> threadLocal;
 
         private ThreadPooling(Supplier<T> initialValue) {
-            this.initialValue = initialValue;
-            this.threadLocal = new ThreadLocal<>();
+            this.threadLocal = ExplicitThreadLocal.withInitial(() -> new Pooled<>(this, initialValue.get()));
         }
 
         @Override
         public Pooled<T> get() {
-            Pooled<T> val = threadLocal.get();
-            if (val != null)
-                return val;
-
-            // We pass null as the owner to prevent a memory leak. If we passed 'this' as the owner and then put val
-            // into the threadLocal, then even after 'this' is inaccessable from the application code, it would still
-            // have a strong reference in the ThreadLocalMap, thus preventing this object from being garbage collected
-            // and preventing the value in threadLocal from being garbage collected.
-            val = new Pooled<>(null, initialValue.get());
-            threadLocal.set(val);
-            return val;
+            return threadLocal.get();
         }
 
         @Override
@@ -140,7 +128,6 @@ public abstract class PoolingSupport<T> {
 
         @Override
         protected void onClosed(Pooled<T> value) {
-
         }
     }
 
