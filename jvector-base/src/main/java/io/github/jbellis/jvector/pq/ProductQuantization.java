@@ -20,8 +20,8 @@ import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.util.PoolingSupport;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
+import io.github.jbellis.jvector.util.StorageSupport;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
@@ -85,16 +85,14 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
             ForkJoinPool parallelExecutor) {
         // limit the number of vectors we train on
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
-        var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
+        var ravvCopy = ravv.isValueShared() ? StorageSupport.newThreadLocal(ravv::copy) : StorageSupport.newShared(ravv);
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
         var vectors = parallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
-                    try (var pooledRavv = ravvCopy.get()) {
-                        var localRavv = pooledRavv.get();
-                        float[] v = localRavv.vectorValue(targetOrd);
-                        return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
-                    }
+                    var localRavv = ravvCopy.get();
+                    float[] v = localRavv.vectorValue(targetOrd);
+                    return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
                 })
                 .collect(Collectors.toList()))
                 .join();

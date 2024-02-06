@@ -21,7 +21,7 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.util.PoolingSupport;
+import io.github.jbellis.jvector.util.StorageSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -48,14 +48,14 @@ import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  */
 public class GraphIndexBuilder<T> {
     private final int beamWidth;
-    private final PoolingSupport<NodeArray> naturalScratch;
-    private final PoolingSupport<NodeArray> concurrentScratch;
+    private final StorageSupport<NodeArray> naturalScratch;
+    private final StorageSupport<NodeArray> concurrentScratch;
 
     private final VectorSimilarityFunction similarityFunction;
     private final float neighborOverflow;
     private final float alpha;
     private final VectorEncoding vectorEncoding;
-    private final PoolingSupport<GraphSearcher<?>> graphSearcher;
+    private final StorageSupport<GraphSearcher<?>> graphSearcher;
 
     @VisibleForTesting
     final OnHeapGraphIndex<T> graph;
@@ -65,8 +65,8 @@ public class GraphIndexBuilder<T> {
     // colliding.  Usually it's obvious because you can see the different sources being used
     // in the same method.  The only tricky place is in addGraphNode, which uses `vectors` immediately,
     // and `vectorsCopy` later on when defining the ScoreFunction for search.
-    private final PoolingSupport<RandomAccessVectorValues<T>> vectors;
-    private final PoolingSupport<RandomAccessVectorValues<T>> vectorsCopy;
+    private final StorageSupport<RandomAccessVectorValues<T>> vectors;
+    private final StorageSupport<RandomAccessVectorValues<T>> vectorsCopy;
     private final int dimension; // for convenience so we don't have to go to the pool for this
     private final NodeSimilarity similarity;
 
@@ -128,8 +128,8 @@ public class GraphIndexBuilder<T> {
             float alpha,
             ForkJoinPool simdExecutor,
             ForkJoinPool parallelExecutor) {
-        var localVectors = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
-        var localVectorsCopy = vectorValues.isValueShared() ? PoolingSupport.newThreadBased(vectorValues::copy) : PoolingSupport.newNoPooling(vectorValues);
+        var localVectors = vectorValues.isValueShared() ? StorageSupport.newThreadLocal(vectorValues::copy) : StorageSupport.newShared(vectorValues);
+        var localVectorsCopy = vectorValues.isValueShared() ? StorageSupport.newThreadLocal(vectorValues::copy) : StorageSupport.newShared(vectorValues);
         vectors = localVectors;
         vectorsCopy = localVectorsCopy;
         dimension = vectorValues.dimension();
@@ -147,34 +147,28 @@ public class GraphIndexBuilder<T> {
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
         NodeSimilarity localSimilarity = node1 -> {
-            try (var v = localVectors.get(); var vc = localVectorsCopy.get()) {
-                T v1 = v.get().vectorValue(node1);
-                return (NodeSimilarity.ExactScoreFunction) node2 -> scoreBetween(vectorEncoding, similarityFunction, v1, vc.get().vectorValue(node2));
-            }
+            T v1 = localVectors.get().vectorValue(node1);
+            var lv = localVectorsCopy.get(); // avoid TL circular reference
+            return (NodeSimilarity.ExactScoreFunction) node2 -> scoreBetween(vectorEncoding, similarityFunction, v1, lv.vectorValue(node2));
         };
         similarity = localSimilarity;
         OnHeapGraphIndex<T> ohgi = new OnHeapGraphIndex<>(M, (node, m) -> new ConcurrentNeighborSet(node, m, localSimilarity, alpha));
         this.graph = ohgi;
 
         // this view will never get closed, but it's okay because we know it's an OHGI view, which has a no-op close
-        this.graphSearcher = PoolingSupport.newThreadBased(() -> new GraphSearcher.Builder<>(ohgi.getView()).withConcurrentUpdates().build());
+        this.graphSearcher = StorageSupport.newThreadLocal(() -> new GraphSearcher.Builder<>(ohgi.getView()).withConcurrentUpdates().build());
 
         // in scratch we store candidates in reverse order: worse candidates are first
-        this.naturalScratch = PoolingSupport.newThreadBased(() -> new NodeArray(Math.max(beamWidth, M + 1)));
-        this.concurrentScratch = PoolingSupport.newThreadBased(() -> new NodeArray(Math.max(beamWidth, M + 1)));
+        this.naturalScratch = StorageSupport.newThreadLocal(() -> new NodeArray(Math.max(beamWidth, M + 1)));
+        this.concurrentScratch = StorageSupport.newThreadLocal(() -> new NodeArray(Math.max(beamWidth, M + 1)));
     }
 
     public OnHeapGraphIndex<T> build() {
-        int size;
-        try (var v = vectors.get()) {
-            size = v.get().size();
-        }
+        int size = vectors.get().size();
 
         simdExecutor.submit(() -> {
             IntStream.range(0, size).parallel().forEach(i -> {
-                try (var v1 = vectors.get()) {
-                    addGraphNode(i, v1.get());
-                }
+                addGraphNode(i, vectors.get());
             });
         }).join();
 
@@ -240,26 +234,23 @@ public class GraphIndexBuilder<T> {
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();
-            try (var gs = graphSearcher.get())
-            {
-                var connectionTargets = new IntHashSet();
-                for (int node = 0; node < graph.getIdUpperBound(); node++) {
-                    if (!connectedNodes.get(node) && graph.containsNode(node)) {
-                        // search for the closest neighbors
-                        var notSelfBits = createNotSelfBits(node);
-                        int ep = graph.entry();
-                        var result = gs.get().searchInternal(similarity.scoreProvider(node), null, beamWidth, 0.0f, 0.0f, ep, notSelfBits).getNodes();
-                        // connect this node to the closest neighbor that hasn't already been used as a connection target
-                        // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
-                        // overwritten by the next node to need reconnection if we don't enforce uniqueness)
-                        for (var ns : result) {
-                            if (connectionTargets.add(ns.node)) {
-                                graph.getNeighbors(ns.node).insertNotDiverse(node, ns.score, true);
-                                break;
-                            }
+            var connectionTargets = new IntHashSet();
+            for (int node = 0; node < graph.getIdUpperBound(); node++) {
+                if (!connectedNodes.get(node) && graph.containsNode(node)) {
+                    // search for the closest neighbors
+                    var notSelfBits = createNotSelfBits(node);
+                    int ep = graph.entry();
+                    var result = graphSearcher.get().searchInternal(similarity.scoreProvider(node), null, beamWidth, 0.0f, 0.0f, ep, notSelfBits).getNodes();
+                    // connect this node to the closest neighbor that hasn't already been used as a connection target
+                    // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
+                    // overwritten by the next node to need reconnection if we don't enforce uniqueness)
+                    for (var ns : result) {
+                        if (connectionTargets.add(ns.node)) {
+                            graph.getNeighbors(ns.node).insertNotDiverse(node, ns.score, true);
+                            break;
                         }
-                        nReconnected.incrementAndGet();
                     }
+                    nReconnected.incrementAndGet();
                 }
             }
             if (nReconnected.get() == 0) {
@@ -316,18 +307,14 @@ public class GraphIndexBuilder<T> {
 
         insertionsInProgress.add(node);
         ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
-        try (var gs = graphSearcher.get();
-             var vc = vectorsCopy.get();
-             var naturalScratchPooled = naturalScratch.get();
-             var concurrentScratchPooled = concurrentScratch.get())
-        {
+        try {
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
             NodeSimilarity.ScoreFunction scoreFunction = similarity.scoreProvider(node);
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
+            var result = graphSearcher.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
 
             // Update neighbors with these candidates.
             // The DiskANN paper calls for using the entire set of visited nodes along the search path as
@@ -336,8 +323,8 @@ public class GraphIndexBuilder<T> {
             // this means that considering additional nodes from the search path, that are by definition
             // farther away than the ones in the topK, would not change the result.)
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
-            var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
-            var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled.get(), vectors, vc.get());
+            var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratch.get());
+            var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratch.get(), vectors, vectorsCopy.get());
             updateNeighbors(newNodeNeighbors, natural, concurrent);
 
             maybeUpdateEntryPoint(node);
@@ -386,18 +373,13 @@ public class GraphIndexBuilder<T> {
     }
 
     public void improveConnections(int node) {
-        try (var gs = graphSearcher.get();
-             var naturalScratchPooled = naturalScratch.get())
-        {
-
-            // find ANN of the new node by searching the graph
-            int ep = graph.entry();
-            NodeSimilarity.ScoreFunction scoreFunction = similarity.scoreProvider(node);
-            var bits = new ExcludingBits(node);
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
-            var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratchPooled.get());
-            updateNeighbors(graph.getNeighbors(node), natural, NodeArray.EMPTY);
-        }
+        // find ANN of the new node by searching the graph
+        int ep = graph.entry();
+        NodeSimilarity.ScoreFunction scoreFunction = similarity.scoreProvider(node);
+        var bits = new ExcludingBits(node);
+        var result = graphSearcher.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
+        var natural = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratch.get());
+        updateNeighbors(graph.getNeighbors(node), natural, NodeArray.EMPTY);
     }
 
     public void markNodeDeleted(int node) {
@@ -482,17 +464,13 @@ public class GraphIndexBuilder<T> {
     private void addNNDescentConnections(int node) {
         var notSelfBits = createNotSelfBits(node);
 
-        try (var gs = graphSearcher.get();
-             var scratch = naturalScratch.get())
-        {
-            NodeSimilarity.ScoreFunction scoreFunction = similarity.scoreProvider(node);
-            int ep = graph.entry();
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
-            var candidates = toScratchCandidates(result.getNodes(), result.getNodes().length, scratch.get());
-            // We use just the topK results as candidates, which is much less expensive than computing scores for
-            // the other visited nodes.  See comments in addGraphNode.
-            updateNeighbors(graph.getNeighbors(node), candidates, NodeArray.EMPTY);
-        }
+        NodeSimilarity.ScoreFunction scoreFunction = similarity.scoreProvider(node);
+        int ep = graph.entry();
+        var result = graphSearcher.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
+        var candidates = toScratchCandidates(result.getNodes(), result.getNodes().length, naturalScratch.get());
+        // We use just the topK results as candidates, which is much less expensive than computing scores for
+        // the other visited nodes.  See comments in addGraphNode.
+        updateNeighbors(graph.getNeighbors(node), candidates, NodeArray.EMPTY);
     }
 
     private static Bits createNotSelfBits(int node) {
@@ -518,25 +496,22 @@ public class GraphIndexBuilder<T> {
             return graph.entry();
         }
 
-        try (var gs = graphSearcher.get();
-             var vc = vectorsCopy.get())
-        {
-            // compute centroid
-            var centroid = new float[dimension];
-            for (var it = graph.getNodes(); it.hasNext(); ) {
-                var node = it.nextInt();
-                VectorUtil.addInPlace(centroid, (float[]) vc.get().vectorValue(node));
-            }
-            VectorUtil.divInPlace(centroid, graph.size());
-
-            // search for the node closest to the centroid
-            var localVE = this.vectorEncoding;
-            var localSF = this.similarityFunction;
-            NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(localVE, localSF, centroid, vc.get().vectorValue(i));
-            int ep = graph.entry();
-            var result = gs.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
-            return result.getNodes()[0].node;
+        // compute centroid
+        var centroid = new float[dimension];
+        for (var it = graph.getNodes(); it.hasNext(); ) {
+            var node = it.nextInt();
+            VectorUtil.addInPlace(centroid, (float[]) vectorsCopy.get().vectorValue(node));
         }
+        VectorUtil.divInPlace(centroid, graph.size());
+
+        // search for the node closest to the centroid
+        var localVE = this.vectorEncoding;
+        var localSF = this.similarityFunction;
+        var localVC = vectorsCopy.get(); // avoid lambda capturing `this`
+        NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(localVE, localSF, centroid, localVC.vectorValue(i));
+        int ep = graph.entry();
+        var result = graphSearcher.get().searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
+        return result.getNodes()[0].node;
     }
 
     private void updateNeighbors(ConcurrentNeighborSet neighbors, NodeArray natural, NodeArray concurrent) {

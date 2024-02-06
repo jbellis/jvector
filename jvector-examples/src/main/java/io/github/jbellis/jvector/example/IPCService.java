@@ -16,19 +16,6 @@
 
 package io.github.jbellis.jvector.example;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOError;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.concurrent.ForkJoinPool;
-import java.util.stream.IntStream;
-
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.MMapRandomAccessVectorValues;
@@ -46,12 +33,25 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.util.PoolingSupport;
+import io.github.jbellis.jvector.util.StorageSupport;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.newsclub.net.unix.AFUNIXServerSocket;
 import org.newsclub.net.unix.AFUNIXSocket;
 import org.newsclub.net.unix.AFUNIXSocketAddress;
+
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOError;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
 
 /**
  * Simple local service to use for interaction with JVector over IPC.
@@ -180,13 +180,11 @@ public class IPCService
         start = System.nanoTime();
 
         byte[][] quantizedVectors = new byte[ravv.size()][];
-        var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
+        var ravvCopy = ravv.isValueShared() ? StorageSupport.newThreadLocal(ravv::copy) : StorageSupport.newShared(ravv);
         PhysicalCoreExecutor.instance.execute(() ->
             IntStream.range(0, quantizedVectors.length).parallel().forEach(i -> {
-                try (var pooledRavv = ravvCopy.get()) {
-                    var localRavv = pooledRavv.get();
-                    quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
-                }
+                var localRavv = ravvCopy.get();
+                quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
             })
         );
 
