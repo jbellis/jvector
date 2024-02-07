@@ -45,8 +45,9 @@ import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.util.PoolingSupport;
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.newsclub.net.unix.AFUNIXServerSocket;
@@ -180,13 +181,11 @@ public class IPCService
         start = System.nanoTime();
 
         byte[][] quantizedVectors = new byte[ravv.size()][];
-        var ravvCopy = ravv.isValueShared() ? PoolingSupport.newThreadBased(ravv::copy) : PoolingSupport.newNoPooling(ravv);
+        var ravvCopy = ravv.threadLocalSupplier();
         PhysicalCoreExecutor.instance.execute(() ->
             IntStream.range(0, quantizedVectors.length).parallel().forEach(i -> {
-                try (var pooledRavv = ravvCopy.get()) {
-                    var localRavv = pooledRavv.get();
-                    quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
-                }
+                var localRavv = ravvCopy.get();
+                quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
             })
         );
 

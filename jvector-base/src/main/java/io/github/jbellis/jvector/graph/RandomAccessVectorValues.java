@@ -24,6 +24,10 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
+
+import java.util.function.Supplier;
+
 /**
  * Provides random access to vectors by dense ordinal. This interface is used by graph-based
  * implementations of KNN search.
@@ -68,4 +72,16 @@ public interface RandomAccessVectorValues<T> {
      * Un-shared implementations may simply return `this`.
      */
     RandomAccessVectorValues<T> copy();
+
+    /**
+     * Returns a supplier of thread-local copies of the RAVV.
+     */
+    default Supplier<RandomAccessVectorValues<T>> threadLocalSupplier() {
+        if (!isValueShared()) {
+            return () -> this;
+        }
+
+        var tl = ExplicitThreadLocal.withInitial(this::copy);
+        return tl::get;
+    }
 }
