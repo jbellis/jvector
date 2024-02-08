@@ -108,7 +108,7 @@ public class ConcurrentNeighborSet {
      * for efficiency.  This method is threadsafe, but if you call it concurrently with other inserts,
      * the limit may end up being exceeded again.
      */
-    public void cleanup() {
+    public void enforceDegree() {
         neighborsRef.getAndUpdate(this::removeAllNonDiverse);
     }
 
