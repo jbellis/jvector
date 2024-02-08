@@ -86,6 +86,34 @@ public class TestProductQuantization extends RandomizedTest {
         assertTrue(improvedLoss < initialLoss, "improvedLoss=" + improvedLoss + " initialLoss=" + initialLoss);
     }
 
+    @Test
+    public void testRefine() {
+        Random R = getRandom();
+        float[][] vectors = generate(ProductQuantization.CLUSTERS + R.nextInt(10*ProductQuantization.CLUSTERS),
+                                     2 + R.nextInt(10),
+                                     1_000 + R.nextInt(10_000));
+
+        // generate PQ codebooks from half of the dataset
+        var half1 = Arrays.copyOf(vectors, vectors.length / 2);
+        var ravv1 = new ListRandomAccessVectorValues(List.of(half1), vectors[0].length);
+        var pq1 = ProductQuantization.compute(ravv1, 1, false);
+
+        // refine the codebooks with the other half (so, drawn from the same distribution)
+        int remaining = vectors.length - vectors.length / 2;
+        var half2 = new float[remaining][];
+        System.arraycopy(vectors, vectors.length / 2, half2, 0, remaining);
+        var ravv2 = new ListRandomAccessVectorValues(List.of(half2), vectors[0].length);
+        var pq2 = pq1.refine(ravv2);
+
+        // the refined version should work better
+        var clusterer1 = new KMeansPlusPlusClusterer(half2, pq1.codebooks[0]);
+        var clusterer2 = new KMeansPlusPlusClusterer(half2, pq2.codebooks[0]);
+        var loss1 = loss(clusterer1, half2);
+        var loss2 = loss(clusterer2, half2);
+        assertTrue(loss2 < loss1, "loss1=" + loss1 + " loss2=" + loss2);
+    }
+
+
     private static double loss(KMeansPlusPlusClusterer clusterer, float[][] vectors) {
         var pq = new ProductQuantization(new float[][][] { clusterer.getCentroids() }, null);
         byte[][] encoded = pq.encodeAll(List.of(vectors));

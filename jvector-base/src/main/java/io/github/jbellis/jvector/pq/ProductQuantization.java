@@ -83,20 +83,10 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
             int M,
             boolean globallyCenter,
             ForkJoinPool simdExecutor,
-            ForkJoinPool parallelExecutor) {
-        // limit the number of vectors we train on
-        var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
-        var ravvCopy = ravv.threadLocalSupplier();
+            ForkJoinPool parallelExecutor)
+    {
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
-        var vectors = parallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
-                .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
-                .mapToObj(targetOrd -> {
-                    var localRavv = ravvCopy.get();
-                    float[] v = localRavv.vectorValue(targetOrd);
-                    return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
-                })
-                .collect(Collectors.toList()))
-                .join();
+        var vectors = extractTrainingVectors(ravv, parallelExecutor);
 
         // subtract the centroid from each training vector
         float[] globalCentroid;
@@ -110,8 +100,62 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         }
 
         // derive the codebooks
-        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets, simdExecutor);
+        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets, simdExecutor, parallelExecutor);
         return new ProductQuantization(codebooks, globalCentroid);
+    }
+
+    static List<float[]> extractTrainingVectors(RandomAccessVectorValues<float[]> ravv, ForkJoinPool parallelExecutor) {
+        // limit the number of vectors we train on
+        var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
+        var ravvCopy = ravv.threadLocalSupplier();
+        return parallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
+                .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
+                .mapToObj(targetOrd -> {
+                    var localRavv = ravvCopy.get();
+                    float[] v = localRavv.vectorValue(targetOrd);
+                    return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
+                })
+                .collect(Collectors.toList()))
+                .join();
+    }
+
+    /**
+     * Create a new PQ by fine-tuning this one with the data in `ravv`
+     */
+    public ProductQuantization refine(RandomAccessVectorValues<float[]> ravv) {
+        return refine(ravv, 1, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+    }
+
+    /**
+     * Create a new PQ by fine-tuning this one with the data in `ravv`
+     *
+     * @param lloydsRounds number of Lloyd's iterations to run against
+     *                     the new data.  Suggested values are 1 or 2.
+     */
+    public ProductQuantization refine(RandomAccessVectorValues<float[]> ravv,
+                                      int lloydsRounds,
+                                      ForkJoinPool simdExecutor,
+                                      ForkJoinPool parallelExecutor)
+    {
+        if (lloydsRounds < 0) {
+            throw new IllegalArgumentException("lloydsRounds must be non-negative");
+        }
+
+        var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
+        var vectorsMutable = extractTrainingVectors(ravv, parallelExecutor);
+        if (globalCentroid != null) {
+            var vectors = vectorsMutable;
+            vectorsMutable = simdExecutor.submit(() -> vectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList())).join();
+        }
+        var vectors = vectorsMutable; // "effectively final" to make the closure happy
+
+        var refinedCodebooks = simdExecutor.submit(() -> IntStream.range(0, M).parallel().mapToObj(m -> {
+            float[][] subvectors = extractSubvectors(vectors, m, subvectorSizesAndOffsets, parallelExecutor);
+            var clusterer = new KMeansPlusPlusClusterer(subvectors, codebooks[m]);
+            return clusterer.cluster(lloydsRounds);
+        }).toArray(float[][][]::new)).join();
+
+        return new ProductQuantization(refinedCodebooks, globalCentroid);
     }
 
     ProductQuantization(float[][][] codebooks, float[] globalCentroid)
@@ -213,19 +257,28 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         return "[" + String.join(", ", b) + "]";
     }
 
-    static float[][][] createCodebooks(List<float[]> vectors, int M, int[][] subvectorSizeAndOffset, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> IntStream.range(0, M).parallel()
-                .mapToObj(m -> {
-                    float[][] subvectors = vectors.stream().parallel()
-                            .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
-                            .toArray(float[][]::new);
-                    var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS);
-                    return clusterer.cluster(K_MEANS_ITERATIONS);
-                })
-                .toArray(float[][][]::new))
-                .join();
+    static float[][][] createCodebooks(List<float[]> vectors,
+                                       int M,
+                                       int[][] subvectorSizeAndOffset,
+                                       ForkJoinPool simdExecutor,
+                                       ForkJoinPool parallelExecutor)
+    {
+        return simdExecutor.submit(() -> IntStream.range(0, M).parallel().mapToObj(m -> {
+            float[][] subvectors = extractSubvectors(vectors, m, subvectorSizeAndOffset, parallelExecutor);
+            var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS);
+            return clusterer.cluster(K_MEANS_ITERATIONS);
+        }).toArray(float[][][]::new)).join();
     }
-    
+
+    /** extract float[] subvectors corresponding to the m'th subspace, in parallel */
+    private static float[][] extractSubvectors(List<float[]> vectors, int m, int[][] subvectorSizeAndOffset, ForkJoinPool parallelExecutor) {
+        return parallelExecutor.submit(() -> {
+            return vectors.parallelStream()
+                    .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
+                    .toArray(float[][]::new);
+        }).join();
+    }
+
     static int closetCentroidIndex(float[] subvector, float[][] codebook) {
         int index = 0;
         float minDist = Integer.MAX_VALUE;
