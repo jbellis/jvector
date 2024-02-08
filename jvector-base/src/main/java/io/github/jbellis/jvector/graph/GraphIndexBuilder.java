@@ -276,7 +276,6 @@ public class GraphIndexBuilder<T> {
             if (nReconnected.get() == 0) {
                 break;
             }
-            System.out.println("Pass " + i + " reconnected " + nReconnected.get() + " nodes");
         }
     }
 
