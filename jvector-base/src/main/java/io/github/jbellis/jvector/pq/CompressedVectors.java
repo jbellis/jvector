@@ -38,4 +38,7 @@ public interface CompressedVectors extends Accountable {
 
     /** @return the compressed size of the vectors, in bytes */
     int getCompressedSize();
+
+    /** @return the compressor used by this instance */
+    VectorCompressor<?> getCompressor();
 }
