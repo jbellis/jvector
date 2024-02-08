@@ -243,6 +243,8 @@ public class Bench {
 
         // 2D grid, built and calculated at runtime
         if (pattern.matcher("2dgrid").find()) {
+            compressionGrid = Arrays.asList(null,
+                                            ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), true));
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
             gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();
