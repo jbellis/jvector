@@ -48,20 +48,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     }
 
     public static BinaryQuantization compute(RandomAccessVectorValues<float[]> ravv, ForkJoinPool parallelExecutor) {
-        // limit the number of vectors we train on
-        var P = min(1.0f, ProductQuantization.MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
-        var ravvCopy = ravv.threadLocalSupplier();
-        var vectors = parallelExecutor.submit(() -> IntStream.range(0, ravv.size()).parallel()
-                .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
-                .mapToObj(targetOrd -> {
-                    var localRavv = ravvCopy.get();
-                    float[] v = localRavv.vectorValue(targetOrd);
-                    return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
-                })
-                .collect(Collectors.toList()))
-                .join();
-
-        // compute the centroid of the training set
+        var vectors = ProductQuantization.extractTrainingVectors(ravv, parallelExecutor);
         float[] globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
         return new BinaryQuantization(globalCentroid);
     }

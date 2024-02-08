@@ -21,16 +21,14 @@ import io.github.jbellis.jvector.vector.VectorUtil;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * A KMeans++ implementation for float vectors.  Optimizes to use SIMD vector instructions if available.
  */
 public class KMeansPlusPlusClusterer {
-    private final Random random;
-
     // number of centroids to compute
     private final int k;
-
     // the points to train on
     private final float[][] points;
     // the cluster each point is assigned to
@@ -48,19 +46,21 @@ public class KMeansPlusPlusClusterer {
      * @param k number of clusters.
      */
     public KMeansPlusPlusClusterer(float[][] points, int k) {
-        if (k <= 0) {
-            throw new IllegalArgumentException("Number of clusters must be positive.");
-        }
-        if (k > points.length) {
-            throw new IllegalArgumentException(String.format("Number of clusters %d cannot exceed number of points %d", k, points.length));
-        }
+        this(points, chooseInitialCentroids(points, k));
+    }
 
+    /**
+     * Constructs a KMeansPlusPlusFloatClusterer with the specified number of clusters,
+     * maximum iterations, and distance function.
+     * <p>
+     * The initial centroids provided as a parameter are copied before modification.
+     */
+    public KMeansPlusPlusClusterer(float[][] points, float[][] centroids) {
         this.points = points;
-        this.k = k;
-        random = new Random();
+        this.k = centroids.length;
+        this.centroids = Arrays.stream(centroids).map(float[]::clone).toArray(float[][]::new);
         centroidDenoms = new int[k];
         centroidNums = new float[k][points[0].length];
-        centroids = chooseInitialCentroids(points);
         assignments = new int[points.length];
 
         initializeAssignedPoints();
@@ -95,10 +95,17 @@ public class KMeansPlusPlusClusterer {
      * across the data and not initialized too closely to each other, leading to better
      * convergence and potentially improved final clusterings.
      *
-     * @param points a list of points from which centroids are chosen.
      * @return an array of initial centroids.
      */
-    private float[][] chooseInitialCentroids(float[][] points) {
+    private static float[][] chooseInitialCentroids(float[][] points, int k) {
+        if (k <= 0) {
+            throw new IllegalArgumentException("Number of clusters must be positive.");
+        }
+        if (k > points.length) {
+            throw new IllegalArgumentException(String.format("Number of clusters %d cannot exceed number of points %d", k, points.length));
+        }
+
+        var random = ThreadLocalRandom.current();
         float[][] centroids = new float[k][];
         float[] distances = new float[points.length];
         Arrays.fill(distances, Float.MAX_VALUE);
@@ -224,6 +231,7 @@ public class KMeansPlusPlusClusterer {
      * Calculates centroids from centroidNums/centroidDenoms updated during point assignment
      */
     private void updateCentroids() {
+        var random = ThreadLocalRandom.current();
         for (int i = 0; i < centroids.length; i++) {
             var denom = centroidDenoms[i];
             if (denom == 0) {
