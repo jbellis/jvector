@@ -20,7 +20,6 @@ import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -40,9 +39,9 @@ public class KMeansPlusPlusClusterer {
     private final float[][] centroidNums;
 
     /**
-     * Constructs a KMeansPlusPlusFloatClusterer with the specified number of clusters,
-     * maximum iterations, and distance function.
+     * Constructs a KMeansPlusPlusFloatClusterer with the specified points and number of clusters.
      *
+     * @param points the points to cluster.
      * @param k number of clusters.
      */
     public KMeansPlusPlusClusterer(float[][] points, int k) {
@@ -50,10 +49,12 @@ public class KMeansPlusPlusClusterer {
     }
 
     /**
-     * Constructs a KMeansPlusPlusFloatClusterer with the specified number of clusters,
-     * maximum iterations, and distance function.
+     * Constructs a KMeansPlusPlusFloatClusterer with the specified points and initial centroids.
      * <p>
      * The initial centroids provided as a parameter are copied before modification.
+     *
+     * @param points the points to cluster.
+     * @param centroids the initial centroids.
      */
     public KMeansPlusPlusClusterer(float[][] points, float[][] centroids) {
         this.points = points;
