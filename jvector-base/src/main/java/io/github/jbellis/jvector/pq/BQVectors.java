@@ -109,6 +109,11 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
+    public VectorCompressor<long[]> getCompressor() {
+        return bq;
+    }
+
+    @Override
     public long ramBytesUsed() {
         return compressedVectors.length * RamUsageEstimator.sizeOf(compressedVectors[0]);
     }
