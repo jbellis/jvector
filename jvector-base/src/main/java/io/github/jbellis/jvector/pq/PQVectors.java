@@ -136,7 +136,7 @@ public class PQVectors implements CompressedVectors {
     }
 
     @Override
-    public VectorCompressor<byte[]> getCompressor() {
+    public ProductQuantization getCompressor() {
         return pq;
     }
 

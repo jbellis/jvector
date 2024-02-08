@@ -109,7 +109,7 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
-    public VectorCompressor<long[]> getCompressor() {
+    public BinaryQuantization getCompressor() {
         return bq;
     }
 
