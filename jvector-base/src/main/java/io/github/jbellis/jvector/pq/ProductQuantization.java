@@ -19,9 +19,7 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorUtil;
 
@@ -47,7 +45,7 @@ import static java.lang.Math.min;
 public class ProductQuantization implements VectorCompressor<byte[]> {
     static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     static final int K_MEANS_ITERATIONS = 6;
-    static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
+    public static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
 
     final float[][][] codebooks;
     private final int M; // codebooks.length, redundantly reproduced for convenience
