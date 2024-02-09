@@ -291,7 +291,7 @@ public class GraphIndexBuilder<T> {
             var neighborNode = neighbors.node[i];
             var neighborScore = neighbors.score[i];
             if (connectionTargets.add(neighborNode)) {
-                graph.getNeighbors(neighborNode).insertNotDiverse(neighborNode, neighborScore, true);
+                graph.getNeighbors(neighborNode).insertNotDiverse(node, neighborScore, true);
                 return true;
             }
         }
