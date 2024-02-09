@@ -122,7 +122,7 @@ public class TestProductQuantization extends RandomizedTest {
         var loss = 0.0;
         for (int i = 0; i < vectors.length; i++) {
             pq.decode(encoded[i], decodedScratch);
-            loss += 1 - VectorSimilarityFunction.COSINE.compare(vectors[i], decodedScratch);
+            loss += 1 - VectorSimilarityFunction.EUCLIDEAN.compare(vectors[i], decodedScratch);
         }
         return loss;
     }
