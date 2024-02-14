@@ -23,7 +23,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.concurrent.locks.StampedLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.IntStream;
 
 /**
@@ -35,9 +36,13 @@ import java.util.stream.IntStream;
  * it is valid to have gaps in the keys.  The value associated with "gap" keys is null.
  */
 public class DenseIntMap<T> {
+    // locking strategy:
+    // - writelock to resize the array
+    // - readlock to update the array with put or remove
+    // - no lock to read the array, volatile is enough
+    private final ReadWriteLock rwl = new ReentrantReadWriteLock();
     private volatile AtomicReferenceArray<T> objects;
     private final AtomicInteger size;
-    private final StampedLock sl = new StampedLock();
 
     public DenseIntMap(int initialSize) {
         objects = new AtomicReferenceArray<>(initialSize);
@@ -55,13 +60,14 @@ public class DenseIntMap<T> {
         ensureCapacity(key);
         long stamp;
         boolean isInsert = false;
-        do {
-            stamp = sl.tryOptimisticRead();
+        rwl.readLock().lock();
+        try {
             isInsert = objects.getAndSet(key, value) == null || isInsert;
-        } while (!sl.validate(stamp));
-
-        if (isInsert) {
-            size.incrementAndGet();
+            if (isInsert) {
+                size.incrementAndGet();
+            }
+        } finally {
+            rwl.readLock().unlock();
         }
     }
 
@@ -77,7 +83,6 @@ public class DenseIntMap<T> {
      * @return the value of the key, or null if not set
      */
     public T get(int key) {
-        // since objects is volatile, we don't need to lock
         var ref = objects;
         if (key >= ref.length()) {
             return null;
@@ -90,7 +95,7 @@ public class DenseIntMap<T> {
             return;
         }
 
-        long stamp = sl.writeLock();
+        rwl.writeLock().lock();
         try {
             var oldArray = objects;
             if (node >= oldArray.length()) {
@@ -102,7 +107,7 @@ public class DenseIntMap<T> {
                 objects = newArray;
             }
         } finally {
-            sl.unlockWrite(stamp);
+            rwl.writeLock().unlock();
         }
     }
 
@@ -118,9 +123,7 @@ public class DenseIntMap<T> {
             return null;
         }
 
-        // ensureCapacity doesn't spin, so we respect the Big Lock to make sure `objects` doesn't
-        // change out from underneath us
-        long stamp = sl.writeLock();
+        rwl.readLock().lock();
         try {
             if (objects.compareAndSet(key, old, null)) {
                 size.decrementAndGet();
@@ -129,7 +132,7 @@ public class DenseIntMap<T> {
                 return null;
             }
         } finally {
-            sl.unlockWrite(stamp);
+            rwl.readLock().unlock();
         }
     }
 
