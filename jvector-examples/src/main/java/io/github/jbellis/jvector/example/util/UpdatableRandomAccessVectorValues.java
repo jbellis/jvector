@@ -16,13 +16,14 @@
 
 package io.github.jbellis.jvector.example.util;
 
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import java.util.ArrayList;
 import java.util.List;
 
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-
-public class UpdatableRandomAccessVectorValues implements RandomAccessVectorValues<float[]> {
-    private final List<float[]> data;
+public class UpdatableRandomAccessVectorValues implements RandomAccessVectorValues {
+    private final List<VectorFloat<?>> data;
     private final int dimensions;
 
     public UpdatableRandomAccessVectorValues(int dimensions) {
@@ -30,7 +31,7 @@ public class UpdatableRandomAccessVectorValues implements RandomAccessVectorValu
         this.dimensions = dimensions;
     }
 
-    public void add(float[] vector) {
+    public void add(VectorFloat<?> vector) {
         data.add(vector);
     }
 
@@ -45,7 +46,7 @@ public class UpdatableRandomAccessVectorValues implements RandomAccessVectorValu
     }
 
     @Override
-    public float[] vectorValue(int targetOrd) {
+    public VectorFloat<?> vectorValue(int targetOrd) {
         return data.get(targetOrd);
     }
 
@@ -55,7 +56,7 @@ public class UpdatableRandomAccessVectorValues implements RandomAccessVectorValu
     }
 
     @Override
-    public RandomAccessVectorValues<float[]> copy() {
+    public RandomAccessVectorValues copy() {
         return this;
     }
 }

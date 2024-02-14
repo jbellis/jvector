@@ -30,9 +30,9 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.SynchronizedGrowableBitSet;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
-import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.stream.IntStream;
@@ -44,7 +44,7 @@ import java.util.stream.IntStream;
  * <p>To search this graph, you should use a View obtained from {@link #getView()} to perform `seek`
  * and `nextNeighbor` operations.
  */
-public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
+public class OnHeapGraphIndex implements GraphIndex, Accountable {
 
     // the current graph entry node, -1 if not set
     private final AtomicInteger entryPoint = new AtomicInteger(-1);
@@ -192,7 +192,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
      * <p>Multiple Views may be searched concurrently.
      */
     @Override
-    public GraphIndex.View<T> getView() {
+    public GraphIndex.View getView() {
         return new ConcurrentGraphIndexView();
     }
 
@@ -247,9 +247,9 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
                 .orElse(Double.NaN);
     }
 
-    private class ConcurrentGraphIndexView implements GraphIndex.View<T> {
+    private class ConcurrentGraphIndexView implements GraphIndex.View {
         @Override
-        public T getVector(int node) {
+        public VectorFloat<?> getVector(int node) {
             throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
         }
 
@@ -290,7 +290,7 @@ public class OnHeapGraphIndex<T> implements GraphIndex<T>, Accountable {
         }
     }
 
-    public void save(DataOutput out) throws IOException {
+    public void save(DataOutput out) {
         if (deletedNodes.cardinality() > 0) {
             throw new IllegalStateException("Cannot save a graph that has deleted nodes.  Call cleanup() first");
         }

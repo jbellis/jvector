@@ -20,13 +20,6 @@ import io.github.jbellis.jvector.TestUtil;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.util.Random;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 public class TestAtomicFixedBitSet extends BaseBitSetTestCase<AtomicFixedBitSet> {
 
   @Override

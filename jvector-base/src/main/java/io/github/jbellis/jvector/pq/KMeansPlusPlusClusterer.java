@@ -17,6 +17,9 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,17 +29,18 @@ import java.util.concurrent.ThreadLocalRandom;
  * A KMeans++ implementation for float vectors.  Optimizes to use SIMD vector instructions if available.
  */
 public class KMeansPlusPlusClusterer {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     // number of centroids to compute
     private final int k;
     // the points to train on
-    private final float[][] points;
+    private final VectorFloat<?>[] points;
     // the cluster each point is assigned to
     private final int[] assignments;
     // the centroids of each cluster
-    private final float[][] centroids;
+    private final VectorFloat<?> centroids;
     // the number of points assigned to each cluster
     private final int[] centroidDenoms;
-    private final float[][] centroidNums;
+    private final VectorFloat<?>[] centroidNums;
 
     /**
      * Constructs a KMeansPlusPlusFloatClusterer with the specified points and number of clusters.
@@ -44,7 +48,7 @@ public class KMeansPlusPlusClusterer {
      * @param points the points to cluster.
      * @param k number of clusters.
      */
-    public KMeansPlusPlusClusterer(float[][] points, int k) {
+    public KMeansPlusPlusClusterer(VectorFloat<?>[] points, int k) {
         this(points, chooseInitialCentroids(points, k));
     }
 
@@ -56,12 +60,16 @@ public class KMeansPlusPlusClusterer {
      * @param points the points to cluster.
      * @param centroids the initial centroids.
      */
-    public KMeansPlusPlusClusterer(float[][] points, float[][] centroids) {
+    public KMeansPlusPlusClusterer(VectorFloat<?>[] points, VectorFloat<?> centroids) {
         this.points = points;
-        this.k = centroids.length;
-        this.centroids = Arrays.stream(centroids).map(float[]::clone).toArray(float[][]::new);
+        this.k = centroids.length() / points[0].length();
+        this.centroids = centroids.copy();
         centroidDenoms = new int[k];
-        centroidNums = new float[k][points[0].length];
+        // initialize with empty vectors
+        centroidNums = new VectorFloat<?>[k];
+        for (int i = 0; i < centroidNums.length; i++) {
+            centroidNums[i] = vectorTypeSupport.createFloatVector(points[0].length());
+        }
         assignments = new int[points.length];
 
         initializeAssignedPoints();
@@ -70,9 +78,9 @@ public class KMeansPlusPlusClusterer {
     /**
      * Performs clustering on the provided set of points.
      *
-     * @return an array of cluster centroids.
+     * @return a VectorFloat of cluster centroids.
      */
-    public float[][] cluster(int maxIterations) {
+    public VectorFloat<?> cluster(int maxIterations) {
         for (int i = 0; i < maxIterations; i++) {
             int changedCount = clusterOnce();
             if (changedCount <= 0.01 * points.length) {
@@ -98,7 +106,7 @@ public class KMeansPlusPlusClusterer {
      *
      * @return an array of initial centroids.
      */
-    private static float[][] chooseInitialCentroids(float[][] points, int k) {
+    private static VectorFloat<?> chooseInitialCentroids(VectorFloat<?>[] points, int k) {
         if (k <= 0) {
             throw new IllegalArgumentException("Number of clusters must be positive.");
         }
@@ -107,13 +115,14 @@ public class KMeansPlusPlusClusterer {
         }
 
         var random = ThreadLocalRandom.current();
-        float[][] centroids = new float[k][];
+        VectorFloat<?> centroids = vectorTypeSupport.createFloatVector(k * points[0].length());
+
         float[] distances = new float[points.length];
         Arrays.fill(distances, Float.MAX_VALUE);
 
         // Choose the first centroid randomly
-        float[] firstCentroid = points[random.nextInt(points.length)];
-        centroids[0] = firstCentroid;
+        VectorFloat<?> firstCentroid = points[random.nextInt(points.length)];
+        centroids.copyFrom(firstCentroid, 0, 0, firstCentroid.length());
         for (int i = 0; i < points.length; i++) {
             float distance1 = VectorUtil.squareDistance(points[i], firstCentroid);
             distances[i] = Math.min(distances[i], distance1);
@@ -140,8 +149,8 @@ public class KMeansPlusPlusClusterer {
                 selectedIdx = random.nextInt(points.length);
             }
 
-            float[] nextCentroid = points[selectedIdx];
-            centroids[i] = nextCentroid;
+            VectorFloat<?> nextCentroid = points[selectedIdx];
+            centroids.copyFrom(nextCentroid, 0, i * nextCentroid.length(), nextCentroid.length());
 
             // Update distances, but only if the new centroid provides a closer distance
             for (int j = 0; j < points.length; j++) {
@@ -149,10 +158,7 @@ public class KMeansPlusPlusClusterer {
                 distances[j] = Math.min(distances[j], newDistance);
             }
         }
-
-        for (float[] centroid : centroids) {
-            assertFinite(centroid);
-        }
+        assertFinite(centroids);
         return centroids;
     }
 
@@ -162,7 +168,7 @@ public class KMeansPlusPlusClusterer {
      */
     private void initializeAssignedPoints() {
         for (int i = 0; i < points.length; i++) {
-            float[] point = points[i];
+            VectorFloat<?> point = points[i];
             var newAssignment = getNearestCluster(point);
             centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
             VectorUtil.addInPlace(centroidNums[newAssignment], point);
@@ -181,7 +187,7 @@ public class KMeansPlusPlusClusterer {
         int changedCount = 0;
 
         for (int i = 0; i < points.length; i++) {
-            float[] point = points[i];
+            VectorFloat<?> point = points[i];
             var oldAssignment = assignments[i];
             var newAssignment = getNearestCluster(point);
 
@@ -201,12 +207,12 @@ public class KMeansPlusPlusClusterer {
     /**
      * Return the index of the closest centroid to the given point
      */
-    private int getNearestCluster(float[] point) {
+    private int getNearestCluster(VectorFloat<?> point) {
         float minDistance = Float.MAX_VALUE;
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            float distance = VectorUtil.squareDistance(point, centroids[i]);
+            float distance = VectorUtil.squareDistance(point, 0, centroids, i * point.length(), point.length());
             if (distance < minDistance) {
                 minDistance = distance;
                 nearestCluster = i;
@@ -217,13 +223,13 @@ public class KMeansPlusPlusClusterer {
     }
 
     @SuppressWarnings({"AssertWithSideEffects", "ConstantConditions"})
-    private static void assertFinite(float[] vector) {
+    private static void assertFinite(VectorFloat<?> vector) {
         boolean assertsEnabled = false;
         assert assertsEnabled = true;
 
         if (assertsEnabled) {
-            for (float v : vector) {
-                assert Float.isFinite(v) : "vector " + Arrays.toString(vector) + " contains non-finite value";
+            for (int i = 0; i < vector.length(); i++) {
+                assert Float.isFinite(vector.get(i)) : "vector " + vector + " contains non-finite value";
             }
         }
     }
@@ -233,13 +239,14 @@ public class KMeansPlusPlusClusterer {
      */
     private void updateCentroids() {
         var random = ThreadLocalRandom.current();
-        for (int i = 0; i < centroids.length; i++) {
+        for (int i = 0; i < k; i++) {
             var denom = centroidDenoms[i];
             if (denom == 0) {
-                centroids[i] = points[random.nextInt(points.length)];
+                centroids.copyFrom(points[random.nextInt(points.length)], 0, i * points[0].length(), points[0].length());
             } else {
-                centroids[i] = Arrays.copyOf(centroidNums[i], centroidNums[i].length);
-                VectorUtil.scale(centroids[i], 1.0f / centroidDenoms[i]);
+                var centroid = centroidNums[i].copy();
+                VectorUtil.scale(centroid, 1.0f / centroidDenoms[i]);
+                centroids.copyFrom(centroid, 0, i * centroid.length(), centroid.length());
             }
         }
     }
@@ -247,18 +254,18 @@ public class KMeansPlusPlusClusterer {
     /**
      * Computes the centroid of a list of points.
      */
-    public static float[] centroidOf(List<float[]> points) {
+    public static VectorFloat<?> centroidOf(List<VectorFloat<?>> points) {
         if (points.isEmpty()) {
             throw new IllegalArgumentException("Can't compute centroid of empty points list");
         }
 
-        float[] centroid = VectorUtil.sum(points);
+        VectorFloat<?> centroid = VectorUtil.sum(points);
         VectorUtil.scale(centroid, 1.0f / points.size());
 
         return centroid;
     }
 
-    public float[][] getCentroids() {
+    public VectorFloat<?> getCentroids() {
         return centroids;
     }
 }

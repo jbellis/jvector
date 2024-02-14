@@ -17,16 +17,22 @@
 package io.github.jbellis.jvector.example.util;
 
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import io.jhdf.HdfFile;
 import io.jhdf.api.Dataset;
 import io.jhdf.object.datatype.FloatingPoint;
 
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.stream.IntStream;
 
 public class Hdf5Loader {
     public static final String HDF5_DIR = "hdf5/";
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     public static DataSet load(String filename) {
         // infer the similarity
@@ -42,12 +48,14 @@ public class Hdf5Loader {
         }
 
         // read the data
-        float[][] baseVectors;
-        float[][] queryVectors;
+        VectorFloat<?>[] baseVectors;
+        VectorFloat<?>[] queryVectors;
         Path path = Path.of(HDF5_DIR).resolve(filename);
         var gtSets = new ArrayList<HashSet<Integer>>();
         try (HdfFile hdf = new HdfFile(path)) {
-            baseVectors = (float[][]) hdf.getDatasetByPath("train").getData();
+            var baseVectorsArray =
+                    (float[][]) hdf.getDatasetByPath("train").getData();
+            baseVectors = IntStream.range(0, baseVectorsArray.length).parallel().mapToObj(i -> vectorTypeSupport.createFloatVector(baseVectorsArray[i])).toArray(VectorFloat<?>[]::new);
             Dataset queryDataset = hdf.getDatasetByPath("test");
             if (((FloatingPoint) queryDataset.getDataType()).getBitPrecision() == 64) {
                 // lastfm dataset contains f64 queries but f32 everything else
@@ -57,10 +65,11 @@ public class Hdf5Loader {
                     for (int j = 0; j < doubles[i].length; j++) {
                         a[j] = (float) doubles[i][j];
                     }
-                    return a;
-                }).toArray(float[][]::new);
+                    return vectorTypeSupport.createFloatVector(a);
+                }).toArray(VectorFloat<?>[]::new);
             } else {
-                queryVectors = (float[][]) queryDataset.getData();
+                var queryVectorsArray = (float[][]) queryDataset.getData();
+                queryVectors = IntStream.range(0, queryVectorsArray.length).parallel().mapToObj(i -> vectorTypeSupport.createFloatVector(queryVectorsArray[i])).toArray(VectorFloat<?>[]::new);
             }
             int[][] groundTruth = (int[][]) hdf.getDatasetByPath("neighbors").getData();
             gtSets = new ArrayList<>(groundTruth.length);

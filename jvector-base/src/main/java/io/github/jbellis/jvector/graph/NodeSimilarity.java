@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 /** Encapsulates comparing node distances. */
 public interface NodeSimilarity {
     /** for one-off comparisons between nodes */
@@ -41,6 +43,14 @@ public interface NodeSimilarity {
         boolean isExact();
 
         float similarityTo(int node2);
+
+        default boolean supportsBulkSimilarity() {
+            return false;
+        }
+
+        default VectorFloat<?> bulkSimilarityTo(int node2) {
+            throw new UnsupportedOperationException("bulk similarity not supported");
+        }
     }
 
     interface ExactScoreFunction extends ScoreFunction {

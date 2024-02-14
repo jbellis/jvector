@@ -24,7 +24,10 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+
 import java.lang.Runtime.Version;
+import java.lang.reflect.InvocationTargetException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Locale;
@@ -58,6 +61,12 @@ public abstract class VectorizationProvider {
    */
   public abstract VectorUtilSupport getVectorUtilSupport();
 
+  /**
+   * Returns a singleton (stateless) {@link VectorTypeSupport} which works with the corresponding {@link VectorUtilSupport}
+   * implementation
+   */
+  public abstract VectorTypeSupport getVectorTypeSupport();
+
   // *** Lookup mechanism: ***
 
   protected static final Logger LOG = Logger.getLogger(VectorizationProvider.class.getName());
@@ -87,6 +96,30 @@ public abstract class VectorizationProvider {
         LOG.warning("C2 compiler is disabled; Java vector incubator API can't be enabled");
         return new DefaultVectorizationProvider();
       }
+
+      // check for jvector.experimental.enable_native_vectorization
+      // this is an experimental feature subject to change
+      if (Boolean.getBoolean("jvector.experimental.enable_native_vectorization")) {
+        try {
+          var provider = (VectorizationProvider) Class.forName("io.github.jbellis.jvector.vector.NativeVectorizationProvider").getConstructor().newInstance();
+          LOG.info("Native Vector API enabled. Using NativeVectorizationProvider.");
+          return provider;
+        } catch (UnsupportedOperationException uoe) {
+          LOG.warning("Native vector API was not enabled. " + uoe.getMessage());
+        } catch (ClassNotFoundException e) {
+          LOG.warning("Java version does not support native vector API");
+        } catch (InvocationTargetException e) {
+          // unwrap, check for UnsupportedOperationException
+          if (e.getCause() instanceof UnsupportedOperationException) {
+            LOG.warning("Native vector API was not enabled. " + e.getCause().getMessage());
+          } else {
+            throw new AssertionError(e);
+          }
+        } catch (Throwable th) {
+          throw new AssertionError(th);
+        }
+      }
+
       try {
         var provider = (VectorizationProvider) Class.forName("io.github.jbellis.jvector.vector.PanamaVectorizationProvider").getConstructor().newInstance();
         LOG.info("Java incubating Vector API enabled. Using PanamaVectorizationProvider.");

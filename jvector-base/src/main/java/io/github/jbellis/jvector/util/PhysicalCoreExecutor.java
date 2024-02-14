@@ -15,16 +15,16 @@
  */
 package io.github.jbellis.jvector.util;
 
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.pq.ProductQuantization;
+
 import java.io.Closeable;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
 
-import io.github.jbellis.jvector.graph.GraphIndexBuilder;
-import io.github.jbellis.jvector.pq.ProductQuantization;
-
 /**
  * A fork join pool which is sized to match the number of physical cores on the machine (avoiding hyper-thread count)
- *
+ * <p>
  * This is important for heavily vectorized sections of the code since it can easily saturate memory bandwidth.
  *
  * @see ProductQuantization

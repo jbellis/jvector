@@ -16,16 +16,17 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.disk.Io;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.ByteSequence;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -42,15 +43,16 @@ import static java.lang.Math.min;
  * <p>
  * Codebook cluster count is fixed at 256.
  */
-public class ProductQuantization implements VectorCompressor<byte[]> {
-    static final int CLUSTERS = 256; // number of clusters per subspace = one byte's worth
+public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    static final int DEFAULT_CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     static final int K_MEANS_ITERATIONS = 6;
     public static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
-
-    final float[][][] codebooks;
+    final VectorFloat<?>[] codebooks; // array of codebooks, where each codebook is a VectorFloat consisting of contiguous subvectors
     private final int M; // codebooks.length, redundantly reproduced for convenience
+    private final int clusterCount; // codebooks[0].length, redundantly reproduced for convenience
     final int originalDimension;
-    private final float[] globalCentroid;
+    private final VectorFloat<?> globalCentroid;
     final int[][] subvectorSizesAndOffsets;
 
     /**
@@ -58,11 +60,24 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      *
      * @param ravv the vectors to quantize
      * @param M number of subspaces
+     * @param clusterCount number of clusters per subspace
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
      */
-    public static ProductQuantization compute(RandomAccessVectorValues<float[]> ravv, int M, boolean globallyCenter) {
-        return compute(ravv, M, globallyCenter, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+    public static ProductQuantization compute(RandomAccessVectorValues ravv, int M, int clusterCount, boolean globallyCenter) {
+        return compute(ravv, M, clusterCount, globallyCenter, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+    }
+
+    /**
+     * Initializes the codebooks by clustering the input data using Product Quantization. Defaults to 256 clusters per subspace.
+     *
+     * @param ravv the vectors to quantize
+     * @param M number of subspaces
+     * @param globallyCenter whether to center the vectors globally before quantization
+     *                       (not recommended when using the quantization for dot product)
+     */
+    public static ProductQuantization compute(RandomAccessVectorValues ravv, int M, boolean globallyCenter) {
+        return compute(ravv, M, DEFAULT_CLUSTERS, globallyCenter);
     }
 
     /**
@@ -70,6 +85,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      *
      * @param ravv the vectors to quantize
      * @param M number of subspaces
+     * @param clusterCount number of clusters per subspace
      * @param globallyCenter whether to center the vectors globally before quantization
      *                       (not recommended when using the quantization for dot product)
      * @param simdExecutor     ForkJoinPool instance for SIMD operations, best is to use a pool with the size of
@@ -77,8 +93,9 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      * @param parallelExecutor ForkJoinPool instance for parallel stream operations
      */
     public static ProductQuantization compute(
-            RandomAccessVectorValues<float[]> ravv,
+            RandomAccessVectorValues ravv,
             int M,
+            int clusterCount,
             boolean globallyCenter,
             ForkJoinPool simdExecutor,
             ForkJoinPool parallelExecutor)
@@ -87,22 +104,22 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         var vectors = extractTrainingVectors(ravv, parallelExecutor);
 
         // subtract the centroid from each training vector
-        float[] globalCentroid;
+        VectorFloat<?> globalCentroid;
         if (globallyCenter) {
             globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
             // subtract the centroid from each vector
-            List<float[]> finalVectors = vectors;
-            vectors = simdExecutor.submit(() -> finalVectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList())).join();
+            List<VectorFloat<?>> finalVectors = vectors;
+            vectors = simdExecutor.submit(() -> finalVectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.<VectorFloat<?>>toList())).join();
         } else {
             globalCentroid = null;
         }
 
         // derive the codebooks
-        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets, simdExecutor, parallelExecutor);
-        return new ProductQuantization(codebooks, globalCentroid);
+        var codebooks = createCodebooks(vectors, M, subvectorSizesAndOffsets, clusterCount, simdExecutor, parallelExecutor);
+        return new ProductQuantization(codebooks, clusterCount, subvectorSizesAndOffsets, globalCentroid);
     }
 
-    static List<float[]> extractTrainingVectors(RandomAccessVectorValues<float[]> ravv, ForkJoinPool parallelExecutor) {
+    static List<VectorFloat<?>> extractTrainingVectors(RandomAccessVectorValues ravv, ForkJoinPool parallelExecutor) {
         // limit the number of vectors we train on
         var P = min(1.0f, MAX_PQ_TRAINING_SET_SIZE / (float) ravv.size());
         var ravvCopy = ravv.threadLocalSupplier();
@@ -110,8 +127,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
                 .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                 .mapToObj(targetOrd -> {
                     var localRavv = ravvCopy.get();
-                    float[] v = localRavv.vectorValue(targetOrd);
-                    return localRavv.isValueShared() ? Arrays.copyOf(v, v.length) : v;
+                    VectorFloat<?> v = localRavv.vectorValue(targetOrd);
+                    return localRavv.isValueShared() ? v.copy() : v;
                 })
                 .collect(Collectors.toList()))
                 .join();
@@ -120,7 +137,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     /**
      * Create a new PQ by fine-tuning this one with the data in `ravv`
      */
-    public ProductQuantization refine(RandomAccessVectorValues<float[]> ravv) {
+    public ProductQuantization refine(RandomAccessVectorValues ravv) {
         return refine(ravv, 1, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
     }
 
@@ -130,7 +147,7 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      * @param lloydsRounds number of Lloyd's iterations to run against
      *                     the new data.  Suggested values are 1 or 2.
      */
-    public ProductQuantization refine(RandomAccessVectorValues<float[]> ravv,
+    public ProductQuantization refine(RandomAccessVectorValues ravv,
                                       int lloydsRounds,
                                       ForkJoinPool simdExecutor,
                                       ForkJoinPool parallelExecutor)
@@ -143,45 +160,39 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         var vectorsMutable = extractTrainingVectors(ravv, parallelExecutor);
         if (globalCentroid != null) {
             var vectors = vectorsMutable;
-            vectorsMutable = simdExecutor.submit(() -> vectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.toList())).join();
+            vectorsMutable = simdExecutor.submit(() -> vectors.stream().parallel().map(v -> VectorUtil.sub(v, globalCentroid)).collect(Collectors.<VectorFloat<?>>toList())).join();
         }
         var vectors = vectorsMutable; // "effectively final" to make the closure happy
 
         var refinedCodebooks = simdExecutor.submit(() -> IntStream.range(0, M).parallel().mapToObj(m -> {
-            float[][] subvectors = extractSubvectors(vectors, m, subvectorSizesAndOffsets, parallelExecutor);
+            VectorFloat<?>[] subvectors = extractSubvectors(vectors, m, subvectorSizesAndOffsets, parallelExecutor);
             var clusterer = new KMeansPlusPlusClusterer(subvectors, codebooks[m]);
             return clusterer.cluster(lloydsRounds);
-        }).toArray(float[][][]::new)).join();
+        }).toArray(VectorFloat<?>[]::new)).join();
 
-        return new ProductQuantization(refinedCodebooks, globalCentroid);
+        return new ProductQuantization(refinedCodebooks, clusterCount, subvectorSizesAndOffsets, globalCentroid);
     }
 
-    ProductQuantization(float[][][] codebooks, float[] globalCentroid)
-    {
+    ProductQuantization(VectorFloat<?>[] codebooks, int clusterCount, int[][] subvectorSizesAndOffsets, VectorFloat<?> globalCentroid) {
         this.codebooks = codebooks;
         this.globalCentroid = globalCentroid;
         this.M = codebooks.length;
-        this.subvectorSizesAndOffsets = new int[M][];
-        int offset = 0;
-        for (int i = 0; i < M; i++) {
-            int size = codebooks[i][0].length;
-            this.subvectorSizesAndOffsets[i] = new int[]{size, offset};
-            offset += size;
-        }
+        this.clusterCount = clusterCount;
+        this.subvectorSizesAndOffsets = subvectorSizesAndOffsets;
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
     }
 
     @Override
     public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
-        return new PQVectors(this, (byte[][]) compressedVectors);
+        return new PQVectors(this, (ByteSequence<?>[]) compressedVectors);
     }
 
     /**
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
     @Override
-    public byte[][] encodeAll(List<float[]> vectors, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() ->vectors.stream().parallel().map(this::encode).toArray(byte[][]::new)).join();
+    public ByteSequence<?>[] encodeAll(List<VectorFloat<?>> vectors, ForkJoinPool simdExecutor) {
+        return simdExecutor.submit(() -> vectors.stream().parallel().map(this::encode).toArray(ByteSequence<?>[]::new)).join();
     }
 
     /**
@@ -190,23 +201,23 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
      * @return one byte per subspace
      */
     @Override
-    public byte[] encode(float[] vector) {
+    public ByteSequence<?> encode(VectorFloat<?> vector) {
         if (globalCentroid != null) {
             vector = VectorUtil.sub(vector, globalCentroid);
         }
 
-        float[] finalVector = vector;
-        byte[] encoded = new byte[M];
+        VectorFloat<?> finalVector = vector;
+        ByteSequence<?> encoded = vectorTypeSupport.createByteSequence(M);
         for (int m = 0; m < M; m++) {
-            encoded[m] = (byte) closetCentroidIndex(getSubVector(finalVector, m, subvectorSizesAndOffsets), codebooks[m]);
+            encoded.set(m, (byte) closestCentroidIndex(finalVector, subvectorSizesAndOffsets[m], codebooks[m]));
         }
         return encoded;
     }
 
     /**
-     * Decodes the quantized representation (byte array) to its approximate original vector.
+     * Decodes the quantized representation (ByteSequence) to its approximate original vector.
      */
-    public void decode(byte[] encoded, float[] target) {
+    public void decode(ByteSequence<?> encoded, VectorFloat<?> target) {
         decodeCentered(encoded, target);
 
         if (globalCentroid != null) {
@@ -216,13 +227,12 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     }
 
     /**
-     * Decodes the quantized representation (byte array) to its approximate original vector, relative to the global centroid.
+     * Decodes the quantized representation (ByteSequence) to its approximate original vector, relative to the global centroid.
      */
-    void decodeCentered(byte[] encoded, float[] target) {
+    void decodeCentered(ByteSequence<?> encoded, VectorFloat<?> target) {
         for (int m = 0; m < M; m++) {
-            int centroidIndex = Byte.toUnsignedInt(encoded[m]);
-            float[] centroidSubvector = codebooks[m][centroidIndex];
-            System.arraycopy(centroidSubvector, 0, target, subvectorSizesAndOffsets[m][1], subvectorSizesAndOffsets[m][0]);
+            int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+            target.copyFrom(codebooks[m], centroidIndex * subvectorSizesAndOffsets[m][0], subvectorSizesAndOffsets[m][1], subvectorSizesAndOffsets[m][0]);
         }
     }
 
@@ -233,55 +243,36 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         return M;
     }
 
-    // for testing
-    static void printCodebooks(List<List<float[]>> codebooks) {
-        List<List<String>> strings = codebooks.stream()
-                .map(L -> L.stream()
-                        .map(ProductQuantization::arraySummary)
-                        .collect(Collectors.toList()))
-                .collect(Collectors.toList());
-        System.out.printf("Codebooks: [%s]%n", String.join("\n ", strings.stream()
-                .map(L -> "[" + String.join(", ", L) + "]")
-                .collect(Collectors.toList())));
-    }
-    private static String arraySummary(float[] a) {
-        List<String> b = new ArrayList<>();
-        for (int i = 0; i < min(4, a.length); i++) {
-            b.add(String.valueOf(a[i]));
-        }
-        if (a.length > 4) {
-            b.set(3, "... (" + a.length + ")");
-        }
-        return "[" + String.join(", ", b) + "]";
+
+    /**
+     * @return number of clusters per subspace
+     */
+    public int getClusterCount() {
+        return clusterCount;
     }
 
-    static float[][][] createCodebooks(List<float[]> vectors,
-                                       int M,
-                                       int[][] subvectorSizeAndOffset,
-                                       ForkJoinPool simdExecutor,
-                                       ForkJoinPool parallelExecutor)
-    {
+    static VectorFloat<?>[] createCodebooks(List<VectorFloat<?>> vectors, int M, int[][] subvectorSizeAndOffset, int clusters, ForkJoinPool simdExecutor, ForkJoinPool parallelExecutor) {
         return simdExecutor.submit(() -> IntStream.range(0, M).parallel().mapToObj(m -> {
-            float[][] subvectors = extractSubvectors(vectors, m, subvectorSizeAndOffset, parallelExecutor);
-            var clusterer = new KMeansPlusPlusClusterer(subvectors, CLUSTERS);
+            VectorFloat<?>[] subvectors = extractSubvectors(vectors, m, subvectorSizeAndOffset, parallelExecutor);
+            var clusterer = new KMeansPlusPlusClusterer(subvectors, clusters);
             return clusterer.cluster(K_MEANS_ITERATIONS);
-        }).toArray(float[][][]::new)).join();
+        }).toArray(VectorFloat<?>[]::new)).join();
     }
 
-    /** extract float[] subvectors corresponding to the m'th subspace, in parallel */
-    private static float[][] extractSubvectors(List<float[]> vectors, int m, int[][] subvectorSizeAndOffset, ForkJoinPool parallelExecutor) {
-        return parallelExecutor.submit(() -> {
-            return vectors.parallelStream()
-                    .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
-                    .toArray(float[][]::new);
-        }).join();
+    /** extract VectorFloat subvectors corresponding to the m'th subspace, in parallel */
+    private static VectorFloat<?>[] extractSubvectors(List<VectorFloat<?>> vectors, int m, int[][] subvectorSizeAndOffset, ForkJoinPool parallelExecutor) {
+        return parallelExecutor.submit(() -> vectors.parallelStream()
+                .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
+                .toArray(VectorFloat<?>[]::new)).join();
     }
-
-    static int closetCentroidIndex(float[] subvector, float[][] codebook) {
+    
+    static int closestCentroidIndex(VectorFloat<?> vector, int[] subvectorSizeAndOffset, VectorFloat<?> codebook) {
         int index = 0;
         float minDist = Integer.MAX_VALUE;
-        for (int i = 0; i < codebook.length; i++) {
-            float dist = VectorUtil.squareDistance(subvector, codebook[i]);
+        // vectorFloat will have n subvectors, each of length subvectorSizeAndOffset[0]
+        var clusterCount = codebook.length() / subvectorSizeAndOffset[0];
+        for (int i = 0; i < clusterCount; i++) {
+            float dist = VectorUtil.squareDistance(vector, subvectorSizeAndOffset[1], codebook, i * subvectorSizeAndOffset[0], subvectorSizeAndOffset[0]);
             if (dist < minDist) {
                 minDist = dist;
                 index = i;
@@ -293,9 +284,9 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
     /**
      * Extracts the m-th subvector from a single vector.
      */
-    static float[] getSubVector(float[] vector, int m, int[][] subvectorSizeAndOffset) {
-        float[] subvector = new float[subvectorSizeAndOffset[m][0]];
-        System.arraycopy(vector, subvectorSizeAndOffset[m][1], subvector, 0, subvectorSizeAndOffset[m][0]);
+    static VectorFloat<?> getSubVector(VectorFloat<?> vector, int m, int[][] subvectorSizeAndOffset) {
+        VectorFloat<?> subvector = vectorTypeSupport.createFloatVector(subvectorSizeAndOffset[m][0]);
+        subvector.copyFrom(vector, subvectorSizeAndOffset[m][1], 0, subvectorSizeAndOffset[m][0]);
         return subvector;
     }
 
@@ -321,8 +312,8 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         if (globalCentroid == null) {
             out.writeInt(0);
         } else {
-            out.writeInt(globalCentroid.length);
-            Io.writeFloats(out, globalCentroid);
+            out.writeInt(globalCentroid.length());
+            vectorTypeSupport.writeFloatVector(out, globalCentroid);
         }
 
         out.writeInt(M);
@@ -333,21 +324,19 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         }
 
         assert codebooks.length == M;
-        assert codebooks[0].length == CLUSTERS;
-        out.writeInt(codebooks[0].length);
-        for (var codebook : codebooks) {
-            for (var centroid : codebook) {
-                Io.writeFloats(out, centroid);
-            }
+        out.writeInt(clusterCount);
+        for (int i = 0; i < M; i++) {
+            var codebook = codebooks[i];
+            assert codebook.length() == clusterCount * subvectorSizesAndOffsets[i][0];
+            vectorTypeSupport.writeFloatVector(out, codebook);
         }
     }
 
     public static ProductQuantization load(RandomAccessReader in) throws IOException {
         int globalCentroidLength = in.readInt();
-        float[] globalCentroid = null;
+        VectorFloat<?> globalCentroid = null;
         if (globalCentroidLength > 0) {
-            globalCentroid = new float[globalCentroidLength];
-            in.readFully(globalCentroid);
+            globalCentroid = vectorTypeSupport.readFloatVector(in, globalCentroidLength);
         }
 
         int M = in.readInt();
@@ -357,24 +346,18 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
             subvectorSizes[i] = new int[2];
             int size = in.readInt();
             subvectorSizes[i][0] = size;
-            offset += size;
             subvectorSizes[i][1] = offset;
+            offset += size;
         }
 
         int clusters = in.readInt();
-        float[][][] codebooks = new float[M][][];
+        VectorFloat<?>[] codebooks = new VectorFloat<?>[M];
         for (int m = 0; m < M; m++) {
-            float[][] codebook = new float[clusters][];
-            for (int i = 0; i < clusters; i++) {
-                int n = subvectorSizes[m][0];
-                float[] centroid = new float[n];
-                in.readFully(centroid);
-                codebook[i] = centroid;
-            }
+            VectorFloat<?> codebook = vectorTypeSupport.readFloatVector(in, clusters * subvectorSizes[m][0]);
             codebooks[m] = codebook;
         }
 
-        return new ProductQuantization(codebooks, globalCentroid);
+        return new ProductQuantization(codebooks, clusters, subvectorSizes, globalCentroid);
     }
 
     @Override
@@ -383,31 +366,29 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         if (o == null || getClass() != o.getClass()) return false;
         ProductQuantization that = (ProductQuantization) o;
         return M == that.M
-               && originalDimension == that.originalDimension
-               && Arrays.deepEquals(codebooks, that.codebooks)
-               && Arrays.equals(globalCentroid, that.globalCentroid)
-               && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets);
+                && originalDimension == that.originalDimension
+                && Objects.equals(globalCentroid, that.globalCentroid)
+                && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets)
+                && Arrays.deepEquals(codebooks, that.codebooks);
     }
 
     @Override
     public int hashCode() {
         int result = Objects.hash(M, originalDimension);
         result = 31 * result + Arrays.deepHashCode(codebooks);
-        result = 31 * result + Arrays.hashCode(globalCentroid);
+        result = 31 * result + Objects.hashCode(globalCentroid);
         result = 31 * result + Arrays.deepHashCode(subvectorSizesAndOffsets);
         return result;
     }
 
-    public float[] getCenter() {
+    public VectorFloat<?> getCenter() {
         return globalCentroid;
     }
 
     public long memorySize() {
         long size = 0;
-        for (float[][] codebook : codebooks) {
-            for (float[] floats : codebook) {
-                size += RamUsageEstimator.sizeOf(floats);
-            }
+        for (VectorFloat<?> codebook : codebooks) {
+            size += codebook.ramBytesUsed();
         }
 
         return size;
@@ -415,6 +396,6 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
 
     @Override
     public String toString() {
-        return String.format("ProductQuantization(%s)", M);
+        return String.format("ProductQuantization(%s,%s)", M, clusterCount);
     }
 }

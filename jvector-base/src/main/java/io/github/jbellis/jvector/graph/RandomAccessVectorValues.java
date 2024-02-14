@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.function.Supplier;
 
@@ -32,7 +33,7 @@ import java.util.function.Supplier;
  * Provides random access to vectors by dense ordinal. This interface is used by graph-based
  * implementations of KNN search.
  */
-public interface RandomAccessVectorValues<T> {
+public interface RandomAccessVectorValues {
 
     /**
      * Return the number of vector values.
@@ -50,13 +51,13 @@ public interface RandomAccessVectorValues<T> {
      * Return the vector value indexed at the given ordinal.
      *
      * <p>For performance, implementations are free to re-use the same object across invocations.
-     * That is, you will get back the same float[]
+     * That is, you will get back the same VectorFloat&lt;?&gt;
      * reference (for instance) for every requested ordinal. If you want to use those values across
      * calls, you should make a copy.
      *
      * @param targetOrd a valid ordinal, &ge; 0 and &lt; {@link #size()}.
      */
-    T vectorValue(int targetOrd);
+    VectorFloat<?> vectorValue(int targetOrd);
 
     /**
      * @return true iff the vector returned is shared.  A shared vector will
@@ -71,12 +72,12 @@ public interface RandomAccessVectorValues<T> {
      * <p>
      * Un-shared implementations may simply return `this`.
      */
-    RandomAccessVectorValues<T> copy();
+    RandomAccessVectorValues copy();
 
     /**
      * Returns a supplier of thread-local copies of the RAVV.
      */
-    default Supplier<RandomAccessVectorValues<T>> threadLocalSupplier() {
+    default Supplier<RandomAccessVectorValues> threadLocalSupplier() {
         if (!isValueShared()) {
             return () -> this;
         }

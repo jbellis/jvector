@@ -24,8 +24,10 @@ import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -36,22 +38,22 @@ import java.util.List;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class Test2DThreshold extends LuceneTestCase {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     @Test
     public void testThreshold() throws IOException {
         var R = getRandom();
         // generate 2D vectors
-        float[][] vectors = new float[10000][2];
+        VectorFloat<?>[] vectors = new VectorFloat<?>[10000];
         for (int i = 0; i < vectors.length; i++) {
-            vectors[i][0] = R.nextFloat();
-            vectors[i][1] = R.nextFloat();
+            vectors[i] = vectorTypeSupport.createFloatVector(new float[]{R.nextFloat(), R.nextFloat()});
         }
 
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.EUCLIDEAN, 6, 32, 1.2f, 1.4f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.EUCLIDEAN, 6, 32, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
 
         // test raw vectors
-        var searcher = new GraphSearcher.Builder<>(onHeapGraph.getView()).build();
+        var searcher = new GraphSearcher.Builder(onHeapGraph.getView()).build();
         for (int i = 0; i < 10; i++) {
             TestParams tp = createTestParams(vectors);
 
@@ -69,11 +71,11 @@ public class Test2DThreshold extends LuceneTestCase {
         var cv = new PQVectors(pq, pq.encodeAll(List.of(vectors)));
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0))
+             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0))
         {
             for (int i = 0; i < 10; i++) {
                 TestParams tp = createTestParams(vectors);
-                searcher = new GraphSearcher.Builder<>(onDiskGraph.getView()).build();
+                searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
                 NodeSimilarity.Reranker reranker = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
                 var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
                 var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
@@ -85,16 +87,16 @@ public class Test2DThreshold extends LuceneTestCase {
     }
 
     // it's not an interesting test if all the vectors are within the threshold
-    private TestParams createTestParams(float[][] vectors) {
+    private TestParams createTestParams(VectorFloat<?>[] vectors) {
         var R = getRandom();
 
         long exactCount;
-        float[] q;
+        VectorFloat<?> q;
         float th;
         do {
-            q = new float[]{R.nextFloat(), R.nextFloat()};
+            q = vectorTypeSupport.createFloatVector(new float[]{R.nextFloat(), R.nextFloat()});
             th = (float) (0.2 + 0.8 * R.nextDouble());
-            float[] finalQ = q;
+            VectorFloat<?> finalQ = q;
             float finalTh = th;
             exactCount = Arrays.stream(vectors).filter(v -> VectorSimilarityFunction.EUCLIDEAN.compare(finalQ, v) >= finalTh).count();
         } while (!(exactCount < vectors.length * 0.8));
@@ -104,10 +106,10 @@ public class Test2DThreshold extends LuceneTestCase {
 
     private static class TestParams {
         public final long exactCount;
-        public final float[] q;
+        public final VectorFloat<?> q;
         public final float th;
 
-        public TestParams(long exactCount, float[] q, float th) {
+        public TestParams(long exactCount, VectorFloat<?> q, float th) {
             this.exactCount = exactCount;
             this.q = q;
             this.th = th;

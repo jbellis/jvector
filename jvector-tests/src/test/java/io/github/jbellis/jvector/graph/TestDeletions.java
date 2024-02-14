@@ -19,22 +19,17 @@ package io.github.jbellis.jvector.graph;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.function.Function;
 
 import static io.github.jbellis.jvector.TestUtil.assertGraphEquals;
 import static io.github.jbellis.jvector.TestUtil.openFileForWriting;
-import static io.github.jbellis.jvector.graph.GraphIndexTestCase.createRandomFloatVectors;
+import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectors;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
@@ -45,7 +40,7 @@ public class TestDeletions extends LuceneTestCase {
         // graph of 10 vectors
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         var graph = TestUtil.buildSequentially(builder, ravv);
 
         // delete a random entry
@@ -54,14 +49,14 @@ public class TestDeletions extends LuceneTestCase {
         // check that searching for random vectors never results in the deleted one
         for (int i = 0; i < 100; i++) {
             var v = TestUtil.randomVector(getRandom(), dimension);
-            var results = GraphSearcher.search(v, 3, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+            var results = GraphSearcher.search(v, 3, ravv, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
             for (var ns : results.getNodes()) {
                 assertNotEquals(n, ns.node);
             }
         }
         // check that asking for the entire graph back still doesn't surface the deleted one
         var v = ravv.vectorValue(n);
-        var results = GraphSearcher.search(v, ravv.size(), ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+        var results = GraphSearcher.search(v, ravv.size(), ravv, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
         assertEquals(GraphIndex.prettyPrint(graph), ravv.size() - 1, results.getNodes().length);
         for (var ns : results.getNodes()) {
             assertNotEquals(n, ns.node);
@@ -73,7 +68,7 @@ public class TestDeletions extends LuceneTestCase {
         // graph of 10 vectors
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         var graph = TestUtil.buildSequentially(builder, ravv);
 
         // delete all nodes that connect to a random node
@@ -96,8 +91,8 @@ public class TestDeletions extends LuceneTestCase {
         assertEquals(ravv.size() - nDeleted, graph.size());
 
         // cleanup should have added new connections to the node that would otherwise have been disconnected
-        var v = Arrays.copyOf(ravv.vectorValue(nodeToIsolate), ravv.dimension);
-        var results = GraphSearcher.search(v, 10, ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+        var v = ravv.vectorValue(nodeToIsolate).copy();
+        var results = GraphSearcher.search(v, 10, ravv, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
         assertEquals(nodeToIsolate, results.getNodes()[0].node);
 
         // check that we can save and load the graph with "holes" from the deletion
@@ -107,7 +102,7 @@ public class TestDeletions extends LuceneTestCase {
             graph.save(out);
             out.flush();
         }
-        var b2 = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var b2 = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString())) {
             b2.load(marr);
         }
@@ -119,7 +114,7 @@ public class TestDeletions extends LuceneTestCase {
     public void testCleanupAfterMarkingAllNodesAsDeleted() {
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         var graph = TestUtil.buildSequentially(builder, ravv);
 
         for (var i = 0; i < graph.size(); i++) {

@@ -36,12 +36,12 @@ import static org.junit.Assert.*;
 public class TestGraphCache extends RandomizedTest {
     private Path testDirectory;
     private Path onDiskGraphIndexPath;
-    private RandomAccessVectorValues<float[]> vectors;
+    private RandomAccessVectorValues vectors;
 
 
     @Before
     public void setup() throws IOException {
-        var fullyConnectedGraph = new TestUtil.FullyConnectedGraphIndex<float[]>(0, 6);
+        var fullyConnectedGraph = new TestUtil.FullyConnectedGraphIndex(0, 6);
         vectors = new ListRandomAccessVectorValues(IntStream.range(0, 6).mapToObj(i -> TestUtil.randomVector(getRandom(), 2)).collect(Collectors.toList()), 2);
         testDirectory = Files.createTempDirectory(this.getClass().getSimpleName());
         onDiskGraphIndexPath = testDirectory.resolve("fullyConnectedGraph");
@@ -56,7 +56,7 @@ public class TestGraphCache extends RandomizedTest {
     @Test
     public void testGraphCacheLoading() throws Exception {
         try (var marr = new SimpleMappedReader(onDiskGraphIndexPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0))
+             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0))
         {
             var none = GraphCache.load(onDiskGraph, -1);
             assertEquals(0, none.ramBytesUsed());
@@ -68,7 +68,7 @@ public class TestGraphCache extends RandomizedTest {
             // move from caching entry node to entry node + all its neighbors (5)
             assertEquals(one.ramBytesUsed(), zero.ramBytesUsed() * (onDiskGraph.size()));
             for (int i = 0; i < 6; i++) {
-                assertArrayEquals(one.getNode(i).vector, vectors.vectorValue(i), 0);
+                assertEquals(one.getNode(i).vector, vectors.vectorValue(i));
                 // fully connected,
                 assertEquals(one.getNode(i).neighbors.length, onDiskGraph.maxDegree());
             }

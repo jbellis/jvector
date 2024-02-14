@@ -22,6 +22,9 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.agrona.collections.Int2IntHashMap;
 
 import java.io.DataOutput;
@@ -32,8 +35,9 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.stream.IntStream;
 
-public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accountable
+public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ReaderSupplier readerSupplier;
     private final long neighborsOffset;
     private final int size;
@@ -61,7 +65,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
      * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
      * if i &lt; j in `graph` then map[i] &lt; map[j] in the returned map.
      */
-    public static <T> Map<Integer, Integer> getSequentialRenumbering(GraphIndex<T> graph) {
+    public static Map<Integer, Integer> getSequentialRenumbering(GraphIndex graph) {
         try (var view = graph.getView()) {
             Int2IntHashMap oldToNewMap = new Int2IntHashMap(-1);
             int nextOrdinal = 0;
@@ -87,13 +91,12 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
     }
 
     /** return a Graph that can be safely queried concurrently */
-    public OnDiskGraphIndex<T>.OnDiskView getView()
+    public OnDiskGraphIndex.OnDiskView getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
 
-    // TODO: This is fake generic until the reading functionality uses T
-    public class OnDiskView implements GraphIndex.View<T>, AutoCloseable
+    public class OnDiskView implements GraphIndex.View, AutoCloseable
     {
         private final RandomAccessReader reader;
         private final int[] neighbors;
@@ -105,15 +108,13 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
             this.neighbors = new int[maxDegree];
         }
 
-        public T getVector(int node) {
+        public VectorFloat<?> getVector(int node) {
             try {
                 long offset = neighborsOffset +
                         node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
                         + Integer.BYTES; // skip the ID
-                float[] vector = new float[dimension];
                 reader.seek(offset);
-                reader.readFully(vector);
-                return (T) vector;
+                return vectorTypeSupport.readFloatVector(reader, dimension);
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -178,7 +179,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
      *
      * If any nodes have been deleted, you must use the overload specifying `oldToNewOrdinals` instead.
      */
-    public static <T> void write(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, DataOutput out)
+    public static void write(GraphIndex graph, RandomAccessVectorValues vectors, DataOutput out)
             throws IOException
     {
         try (var view = graph.getView()) {
@@ -199,14 +200,14 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
      *                         any deleted nodes.
      * @param out the output to write to
      */
-    public static <T> void write(GraphIndex<T> graph,
-                                 RandomAccessVectorValues<T> vectors,
+    public static void write(GraphIndex graph,
+                                 RandomAccessVectorValues vectors,
                                  Map<Integer, Integer> oldToNewOrdinals,
                                  DataOutput out)
             throws IOException
     {
         if (graph instanceof OnHeapGraphIndex) {
-            var ohgi = (OnHeapGraphIndex<T>) graph;
+            var ohgi = (OnHeapGraphIndex) graph;
             if (ohgi.getDeletedNodes().cardinality() > 0) {
                 throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
             }
@@ -240,7 +241,7 @@ public class OnDiskGraphIndex<T> implements GraphIndex<T>, AutoCloseable, Accoun
                 }
 
                 out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                Io.writeFloats(out, (float[]) vectors.vectorValue(originalOrdinal));
+                vectorTypeSupport.writeFloatVector(out, vectors.vectorValue(originalOrdinal));
 
                 var neighbors = view.getNeighborsIterator(originalOrdinal);
                 out.writeInt(neighbors.size());

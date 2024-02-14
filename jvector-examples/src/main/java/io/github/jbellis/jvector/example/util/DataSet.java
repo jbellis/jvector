@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,16 +32,16 @@ import java.util.Set;
 public class DataSet {
     public final String name;
     public final VectorSimilarityFunction similarityFunction;
-    public final List<float[]> baseVectors;
-    public final List<float[]> queryVectors;
+    public final List<VectorFloat<?>> baseVectors;
+    public final List<VectorFloat<?>> queryVectors;
     public final List<? extends Set<Integer>> groundTruth;
-    private RandomAccessVectorValues<float[]> baseRavv;
+    private RandomAccessVectorValues baseRavv;
 
-    public DataSet(String name, VectorSimilarityFunction similarityFunction, List<float[]> baseVectors, List<float[]> queryVectors, List<? extends Set<Integer>> groundTruth) {
+    public DataSet(String name, VectorSimilarityFunction similarityFunction, List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<? extends Set<Integer>> groundTruth) {
         if (baseVectors.isEmpty() || queryVectors.isEmpty() || groundTruth.isEmpty()) {
             throw new IllegalArgumentException("Base, query, and groundTruth vectors must not be empty");
         }
-        if (baseVectors.get(0).length != queryVectors.get(0).length) {
+        if (baseVectors.get(0).length() != queryVectors.get(0).length()) {
             throw new IllegalArgumentException("Base and query vectors must have the same dimensionality");
         }
         if (queryVectors.size() != groundTruth.size()) {
@@ -54,7 +55,7 @@ public class DataSet {
         this.groundTruth = groundTruth;
 
         System.out.format("%n%s: %d base and %d query vectors created, dimensions %d%n",
-                name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length);
+                name, baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
     }
 
     /**
@@ -62,9 +63,9 @@ public class DataSet {
      * Note: This only scrubs and normalizes for dot product similarity.
      */
     public static DataSet getScrubbedDataSet(String pathStr, VectorSimilarityFunction similarityFunction,
-                                             List<float[]> baseVectors, List<float[]> queryVectors, List<HashSet<Integer>> groundTruth) {
-        List<float[]> scrubbedBaseVectors;
-        List<float[]> scrubbedQueryVectors;
+                                             List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<HashSet<Integer>> groundTruth) {
+        List<VectorFloat<?>> scrubbedBaseVectors;
+        List<VectorFloat<?>> scrubbedQueryVectors;
         List<HashSet<Integer>> gtSet;
         if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
             // verify that vectors are normalized and sane.
@@ -77,7 +78,7 @@ public class DataSet {
             {
                 int j = 0;
                 for (int i = 0; i < baseVectors.size(); i++) {
-                    float[] v = baseVectors.get(i);
+                    VectorFloat<?> v = baseVectors.get(i);
                     if (Math.abs(normOf(v)) > 1e-5) {
                         scrubbedBaseVectors.add(v);
                         rawToScrubbed.put(i, j++);
@@ -85,7 +86,7 @@ public class DataSet {
                 }
             }
             for (int i = 0; i < queryVectors.size(); i++) {
-                float[] v = queryVectors.get(i);
+                VectorFloat<?> v = queryVectors.get(i);
                 if (Math.abs(normOf(v)) > 1e-5) {
                     scrubbedQueryVectors.add(v);
                     var gt = new HashSet<Integer>();
@@ -110,25 +111,25 @@ public class DataSet {
         return new DataSet(pathStr, similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
 
-    private static void normalizeAll(Iterable<float[]> vectors) {
-        for (float[] v : vectors) {
+    private static void normalizeAll(Iterable<VectorFloat<?>> vectors) {
+        for (VectorFloat<?> v : vectors) {
             VectorUtil.l2normalize(v);
         }
     }
 
-    private static float normOf(float[] baseVector) {
+    private static float normOf(VectorFloat<?> baseVector) {
         float norm = 0;
-        for (float v : baseVector) {
-            norm += v * v;
+        for (int i = 0; i < baseVector.length(); i++) {
+            norm += baseVector.get(i) * baseVector.get(i);
         }
         return (float) Math.sqrt(norm);
     }
 
     public int getDimension() {
-        return baseVectors.get(0).length;
+        return baseVectors.get(0).length();
     }
 
-    public RandomAccessVectorValues<float[]> getBaseRavv() {
+    public RandomAccessVectorValues getBaseRavv() {
         if (baseRavv == null) {
             baseRavv = new ListRandomAccessVectorValues(baseVectors, getDimension());
         }

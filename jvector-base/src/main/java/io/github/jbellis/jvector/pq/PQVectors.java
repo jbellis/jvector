@@ -20,6 +20,10 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.ByteSequence;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -27,17 +31,18 @@ import java.util.Arrays;
 import java.util.Objects;
 
 public class PQVectors implements CompressedVectors {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ProductQuantization pq;
-    private final byte[][] compressedVectors;
-    private final ThreadLocal<float[]> partialSums; // for dot product, euclidean, and cosine
-    private final ThreadLocal<float[]> partialMagnitudes; // for cosine
+    private final ByteSequence<?>[] compressedVectors;
+    private final ThreadLocal<VectorFloat<?>> partialSums; // for dot product, euclidean, and cosine
+    private final ThreadLocal<VectorFloat<?>> partialMagnitudes; // for cosine
 
-    public PQVectors(ProductQuantization pq, byte[][] compressedVectors)
+    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
-        this.partialSums = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
-        this.partialMagnitudes = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
+        this.partialSums = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(pq.getSubspaceCount() * pq.getClusterCount()));
+        this.partialMagnitudes = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(pq.getSubspaceCount() * pq.getClusterCount()));
     }
 
     @Override
@@ -50,11 +55,11 @@ public class PQVectors implements CompressedVectors {
         out.writeInt(compressedVectors.length);
         out.writeInt(pq.getSubspaceCount());
         for (var v : compressedVectors) {
-            out.write(v);
+            vectorTypeSupport.writeByteSequence(out, v);
         }
     }
 
-    public static CompressedVectors load(RandomAccessReader in, long offset) throws IOException
+    public static PQVectors load(RandomAccessReader in, long offset) throws IOException
     {
         in.seek(offset);
 
@@ -66,7 +71,7 @@ public class PQVectors implements CompressedVectors {
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
-        var compressedVectors = new byte[size][];
+        var compressedVectors = new ByteSequence<?>[size];
 
         int compressedDimension = in.readInt();
         if (compressedDimension < 0) {
@@ -75,8 +80,7 @@ public class PQVectors implements CompressedVectors {
 
         for (int i = 0; i < size; i++)
         {
-            byte[] vector = new byte[compressedDimension];
-            in.readFully(vector);
+            ByteSequence<?> vector = vectorTypeSupport.readByteSequence(in, compressedDimension);
             compressedVectors[i] = vector;
         }
 
@@ -100,7 +104,7 @@ public class PQVectors implements CompressedVectors {
     }
 
     @Override
-    public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
+    public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
                 return new PQDecoder.DotProductDecoder(this, q);
@@ -113,15 +117,19 @@ public class PQVectors implements CompressedVectors {
         }
     }
 
-    byte[] get(int ordinal) {
+    public ByteSequence<?> get(int ordinal) {
         return compressedVectors[ordinal];
     }
 
-    float[] reusablePartialSums() {
+    public ProductQuantization getProductQuantization() {
+        return pq;
+    }
+
+    VectorFloat<?> reusablePartialSums() {
         return partialSums.get();
     }
 
-    float[] reusablePartialMagnitudes() {
+    VectorFloat<?> reusablePartialMagnitudes() {
         return partialMagnitudes.get();
     }
 

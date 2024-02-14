@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.example.util;
 import com.indeed.util.mmap.MMapBuffer;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -46,6 +45,15 @@ public class MMapReader implements RandomAccessReader {
 
     public void readFully(byte[] bytes) {
         read(bytes, 0, bytes.length);
+    }
+
+    public void readFully(ByteBuffer buffer) {
+        var length = buffer.remaining();
+        try {
+            this.buffer.memory().getBytes(position, buffer);
+        } finally {
+            position += length;
+        }
     }
 
     private void read(byte[] bytes, int offset, int count) {
