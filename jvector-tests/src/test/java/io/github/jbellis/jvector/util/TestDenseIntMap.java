@@ -81,15 +81,22 @@ public class TestDenseIntMap extends RandomizedTest {
 
     @Test
     public void testConcurrency() throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            testConcurrencyOnce();
+        }
+    }
+
+    private static void testConcurrencyOnce() throws InterruptedException {
         var map = new DenseIntMap<String>(100);
         var source = new ConcurrentHashMap<Integer, String>();
 
-        var latch = new CountDownLatch(4);
-        for (int t = 0; t < 4; t++) {
+        int nThreads = randomIntBetween(2, 16);
+        var latch = new CountDownLatch(nThreads);
+        for (int t = 0; t < nThreads; t++) {
             new Thread(() -> {
                 try {
                     for (int i = 0; i < 1000; i++) {
-                        int key = randomIntBetween(0, 500);
+                        int key = randomIntBetween(0, 100);
                         if (rarely()) {
                             source.remove(key);
                             map.remove(key);
