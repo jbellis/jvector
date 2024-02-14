@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
+<project xmlns="https://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="https://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>io.github.jbellis</groupId>
@@ -12,8 +12,8 @@
     <artifactId>jvector-tests</artifactId>
     <name>Tests</name>
     <properties>
-        <skipJdk11Tests>true</skipJdk11Tests>
-        <skipJdk20Tests>true</skipJdk20Tests>
+        <skipSIMD>true</skipSIMD>
+        <skipScalar>true</skipScalar>
     </properties>
     <build>
         <plugins>
@@ -76,25 +76,27 @@
                 </dependencies>
                 <executions>
                     <execution>
-                        <id>jdk20</id>
+                        <id>simd</id>
                         <goals>
                             <goal>test</goal>
                         </goals>
                         <configuration>
                             <argLine>
-                                --add-modules=jdk.incubator.vector
+                                --add-modules jdk.incubator.vector
+                                --enable-native-access=ALL-UNNAMED
+                                -Djvector.experimental.enable_native_vectorization=true
                                 --enable-preview
                             </argLine>
-                            <skip>${skipJdk20Tests}</skip>
+                            <skip>${skipSIMD}</skip>
                         </configuration>
                     </execution>
                     <execution>
-                        <id>jdk11</id>
+                        <id>scalar</id>
                         <goals>
                             <goal>test</goal>
                         </goals>
                         <configuration>
-                            <skip>${skipJdk11Tests}</skip>
+                            <skip>${skipScalar}</skip>
                         </configuration>
                     </execution>
                 </executions>
@@ -137,7 +139,7 @@
     </dependencies>
     <profiles>
         <profile>
-            <id>jdk20</id>
+            <id>jdk21</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
@@ -148,15 +150,35 @@
                     <version>${project.version}</version>
                     <scope>compile</scope>
                 </dependency>
+                <dependency>
+                    <groupId>io.github.jbellis</groupId>
+                    <artifactId>jvector-native</artifactId>
+                    <version>${project.version}</version>
+                    <scope>compile</scope>
+                </dependency>
             </dependencies>
             <properties>
-                <skipJdk20Tests>false</skipJdk20Tests>
+                <skipSIMD>false</skipSIMD>
+            </properties>
+        </profile>
+        <profile>
+            <id>jdk20</id>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.jbellis</groupId>
+                    <artifactId>jvector-twenty</artifactId>
+                    <version>${project.version}</version>
+                    <scope>compile</scope>
+                </dependency>
+            </dependencies>
+            <properties>
+                <skipSIMD>false</skipSIMD>
             </properties>
         </profile>
         <profile>
             <id>jdk11</id>
             <properties>
-                <skipJdk11Tests>false</skipJdk11Tests>
+                <skipScalar>false</skipScalar>
             </properties>
         </profile>
     </profiles>

@@ -16,14 +16,20 @@
 
 package io.github.jbellis.jvector;
 
+import io.github.jbellis.jvector.disk.OnDiskADCGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.ByteSequence;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -33,15 +39,24 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.carrotsearch.randomizedtesting.RandomizedTest.getRandom;
 import static org.junit.Assert.assertEquals;
 
 public class TestUtil {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     /** min .. max inclusive on both ends, to match Lucene's */
     public static int nextInt(Random random, int min, int max) {
         return min + random.nextInt(1 + max - min);
@@ -59,7 +74,7 @@ public class TestUtil {
      */
     public static void deleteQuietly(Path targetPath) {
         try {
-            Files.walkFileTree(targetPath, new FileVisitor<Path>() {
+            Files.walkFileTree(targetPath, new FileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                     return FileVisitResult.CONTINUE;
@@ -81,7 +96,7 @@ public class TestUtil {
                 @Override
                 public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                     if (exc != null) {
-                        System.err.println("deleteQuietly encountered an Exception after visiting directory: " + exc.toString());
+                        System.err.println("deleteQuietly encountered an Exception after visiting directory: " + exc);
                         return FileVisitResult.TERMINATE;
                     }
                     Files.delete(dir);
@@ -89,32 +104,36 @@ public class TestUtil {
                 }
             });
         } catch (IOException e) {
-            System.err.println("deleteQuietly encountered an Exception: " + e.toString());
+            System.err.println("deleteQuietly encountered an Exception: " + e);
         }
     }
 
-    public static float[] randomVector(Random random, int dim) {
-      float[] vec = new float[dim];
-      for (int i = 0; i < dim; i++) {
-        vec[i] = random.nextFloat();
-        if (random.nextBoolean()) {
-          vec[i] = -vec[i];
+    public static VectorFloat<?> randomVector(Random random, int dim) {
+        var vec = vectorTypeSupport.createFloatVector(dim);
+        for (int i = 0; i < dim; i++) {
+            vec.set(i, random.nextFloat());
+            if (random.nextBoolean()) {
+                vec.set(i, -vec.get(i));
+            }
         }
-      }
-      VectorUtil.l2normalize(vec);
-      return vec;
+        VectorUtil.l2normalize(vec);
+        return vec;
     }
 
-    public static byte[] randomVector8(Random random, int dim) {
-      float[] fvec = randomVector(random, dim);
-      byte[] bvec = new byte[dim];
-      for (int i = 0; i < dim; i++) {
-        bvec[i] = (byte) (fvec[i] * 127);
-      }
-      return bvec;
+    public static ByteSequence<?> randomVector8(VectorTypeSupport vts, Random random, int dim) {
+        VectorFloat<?> fvec = randomVector(random, dim);
+        ByteSequence<?> bvec = vts.createByteSequence(dim);
+        for (int i = 0; i < dim; i++) {
+            bvec.set(i, (byte) (fvec.get(i) * 127));
+        }
+        return bvec;
     }
 
-    public static <T> void writeGraph(GraphIndex<T> graph, RandomAccessVectorValues<T> vectors, Path outputPath) throws IOException {
+    public static List<VectorFloat<?>> createRandomVectors(int count, int dimension) {
+        return IntStream.range(0, count).mapToObj(i -> TestUtil.randomVector(getRandom(), dimension)).collect(Collectors.toList());
+    }
+
+    public static <T> void writeGraph(GraphIndex graph, RandomAccessVectorValues vectors, Path outputPath) throws IOException {
         try (var out = openFileForWriting(outputPath))
         {
             OnDiskGraphIndex.write(graph, vectors, out);
@@ -122,7 +141,15 @@ public class TestUtil {
         }
     }
 
-    public static Set<Integer> getNeighborNodes(GraphIndex.View<?> g, int node) {
+    public static <T> void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues vectors, PQVectors pq, Path outputPath) throws IOException {
+        try (var out = openFileForWriting(outputPath))
+        {
+            OnDiskADCGraphIndex.write(graph, vectors, pq, out);
+            out.flush();
+        }
+    }
+
+    public static Set<Integer> getNeighborNodes(GraphIndex.View g, int node) {
       Set<Integer> neighbors = new HashSet<>();
       for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
         int n = it.nextInt();
@@ -131,7 +158,7 @@ public class TestUtil {
       return neighbors;
     }
 
-    static List<Integer> sortedNodes(GraphIndex<?> h) {
+    static List<Integer> sortedNodes(GraphIndex h) {
           var graphNodes = h.getNodes();
           List<Integer> nodes = new ArrayList<>();
           while (graphNodes.hasNext()) {
@@ -141,7 +168,7 @@ public class TestUtil {
           return nodes;
       }
 
-    public static void assertGraphEquals(GraphIndex<?> g, GraphIndex<?> h) {
+    public static void assertGraphEquals(GraphIndex g, GraphIndex h) {
           // construct these up front since they call seek which will mess up our test loop
           String prettyG = GraphIndex.prettyPrint(g);
           String prettyH = GraphIndex.prettyPrint(h);
@@ -184,7 +211,7 @@ public class TestUtil {
         }
     }
 
-    public static <T> OnHeapGraphIndex<T> buildSequentially(GraphIndexBuilder<T> builder, RandomAccessVectorValues<T> vectors) {
+    public static <T> OnHeapGraphIndex buildSequentially(GraphIndexBuilder builder, RandomAccessVectorValues vectors) {
         for (var i = 0; i < vectors.size(); i++) {
             builder.addGraphNode(i, vectors);
         }
@@ -192,7 +219,7 @@ public class TestUtil {
         return builder.getGraph();
     }
 
-    public static class FullyConnectedGraphIndex<T> implements GraphIndex<T> {
+    public static class FullyConnectedGraphIndex implements GraphIndex {
         private final int entryNode;
         private final int size;
 
@@ -213,7 +240,7 @@ public class TestUtil {
         }
 
         @Override
-        public View<T> getView() {
+        public View getView() {
             return new FullyConnectedGraphIndexView();
         }
 
@@ -225,7 +252,7 @@ public class TestUtil {
         @Override
         public void close() { }
 
-        private class FullyConnectedGraphIndexView implements View<T> {
+        private class FullyConnectedGraphIndexView implements View {
             @Override
             public NodesIterator getNeighborsIterator(int node) {
                 return new NodesIterator.ArrayNodesIterator(IntStream.range(0, size).filter(i -> i != node).toArray() , size - 1);
@@ -242,7 +269,7 @@ public class TestUtil {
             }
 
             @Override
-            public T getVector(int node) {
+            public VectorFloat<?> getVector(int node) {
                 throw new UnsupportedOperationException("No vectors associated with FullyConnectedGraphIndex");
             }
 
@@ -256,7 +283,7 @@ public class TestUtil {
         }
     }
 
-    public static class RandomlyConnectedGraphIndex<T> implements GraphIndex<T> {
+    public static class RandomlyConnectedGraphIndex implements GraphIndex {
         private final int size;
         private final Map<Integer, int[]> nodes;
         private final int entryNode;
@@ -266,7 +293,7 @@ public class TestUtil {
             this.nodes = new ConcurrentHashMap<>();
 
             var maxNeighbors = Math.min(M, size - 1);
-            var nodeIds = new ArrayList<>(IntStream.range(0, size).boxed().collect(Collectors.toList()));
+            var nodeIds = IntStream.range(0, size).boxed().collect(Collectors.toCollection(ArrayList::new));
             Collections.shuffle(nodeIds, random);
 
             for (int i = 0; i < size; i++) {
@@ -295,7 +322,7 @@ public class TestUtil {
         }
 
         @Override
-        public View<T> getView() {
+        public View getView() {
             return new RandomlyConnectedGraphIndexView();
         }
 
@@ -307,7 +334,7 @@ public class TestUtil {
         @Override
         public void close() { }
 
-        private class RandomlyConnectedGraphIndexView implements View<T> {
+        private class RandomlyConnectedGraphIndexView implements View {
             @Override
             public NodesIterator getNeighborsIterator(int node) {
                 return new NodesIterator.ArrayNodesIterator(nodes.get(node));
@@ -324,7 +351,7 @@ public class TestUtil {
             }
 
             @Override
-            public T getVector(int node) {
+            public VectorFloat<?> getVector(int node) {
                 throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
             }
 

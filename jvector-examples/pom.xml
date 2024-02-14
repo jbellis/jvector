@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
+<project xmlns="https://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="https://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>io.github.jbellis</groupId>
@@ -115,7 +115,7 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>-Xmx32G</argument>
+                                        <argument>-Xmx14G</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
                                         <argument>${benchArgs}</argument>
@@ -129,9 +129,6 @@
         </profile>
         <profile>
             <id>jdk20</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
             <dependencies>
                 <dependency>
                     <groupId>io.github.jbellis</groupId>
@@ -167,8 +164,11 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
-                                        <argument>-Xmx12G</argument>
+                                        <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
+                                        <argument>-Xmx14G</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
                                         <argument>${benchArgs}</argument>
@@ -181,7 +181,10 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.IPCService</argument>
                                     </arguments>
@@ -193,9 +196,111 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
+                                        <argument>-Xmx10G</argument>
+                                        <argument>-ea</argument>
+                                        <argument>-Djava.util.concurrent.ForkJoinPool.common.parallelism=1</argument>
+                                        <argument>-Djvector.physical_core_count=1</argument>
+                                        <argument>io.github.jbellis.jvector.example.IPCService</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>jdk21</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.jbellis</groupId>
+                    <artifactId>jvector-twenty</artifactId>
+                    <version>${project.version}</version>
+                    <scope>compile</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.github.jbellis</groupId>
+                    <artifactId>jvector-native</artifactId>
+                    <version>${project.version}</version>
+                    <scope>compile</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <configuration>
+                            <skip>false</skip>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sift</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-ea</argument>
+                                        <argument>-Djvector.experimental.enable_native_vectorization=true</argument>
+                                        <argument>io.github.jbellis.jvector.example.SiftSmall</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>bench</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
+                                        <argument>-Xmx14G</argument>
+                                        <argument>-ea</argument>
+                                        <argument>-Djvector.experimental.enable_native_vectorization=true</argument>
+                                        <argument>io.github.jbellis.jvector.example.Bench</argument>
+                                        <argument>${benchArgs}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>ipcserve</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-ea</argument>
+                                        <argument>-Djvector.experimental.enable_native_vectorization=true</argument>
+                                        <argument>io.github.jbellis.jvector.example.IPCService</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>ipcserve-1core</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-Djava.util.concurrent.ForkJoinPool.common.parallelism=1</argument>
                                         <argument>-Djvector.physical_core_count=1</argument>
+                                        <argument>-Djvector.experimental.enable_native_vectorization=true</argument>
                                         <argument>-ea</argument>
                                         <argument>io.github.jbellis.jvector.example.IPCService</argument>
                                     </arguments>

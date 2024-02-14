@@ -20,7 +20,6 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
-import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;
@@ -31,9 +30,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 
-import static io.github.jbellis.jvector.graph.GraphIndexTestCase.createRandomFloatVectors;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectors;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class GraphIndexBuilderTest extends LuceneTestCase {
@@ -54,8 +53,8 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
     public void testSaveAndLoad() throws IOException {
         int dimension = randomIntBetween(2, 32);
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(randomIntBetween(10, 100), dimension, getRandom()));
-        Supplier<GraphIndexBuilder<float[]>> newBuilder = () ->
-            new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        Supplier<GraphIndexBuilder> newBuilder = () ->
+            new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
 
         var indexDataPath = testDirectory.resolve("index_builder.data");
         var builder = newBuilder.get();

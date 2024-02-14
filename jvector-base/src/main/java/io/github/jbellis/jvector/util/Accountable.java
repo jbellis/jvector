@@ -25,5 +25,5 @@
 package io.github.jbellis.jvector.util;
 
 public interface Accountable {
-    public long ramBytesUsed();
+    long ramBytesUsed();
 }

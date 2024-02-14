@@ -28,9 +28,8 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
+import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
 import static java.lang.Math.abs;
 import static java.lang.Math.log;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,10 +82,6 @@ public class TestCompressedVectors extends RandomizedTest {
             var cv2 = BQVectors.load(in, 0);
             assertEquals(cv, cv2);
         }
-    }
-
-    private static List<float[]> createRandomVectors(int count, int dimension) {
-        return IntStream.range(0, count).mapToObj(i -> TestUtil.randomVector(getRandom(), dimension)).collect(Collectors.toList());
     }
 
     private void testEncodings(int dimension, int codebooks) {

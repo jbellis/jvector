@@ -24,6 +24,9 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.ByteSequence;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import java.util.List;
 
 /**
@@ -32,50 +35,41 @@ import java.util.List;
 public interface VectorUtilSupport {
 
   /** Calculates the dot product of the given float arrays. */
-  float dotProduct(float[] a, float[] b);
+  float dotProduct(VectorFloat<?> a, VectorFloat<?> b);
 
   /** Calculates the dot product of float arrays of differing sizes, or a subset of the data */
-  float dotProduct(float[] a, int aoffset, float[] b, int boffset, int length);
+  float dotProduct(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length);
 
   /** Returns the cosine similarity between the two vectors. */
-  float cosine(float[] v1, float[] v2);
+  float cosine(VectorFloat<?> v1, VectorFloat<?> v2);
 
   /** Returns the sum of squared differences of the two vectors. */
-  float squareDistance(float[] a, float[] b);
+  float squareDistance(VectorFloat<?> a, VectorFloat<?> b);
 
   /** Calculates the sum of squared differences of float arrays of differing sizes, or a subset of the data */
-  float squareDistance(float[] a, int aoffset, float[] b, int boffset, int length);
-
-  /** Returns the dot product computed over signed bytes. */
-  int dotProduct(byte[] a, byte[] b);
-
-  /** Returns the cosine similarity between the two byte vectors. */
-  float cosine(byte[] a, byte[] b);
-
-  /** Returns the sum of squared differences of the two byte vectors. */
-  int squareDistance(byte[] a, byte[] b);
+  float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length);
 
   /** returns the sum of the given vectors. */
-  float[] sum(List<float[]> vectors);
+  VectorFloat<?> sum(List<VectorFloat<?>> vectors);
 
   /** return the sum of the components of the vector */
-  float sum(float[] vector);
+  float sum(VectorFloat<?> vector);
 
   /** Divide vector by divisor, in place (vector will be modified) */
-  void scale(float[] vector, float multiplier);
+  void scale(VectorFloat<?> vector, float multiplier);
 
   /** Adds v2 into v1, in place (v1 will be modified) */
-  public void addInPlace(float[] v1, float[] v2);
+  void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
   /** Subtracts v2 from v1, in place (v1 will be modified) */
-  public void subInPlace(float[] v1, float[] v2);
+  void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
   /** @return lhs - rhs, element-wise */
-  public float[] sub(float[] lhs, float[] rhs);
+  VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs);
 
   /**
    * Calculates the sum of sparse points in a vector.
-   *
+   * <p>
    * This assumes the data vector is a 2d matrix which has been flattened into 1 dimension
    * so rather than data[n][m] it's data[n * m].  With this layout this method can quickly
    * assemble the data from this heap and sum it.
@@ -86,7 +80,23 @@ public interface VectorUtilSupport {
    * @param baseOffsets bytes that represent offsets from the baseIndex
    * @return the sum of the points
    */
-  public float assembleAndSum(float[] data, int baseIndex, byte[] baseOffsets);
+  float assembleAndSum(VectorFloat<?> data, int baseIndex, ByteSequence<?> baseOffsets);
 
-  public int hammingDistance(long[] v1, long[] v2);
+  int hammingDistance(long[] v1, long[] v2);
+
+  /**
+   * Calculates the similarity score of multiple product quantization-encoded vectors against a single query vector,
+   * using precomputed similarity score fragments derived from codebook contents.
+   * @param shuffles a sequence of shuffles to be used against partial pre-computed fragments. These are transposed PQ-encoded
+   *                 vectors using the same codebooks as the partials. Due to the transposition, rather than this being
+   *                 contiguous encoded vectors, the first component of all vectors is stored contiguously, then the second, and so on.
+   * @param codebookCount The number of codebooks used in the PQ encoding.
+   * @param partials The precomputed score fragments for each codebook entry. These are stored as a contiguous vector of all
+   *                 the fragments for one codebook, followed by all the fragments for the next codebook, and so on.
+   * @param vsf      The similarity function to use.
+   * @param results  The output vector to store the similarity scores. This should be pre-allocated to the same size as the number of shuffles.
+   */
+  void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results);
+
+  void calculatePartialSums(VectorFloat<?> codebook, int baseOffset, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums);
 }

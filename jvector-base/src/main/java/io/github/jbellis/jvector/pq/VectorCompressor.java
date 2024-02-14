@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -29,13 +30,13 @@ import java.util.concurrent.ForkJoinPool;
  */
 public interface VectorCompressor<T> {
 
-    default T[] encodeAll(List<float[]> vectors) {
+    default T[] encodeAll(List<VectorFloat<?>> vectors) {
         return encodeAll(vectors, PhysicalCoreExecutor.pool());
     }
 
-    T[] encodeAll(List<float[]> vectors, ForkJoinPool simdExecutor);
+    T[] encodeAll(List<VectorFloat<?>> vectors, ForkJoinPool simdExecutor);
 
-    T encode(float[] v);
+    T encode(VectorFloat<?> v);
 
     void write(DataOutput out) throws IOException;
 

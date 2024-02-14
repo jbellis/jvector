@@ -19,6 +19,8 @@ package io.github.jbellis.jvector.graph;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.util.ArrayUtil;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -26,11 +28,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.stream.IntStream;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
+  protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
   private static void validateSortedByScore(NodeArray na) {
     for (int i = 0; i < na.size() - 1; i++) {
@@ -42,19 +43,15 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   public void testInsertDiverse() {
     // set up scoreBetween
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
+    var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var candidates = new NodeArray(10);
-    NodeSimilarity scoreBetween = a -> {
-      return (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
-    };
+    NodeSimilarity scoreBetween = a -> (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     // fill candidates with all the nodes except 7
     IntStream.range(0, 10)
         .filter(i -> i != 7)
         .forEach(
-            i -> {
-              candidates.insertSorted(i, scoreBetween.score(7, i));
-            });
+            i -> candidates.insertSorted(i, scoreBetween.score(7, i)));
     assert candidates.size() == 9;
 
     // only nodes 6 and 8 are diverse wrt 7
@@ -71,24 +68,18 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   public void testInsertDiverseConcurrent() {
     // set up scoreBetween
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
+    var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var natural = new NodeArray(10);
     var concurrent = new NodeArray(10);
-    NodeSimilarity scoreBetween = a -> {
-      return (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
-    };
+    NodeSimilarity scoreBetween = a -> (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     // "natural" candidates are [0..7), "concurrent" are [8..10)
     IntStream.range(0, 7)
         .forEach(
-            i -> {
-              natural.insertSorted(i, scoreBetween.score(7, i));
-            });
+            i -> natural.insertSorted(i, scoreBetween.score(7, i)));
     IntStream.range(8, 10)
         .forEach(
-            i -> {
-              concurrent.insertSorted(i, scoreBetween.score(7, i));
-            });
+            i -> concurrent.insertSorted(i, scoreBetween.score(7, i)));
 
     // only nodes 6 and 8 are diverse wrt 7
     var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween);
@@ -102,12 +93,10 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   @Test
   public void testInsertDiverseRetainsNatural() {
     // set up scoreBetween
-    var vectors = new GraphIndexTestCase.CircularFloatVectorValues(10);
+    var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    NodeSimilarity scoreBetween = a -> {
-      return (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
-    };
+    NodeSimilarity scoreBetween = a -> (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
 
     // check that the new neighbor doesn't replace the existing one (since both are diverse, and the max degree accommodates both)
     var cna = new NodeArray(1);

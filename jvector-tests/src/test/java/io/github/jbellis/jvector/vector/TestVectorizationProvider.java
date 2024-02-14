@@ -18,13 +18,16 @@ package io.github.jbellis.jvector.vector;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
-public class TestVectorizationProvider extends RandomizedTest {
-    static boolean hasSimd = VectorizationProvider.vectorModulePresentAndReadable();
 
+public class TestVectorizationProvider extends RandomizedTest {
+    static final boolean hasSimd = VectorizationProvider.vectorModulePresentAndReadable();
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     @Test
     public void testSimilarityMetricsFloat() {
         Assume.assumeTrue(hasSimd);
@@ -32,31 +35,19 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorizationProvider a = new DefaultVectorizationProvider();
         VectorizationProvider b = VectorizationProvider.getInstance();
 
-        for (int i = 0; i < 1000; i++) {
-            float[] v1 = TestUtil.randomVector(getRandom(), 1021); //prime numbers
-            float[] v2 = TestUtil.randomVector(getRandom(), 1021); //prime numbers
+        VectorFloat<?> v1b = TestUtil.randomVector(getRandom(), 1021); //prime numbers
+        VectorFloat<?> v2b = TestUtil.randomVector(getRandom(), 1021); //prime numbers
 
-            Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1, v2), b.getVectorUtilSupport().dotProduct(v1, v2), 0.00001f);
-            Assert.assertEquals(a.getVectorUtilSupport().cosine(v1, v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
-            Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1, v2), b.getVectorUtilSupport().squareDistance(v1, v2), 0.00001f);
+        var v1a = a.getVectorTypeSupport().createFloatVector(1021);
+        var v2a = a.getVectorTypeSupport().createFloatVector(1021);
+        for (int i = 0; i < 1021; i++) {
+            v1a.set(i, v1b.get(i));
+            v2a.set(i, v2b.get(i));
         }
-    }
 
-    @Test
-    public void testSimilarityMetricsByte() {
-        Assume.assumeTrue(hasSimd);
-
-        VectorizationProvider a = new DefaultVectorizationProvider();
-        VectorizationProvider b = VectorizationProvider.getInstance();
-
-        for (int i = 0; i < 1000; i++) {
-            byte[] v1 = TestUtil.randomVector8(getRandom(), 1021); //prime numbers
-            byte[] v2 = TestUtil.randomVector8(getRandom(), 1021); //prime numbers
-
-            Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1, v2), b.getVectorUtilSupport().dotProduct(v1, v2));
-            Assert.assertEquals(a.getVectorUtilSupport().cosine(v1, v2), b.getVectorUtilSupport().cosine(v1, v2), 0.00001f);
-            Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1, v2), b.getVectorUtilSupport().squareDistance(v1, v2));
-        }
+        Assert.assertEquals(a.getVectorUtilSupport().dotProduct(v1a,v2a), b.getVectorUtilSupport().dotProduct(v1b, v2b), 0.00001f);
+        Assert.assertEquals(a.getVectorUtilSupport().cosine(v1a,v2a), b.getVectorUtilSupport().cosine(v1b, v2b), 0.00001f);
+        Assert.assertEquals(a.getVectorUtilSupport().squareDistance(v1a, v2a), b.getVectorUtilSupport().squareDistance(v1b, v2b), 0.00001f);
     }
 
     @Test
@@ -67,20 +58,20 @@ public class TestVectorizationProvider extends RandomizedTest {
         VectorizationProvider b = VectorizationProvider.getInstance();
 
         for (int i = 0; i < 1000; i++) {
-            float[] v2 = TestUtil.randomVector(getRandom(), 256);
+            VectorFloat<?> v2 = TestUtil.randomVector(getRandom(), 256);
 
-            float[] v3 = new float[32];
+            VectorFloat<?> v3 = vectorTypeSupport.createFloatVector(32);
             byte[] offsets = new byte[32];
             int skipSize = 256/32;
             //Assemble v3 from bits of v2
             for (int j = 0, c = 0; j < 256; j+=skipSize, c++) {
-                v3[c] = v2[j];
+                v3.set(c, v2.get(j));
                 offsets[c] = (byte) (c * skipSize);
             }
 
             Assert.assertEquals(a.getVectorUtilSupport().sum(v3), b.getVectorUtilSupport().sum(v3), 0.0001);
-            Assert.assertEquals(a.getVectorUtilSupport().sum(v3), a.getVectorUtilSupport().assembleAndSum(v2, 0, offsets), 0.0001);
-            Assert.assertEquals(b.getVectorUtilSupport().sum(v3), b.getVectorUtilSupport().assembleAndSum(v2, 0, offsets), 0.0001);
+            Assert.assertEquals(a.getVectorUtilSupport().sum(v3), a.getVectorUtilSupport().assembleAndSum(v2, 0, vectorTypeSupport.createByteSequence(offsets)), 0.0001);
+            Assert.assertEquals(b.getVectorUtilSupport().sum(v3), b.getVectorUtilSupport().assembleAndSum(v2, 0, vectorTypeSupport.createByteSequence(offsets)), 0.0001);
 
         }
     }

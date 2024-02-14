@@ -21,9 +21,8 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
-import io.github.jbellis.jvector.graph.GraphIndexTestCase;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.vector.VectorEncoding;
+import io.github.jbellis.jvector.graph.TestVectorGraph;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;
@@ -37,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -46,13 +44,13 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     private Path testDirectory;
 
-    private TestUtil.FullyConnectedGraphIndex<float[]> fullyConnectedGraph;
-    private TestUtil.RandomlyConnectedGraphIndex<float[]> randomlyConnectedGraph;
+    private TestUtil.FullyConnectedGraphIndex fullyConnectedGraph;
+    private TestUtil.RandomlyConnectedGraphIndex randomlyConnectedGraph;
 
     @Before
     public void setup() throws IOException {
-        fullyConnectedGraph = new TestUtil.FullyConnectedGraphIndex<>(0, 6);
-        randomlyConnectedGraph = new TestUtil.RandomlyConnectedGraphIndex<>(10, 4, getRandom());
+        fullyConnectedGraph = new TestUtil.FullyConnectedGraphIndex(0, 6);
+        randomlyConnectedGraph = new TestUtil.RandomlyConnectedGraphIndex(10, 4, getRandom());
         testDirectory = Files.createTempDirectory(this.getClass().getSimpleName());
     }
 
@@ -66,10 +64,10 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         for (var graph : List.of(fullyConnectedGraph, randomlyConnectedGraph))
         {
             var outputPath = testDirectory.resolve("test_graph_" + graph.getClass().getSimpleName());
-            var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
+            var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
             TestUtil.writeGraph(graph, ravv, outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-                 var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0))
+                 var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0))
             {
                 TestUtil.assertGraphEquals(graph, onDiskGraph);
                 try (var onDiskView = onDiskGraph.getView()) {
@@ -82,8 +80,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     @Test
     public void testRenumberingOnDelete() throws IOException {
         // graph of 3 vectors
-        var ravv = new GraphIndexTestCase.CircularFloatVectorValues(3);
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(3);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         var original = TestUtil.buildSequentially(builder, ravv);
 
         // delete the first node
@@ -115,7 +113,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             // 0 -> 1
@@ -128,8 +126,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     @Test
     public void testReorderingRenumbering() throws IOException {
         // graph of 3 vectors
-        var ravv = new GraphIndexTestCase.CircularFloatVectorValues(3);
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(3);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         var original = TestUtil.buildSequentially(builder, ravv);
 
         // create renumbering map
@@ -147,31 +145,31 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
-            assertArrayEquals(onDiskView.getVector(0), ravv.vectorValue(2), 0.0f);
-            assertArrayEquals(onDiskView.getVector(1), ravv.vectorValue(1), 0.0f);
-            assertArrayEquals(onDiskView.getVector(2), ravv.vectorValue(0), 0.0f);
+            assertEquals(onDiskView.getVector(0), ravv.vectorValue(2));
+            assertEquals(onDiskView.getVector(1), ravv.vectorValue(1));
+            assertEquals(onDiskView.getVector(2), ravv.vectorValue(0));
         }
     }
 
-    private static void validateVectors(GraphIndex.View<float[]> view, RandomAccessVectorValues<float[]> ravv) {
+    private static void validateVectors(GraphIndex.View view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
-            assertArrayEquals(view.getVector(i), ravv.vectorValue(i), 0.0f);
+            assertEquals(view.getVector(i), ravv.vectorValue(i));
         }
     }
 
     @Test
     public void testLargeGraph() throws Exception
     {
-        var graph = new TestUtil.RandomlyConnectedGraphIndex<float[]>(100_000, 32, getRandom());
+        var graph = new TestUtil.RandomlyConnectedGraphIndex(100_000, 32, getRandom());
         var outputPath = testDirectory.resolve("large_graph");
-        var ravv = new GraphIndexTestCase.CircularFloatVectorValues(graph.size());
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
         TestUtil.writeGraph(graph, ravv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex<float[]>(marr::duplicate, 0);
+             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
              var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);

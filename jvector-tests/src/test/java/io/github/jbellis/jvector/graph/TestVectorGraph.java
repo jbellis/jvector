@@ -24,18 +24,25 @@
 
 package io.github.jbellis.jvector.graph;
 
+import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.exceptions.ThreadInterruptedException;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.FixedBitSet;
-import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import org.junit.Before;
 import org.junit.Test;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,21 +53,106 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Tests KNN graphs
  */
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
-public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
+public class TestVectorGraph extends LuceneTestCase {
+    private VectorSimilarityFunction similarityFunction;
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    @Before
+    public void setup() {
+        similarityFunction = RandomizedTest.randomFrom(VectorSimilarityFunction.values());
+    }
 
-    VectorSimilarityFunction similarityFunction;
+    VectorFloat<?> randomVector(int dim) {
+        return TestUtil.randomVector(getRandom(), dim);
+    }
 
-    abstract VectorEncoding getVectorEncoding();
+    MockVectorValues vectorValues(int size, int dimension) {
+        return MockVectorValues.fromValues(createRandomFloatVectors(size, dimension, getRandom()));
+    }
 
-    abstract T randomVector(int dim);
+    MockVectorValues vectorValues(VectorFloat<?>[] values) {
+        return MockVectorValues.fromValues(values);
+    }
 
-    abstract AbstractMockVectorValues<T> vectorValues(int size, int dimension);
+    RandomAccessVectorValues circularVectorValues(int nDoc) {
+        return new CircularFloatVectorValues(nDoc);
+    }
 
-    abstract AbstractMockVectorValues<T> vectorValues(float[][] values);
+    VectorFloat<?> getTargetVector() {
+        return vectorTypeSupport.createFloatVector(new float[] {1f, 0f});
+    }
 
-    abstract RandomAccessVectorValues<T> circularVectorValues(int nDoc);
+    @Test
+    public void testSearchWithSkewedAcceptOrds() {
+        int nDoc = 1000;
+        similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
+        RandomAccessVectorValues vectors = circularVectorValues(nDoc);
+        getRandom().nextInt();
+        GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 32, 100, 1.0f, 1.0f);
+        var graph = TestUtil.buildSequentially(builder, vectors);
 
-    abstract T getTargetVector();
+        // Skip over half of the documents that are closest to the query vector
+        FixedBitSet acceptOrds = new FixedBitSet(nDoc);
+        for (int i = 500; i < nDoc; i++) {
+            acceptOrds.set(i);
+        }
+        SearchResult.NodeScore[] nn =
+                GraphSearcher.search(
+                        getTargetVector(),
+                        10,
+                        vectors.copy(),
+                        similarityFunction,
+                        graph,
+                        acceptOrds
+                ).getNodes();
+
+        int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
+        assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
+        int sum = 0;
+        for (int node : nodes) {
+            assertTrue("the results include a deleted document: " + node, acceptOrds.get(node));
+            sum += node;
+        }
+        // We still expect to get reasonable recall. The lowest non-skipped docIds
+        // are closest to the query vector: sum(500,509) = 5045
+        assertTrue("sum(result docs)=" + sum, sum < 5100);
+    }
+
+    @Test
+    // build a random graph and check that resuming a search finds the same nodes as an equivalent from-search search
+    // this test is float-specific because random byte vectors are far more likely to have tied similarities,
+    // which throws off our assumption that resume picks back up with the same state that the original search
+    // left off in (because evictedResults from the first search may not end up in the same order in the
+    // candidates queue)
+    public void testResume() {
+        int size = 1000;
+        int dim = 2;
+        var vectors = vectorValues(size, dim);
+        var builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
+        var graph = builder.build();
+        Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
+
+        int initialTopK = 10;
+        int resumeTopK = 15;
+        var query = randomVector(dim);
+        var searcher = new GraphSearcher.Builder(graph.getView()).build();
+
+        var initial = searcher.search((NodeSimilarity.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK, acceptOrds);
+        assertEquals(initialTopK, initial.getNodes().length);
+
+        var resumed = searcher.resume(resumeTopK);
+        assertEquals(resumeTopK, resumed.getNodes().length);
+
+        var expected = searcher.search((NodeSimilarity.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK + resumeTopK, acceptOrds);
+        assertEquals(expected.getVisitedCount(), initial.getVisitedCount() + resumed.getVisitedCount());
+        assertEquals(expected.getNodes().length, initial.getNodes().length + resumed.getNodes().length);
+        var initialResumedResults = Stream.concat(Arrays.stream(initial.getNodes()), Arrays.stream(resumed.getNodes()))
+                .sorted(Comparator.comparingDouble(ns -> -ns.score))
+                .collect(Collectors.toList());
+        var expectedResults = List.of(expected.getNodes());
+        for (int i = 0; i < expectedResults.size(); i++) {
+            assertEquals(expectedResults.get(i).score, initialResumedResults.get(i).score, 1E-6);
+        }
+    }
 
     // Make sure we actually approximately find the closest k elements. Mostly this is about
     // ensuring that we have all the distance functions, comparators, priority queues and so on
@@ -69,19 +161,17 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     public void testAknnDiverse() {
         int nDoc = 100;
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-        RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 20, 100, 1.0f, 1.4f);
+        RandomAccessVectorValues vectors = circularVectorValues(nDoc);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 20, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // run some searches
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
-                                                           10,
-                                                           vectors.copy(),
-                                                           getVectorEncoding(),
-                                                           similarityFunction,
-                                                           graph,
-                                                           Bits.ALL
+                10,
+                vectors.copy(),
+                similarityFunction,
+                graph,
+                Bits.ALL
         ).getNodes();
         int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
         assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
@@ -106,21 +196,19 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     @Test
     public void testSearchWithAcceptOrds() {
         int nDoc = 100;
-        RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
+        RandomAccessVectorValues vectors = circularVectorValues(nDoc);
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 32, 100, 1.0f, 1.4f);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 32, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // the first 10 docs must not be deleted to ensure the expected recall
         Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
-                                                           10,
-                                                           vectors.copy(),
-                                                           getVectorEncoding(),
-                                                           similarityFunction,
-                                                           graph,
-                                                           acceptOrds
+                10,
+                vectors.copy(),
+                similarityFunction,
+                graph,
+                acceptOrds
         ).getNodes();
         int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
         assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
@@ -137,11 +225,10 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     @Test
     public void testSearchWithSelectiveAcceptOrds() {
         int nDoc = 100;
-        RandomAccessVectorValues<T> vectors = circularVectorValues(nDoc);
+        RandomAccessVectorValues vectors = circularVectorValues(nDoc);
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 32, 100, 1.0f, 1.4f);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 32, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
         // Only mark a few vectors as accepted
         var acceptOrds = new FixedBitSet(nDoc);
@@ -152,24 +239,23 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // Check the search finds all accepted vectors
         int numAccepted = acceptOrds.cardinality();
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
-                                                           numAccepted,
-                                                           vectors.copy(),
-                                                           getVectorEncoding(),
-                                                           similarityFunction,
-                                                           graph,
-                                                           acceptOrds
+                numAccepted,
+                vectors.copy(),
+                similarityFunction,
+                graph,
+                acceptOrds
         ).getNodes();
 
         int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
         for (int node : nodes) {
             assertTrue(String.format("the results include a deleted document: %d for %s",
-                                     node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
+                    node, GraphIndex.prettyPrint(builder.graph)), acceptOrds.get(node));
         }
         for (int i = 0; i < acceptOrds.length(); i++) {
             if (acceptOrds.get(i)) {
                 int finalI = i;
                 assertTrue(String.format("the results do not include an accepted document: %d for %s",
-                                         i, GraphIndex.prettyPrint(builder.graph)), Arrays.stream(nodes).anyMatch(j -> j == finalI));
+                        i, GraphIndex.prettyPrint(builder.graph)), Arrays.stream(nodes).anyMatch(j -> j == finalI));
             }
         }
     }
@@ -177,21 +263,19 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     @Test
     public void testGraphIndexBuilderInvalid() {
         assertThrows(NullPointerException.class,
-                     () -> new GraphIndexBuilder<>(null, null, null, 0, 0, 1.0f, 1.0f));
+                () -> new GraphIndexBuilder(null, null, 0, 0, 1.0f, 1.0f));
         // M must be > 0
         assertThrows(IllegalArgumentException.class,
-                     () -> {
-                         RandomAccessVectorValues<T> vectors = vectorValues(1, 1);
-                         VectorEncoding vectorEncoding = getVectorEncoding();
-                         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 0, 10, 1.0f, 1.0f);
-                     });
+                () -> {
+                    RandomAccessVectorValues vectors = vectorValues(1, 1);
+                    new GraphIndexBuilder(vectors, similarityFunction, 0, 10, 1.0f, 1.0f);
+                });
         // beamWidth must be > 0
         assertThrows(IllegalArgumentException.class,
-                     () -> {
-                         RandomAccessVectorValues<T> vectors = vectorValues(1, 1);
-                         VectorEncoding vectorEncoding = getVectorEncoding();
-                         new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 10, 0, 1.0f, 1.0f);
-                     });
+                () -> {
+                    RandomAccessVectorValues vectors = vectorValues(1, 1);
+                    new GraphIndexBuilder(vectors, similarityFunction, 10, 0, 1.0f, 1.0f);
+                });
     }
 
     // FIXME
@@ -203,7 +287,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     public void testDiversity() {
         similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
         // Some carefully checked test cases with simple 2d vectors on the unit circle:
-        float[][] values = {
+        VectorFloat<?>[] values = {
                 unitVector2d(0.5),
                 unitVector2d(0.75),
                 unitVector2d(0.2),
@@ -212,11 +296,10 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
                 unitVector2d(0.77),
                 unitVector2d(0.6)
         };
-        AbstractMockVectorValues<T> vectors = vectorValues(values);
+        MockVectorValues vectors = vectorValues(values);
         // First add nodes until everybody gets a full neighbor list
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 4, 10, 1.0f, 1.0f);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 4, 10, 1.0f, 1.0f);
         // node 0 is added by the builder constructor
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
@@ -261,18 +344,17 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // in particular if a new neighbor displaces an existing neighbor
         // by being closer to the target, yet none of the existing neighbors is closer to the new vector
         // than to the target -- ie they all remain diverse, so we simply drop the farthest one.
-        float[][] values = {
-                {0, 0, 0},
-                {0, 10, 0},
-                {0, 0, 20},
-                {10, 0, 0},
-                {0, 4, 0}
+        VectorFloat<?>[] values = {
+                vectorTypeSupport.createFloatVector(new float[]{0, 0, 0}),
+                vectorTypeSupport.createFloatVector(new float[]{0, 10, 0}),
+                vectorTypeSupport.createFloatVector(new float[]{0, 0, 20}),
+                vectorTypeSupport.createFloatVector(new float[]{10, 0, 0}),
+                vectorTypeSupport.createFloatVector(new float[]{0, 4, 0})
         };
-        AbstractMockVectorValues<T> vectors = vectorValues(values);
+        MockVectorValues vectors = vectorValues(values);
         // First add nodes until everybody gets a full neighbor list
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10, 1.0f, 1.0f);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 2, 10, 1.0f, 1.0f);
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
         builder.addGraphNode(2, vectors);
@@ -294,17 +376,16 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     public void testDiversity3d() {
         similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
         // test the case when a neighbor *becomes* non-diverse when a newer better neighbor arrives
-        float[][] values = {
-                {0, 0, 0},
-                {0, 10, 0},
-                {0, 0, 20},
-                {0, 9, 0}
+        VectorFloat<?>[] values = {
+                vectorTypeSupport.createFloatVector(new float[]{0, 0, 0}),
+                vectorTypeSupport.createFloatVector(new float[]{0, 10, 0}),
+                vectorTypeSupport.createFloatVector(new float[]{0, 0, 20}),
+                vectorTypeSupport.createFloatVector(new float[]{0, 9, 0})
         };
-        AbstractMockVectorValues<T> vectors = vectorValues(values);
+        MockVectorValues vectors = vectorValues(values);
         // First add nodes until everybody gets a full neighbor list
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 2, 10, 1.0f, 1.0f);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 2, 10, 1.0f, 1.0f);
         builder.addGraphNode(0, vectors);
         builder.addGraphNode(1, vectors);
         builder.addGraphNode(2, vectors);
@@ -322,7 +403,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         assertNeighbors(builder.graph, 3, 0, 1);
     }
 
-    private void assertNeighbors(OnHeapGraphIndex<T> graph, int node, int... expected) {
+    private void assertNeighbors(OnHeapGraphIndex graph, int node, int... expected) {
         Arrays.sort(expected);
         ConcurrentNeighborSet nn = graph.getNeighbors(node);
         Iterator<Integer> it = nn.iterator();
@@ -339,11 +420,10 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     public void testRandom() {
         int size = between(100, 150);
         int dim = between(2, 15);
-        AbstractMockVectorValues<T> vectors = vectorValues(size, dim);
+        MockVectorValues vectors = vectorValues(size, dim);
         int topK = 5;
-        VectorEncoding vectorEncoding = getVectorEncoding();
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, vectorEncoding, similarityFunction, 20, 30, 1.0f, 1.4f);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
         var graph = builder.build();
         Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
@@ -351,26 +431,19 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         int totalMatches = 0;
         for (int i = 0; i < 100; i++) {
             SearchResult.NodeScore[] actual;
-            T query = randomVector(dim);
+            VectorFloat<?> query = randomVector(dim);
             actual = GraphSearcher.search(query,
-                                          efSearch,
-                                          vectors,
-                                          getVectorEncoding(),
-                                          similarityFunction,
-                                          graph,
-                                          acceptOrds
+                    efSearch,
+                    vectors,
+                    similarityFunction,
+                    graph,
+                    acceptOrds
             ).getNodes();
 
             NodeQueue expected = new NodeQueue(new BoundedLongHeap(topK), NodeQueue.Order.MIN_HEAP);
             for (int j = 0; j < size; j++) {
                 if (vectors.vectorValue(j) != null && acceptOrds.get(j)) {
-                    if (getVectorEncoding() == VectorEncoding.BYTE) {
-                        assert query instanceof byte[];
-                        expected.push(j, similarityFunction.compare((byte[]) query, (byte[]) vectors.vectorValue(j)));
-                    } else {
-                        assert query instanceof float[];
-                        expected.push(j, similarityFunction.compare((float[]) query, (float[]) vectors.vectorValue(j)));
-                    }
+                        expected.push(j, similarityFunction.compare(query, vectors.vectorValue(j)));
                 }
             }
             var actualNodeIds = Arrays.stream(actual, 0, topK).mapToInt(nodeScore -> nodeScore.node).toArray();
@@ -383,20 +456,6 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         // a bug has been introduced in graph construction.
         double overlap = totalMatches / (double) (100 * topK);
         assertTrue("overlap=" + overlap, overlap > 0.9);
-    }
-
-    protected NodeSimilarity.ExactScoreFunction getScoreFunction(T query, RandomAccessVectorValues<T> vectors) {
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> {
-            switch (getVectorEncoding()) {
-                case BYTE:
-                    return similarityFunction.compare((byte[]) query, (byte[]) vectors.vectorValue(i));
-                case FLOAT32:
-                    return similarityFunction.compare((float[]) query, (float[]) vectors.vectorValue(i));
-                default:
-                    throw new RuntimeException("Unsupported vector encoding: " + getVectorEncoding());
-            }
-        };
-        return scoreFunction;
     }
 
     private int computeOverlap(int[] a, int[] b) {
@@ -419,19 +478,8 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
 
     @Test
     public void testConcurrentNeighbors() {
-        RandomAccessVectorValues<T> vectors = circularVectorValues(3);
-        GraphIndexBuilder<T> builder =
-                new GraphIndexBuilder<>(vectors, getVectorEncoding(), similarityFunction, 2, 30, 1.0f, 1.0f) {
-                    @Override
-                    protected float scoreBetween(T v1, T v2) {
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            throw new ThreadInterruptedException(e);
-                        }
-                        return super.scoreBetween(v1, v2);
-                    }
-                };
+        RandomAccessVectorValues vectors = circularVectorValues(100);
+        GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 2, 30, 1.0f, 1.4f);
         var graph = builder.build();
         for (int i = 0; i < vectors.size(); i++) {
             assertTrue(graph.getNeighbors(i).size() <= 2);
@@ -441,7 +489,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
     /**
      * Returns vectors evenly distributed around the upper unit semicircle.
      */
-    public static class CircularFloatVectorValues implements RandomAccessVectorValues<float[]> {
+    public static class CircularFloatVectorValues implements RandomAccessVectorValues {
 
         private final int size;
 
@@ -465,7 +513,7 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         }
 
         @Override
-        public float[] vectorValue(int ord) {
+        public VectorFloat<?> vectorValue(int ord) {
             return unitVector2d(ord / (double) size);
         }
 
@@ -475,65 +523,16 @@ public abstract class GraphIndexTestCase<T> extends LuceneTestCase {
         }
     }
 
-    /**
-     * Returns vectors evenly distributed around the upper unit semicircle.
-     */
-    static class CircularByteVectorValues implements RandomAccessVectorValues<byte[]> {
-        private final int size;
-
-        CircularByteVectorValues(int size) {
-            this.size = size;
-        }
-
-        @Override
-        public CircularByteVectorValues copy() {
-            return new CircularByteVectorValues(size);
-        }
-
-        @Override
-        public int dimension() {
-            return 2;
-        }
-
-        @Override
-        public int size() {
-            return size;
-        }
-
-        @Override
-        public byte[] vectorValue(int ord) {
-            float[] value = unitVector2d(ord / (double) size);
-            byte[] bValue = new byte[value.length];
-            for (int i = 0; i < value.length; i++) {
-                bValue[i] = (byte) (value[i] * 127);
-            }
-            return bValue;
-        }
-
-        @Override
-        public boolean isValueShared() {
-            return false;
-        }
-    }
-
-    private static float[] unitVector2d(double piRadians) {
-        return new float[] {
+    private static VectorFloat<?> unitVector2d(double piRadians) {
+        return vectorTypeSupport.createFloatVector(new float[]{
                 (float) Math.cos(Math.PI * piRadians), (float) Math.sin(Math.PI * piRadians)
-        };
+        });
     }
 
-    public static float[][] createRandomFloatVectors(int size, int dimension, Random random) {
-        float[][] vectors = new float[size][];
+    public static VectorFloat<?>[] createRandomFloatVectors(int size, int dimension, Random random) {
+        VectorFloat<?>[] vectors = new VectorFloat<?>[size];
         for (int offset = 0; offset < size; offset++) {
             vectors[offset] = TestUtil.randomVector(random, dimension);
-        }
-        return vectors;
-    }
-
-    static byte[][] createRandomByteVectors(int size, int dimension, Random random) {
-        byte[][] vectors = new byte[size][];
-        for (int offset = 0; offset < size; offset++) {
-            vectors[offset] = TestUtil.randomVector8(random, dimension);
         }
         return vectors;
     }

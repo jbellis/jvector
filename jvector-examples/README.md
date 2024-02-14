@@ -54,7 +54,7 @@ Now you can interact with the service
 ```bash
 socat - unix-client:/tmp/jvector.sock
 
-CREATE 3 DOT_PRODUCT 1 20
+CREATE 3 DOT_PRODUCT 2 20
 OK
 WRITE [0.1,0.15,0.3]
 OK

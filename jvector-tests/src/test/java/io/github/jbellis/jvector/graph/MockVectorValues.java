@@ -25,17 +25,24 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.ArrayUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
-public class MockVectorValues extends AbstractMockVectorValues<float[]> {
-    private final float[] denseScratch;
+public class MockVectorValues implements RandomAccessVectorValues {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    private final VectorFloat<?> scratch;
+    private final int dimension;
+    private final VectorFloat<?>[] denseValues;
 
-    public static MockVectorValues fromValues(float[][] values) {
-        return new MockVectorValues(values[0].length, values);
+    public static MockVectorValues fromValues(VectorFloat<?>[] values) {
+        return new MockVectorValues(values[0].length(), values);
     }
 
-    MockVectorValues(int dimension, float[][] denseValues) {
-        super(dimension, denseValues);
-        this.denseScratch = new float[dimension];
+    MockVectorValues(int dimension, VectorFloat<?>[] denseValues) {
+        this.dimension = dimension;
+        this.denseValues = denseValues;
+        this.scratch = vectorTypeSupport.createFloatVector(dimension);
     }
 
     @Override
@@ -51,11 +58,23 @@ public class MockVectorValues extends AbstractMockVectorValues<float[]> {
     }
 
     @Override
-    public float[] vectorValue(int targetOrd) {
-        float[] original = super.vectorValue(targetOrd);
+    public VectorFloat<?> vectorValue(int targetOrd) {
+        VectorFloat<?> original = denseValues[targetOrd];
         // present a single vector reference to callers like the disk-backed RAVV implmentations,
         // to catch cases where they are not making a copy
-        System.arraycopy(original, 0, denseScratch, 0, dimension);
-        return denseScratch;
+           for (int i = 0; i < dimension; i++) {
+                scratch.set(i, original.get(i));
+            }
+        return scratch;
+    }
+
+    @Override
+    public int size() {
+        return denseValues.length;
+    }
+
+    @Override
+    public int dimension() {
+        return dimension;
     }
 }

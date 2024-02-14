@@ -16,8 +16,12 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import jdk.incubator.vector.FloatVector;
 
+/**
+ * Vectorization provider that uses on-heap arrays and SIMD operations through Panama SIMD API.
+ */
 public class PanamaVectorizationProvider extends VectorizationProvider
 {
     static {
@@ -25,15 +29,21 @@ public class PanamaVectorizationProvider extends VectorizationProvider
     }
 
     private final VectorUtilSupport vectorUtilSupport;
+    private final VectorTypeSupport vectorTypeSupport;
 
     public PanamaVectorizationProvider() {
         this.vectorUtilSupport = new PanamaVectorUtilSupport();
         LOG.info("Preferred f32 species is " + FloatVector.SPECIES_PREFERRED.vectorBitSize());
+        this.vectorTypeSupport = new ArrayVectorProvider();
     }
 
     @Override
-    public VectorUtilSupport getVectorUtilSupport()
-    {
+    public VectorUtilSupport getVectorUtilSupport() {
         return vectorUtilSupport;
+    }
+
+    @Override
+    public VectorTypeSupport getVectorTypeSupport() {
+        return vectorTypeSupport;
     }
 }

@@ -31,8 +31,8 @@ import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.util.GrowableLongHeap;
 import io.github.jbellis.jvector.util.SparseFixedBitSet;
-import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -44,9 +44,9 @@ import static java.lang.Math.min;
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
  * search algorithm, see {@link GraphIndex}.
  */
-public class GraphSearcher<T> {
+public class GraphSearcher {
 
-    private final GraphIndex.View<T> view;
+    private final GraphIndex.View view;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
     // to allocate, so they're cleared and reused across calls.
@@ -65,7 +65,7 @@ public class GraphSearcher<T> {
      *
      * @param visited bit set that will track nodes that have already been visited
      */
-    GraphSearcher(GraphIndex.View<T> view, BitSet visited) {
+    GraphSearcher(GraphIndex.View view, BitSet visited) {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
@@ -76,44 +76,34 @@ public class GraphSearcher<T> {
      * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
      * is the unique owner of the vectors instance passed in here.
      */
-    public static <T> SearchResult search(T targetVector, int topK, RandomAccessVectorValues<T> vectors, VectorEncoding vectorEncoding, VectorSimilarityFunction similarityFunction, GraphIndex<T> graph, Bits acceptOrds) {
+    public static SearchResult search(VectorFloat<?> targetVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
-            var searcher = new GraphSearcher.Builder<>(view).withConcurrentUpdates().build();
-            NodeSimilarity.ExactScoreFunction scoreFunction = i -> {
-                switch (vectorEncoding) {
-                    case BYTE:
-                        return similarityFunction.compare((byte[]) targetVector, (byte[]) vectors.vectorValue(i));
-                    case FLOAT32:
-                        return similarityFunction.compare((float[]) targetVector, (float[]) vectors.vectorValue(i));
-                    default:
-                        throw new RuntimeException("Unsupported vector encoding: " + vectorEncoding);
-                }
-            };
+            var searcher = new GraphSearcher.Builder(view).withConcurrentUpdates().build();
+            NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
             return searcher.search(scoreFunction, null, topK, acceptOrds);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
     }
 
     /** Builder */
-    public static class Builder<T> {
-        private final GraphIndex.View<T> view;
+    public static class Builder {
+        private final GraphIndex.View view;
         private boolean concurrent;
 
-        public Builder(GraphIndex.View<T> view) {
+        public Builder(GraphIndex.View view) {
             this.view = view;
         }
 
-        public Builder<T> withConcurrentUpdates() {
+        public Builder withConcurrentUpdates() {
             this.concurrent = true;
             return this;
         }
 
-        public GraphSearcher<T> build() {
+        public GraphSearcher build() {
             int size = view.getIdUpperBound();
             BitSet bits = concurrent ? new GrowableBitSet(size) : new SparseFixedBitSet(size);
-            return new GraphSearcher<>(view, bits);
+            return new GraphSearcher(view, bits);
         }
     }
 
@@ -269,7 +259,7 @@ public class GraphSearcher<T> {
         // have to be considered.
         var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
         var scoreTracker = threshold > 0 ? new ScoreTracker.NormalDistributionTracker(threshold) : ScoreTracker.NO_OP;
-
+        VectorFloat<?> similarities = null;
         // add evicted results from the last call back to the candidates
         var previouslyEvicted = evictedResults.size() > 0 ? new GrowableBitSet(view.size()) : Bits.NONE;
         while (evictedResults.size() > 0) {
@@ -322,15 +312,20 @@ public class GraphSearcher<T> {
                 continue;
             }
 
-            // add its neighbors to the candidates queue
-            for (var it = view.getNeighborsIterator(topCandidateNode); it.hasNext(); ) {
-                int friendOrd = it.nextInt();
+            if (scoreFunction.supportsBulkSimilarity()) {
+                similarities = scoreFunction.bulkSimilarityTo(topCandidateNode);
+            }
+
+            var it = view.getNeighborsIterator(topCandidateNode);
+
+            for (int i = 0; i < it.size(); i++) {
+                var friendOrd = it.nextInt();
                 if (visited.getAndSet(friendOrd)) {
                     continue;
                 }
                 numVisited++;
 
-                float friendSimilarity = scoreFunction.similarityTo(friendOrd);
+                float friendSimilarity = scoreFunction.supportsBulkSimilarity() ? similarities.get(i) : scoreFunction.similarityTo(friendOrd);
                 scoreTracker.track(friendSimilarity);
                 candidates.push(friendOrd, friendSimilarity);
             }

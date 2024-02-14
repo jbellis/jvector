@@ -24,12 +24,22 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.ByteSequence;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 import java.util.List;
 
+/**
+ * A VectorUtilSupport implementation supported by JDK 11+. This implementation assumes the VectorFloat/ByteSequence
+ * objects wrap an on-heap array of the corresponding type.
+ */
 final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
-  public float dotProduct(float[] a, float[] b) {
+  public float dotProduct(VectorFloat<?> av, VectorFloat<?> bv) {
+    float[] a = ((ArrayVectorFloat) av).get();
+    float[] b = ((ArrayVectorFloat) bv).get();
+
     float res = 0f;
     /*
      * If length of vector is larger than 8, we use unrolled dot product to accelerate the
@@ -95,8 +105,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float dotProduct(float[] a, int aoffset, float[] b, int boffset, int length)
+  public float dotProduct(VectorFloat<?> av, int aoffset, VectorFloat<?> bv, int boffset, int length)
   {
+    float[] b = ((ArrayVectorFloat) bv).get();
+    float[] a = ((ArrayVectorFloat) av).get();
+
     float sum = 0f;
     for (int i = 0; i < length; i++) {
       sum += a[aoffset + i] * b[boffset + i];
@@ -106,7 +119,10 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float cosine(float[] a, float[] b) {
+  public float cosine(VectorFloat<?> av, VectorFloat<?> bv) {
+    float[] a = ((ArrayVectorFloat) av).get();
+    float[] b = ((ArrayVectorFloat) bv).get();
+
     float sum = 0.0f;
     float norm1 = 0.0f;
     float norm2 = 0.0f;
@@ -123,7 +139,10 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float squareDistance(float[] a, float[] b) {
+  public float squareDistance(VectorFloat<?> av, VectorFloat<?> bv) {
+    float[] a = ((ArrayVectorFloat) av).get();
+    float[] b = ((ArrayVectorFloat) bv).get();
+
     float squareSum = 0.0f;
     int dim = a.length;
     int i;
@@ -157,8 +176,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float squareDistance(float[] a, int aoffset, float[] b, int boffset, int length)
+  public float squareDistance(VectorFloat<?> av, int aoffset, VectorFloat<?> bv, int boffset, int length)
   {
+    float[] a = ((ArrayVectorFloat) av).get();
+    float[] b = ((ArrayVectorFloat) bv).get();
+
     float squareSum = 0f;
     for (int i = 0; i < length; i++) {
       float diff = a[aoffset + i] - b[boffset + i];
@@ -169,100 +191,64 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public int dotProduct(byte[] a, byte[] b) {
-    int total = 0;
-    for (int i = 0; i < a.length; i++) {
-      total += a[i] * b[i];
-    }
-    return total;
-  }
+  public VectorFloat<?> sum(List<VectorFloat<?>> vectors) {
 
-  @Override
-  public float cosine(byte[] a, byte[] b) {
-    // Note: this will not overflow if dim < 2^18, since max(byte * byte) = 2^14.
-    int sum = 0;
-    int norm1 = 0;
-    int norm2 = 0;
-
-    for (int i = 0; i < a.length; i++) {
-      byte elem1 = a[i];
-      byte elem2 = b[i];
-      sum += elem1 * elem2;
-      norm1 += elem1 * elem1;
-      norm2 += elem2 * elem2;
-    }
-    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
-  }
-
-  @Override
-  public int squareDistance(byte[] a, byte[] b) {
-    // Note: this will not overflow if dim < 2^18, since max(byte * byte) = 2^14.
-    int squareSum = 0;
-    for (int i = 0; i < a.length; i++) {
-      int diff = a[i] - b[i];
-      squareSum += diff * diff;
-    }
-    return squareSum;
-  }
-
-  @Override
-  public float[] sum(List<float[]> vectors) {
-    float[] sum = new float[vectors.get(0).length];
-    for (float[] vector : vectors) {
-      for (int i = 0; i < vector.length; i++) {
-        sum[i] += vector[i];
+    VectorFloat<?> sum = new ArrayVectorFloat(vectors.get(0).length());
+    for (VectorFloat<?> vector : vectors) {
+      for (int i = 0; i < vector.length(); i++) {
+        sum.set(i, sum.get(i) + vector.get(i));
       }
     }
     return sum;
   }
 
   @Override
-  public float sum(float[] vector) {
+  public float sum(VectorFloat<?> vector) {
     float sum = 0;
-    for (float v : vector) {
-      sum += v;
+    for (int i = 0; i < vector.length(); i++) {
+      sum += vector.get(i);
     }
+
     return sum;
   }
 
   @Override
-  public void scale(float[] vector, float multiplier) {
-    for (int i = 0; i < vector.length; i++) {
-      vector[i] *= multiplier;
+  public void scale(VectorFloat<?> vector, float multiplier) {
+    for (int i = 0; i < vector.length(); i++) {
+      vector.set(i, vector.get(i) * multiplier);
     }
   }
 
   @Override
-  public void addInPlace(float[] v1, float[] v2) {
-    for (int i = 0; i < v1.length; i++) {
-      v1[i] += v2[i];
+  public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+    for (int i = 0; i < v1.length(); i++) {
+      v1.set(i, v1.get(i) + v2.get(i));
     }
   }
 
   @Override
-  public void subInPlace(float[] v1, float[] v2) {
-    for (int i = 0; i < v1.length; i++) {
-      v1[i] -= v2[i];
+  public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+    for (int i = 0; i < v1.length(); i++) {
+      v1.set(i, v1.get(i) - v2.get(i));
     }
   }
 
   @Override
-  public float[] sub(float[] lhs, float[] rhs) {
-    float[] result = new float[lhs.length];
-    for (int i = 0; i < lhs.length; i++) {
-      result[i] = lhs[i] - rhs[i];
+  public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
+    VectorFloat<?> result = new ArrayVectorFloat(lhs.length());
+    for (int i = 0; i < lhs.length(); i++) {
+      result.set(i, lhs.get(i) - rhs.get(i));
     }
     return result;
   }
 
   @Override
-  public float assembleAndSum(float[] data, int dataBase, byte[] baseOffsets)
-  {
-      float sum = 0f;
-      for (int i = 0; i < baseOffsets.length; i++) {
-          sum += data[dataBase * i + Byte.toUnsignedInt(baseOffsets[i])];
-      }
-      return sum;
+  public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
+    float sum = 0f;
+    for (int i = 0; i < baseOffsets.length(); i++) {
+      sum += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i)));
+    }
+    return sum;
   }
 
   @Override
@@ -272,5 +258,43 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       hd += Long.bitCount(v1[i] ^ v2[i]);
     }
     return hd;
+  }
+
+  @Override
+  public void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results) {
+    for (int i = 0; i < codebookCount; i++) {
+      for (int j = 0; j < 32; j++) {
+        results.set(j, results.get(j) + partials.get(i * 32 + shuffles.get(i * 32 + j)));
+      }
+    }
+
+    for (int i = 0; i < results.length(); i++) {
+      switch (vsf) {
+        case EUCLIDEAN:
+          results.set(i, 1 / (1 + results.get(i)));
+          break;
+        case DOT_PRODUCT:
+          results.set(i, (results.get(i) + 1) / 2);
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+      }
+    }
+  }
+
+  @Override
+  public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+    for (int i = 0; i < clusterCount; i++) {
+      switch (vsf) {
+        case DOT_PRODUCT:
+          partialSums.set(codebookBase + i, dotProduct(codebook, i * size, query, queryOffset, size));
+          break;
+        case EUCLIDEAN:
+          partialSums.set(codebookBase + i, squareDistance(codebook, i * size, query, queryOffset, size));
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+      }
+    }
   }
 }

@@ -21,6 +21,7 @@ import sun.misc.Unsafe;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -84,7 +85,17 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     @Override
-    public void readFully(long[] vector) throws IOException {
+    public void readFully(ByteBuffer buffer) {
+        // slice mbb from current position to buffer.remaining()
+        var slice = mbb.slice();
+        var remaining = buffer.remaining();
+        slice.limit(remaining);
+        buffer.put(slice);
+        mbb.position(mbb.position() + remaining);
+    }
+
+    @Override
+    public void readFully(long[] vector) {
         for (int i = 0; i < vector.length; i++) {
             vector[i] = mbb.getLong();
         }

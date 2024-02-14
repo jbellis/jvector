@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 
@@ -38,7 +39,7 @@ import java.io.IOException;
  * All methods are threadsafe.  Operations that require persistent state are wrapped
  * in a View that should be created per accessing thread.
  */
-public interface GraphIndex<T> extends AutoCloseable {
+public interface GraphIndex extends AutoCloseable {
     /** Returns the number of nodes in the graph */
     int size();
 
@@ -53,7 +54,7 @@ public interface GraphIndex<T> extends AutoCloseable {
     /**
      * Return a View with which to navigate the graph.  Views are not threadsafe.
      */
-    View<T> getView();
+    View getView();
 
     /**
      * @return the maximum number of edges per node
@@ -78,7 +79,7 @@ public interface GraphIndex<T> extends AutoCloseable {
     @Override
     void close() throws IOException;
 
-    interface View<T> extends AutoCloseable {
+    interface View extends AutoCloseable {
         /**
          * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
          * is guaranteed to be valid.
@@ -102,7 +103,7 @@ public interface GraphIndex<T> extends AutoCloseable {
          * In that situation, we will want to reorder the results by the exact similarity
          * at the end of the search.
          */
-        T getVector(int node);
+        VectorFloat<?> getVector(int node);
 
         /**
          * Return a Bits instance indicating which nodes are live.  The result is undefined for
@@ -118,7 +119,7 @@ public interface GraphIndex<T> extends AutoCloseable {
         }
     }
 
-    static <T> String prettyPrint(GraphIndex<T> graph) {
+    static String prettyPrint(GraphIndex graph) {
         StringBuilder sb = new StringBuilder();
         sb.append(graph);
         sb.append("\n");

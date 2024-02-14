@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.disk;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * This is a subset of DataInput, plus seek and readFully methods, which allows implementations
@@ -28,6 +29,8 @@ public interface RandomAccessReader extends AutoCloseable {
     int readInt() throws IOException;
 
     void readFully(byte[] bytes) throws IOException;
+
+    void readFully(ByteBuffer buffer) throws IOException;
 
     void readFully(float[] floats) throws IOException;
 

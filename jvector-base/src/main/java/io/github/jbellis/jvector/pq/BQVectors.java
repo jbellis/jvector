@@ -21,6 +21,7 @@ import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -48,8 +49,8 @@ public class BQVectors implements CompressedVectors {
         }
         out.writeInt(compressedVectors[0].length);
         for (var v : compressedVectors) {
-            for (int i = 0; i < v.length; i++) {
-                out.writeLong(v[i]);
+            for (long l : v) {
+                out.writeLong(l);
             }
         }
     }
@@ -86,11 +87,11 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
-    public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(float[] q, VectorSimilarityFunction similarityFunction) {
+    public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         var qBQ = bq.encode(q);
         return node2 -> {
             var vBQ = compressedVectors[node2];
-            return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / q.length;
+            return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / q.length();
         };
     }
 

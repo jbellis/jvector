@@ -4,6 +4,7 @@ target/
 
 ### IntelliJ IDEA ###
 .idea
+*.iml
 
 ### VS Code ###
 .vscode/
@@ -15,3 +16,10 @@ target/
 
 fvec/
 hdf5/
+
+### Native libraries/objects
+*.so
+*.o
+
+### asdf (or other version managers)
+.tool-versions
