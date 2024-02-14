@@ -268,14 +268,16 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         }).toArray(float[][][]::new)).join();
     }
 
-    /** extract float[] subvectors corresponding to the m'th subspace, in parallel */
+    /**
+     * Extract float[] subvectors corresponding to the m'th subspace.
+     * This is NOT done in parallel (since the callers are themselves running in parallel).
+     */
     private static float[][] extractSubvectors(List<float[]> vectors, int m, int[][] subvectorSizeAndOffset, ForkJoinPool parallelExecutor) {
-        return parallelExecutor.submit(() -> {
-            return vectors.parallelStream()
+        return vectors.stream()
                     .map(vector -> getSubVector(vector, m, subvectorSizeAndOffset))
                     .toArray(float[][]::new);
-        }).join();
     }
+
 
     static int closetCentroidIndex(float[] subvector, float[][] codebook) {
         int index = 0;
