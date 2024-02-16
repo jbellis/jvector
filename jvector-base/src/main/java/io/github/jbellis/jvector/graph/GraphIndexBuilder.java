@@ -41,6 +41,9 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
+import static java.lang.Math.abs;
+import static java.lang.Math.sqrt;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -542,6 +545,9 @@ public class GraphIndexBuilder<T> {
         };
     }
 
+    /**
+     * Returns the ordinal of the node that is closest to the centroid of the graph.
+     */
     private int approximateMedioid() {
         assert graph.size() > 0;
 
@@ -558,7 +564,16 @@ public class GraphIndexBuilder<T> {
             VectorUtil.addInPlace(centroid, (float[]) vc.vectorValue(node));
         }
         VectorUtil.scale(centroid, 1.0f / graph.size());
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> scoreBetween(vc.vectorValue(i), (T) centroid);
+
+        // if the centroid is the zero vector, we can't use cosine similarity in our search
+        VectorSimilarityFunction sf;
+        if (similarityFunction == VectorSimilarityFunction.COSINE) {
+            sf = dotProduct(centroid, centroid) < 1E-6 ? VectorSimilarityFunction.EUCLIDEAN : similarityFunction;
+        } else {
+            sf = similarityFunction;
+        }
+        NodeSimilarity.ExactScoreFunction scoreFunction = i -> sf.compare((float[]) vc.vectorValue(i), centroid);
+
         int ep = graph.entry();
         var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
         return result.getNodes()[0].node;

@@ -155,4 +155,17 @@ public class TestFloatVectorGraph extends GraphIndexTestCase<float[]> {
             assertEquals(expectedResults.get(i).score, initialResumedResults.get(i).score, 1E-6);
         }
     }
+
+    @Test
+    public void testZeroCentroid()
+    {
+        var rawVectors = List.of(new float[] {-1, -1}, new float[] {1, 1});
+        var vectors = new ListRandomAccessVectorValues(rawVectors, 2);
+        var builder = new GraphIndexBuilder<>(vectors, getVectorEncoding(), VectorSimilarityFunction.COSINE, 2, 2, 1.0f, 1.0f);
+        try (var graph = builder.build()) {
+            var results = GraphSearcher.search(new float[] {0.5f, 0.5f}, 1, vectors, VectorEncoding.FLOAT32, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+            assertEquals(1, results.getNodes().length);
+            assertEquals(1, results.getNodes()[0].node);
+        }
+    }
 }
