@@ -47,7 +47,7 @@ public final class VectorUtil {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length() + "!=" + b.length());
     }
     float r = impl.dotProduct(a, b);
-    assert Float.isFinite(r);
+    assert Float.isFinite(r) : String.format("dotProduct(%s, %s) = %s", a, b, r);
     return r;
   }
 
@@ -155,5 +155,38 @@ public final class VectorUtil {
 
   public static void calculatePartialSums(VectorFloat<?> codebook, int baseOffset, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
     impl.calculatePartialSums(codebook, baseOffset, size, clusterCount, query, offset, vsf, partialSums);
+  }
+
+  /**
+   * Calculates the dot product similarity scores between v1 and multiple vectors packed into v2.
+   * Note that unlike the dotProduct, this method puts similarity scores into results, taking this responsibility from VectorSimilarityFunction.
+   * @param v1 the query vector
+   * @param v2 multiple vectors to compare against
+   * @param results the output vector to store the similarity scores. This should be pre-allocated to the same size as the number of vectors in v2.
+   */
+  public static void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    impl.dotProductMultiScore(v1, v2, results);
+  }
+
+  /**
+   * Calculates the square distance similarity scores between v1 and multiple vectors packed into v2.
+   * Note that unlike the squareDistance, this method puts similarity scores into results, taking this responsibility from VectorSimilarityFunction.
+   * @param v1 the query vector
+   * @param v2 multiple vectors to compare against
+   * @param results the output vector to store the similarity scores. This should be pre-allocated to the same size as the number of vectors in v2.
+   */
+  public static void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    impl.squareDistanceMultiScore(v1, v2, results);
+  }
+
+  /**
+   * Calculates the cosine similarity scores between v1 and multiple vectors packed into v2.
+   * Note that unlike the cosine, this method puts similarity scores into results, taking this responsibility from VectorSimilarityFunction.
+   * @param v1 the query vector
+   * @param v2 multiple vectors to compare against
+   * @param results the output vector to store the similarity scores. This should be pre-allocated to the same size as the number of vectors in v2.
+   */
+  public static void cosineMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    impl.cosineMultiScore(v1, v2, results);
   }
 }

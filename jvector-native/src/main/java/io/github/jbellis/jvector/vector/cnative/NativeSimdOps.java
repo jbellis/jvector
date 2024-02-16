@@ -169,6 +169,38 @@ public class NativeSimdOps  {
             throw new AssertionError("should not reach here", ex$);
         }
     }
+    public static MethodHandle dot_product_multi_f32_512$MH() {
+        return RuntimeHelper.requireNonNull(constants$2.const$1,"dot_product_multi_f32_512");
+    }
+    /**
+     * {@snippet :
+     * void dot_product_multi_f32_512(float* v1, float* packedv2, int v1Length, int resultsLength, float* results);
+     * }
+     */
+    public static void dot_product_multi_f32_512(MemorySegment v1, MemorySegment packedv2, int v1Length, int resultsLength, MemorySegment results) {
+        var mh$ = dot_product_multi_f32_512$MH();
+        try {
+            mh$.invokeExact(v1, packedv2, v1Length, resultsLength, results);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+    public static MethodHandle square_distance_multi_f32_512$MH() {
+        return RuntimeHelper.requireNonNull(constants$2.const$2,"square_distance_multi_f32_512");
+    }
+    /**
+     * {@snippet :
+     * void square_distance_multi_f32_512(float* v1, float* packedv2, int v1Length, int resultsLength, float* results);
+     * }
+     */
+    public static void square_distance_multi_f32_512(MemorySegment v1, MemorySegment packedv2, int v1Length, int resultsLength, MemorySegment results) {
+        var mh$ = square_distance_multi_f32_512$MH();
+        try {
+            mh$.invokeExact(v1, packedv2, v1Length, resultsLength, results);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
 }
 
 

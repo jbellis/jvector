@@ -43,6 +43,9 @@ public interface VectorUtilSupport {
   /** Returns the cosine similarity between the two vectors. */
   float cosine(VectorFloat<?> v1, VectorFloat<?> v2);
 
+  /** Calculates the cosine similarity of VectorFloats of differing sizes, or a subset of the data */
+  float cosine(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length);
+
   /** Returns the sum of squared differences of the two vectors. */
   float squareDistance(VectorFloat<?> a, VectorFloat<?> b);
 
@@ -99,4 +102,22 @@ public interface VectorUtilSupport {
   void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results);
 
   void calculatePartialSums(VectorFloat<?> codebook, int baseOffset, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums);
+
+  default void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    for (int i = 0; i < results.length(); i++) {
+      results.set(i, (1 + dotProduct(v1, 0, v2, i * v1.length(), v1.length())) / 2);
+    }
+  }
+
+  default void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    for (int i = 0; i < results.length(); i++) {
+      results.set(i, 1 / (1 + squareDistance(v1, 0, v2, i * v1.length(), v1.length())));
+    }
+  }
+
+  default void cosineMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    for (int i = 0; i < results.length(); i++) {
+      results.set(i, (1 + cosine(v1, 0, v2, i * v1.length(), v1.length())) / 2);
+    }
+  }
 }

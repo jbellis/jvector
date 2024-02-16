@@ -139,6 +139,23 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public float cosine(VectorFloat<?> av, int aoffset, VectorFloat<?> bv, int boffset, int length) {
+    float[] a = ((ArrayVectorFloat) av).get();
+    float[] b = ((ArrayVectorFloat) bv).get();
+    float sum = 0.0f;
+    float norm1 = 0.0f;
+    float norm2 = 0.0f;
+    for (int i = 0; i < length; i++) {
+      float elem1 = a[aoffset + i];
+      float elem2 = b[(boffset + i)];
+      sum += elem1 * elem2;
+      norm1 += elem1 * elem1;
+      norm2 += elem2 * elem2;
+    }
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+  }
+
+  @Override
   public float squareDistance(VectorFloat<?> av, VectorFloat<?> bv) {
     float[] a = ((ArrayVectorFloat) av).get();
     float[] b = ((ArrayVectorFloat) bv).get();

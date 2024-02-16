@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import jdk.incubator.vector.FloatVector;
 
 import java.util.List;
 
@@ -38,19 +39,29 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public float cosine(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
+        return VectorSimdOps.cosineSimilarity((OffHeapVectorFloat)a, aoffset, (OffHeapVectorFloat)b, boffset, length);
+    }
+
+    @Override
     public float squareDistance(VectorFloat<?> a, VectorFloat<?> b) {
-         return VectorSimdOps.squareDistance((OffHeapVectorFloat)a, (OffHeapVectorFloat)b);
+         return this.squareDistance(a, 0, b, 0, a.length());
     }
 
     @Override
     public float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
-        return VectorSimdOps.squareDistance((OffHeapVectorFloat) a, aoffset, (OffHeapVectorFloat) b, boffset, length);
+        if (length <= 32)
+            return VectorSimdOps.squareDistance((OffHeapVectorFloat) a, aoffset, (OffHeapVectorFloat) b, boffset, length);
+        else
+            return NativeSimdOps.euclidean_f32(FloatVector.SPECIES_PREFERRED.vectorBitSize(), ((OffHeapVectorFloat)a).get(), aoffset, ((OffHeapVectorFloat)b).get(), boffset, length);
     }
 
     @Override
     public float dotProduct(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
-        return VectorSimdOps.dotProduct((OffHeapVectorFloat)a, aoffset, (OffHeapVectorFloat)b, boffset, length);
-        //return NativeSimdOps.dot_product_f32(FloatVector.SPECIES_PREFERRED.vectorBitSize(), ((OffHeapVectorFloat)a).get(), aoffset, ((OffHeapVectorFloat)b).get(), boffset, length);
+        if (length <= 32)
+            return VectorSimdOps.dotProduct((OffHeapVectorFloat)a, aoffset, (OffHeapVectorFloat)b, boffset, length);
+        else
+            return NativeSimdOps.dot_product_f32(FloatVector.SPECIES_PREFERRED.vectorBitSize(), ((OffHeapVectorFloat)a).get(), aoffset, ((OffHeapVectorFloat)b).get(), boffset, length);
     }
 
     @Override
@@ -109,5 +120,15 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
             case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(((OffHeapVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((OffHeapVectorFloat)query).get(), queryOffset, ((OffHeapVectorFloat)partialSums).get());
             case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
         }
+    }
+
+    @Override
+    public void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+        NativeSimdOps.dot_product_multi_f32_512(((OffHeapVectorFloat)v1).get(), ((OffHeapVectorFloat)v2).get(), v1.length(), results.length(), ((OffHeapVectorFloat)results).get());
+    }
+
+    @Override
+    public void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+        NativeSimdOps.square_distance_multi_f32_512(((OffHeapVectorFloat)v1).get(), ((OffHeapVectorFloat)v2).get(), v1.length(), results.length(), ((OffHeapVectorFloat)results).get());
     }
 }

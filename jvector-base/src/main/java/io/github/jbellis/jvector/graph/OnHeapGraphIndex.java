@@ -253,6 +253,11 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
             throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
         }
 
+        @Override
+        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
+            throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
+        }
+
         public NodesIterator getNeighborsIterator(int node) {
             return getNeighbors(node).iterator();
         }

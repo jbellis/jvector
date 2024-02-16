@@ -37,7 +37,31 @@ public interface VectorTypeSupport {
      */
     VectorFloat<?> createFloatVector(int length);
 
+    /**
+     * Read a vector from the given RandomAccessReader.
+     * @param r the reader to read the vector from.
+     * @param size the size of the vector to read.
+     * @return the vector.
+     * @throws IOException
+     */
     VectorFloat<?> readFloatVector(RandomAccessReader r, int size) throws IOException;
+
+    /**
+     * Read a vector from the given RandomAccessReader and store it in the given vector at the specified offset.
+     * @param r the reader to read the vector from.
+     * @param size the size of the vector to read.
+     * @param vector the vector to store the read data in.
+     * @param offset the offset in the vector to store the read data at.
+     * @throws IOException
+     */
+    void readFloatVector(RandomAccessReader r, int size, VectorFloat<?> vector, int offset) throws IOException;
+
+    /**
+     * Write the given vector to the given DataOutput.
+     * @param out the output to write the vector to.
+     * @param vector the vector to write.
+     * @throws IOException
+     */
     void writeFloatVector(DataOutput out, VectorFloat<?> vector) throws IOException;
 
     /**

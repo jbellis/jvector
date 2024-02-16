@@ -22,12 +22,11 @@
   if you were building a graph of M=16 with JVector2, you should build it with M=32
   with JVector3.
 - `NodeSimilarity.ReRanker` renamed to `Reranker`
-- `NodeSimilarity.Reranker` api has changed.  The interface is no longer parameterized,
-  and the `similarityTo` method no longer takes a Map parameter (provided by `search` with
-  the full vectors associated with the nodes returned).  This is because we discovered that
-  (in contrast with the original DiskANN design) it is more performant to read vectors lazily 
-  from disk at reranking time, since this will only have to fetch vectors for the topK nodes 
-  instead of all nodes visited.
+- `NodeSimilarity.Reranker` api has changed.  The interface is no longer parameterized, the `similarityTo` method no longer takes a Map parameter (provided by `search` with
+  the full vectors associated with the nodes returned), and a single call will be made with an array of ids to rerank 
+  rather than call-per-id.  The map change is because we discovered that (in contrast with the original DiskANN design) it is more
+  performant to read vectors lazily from disk at reranking time, since this will only have to fetch vectors for the topK 
+  nodes instead of all nodes visited. The id change is to allow native implementations to perform more work per FFM call.
 
 ## Other changes to public classes
 

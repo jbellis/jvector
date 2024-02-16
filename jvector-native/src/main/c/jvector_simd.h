@@ -30,4 +30,6 @@ void bulk_shuffle_euclidean_f32_512(const unsigned char* shuffles, int codebookC
 float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned char* baseOffsets, int baseOffsetsLength);
 void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
 void calculate_partial_sums_euclidean_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
+void dot_product_multi_f32_512(const float* v1, const float* packedv2, int v1Length, int resultsLength, float* results);
+void square_distance_multi_f32_512(const float* v1, const float* packedv2, int v1Length, int resultsLength, float* results);
 #endif

@@ -16,10 +16,14 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /** Encapsulates comparing node distances. */
 public interface NodeSimilarity {
+    VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     /** for one-off comparisons between nodes */
     default float score(int node1, int node2) {
         return scoreProvider(node1).similarityTo(node2);
@@ -70,6 +74,13 @@ public interface NodeSimilarity {
     }
 
     interface Reranker {
-        float similarityTo(int node2);
+        /**
+         * Rerank the nodes identified by the nodes array, storing the similarities in the results vector.
+         *
+         * @param nodes   the nodes to calculate similarity for
+         * @param results the similarity scores for each node, in the same order as the input nodes.
+         *                This should be pre-allocated to the same size as nodes.length.
+         */
+        void similarityTo(int[] nodes, VectorFloat<?> results);
     }
 }

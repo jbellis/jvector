@@ -121,6 +121,19 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             }
         }
 
+        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
+            try {
+                long diskOffset = neighborsOffset +
+                        node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
+                        + Integer.BYTES; // skip the ID
+                reader.seek(diskOffset);
+                vectorTypeSupport.readFloatVector(reader, dimension, vector, offset);
+            }
+            catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
         public NodesIterator getNeighborsIterator(int node) {
             try {
                 reader.seek(neighborsOffset +

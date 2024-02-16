@@ -24,6 +24,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.Buffer;
+import java.nio.ByteOrder;
 
 /**
  * VectorTypeSupport using off-heap MemorySegments.
@@ -48,9 +49,29 @@ public class OffHeapVectorProvider implements VectorTypeSupport
     @Override
     public VectorFloat<?> readFloatVector(RandomAccessReader r, int size) throws IOException
     {
-        float[] d = new float[size];
-        r.readFully(d);
-        return new OffHeapVectorFloat(d);
+        var vector = new OffHeapVectorFloat(size);
+        var buffer = vector.get().asByteBuffer();
+        r.readFully(buffer);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        buffer.flip();
+        for (int i = 0; i < buffer.capacity(); i = i + 4) {
+            var val = buffer.getInt(i);
+            buffer.putInt(i, Integer.reverseBytes(val));
+        }
+        return vector;
+    }
+
+    @Override
+    public void readFloatVector(RandomAccessReader r, int count, VectorFloat<?> vector, int offset) throws IOException {
+        var destBuffer = ((OffHeapVectorFloat) vector).get().asByteBuffer();
+        destBuffer.position(offset * Float.BYTES);
+        destBuffer.limit(destBuffer.position() + count * Float.BYTES);
+        r.readFully(destBuffer);
+        destBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = offset * Float.BYTES; i < destBuffer.limit(); i = i + 4) {
+            var val = destBuffer.getInt(i);
+            destBuffer.putInt(i, Integer.reverseBytes(val));
+        }
     }
 
     @Override

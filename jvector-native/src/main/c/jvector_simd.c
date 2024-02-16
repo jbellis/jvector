@@ -399,3 +399,97 @@ void calculate_partial_sums_euclidean_f32_512(const float* codebook, int codeboo
       partialSums[codebookBase + i] = euclidean_f32(512, codebook, i * size, query, queryOffset, size);
     }
 }
+
+void dot_product_multi_f32_512(const float* v1, const float* packedv2, int v1Length, int resultsLength, float* results) {
+    int ao = 0;
+    int simd_length = v1Length - (v1Length % 16);
+
+
+    if (v1Length >= 16) {
+        __m512 sums[resultsLength]; // Array of sums for each subvector in c
+        for (int k = 0; k < resultsLength; ++k) {
+            sums[k] = _mm512_setzero_ps();
+        }
+
+        for (; ao < simd_length; ao += 16) {
+            __m512 va = _mm512_loadu_ps(v1 + ao);
+
+            for (int k = 0; k < resultsLength; ++k) {
+                // Load float32 from the k-th subvector of c
+                __m512 vc = _mm512_loadu_ps(packedv2 + ao + (k * v1Length));
+                // Multiply and accumulate for the k-th subvector
+                sums[k] = _mm512_fmadd_ps(va, vc, sums[k]);
+            }
+        }
+
+        // Horizontal sum of the vectors to get K dot products
+        __attribute__((aligned(64))) float result[16];
+        for (int k = 0; k < resultsLength; ++k) {
+            _mm512_store_ps(result, sums[k]);
+
+            for (int i = 0; i < 16; ++i) {
+                results[k] += result[i];
+            }
+        }
+    }
+
+    // Scalar computation for remaining elements
+    for (; ao < v1Length; ao++) {
+        for (int k = 0; k < resultsLength; ++k) {
+            results[k] += v1[ao] * packedv2[ao + (k * v1Length)];
+        }
+    }
+
+    // convert to scores
+    for (int k = 0; k < resultsLength; ++k) {
+        results[k] = (1.0f + results[k] ) / 2;
+    }
+}
+
+void square_distance_multi_f32_512(const float* v1, const float* packedv2, int v1Length, int resultsLength, float* results) {
+    int ao = 0;
+    int simd_length = v1Length - (v1Length % 16);
+
+
+    if (v1Length >= 16) {
+        __m512 sums[resultsLength]; // Array of sums for each subvector in c
+        for (int k = 0; k < resultsLength; ++k) {
+            sums[k] = _mm512_setzero_ps();
+        }
+
+        for (; ao < simd_length; ao += 16) {
+            __m512 va = _mm512_loadu_ps(v1 + ao);
+
+            for (int k = 0; k < resultsLength; ++k) {
+                // Load float32 from the k-th subvector of c
+                __m512 vc = _mm512_loadu_ps(packedv2 + ao + (k * v1Length));
+                // Multiply and accumulate for the k-th subvector
+                __m512 diff = _mm512_sub_ps(va, vc);
+                sums[k] = _mm512_fmadd_ps(diff, diff, sums[k]);
+            }
+        }
+
+        // Horizontal sum of the vectors to get K dot products
+        __attribute__((aligned(64))) float result[16];
+        for (int k = 0; k < resultsLength; ++k) {
+            _mm512_store_ps(result, sums[k]);
+
+            for (int i = 0; i < 16; ++i) {
+                results[k] += result[i];
+            }
+        }
+    }
+
+    // Scalar computation for remaining elements
+    for (; ao < v1Length; ao++) {
+        for (int k = 0; k < resultsLength; ++k) {
+            float diff = v1[ao] - packedv2[ao + (k * v1Length)];
+            results[k] += diff * diff;
+        }
+    }
+
+    // convert to scores
+    for (int k = 0; k < resultsLength; ++k) {
+        results[k] = 1.0f / (1 + results[k]);
+    }
+}

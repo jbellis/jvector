@@ -257,6 +257,32 @@ final class VectorSimdOps {
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
     }
 
+    static float cosineSimilarity(OffHeapVectorFloat v1, int v1offset, OffHeapVectorFloat v2, int v2offset, int length) {
+        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
+            vsum = vsum.add(a.mul(b));
+            vaMagnitude = a.fma(a, vaMagnitude);
+            vbMagnitude = b.fma(b, vbMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float aMagnitude = vaMagnitude.reduceLanes(VectorOperators.ADD);
+        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+
+        for (int i = vectorizedLength; i < length; i++) {
+            sum += v1.get(v1offset + i) * v2.get(v2offset + i);
+            aMagnitude += v1.get(v1offset + i) * v1.get(v1offset + i);
+            bMagnitude += v2.get(v2offset + i) * v2.get(v2offset + i);
+        }
+
+        return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
+    }
+
     static float squareDistance64(OffHeapVectorFloat v1, int offset1, OffHeapVectorFloat v2, int offset2) {
         var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
         var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), v2.offset(offset2), ByteOrder.LITTLE_ENDIAN);
