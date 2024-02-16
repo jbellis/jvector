@@ -367,7 +367,7 @@ public class GraphSearcher {
                 nodes[i] = new SearchResult.NodeScore(n, nScore);
             }
         } else {
-            nodes = resultsQueue.nodesCopy(reranker::similarityTo, rerankFloor);
+            nodes = resultsQueue.nodesCopy(reranker, rerankFloor);
             Arrays.sort(nodes, 0, nodes.length, Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
             resultsQueue.clear();
         }

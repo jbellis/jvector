@@ -26,6 +26,8 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.util.stream.IntStream;
 
@@ -36,6 +38,7 @@ import java.util.stream.IntStream;
  * or unbounded operations, depending on the implementation subclasses, and either maxheap or minheap behavior.
  */
 public class NodeQueue {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     public enum Order {
         MIN_HEAP {
@@ -134,12 +137,18 @@ public class NodeQueue {
         return nodes;
     }
 
-    public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.ExactScoreFunction sf, float rerankFloor) {
-        return IntStream.range(0, size())
-                .mapToLong(i -> heap.get(i + 1))
-                .filter(m -> decodeScore(m) >= rerankFloor)
-                .mapToObj(m -> new SearchResult.NodeScore(decodeNodeId(m), sf.similarityTo(decodeNodeId(m))))
-                .toArray(SearchResult.NodeScore[]::new);
+    public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.Reranker rr, float rerankFloor) {
+        var ids = IntStream.range(0, size())
+                                    .mapToLong(i -> heap.get(i + 1))
+                                    .filter(m -> decodeScore(m) >= rerankFloor)
+                                    .mapToInt(this::decodeNodeId).toArray();
+        var scores = vectorTypeSupport.createFloatVector(ids.length);
+        rr.similarityTo(ids, scores);
+        var nodeScores = new SearchResult.NodeScore[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            nodeScores[i] = new SearchResult.NodeScore(ids[i], scores.get(i));
+        }
+        return nodeScores;
     }
 
     /** Returns the top element's node id. */

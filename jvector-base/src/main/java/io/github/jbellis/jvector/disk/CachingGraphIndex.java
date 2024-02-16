@@ -98,6 +98,16 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
         }
 
         @Override
+        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
+            var cached = cache.getNode(node);
+            if (cached != null) {
+                vector.copyFrom(cached.vector, 0, offset, cached.vector.length());
+                return;
+            }
+            view.getVectorInto(node, vector, offset);
+        }
+
+        @Override
         public int size() {
             return view.size();
         }

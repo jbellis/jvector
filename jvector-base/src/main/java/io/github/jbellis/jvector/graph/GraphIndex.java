@@ -106,6 +106,14 @@ public interface GraphIndex extends AutoCloseable {
         VectorFloat<?> getVector(int node);
 
         /**
+         * Retrieve the vector associated with a given node, and store it in the destination vector at the given offset.
+         * @param node the node to retrieve
+         * @param destinationVector the vector to store the result in
+         * @param offset the offset in the destination vector to store the result
+         */
+        void getVectorInto(int node, VectorFloat<?> destinationVector, int offset);
+
+        /**
          * Return a Bits instance indicating which nodes are live.  The result is undefined for
          * ordinals that do not correspond to nodes in the graph.
          */

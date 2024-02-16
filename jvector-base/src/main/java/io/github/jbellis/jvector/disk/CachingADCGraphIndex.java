@@ -106,6 +106,16 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
             return view.getVector(node);
         }
 
+        @Override
+        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
+            var cached = cache.getNode(node);
+            if (cached != null) {
+                vector.copyFrom(cached.vector, 0, offset, cached.vector.length());
+                return;
+            }
+            view.getVectorInto(node, vector, offset);
+        }
+
         public ByteSequence<?> getPackedNeighbors(int node) {
             var cached = cache.getNode(node);
             if (cached != null) {

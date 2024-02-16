@@ -33,6 +33,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public float cosine(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
+        return SimdOps.cosineSimilarity((ArrayVectorFloat)a, aoffset, (ArrayVectorFloat)b, boffset, length);
+    }
+
+    @Override
     public float squareDistance(VectorFloat<?> a, VectorFloat<?> b) {
         return SimdOps.squareDistance((ArrayVectorFloat)a, (ArrayVectorFloat)b);
     }

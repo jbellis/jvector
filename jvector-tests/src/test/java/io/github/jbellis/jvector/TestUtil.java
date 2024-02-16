@@ -274,6 +274,11 @@ public class TestUtil {
             }
 
             @Override
+            public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
+                throw new UnsupportedOperationException("No vectors associated with FullyConnectedGraphIndex");
+            }
+
+            @Override
             public Bits liveNodes() {
                 return Bits.ALL;
             }
@@ -352,6 +357,11 @@ public class TestUtil {
 
             @Override
             public VectorFloat<?> getVector(int node) {
+                throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
+            }
+
+            @Override
+            public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
                 throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
             }
 

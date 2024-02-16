@@ -32,7 +32,9 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
@@ -46,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 public class SiftSmall {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     public static void testRecall(ArrayList<VectorFloat<?>> baseVectors, ArrayList<VectorFloat<?>> queryVectors, ArrayList<HashSet<Integer>> groundTruth, Path testDirectory) throws IOException, InterruptedException, ExecutionException {
         int originalDimension = baseVectors.get(0).length();
@@ -89,6 +92,7 @@ public class SiftSmall {
         var topKfound = new AtomicInteger(0);
         var topK = 100;
         var graphType = graph.getClass().getSimpleName();
+        var dimension = ravv.dimension();
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
@@ -101,7 +105,15 @@ public class SiftSmall {
             }
             else {
                 NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                NodeSimilarity.Reranker rr = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, view.getVector(j));
+                NodeSimilarity.Reranker rr = (nodes, results) -> {
+                    var nodeCount = nodes.length;
+                    var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * dimension);
+                    for (int i1 = 0; i1 < nodeCount; i1++) {
+                        var node = nodes[i1];
+                        view.getVectorInto(node, packedVectors, i1 * dimension);
+                    }
+                    VectorSimilarityFunction.EUCLIDEAN.compareMulti(queryVector, packedVectors, results);
+                };
                 nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
             }
 

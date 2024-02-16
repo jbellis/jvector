@@ -39,6 +39,8 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -60,6 +62,7 @@ import java.util.stream.IntStream;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private static void testRecall(int M,
                                    int efConstruction,
                                    List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
@@ -190,7 +193,15 @@ public class Bench {
                         } else {
                             sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
-                        NodeSimilarity.Reranker rr = (j) -> ds.similarityFunction.compare(queryVector, view.getVector(j));
+                        NodeSimilarity.Reranker rr = (nodes, results) -> {
+                            var nodeCount = nodes.length;
+                            var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * ds.getDimension());
+                            for (int i1 = 0; i1 < nodeCount; i1++) {
+                                var node = nodes[i1];
+                                view.getVectorInto(node, packedVectors, i1 * ds.getDimension());
+                            }
+                            ds.similarityFunction.compareMulti(queryVector, packedVectors, results);
+                        };
                         sr = new GraphSearcher.Builder(view)
                                 .build()
                                 .search(sf, rr, efSearch, Bits.ALL);
