@@ -43,6 +43,9 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
+import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
+import static java.lang.Math.abs;
+import static java.lang.Math.sqrt;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -52,10 +55,10 @@ import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
  * that calls `addGraphNode`.  These allocations are retained until the GIB itself is no longer referenced.
  * Under most conditions this is not something you need to worry about, but it does mean
  * that spawning a new Thread per call is not advisable.  This includes virtual threads.
- *
  */
 public class GraphIndexBuilder {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     private final int beamWidth;
     private final ExplicitThreadLocal<NodeArray> naturalScratch;
     private final ExplicitThreadLocal<NodeArray> concurrentScratch;
@@ -537,6 +540,9 @@ public class GraphIndexBuilder {
         };
     }
 
+    /**
+     * Returns the ordinal of the node that is closest to the centroid of the graph.
+     */
     private int approximateMedioid() {
         assert graph.size() > 0;
 
@@ -548,7 +554,15 @@ public class GraphIndexBuilder {
             VectorUtil.addInPlace(centroid, vc.vectorValue(node));
         }
         VectorUtil.scale(centroid, 1.0f / graph.size());
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(vc.vectorValue(i), centroid);
+
+        // if the centroid is the zero vector, we can't use cosine similarity in our search
+        VectorSimilarityFunction sf;
+        if (similarityFunction == VectorSimilarityFunction.COSINE) {
+            sf = dotProduct(centroid, centroid) < 1E-6 ? VectorSimilarityFunction.EUCLIDEAN : similarityFunction;
+        } else {
+            sf = similarityFunction;
+        }
+        NodeSimilarity.ExactScoreFunction scoreFunction = i -> sf.compare(vc.vectorValue(i), centroid);
         int ep = graph.entry();
         var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
         return result.getNodes()[0].node;

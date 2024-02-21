@@ -486,6 +486,21 @@ public class TestVectorGraph extends LuceneTestCase {
         }
     }
 
+    @Test
+    public void testZeroCentroid()
+    {
+        var rawVectors = List.of(vectorTypeSupport.createFloatVector(new float[] {-1, -1}),
+                                 vectorTypeSupport.createFloatVector(new float[] {1, 1}));
+        var vectors = new ListRandomAccessVectorValues(rawVectors, 2);
+        var builder = new GraphIndexBuilder(vectors, VectorSimilarityFunction.COSINE, 2, 2, 1.0f, 1.0f);
+        try (var graph = builder.build()) {
+            var qv = vectorTypeSupport.createFloatVector(new float[] {0.5f, 0.5f});
+            var results = GraphSearcher.search(qv, 1, vectors, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
+            assertEquals(1, results.getNodes().length);
+            assertEquals(1, results.getNodes()[0].node);
+        }
+    }
+
     /**
      * Returns vectors evenly distributed around the upper unit semicircle.
      */
