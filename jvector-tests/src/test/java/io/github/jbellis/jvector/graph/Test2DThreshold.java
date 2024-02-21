@@ -71,20 +71,13 @@ public class Test2DThreshold extends LuceneTestCase {
         var cv = new PQVectors(pq, pq.encodeAll(List.of(vectors)));
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0))
+             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
+             var view = onDiskGraph.getView())
         {
             for (int i = 0; i < 10; i++) {
                 TestParams tp = createTestParams(vectors);
                 searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
-                NodeSimilarity.Reranker reranker = (nodes, results) -> {
-                    var nodeCount = nodes.length;
-                    var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * ravv.dimension());
-                    for (int i1 = 0; i1 < nodeCount; i1++) {
-                        var node = nodes[i1];
-                        onDiskGraph.getView().getVectorInto(node, packedVectors, i1 * ravv.dimension());
-                    }
-                    VectorSimilarityFunction.EUCLIDEAN.compareMulti(tp.q, packedVectors, results);
-                };
+                var reranker = NodeSimilarity.Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
                 var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
                 var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
 

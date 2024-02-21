@@ -193,15 +193,7 @@ public class Bench {
                         } else {
                             sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
-                        NodeSimilarity.Reranker rr = (nodes, results) -> {
-                            var nodeCount = nodes.length;
-                            var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * ds.getDimension());
-                            for (int i1 = 0; i1 < nodeCount; i1++) {
-                                var node = nodes[i1];
-                                view.getVectorInto(node, packedVectors, i1 * ds.getDimension());
-                            }
-                            ds.similarityFunction.compareMulti(queryVector, packedVectors, results);
-                        };
+                        var rr = NodeSimilarity.Reranker.from(queryVector, ds.similarityFunction, view);
                         sr = new GraphSearcher.Builder(view)
                                 .build()
                                 .search(sf, rr, efSearch, Bits.ALL);
