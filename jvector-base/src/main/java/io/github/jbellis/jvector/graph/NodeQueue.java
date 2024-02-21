@@ -143,7 +143,7 @@ public class NodeQueue {
                                     .filter(m -> decodeScore(m) >= rerankFloor)
                                     .mapToInt(this::decodeNodeId).toArray();
         var scores = vectorTypeSupport.createFloatVector(ids.length);
-        rr.similarityTo(ids, scores);
+        rr.score(ids, scores);
         var nodeScores = new SearchResult.NodeScore[ids.length];
         for (int i = 0; i < ids.length; i++) {
             nodeScores[i] = new SearchResult.NodeScore(ids[i], scores.get(i));

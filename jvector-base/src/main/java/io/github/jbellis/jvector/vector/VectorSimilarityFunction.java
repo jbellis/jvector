@@ -41,8 +41,8 @@ public enum VectorSimilarityFunction {
     }
 
     @Override
-    public void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVector, VectorFloat<?> results) {
-      VectorUtil.squareDistanceMultiScore(v1, packedVector, results);
+    public void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVectors, VectorFloat<?> results) {
+      VectorUtil.euclideanMultiScore(v1, packedVectors, results);
     }
   },
 
@@ -60,8 +60,8 @@ public enum VectorSimilarityFunction {
     }
 
     @Override
-    public void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVector, VectorFloat<?> results) {
-      VectorUtil.dotProductMultiScore(v1, packedVector, results);
+    public void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVectors, VectorFloat<?> results) {
+      VectorUtil.dotProductMultiScore(v1, packedVectors, results);
     }
   },
 
@@ -78,8 +78,8 @@ public enum VectorSimilarityFunction {
     }
 
     @Override
-    public void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVector, VectorFloat<?> results) {
-      VectorUtil.cosineMultiScore(v1, packedVector, results);
+    public void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVectors, VectorFloat<?> results) {
+      VectorUtil.cosineMultiScore(v1, packedVectors, results);
     }
   };
 
@@ -98,7 +98,7 @@ public enum VectorSimilarityFunction {
    * similarity scores correspond to closer vectors.
    *
    * @param v1 a vector
-   * @param packedVector N vectors packed into a single vector, of N * v1.length() dimension
+   * @param packedVectors N vectors packed into a single vector, of N * v1.length() dimension
    */
-  public abstract void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVector, VectorFloat<?> results);
+  public abstract void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVectors, VectorFloat<?> results);
 }

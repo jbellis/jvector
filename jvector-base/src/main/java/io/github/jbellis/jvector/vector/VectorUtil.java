@@ -169,13 +169,13 @@ public final class VectorUtil {
   }
 
   /**
-   * Calculates the square distance similarity scores between v1 and multiple vectors packed into v2.
+   * Calculates the Euclidean similarity scores between v1 and multiple vectors packed into v2.
    * Note that unlike the squareDistance, this method puts similarity scores into results, taking this responsibility from VectorSimilarityFunction.
    * @param v1 the query vector
    * @param v2 multiple vectors to compare against
    * @param results the output vector to store the similarity scores. This should be pre-allocated to the same size as the number of vectors in v2.
    */
-  public static void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+  public static void euclideanMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
     impl.squareDistanceMultiScore(v1, v2, results);
   }
 

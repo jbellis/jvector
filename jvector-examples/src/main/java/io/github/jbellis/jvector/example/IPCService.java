@@ -271,15 +271,7 @@ public class IPCService
             if (ctx.cv != null) {
                 NodeSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
-                    NodeSimilarity.Reranker rr = (nodes, resultVector) -> {
-                        var nodeCount = nodes.length;
-                        var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * ctx.dimension);
-                        for (int i1 = 0; i1 < nodeCount; i1++) {
-                            var node = nodes[i1];
-                            view.getVectorInto(node, packedVectors, i1 * ctx.dimension);
-                        }
-                        ctx.similarityFunction.compareMulti(queryVector, packedVectors, resultVector);
-                    };
+                    var rr = NodeSimilarity.Reranker.from(queryVector, ctx.similarityFunction, view);
                     r = new GraphSearcher.Builder(ctx.index.getView()).build().search(sf, rr, searchEf, Bits.ALL);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
