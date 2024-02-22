@@ -36,13 +36,9 @@ then
     exit 0
 fi
 
-jextract --source \
+jextract \
   --output ../java \
   -t io.github.jbellis.jvector.vector.cnative \
   -I . \
-  -l jvector \
   --header-class-name NativeSimdOps \
   jvector_simd.h
-
-# Use sed to strip System.loadLibrary("jvector"); from ../java/io/github/jbellis/jvector/vector/cnative/RuntimeHelper.java
-sed -i 's/.*System.loadLibrary("jvector");//' ../java/io/github/jbellis/jvector/vector/cnative/RuntimeHelper.java

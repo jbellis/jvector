@@ -17,7 +17,7 @@
 #include <cpuid.h>
 #include "jvector_simd.h"
 
-bool check_compatibility() {
+bool check_compatibility(void) {
     unsigned int eax, ebx, ecx, edx;
     bool avx512f_supported = 0, avx512cd_supported = 0, avx512bw_supported = 0, avx512dq_supported = 0, avx512vl_supported = 0;
 
