@@ -20,7 +20,7 @@
 #define VECTOR_SIMD_DOT_H
 
 // check CPU support
-bool check_compatibility();
+bool check_compatibility(void);
 
 //F32
 float dot_product_f32(int preferred_size, const float* a, int aoffset, const float* b, int boffset, int length);
