@@ -35,9 +35,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class DownloadHelper {
     private static final String bucketName = "astra-vector";
@@ -51,77 +48,32 @@ public class DownloadHelper {
                 .credentialsProvider(AnonymousCredentialsProvider.create());
     }
 
-    public static void maybeDownloadFvecs(String prefix) {
-        List<String> keys = new ArrayList<>();
-        switch (prefix) {
-            case "text-embedding-3-large_3072_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/text-embedding-3-large_3072_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/text-embedding-3-large_3072_100000_indices_query_10000.ivec"));
-                break;
-            case "text-embedding-3-large_1536_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/text-embedding-3-large_1536_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/text-embedding-3-large_1536_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/text-embedding-3-large_1536_100000_indices_query_10000.ivec"));
-                break;
-            case "text-embedding-3-small_1536_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/text-embedding-3-small_1536_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/text-embedding-3-small_1536_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/text-embedding-3-small_1536_100000_indices_query_10000.ivec"));
-                break;
-            case "ada_002_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
-                break;
-            case "intfloat_e5-small-v2_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
-                break;
-            case "intfloat_e5-base-v2_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-base-v2_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/intfloat_e5-base-v2_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/intfloat_e5-base-v2_100000_indices_query_10000.ivec"));
-                break;
-            case "intfloat_e5-large-v2_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/intfloat_e5-large-v2_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/intfloat_e5-large-v2_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/intfloat_e5-large-v2_100000_indices_query_10000.ivec"));
-                break;
-            case "textembedding-gecko_100000":
-                keys.addAll(List.of("wikipedia_squad/100k/textembedding-gecko_100000_base_vectors.fvec",
-                                    "wikipedia_squad/100k/textembedding-gecko_100000_query_vectors_10000.fvec",
-                                    "wikipedia_squad/100k/textembedding-gecko_100000_indices_query_10000.ivec"));
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown prefix: " + prefix);
+    public static MultiFileDatasource maybeDownloadFvecs(String name) {
+        var mfd = MultiFileDatasource.byName.get(name);
+        if (mfd == null) {
+            throw new IllegalArgumentException("Unknown dataset: " + name);
         }
         // TODO how to detect and recover from incomplete downloads?
 
         // get directory from paths in keys
-        List<String> dirs = keys.stream().map(key -> key.substring(0, key.lastIndexOf("/"))).distinct().collect(Collectors.toList());
-        for (String dir : dirs) {
-            try {
-                dir = "fvec/" + dir;
-                Files.createDirectories(Paths.get(dir));
-            } catch (IOException e) {
-                System.err.println("Failed to create directory: " + e.getMessage());
-            }
+        try {
+            Files.createDirectories(Paths.get("fvec").resolve(mfd.directory()));
+        } catch (IOException e) {
+            System.err.println("Failed to create directory: " + e.getMessage());
         }
 
         try (S3AsyncClient s3Client = s3AsyncClientBuilder().build()) {
             S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
-            for (String key : keys) {
-                Path path = Paths.get("fvec", key);
+            for (var remotePath : mfd.paths()) {
+                Path path = Paths.get("fvec").resolve(remotePath);
                 if (Files.exists(path)) {
                     continue;
                 }
 
-                System.out.println("Downloading: " + key);
+                System.out.println("Downloading: " + remotePath);
                 DownloadFileRequest downloadFileRequest =
                         DownloadFileRequest.builder()
-                                .getObjectRequest(b -> b.bucket(bucketName).key(key))
+                                .getObjectRequest(b -> b.bucket(bucketName).key(remotePath.toString()))
                                 .addTransferListener(LoggingTransferListener.create())
                                 .destination(Paths.get(path.toString()))
                                 .build();
@@ -146,6 +98,8 @@ public class DownloadHelper {
             System.out.println("Error downloading data from S3: " + e.getMessage());
             System.exit(1);
         }
+
+        return mfd;
     }
 
     public static void maybeDownloadHdf5(String datasetName) {

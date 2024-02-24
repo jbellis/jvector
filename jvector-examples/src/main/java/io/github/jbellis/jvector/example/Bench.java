@@ -234,18 +234,19 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
-                "text-embedding-3-large_3072_100000",
-                "text-embedding-3-large_1536_100000",
-                "text-embedding-3-small_1536_100000",
-                "intfloat_e5-small-v2_100000",
-                "intfloat_e5-base-v2_100000",
-                "intfloat_e5-large-v2_100000",
-                "textembedding-gecko_100000",
-                "ada_002_100000");
+//                "colbert-10M", // WIP
+                "openai-v3-large-3072-100k",
+                "openai-v3-large-1536-100k",
+                "openai-v3-small-100k",
+                "e5-small-v2-100k",
+                "e5-base-v2-100k",
+                "e5-large-v2-100k",
+                "gecko-100k",
+                "ada002-100k");
         for (var nwDatasetName : nwFiles) {
             if (pattern.matcher(nwDatasetName).find()) {
-                DownloadHelper.maybeDownloadFvecs(nwDatasetName);
-                gridSearch(loadNWDataData(nwDatasetName), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+                var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
+                gridSearch(mfd.load(), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
                 cachedCompressors.clear();
             }
         }
@@ -278,19 +279,6 @@ public class Bench {
             gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();
         }
-    }
-
-    private static DataSet loadNWDataData(String name) throws IOException {
-        var path = "wikipedia_squad/100k";
-        var baseVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("fvec/" + path + "/" + name + "_query_vectors_10000.fvec");
-        var gt = SiftLoader.readIvecs("fvec/" + path + "/" + name + "_indices_query_10000.ivec");
-        var ds = DataSet.getScrubbedDataSet(name,
-                             VectorSimilarityFunction.DOT_PRODUCT,
-                             baseVectors,
-                             queryVectors,
-                             gt);
-        return ds;
     }
 
     private static void gridSearch(DataSet ds,
