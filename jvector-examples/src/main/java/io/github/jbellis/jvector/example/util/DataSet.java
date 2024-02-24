@@ -37,10 +37,22 @@ public class DataSet {
     public final List<? extends Set<Integer>> groundTruth;
     private RandomAccessVectorValues baseRavv;
 
-    public DataSet(String name, VectorSimilarityFunction similarityFunction, List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<? extends Set<Integer>> groundTruth) {
-        if (baseVectors.isEmpty() || queryVectors.isEmpty() || groundTruth.isEmpty()) {
-            throw new IllegalArgumentException("Base, query, and groundTruth vectors must not be empty");
+    public DataSet(String name,
+                   VectorSimilarityFunction similarityFunction,
+                   List<VectorFloat<?>> baseVectors,
+                   List<VectorFloat<?>> queryVectors,
+                   List<? extends Set<Integer>> groundTruth)
+    {
+        if (baseVectors.isEmpty()) {
+            throw new IllegalArgumentException("Base vectors must not be empty");
         }
+        if (queryVectors.isEmpty()) {
+            throw new IllegalArgumentException("Query vectors must not be empty");
+        }
+        if (groundTruth.isEmpty()) {
+            throw new IllegalArgumentException("Ground truth vectors must not be empty");
+        }
+
         if (baseVectors.get(0).length() != queryVectors.get(0).length()) {
             throw new IllegalArgumentException("Base and query vectors must have the same dimensionality");
         }
@@ -96,7 +108,7 @@ public class DataSet {
                     gtSet.add(gt);
                 }
             }
-            // now that the zero vectors are removed, we can normalize
+            // now that the zero vectors are removed, we can normalize if it looks like they aren't already
             if (Math.abs(normOf(baseVectors.get(0)) - 1.0) > 1e-5) {
                 normalizeAll(scrubbedBaseVectors);
                 normalizeAll(scrubbedQueryVectors);
