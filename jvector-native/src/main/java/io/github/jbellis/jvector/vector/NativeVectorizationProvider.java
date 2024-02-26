@@ -23,7 +23,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /**
  * Experimental!
- * VectorizationProvider implementation that assumes OffHeap vectors and prefers native/Panama SIMD.
+ * VectorizationProvider implementation that uses MemorySegment vectors and prefers native/Panama SIMD.
  */
 @Experimental
 public class NativeVectorizationProvider extends VectorizationProvider {
@@ -39,7 +39,7 @@ public class NativeVectorizationProvider extends VectorizationProvider {
             throw new UnsupportedOperationException("Native SIMD operations are not supported on this platform due to missing CPU support.");
         }
         this.vectorUtilSupport = new NativeVectorUtilSupport();
-        this.vectorTypeSupport = new OffHeapVectorProvider();
+        this.vectorTypeSupport = new MemorySegmentVectorProvider();
     }
 
     @Override

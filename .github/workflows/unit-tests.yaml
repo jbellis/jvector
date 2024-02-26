@@ -18,7 +18,7 @@ jobs:
         cancel-in-progress: true
     strategy:
       matrix:
-        jdk: [ 11, 20, 21 ]
+        jdk: [ 11, 20 ] # 22 is not yet released, but it needs to be added
         os: [ ubuntu-latest, windows-latest ]
     runs-on: ${{ matrix.os }}
     steps:
@@ -29,9 +29,9 @@ jobs:
           java-version: ${{ matrix.jdk }}
           distribution: temurin
           cache: maven
-      - name: Compile, run tests, and package (JDK 21)
+      - name: Compile, run tests, and package (JDK 22)
         run: mvn -B verify
-        if: matrix.jdk == '21'
+        if: matrix.jdk == '22'
       - name: Compile, run tests, and package (JDK 20)
         run: mvn -B -Pjdk20 -am -pl jvector-tests test
         if: matrix.jdk == '20'
