@@ -42,6 +42,10 @@ public class MultiFileDatasource {
                                                    "wikipedia_squad/10M/nodup/colbertv2.0_128_base_vectors_10000000.fvec",
                                                    "wikipedia_squad/10M/nodup/colbertv2.0_128_query_vectors_100000.fvec",
                                                    "wikipedia_squad/10M/nodup/colbertv2.0_128_indices_b10000000_q100000_k100.ivec"));
+        put("colbert-1M", new MultiFileDatasource("colbert-1M",
+                                                   "wikipedia_squad/1M/colbertv2.0_128_base_vectors_1000000.fvec",
+                                                   "wikipedia_squad/1M/colbertv2.0_128_query_vectors_100000.fvec",
+                                                   "wikipedia_squad/1M/colbertv2.0_128_indices_b1000000_q100000_k100.ivec"));
         put("openai-v3-large-3072-100k", new MultiFileDatasource("openai-v3-large-3072-100k",
                                                                  "wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec",
                                                                  "wikipedia_squad/100k/text-embedding-3-large_3072_100000_query_vectors_10000.fvec",

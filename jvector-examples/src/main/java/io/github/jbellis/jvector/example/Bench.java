@@ -216,15 +216,15 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
-        var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(1, 2);
+        var mGrid = List.of(32, 48); // List.of(16, 24, 32, 48, 64, 96, 128);
+        var efConstructionGrid = List.of(100, 200); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var efSearchGrid = List.of(4, 6);
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
-                null, // uncompressed
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4,
-                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
+                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN)
+                );
 
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything
@@ -235,6 +235,7 @@ public class Bench {
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
 //                "colbert-10M", // WIP
+                "colbert-1M",
                 "openai-v3-large-3072-100k",
                 "openai-v3-large-1536-100k",
                 "openai-v3-small-100k",
