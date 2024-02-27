@@ -25,7 +25,6 @@ import io.github.jbellis.jvector.example.util.DataSetCreator;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
-import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
@@ -33,6 +32,7 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.pq.BinaryQuantization;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -62,11 +62,10 @@ import java.util.stream.IntStream;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private static void testRecall(int M,
                                    int efConstruction,
                                    List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
-                                   List<Integer> efSearchOptions,
+                                   List<Double> efSearchOptions,
                                    DataSet ds,
                                    Path testDirectory) throws IOException
     {
@@ -110,25 +109,25 @@ public class Bench {
                 try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0));
                      var onDiskFusedGraph = fusedCompatible ? new CachingADCGraphIndex(new OnDiskADCGraphIndex(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
                     int queryRuns = 2;
-                    for (int overquery : efSearchOptions) {
+                    for (double overquery : efSearchOptions) {
                         start = System.nanoTime();
                         if (compressor == null) {
                             // include both in-memory and on-disk search of uncompressed vectors
-                            var pqr = performQueries(ds, floatVectors, cv, onHeapGraph, topK, topK * overquery, queryRuns);
+                            var pqr = performQueries(ds, floatVectors, cv, onHeapGraph, topK, (int) (topK * overquery), queryRuns);
                             var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
+                            System.out.format("  Query %s top %d/%.1f recall %.4f in %.2fs after %,d nodes visited%n",
                                               "(memory)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                         }
                         if (fusedCompatible) {
                             // include both fused and regular graphs for PQ if clusters == 32
-                            var pqr = performQueries(ds, floatVectors, cv, onDiskFusedGraph, topK, topK * overquery, queryRuns);
+                            var pqr = performQueries(ds, floatVectors, cv, onDiskFusedGraph, topK, (int) (topK * overquery), queryRuns);
                             var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
                             System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                                               "(fused)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                         }
-                        var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, topK * overquery, queryRuns);
+                        var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, (int) (topK * overquery), queryRuns);
                         var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                        System.out.format("  Query %stop %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
+                        System.out.format("  Query %stop %d/%.1f recall %.4f in %.2fs after %,d nodes visited%n",
                                           compressor == null ? "(disk) " : "", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                     }
                 }
@@ -216,12 +215,14 @@ public class Bench {
     public static void main(String[] args) throws IOException {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
-        var mGrid = List.of(32, 48); // List.of(16, 24, 32, 48, 64, 96, 128);
-        var efConstructionGrid = List.of(100, 200); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(4, 6);
+        var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
+        var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var efSearchGrid = List.of(1, 3, 4, 5);
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
+                null,
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
+                ds -> BinaryQuantization.compute(ds.getBaseRavv()),
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN)
                 );
@@ -234,12 +235,9 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
-//                "colbert-10M", // WIP
-                "colbert-1M",
                 "openai-v3-large-3072-100k",
                 "openai-v3-large-1536-100k",
                 "openai-v3-small-100k",
-                "e5-small-v2-100k",
                 "e5-base-v2-100k",
                 "e5-large-v2-100k",
                 "gecko-100k",
@@ -286,7 +284,7 @@ public class Bench {
                                    List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
                                    List<Integer> mGrid,
                                    List<Integer> efConstructionGrid,
-                                   List<Integer> efSearchFactor) throws IOException
+                                   List<Double> efSearchFactor) throws IOException
     {
         var testDirectory = Files.createTempDirectory("BenchGraphDir");
         try {
