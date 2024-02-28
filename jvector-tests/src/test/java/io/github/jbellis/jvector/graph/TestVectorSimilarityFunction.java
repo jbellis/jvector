@@ -49,6 +49,7 @@ public class TestVectorSimilarityFunction extends RandomizedTest {
         }
 
         for (VectorSimilarityFunction vsf : VectorSimilarityFunction.values()) {
+            results.zero();
             vsf.compareMulti(q, packedVectors, results);
             for (int i = 0; i < length; i++) {
                 Assert.assertEquals(vsf.compare(q, vectors.get(ids[i])), results.get(i), 0.01f);
