@@ -69,9 +69,9 @@ final class VectorSimdOps {
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             var divResult = a.mul(multiplier);
-            divResult.intoMemorySegment(vector.get(), i, ByteOrder.LITTLE_ENDIAN);
+            divResult.intoMemorySegment(vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
         }
 
         // Process the tail
