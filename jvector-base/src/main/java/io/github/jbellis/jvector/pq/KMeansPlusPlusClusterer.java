@@ -16,11 +16,11 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.vector.Matrix;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import io.github.jbellis.jvector.vector.Matrix;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -275,15 +275,19 @@ public class KMeansPlusPlusClusterer {
      */
     private int updateAssignedPointsAnisotropic() {
         float pcm = computeParallelCostMultiplier(anisotropicThreshold, points[0].length());
-
+        float[] cdotc = new float[k];
+        for (int i = 0; i < k; i++) {
+            cdotc[i] = dotProduct(centroids, i * points[0].length(), centroids, i * points[0].length(), points[0].length());
+        }
         int changedCount = 0;
         for (int i = 0; i < points.length; i++) {
             var point = points[i];
+            var pointdotpoint = dotProduct(point, point);
 
             int index = assignments[i];
             float minDist = Float.MAX_VALUE;
             for (int j = 0; j < k; j++) {
-                float dist = weightedDistance(point, j, pcm);
+                float dist = weightedDistance(point, j, pcm, cdotc[j], pointdotpoint);
                 if (dist < minDist) {
                     minDist = dist;
                     index = j;
@@ -302,11 +306,10 @@ public class KMeansPlusPlusClusterer {
     /**
      * Calculates the weighted distance between two data points.
      */
-    private float weightedDistance(VectorFloat<?> x, int centroid, float parallelCostMultiplier) {
-        var residual = VectorUtil.sub(centroids, centroid * x.length(), x, 0, x.length());
-
-        float parallelErrorSubtotal = VectorUtil.dotProduct(residual, x);
-        float residualSquaredNorm = VectorUtil.dotProduct(residual, residual);
+    private float weightedDistance(VectorFloat<?> x, int centroid, float parallelCostMultiplier, float cdotc, float xdotx) {
+        var cdotx = VectorUtil.dotProduct(centroids, centroid * x.length(), x, 0, x.length());
+        float parallelErrorSubtotal = cdotx - xdotx;
+        float residualSquaredNorm = cdotc - 2 * cdotx + xdotx;
         float parallelError = square(parallelErrorSubtotal);
         float perpendicularError = residualSquaredNorm - parallelError;
 
