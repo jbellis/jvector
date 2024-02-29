@@ -275,19 +275,24 @@ public class KMeansPlusPlusClusterer {
      */
     private int updateAssignedPointsAnisotropic() {
         float pcm = computeParallelCostMultiplier(anisotropicThreshold, points[0].length());
-        float[] cdotc = new float[k];
+
+        // precompute norms for each centroid
+        float[] cNormSquared = new float[k];
         for (int i = 0; i < k; i++) {
-            cdotc[i] = dotProduct(centroids, i * points[0].length(), centroids, i * points[0].length(), points[0].length());
+            cNormSquared[i] = dotProduct(centroids, i * points[0].length(),
+                                         centroids, i * points[0].length(),
+                                         points[0].length());
         }
+
         int changedCount = 0;
         for (int i = 0; i < points.length; i++) {
-            var point = points[i];
-            var pointdotpoint = dotProduct(point, point);
+            var x = points[i];
+            var xNormSquared = dotProduct(x, x);
 
             int index = assignments[i];
             float minDist = Float.MAX_VALUE;
             for (int j = 0; j < k; j++) {
-                float dist = weightedDistance(point, j, pcm, cdotc[j], pointdotpoint);
+                float dist = weightedDistance(x, j, pcm, cNormSquared[j], xNormSquared);
                 if (dist < minDist) {
                     minDist = dist;
                     index = j;
@@ -306,10 +311,10 @@ public class KMeansPlusPlusClusterer {
     /**
      * Calculates the weighted distance between two data points.
      */
-    private float weightedDistance(VectorFloat<?> x, int centroid, float parallelCostMultiplier, float cdotc, float xdotx) {
-        var cdotx = VectorUtil.dotProduct(centroids, centroid * x.length(), x, 0, x.length());
-        float parallelErrorSubtotal = cdotx - xdotx;
-        float residualSquaredNorm = cdotc - 2 * cdotx + xdotx;
+    private float weightedDistance(VectorFloat<?> x, int centroid, float parallelCostMultiplier, float cNormSquared, float xNormSquared) {
+        float cDotX = VectorUtil.dotProduct(centroids, centroid * x.length(), x, 0, x.length());
+        float parallelErrorSubtotal = cDotX - xNormSquared;
+        float residualSquaredNorm = cNormSquared - 2 * cDotX + xNormSquared;
         float parallelError = square(parallelErrorSubtotal);
         float perpendicularError = residualSquaredNorm - parallelError;
 
