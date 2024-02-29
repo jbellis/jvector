@@ -47,6 +47,11 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
         segment.copyFrom(MemorySegment.ofArray(data));
     }
 
+    public OffHeapVectorFloat(MemorySegment segment) {
+        this.segment = segment;
+        this.length = (int) segment.byteSize();
+    }
+
     @Override
     public long ramBytesUsed()
     {

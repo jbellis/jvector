@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.vector.types;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.vector.VectorUtil;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -36,6 +37,8 @@ public interface VectorTypeSupport {
      * @return the created vector.
      */
     VectorFloat<?> createFloatVector(int length);
+
+    VectorFloat<?> sliceFloatVector(VectorFloat<?> original, int offset, int length);
 
     /**
      * Read a vector from the given RandomAccessReader.

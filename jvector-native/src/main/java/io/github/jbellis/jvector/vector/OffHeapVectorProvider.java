@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.nio.Buffer;
 import java.nio.ByteOrder;
 
@@ -37,6 +38,9 @@ public class OffHeapVectorProvider implements VectorTypeSupport
         if (data instanceof Buffer)
             return new OffHeapVectorFloat((Buffer) data);
 
+        if (data instanceof MemorySegment)
+            return new OffHeapVectorFloat((MemorySegment) data);
+
         return new OffHeapVectorFloat((float[]) data);
     }
 
@@ -44,6 +48,12 @@ public class OffHeapVectorProvider implements VectorTypeSupport
     public VectorFloat<?> createFloatVector(int length)
     {
         return new OffHeapVectorFloat(length);
+    }
+
+    @Override
+    public VectorFloat<?> sliceFloatVector(VectorFloat<?> original, int offset, int length) {
+        MemorySegment segment = ((OffHeapVectorFloat) original).get();
+        return new OffHeapVectorFloat(segment.asSlice((long) offset * Float.BYTES, (long) length * Float.BYTES));
     }
 
     @Override

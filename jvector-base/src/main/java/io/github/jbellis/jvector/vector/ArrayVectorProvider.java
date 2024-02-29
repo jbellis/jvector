@@ -45,6 +45,13 @@ final class ArrayVectorProvider implements VectorTypeSupport
     }
 
     @Override
+    public VectorFloat<?> sliceFloatVector(VectorFloat<?> original, int offset, int length) {
+        float[] v = new float[length];
+        System.arraycopy(((ArrayVectorFloat)original).get(), offset, v, 0, length);
+        return new ArrayVectorFloat(v);
+    }
+
+    @Override
     public VectorFloat<?> readFloatVector(RandomAccessReader r, int size) throws IOException
     {
         float[] vector = new float[size];
