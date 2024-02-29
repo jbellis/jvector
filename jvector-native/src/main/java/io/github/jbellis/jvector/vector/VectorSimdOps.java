@@ -470,25 +470,21 @@ final class VectorSimdOps {
         }
     }
 
-    static VectorFloat<?> sub(OffHeapVectorFloat lhs, OffHeapVectorFloat rhs) {
-        if (lhs.length() != rhs.length()) {
-            throw new IllegalArgumentException("Vectors must have the same length");
-        }
-
-        OffHeapVectorFloat result = new OffHeapVectorFloat(lhs.length());
-        int vectorizedLength = (lhs.length() / FloatVector.SPECIES_PREFERRED.length()) * FloatVector.SPECIES_PREFERRED.length();
+    static VectorFloat<?> sub(OffHeapVectorFloat a, int aOffset, OffHeapVectorFloat b, int bOffset, int length) {
+        OffHeapVectorFloat result = new OffHeapVectorFloat(length);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, lhs.get(), lhs.offset(i), ByteOrder.LITTLE_ENDIAN);
-            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, rhs.get(), rhs.offset(i), ByteOrder.LITTLE_ENDIAN);
-            var subResult = a.sub(b);
+            var lhs = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, a.get(), a.offset(aOffset + i), ByteOrder.LITTLE_ENDIAN);
+            var rhs = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, b.get(), b.offset(bOffset + i), ByteOrder.LITTLE_ENDIAN);
+            var subResult = lhs.sub(rhs);
             subResult.intoMemorySegment(result.get(), result.offset(i), ByteOrder.LITTLE_ENDIAN);
         }
 
         // Process the tail
-        for (int i = vectorizedLength; i < lhs.length(); i++) {
-            result.set(i, lhs.get(i) - rhs.get(i));
+        for (int i = vectorizedLength; i < length; i++) {
+            result.set(i, a.get(aOffset + i) - b.get(bOffset + i));
         }
 
         return result;

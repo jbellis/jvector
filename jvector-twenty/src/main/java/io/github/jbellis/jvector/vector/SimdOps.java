@@ -205,7 +205,6 @@ final class SimdOps {
     }
 
     static float dotProductPreferred(ArrayVectorFloat v1, int v1offset, ArrayVectorFloat v2, int v2offset, int length) {
-
         if (length == FloatVector.SPECIES_PREFERRED.length())
             return dotPreferred(v1, v1offset, v2, v2offset);
 
@@ -495,28 +494,24 @@ final class SimdOps {
         }
     }
 
-    static VectorFloat<?> sub(ArrayVectorFloat lhs, ArrayVectorFloat rhs) {
-        if (lhs.length() != rhs.length()) {
-            throw new IllegalArgumentException("Vectors must have the same length");
-        }
-
-        ArrayVectorFloat result = new ArrayVectorFloat(lhs.length());
-        int vectorizedLength = (lhs.length() / FloatVector.SPECIES_PREFERRED.length()) * FloatVector.SPECIES_PREFERRED.length();
+    static VectorFloat<?> sub(ArrayVectorFloat a, int aOffset, ArrayVectorFloat b, int bOffset, int length) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        float[] res = new float[length];
 
         // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, lhs.get(), i);
-            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, rhs.get(), i);
-            var subResult = a.sub(b);
-            subResult.intoArray(result.get(), i);
+            var lhs = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, a.get(), aOffset + i);
+            var rhs = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, b.get(), bOffset + i);
+            var subResult = lhs.sub(rhs);
+            subResult.intoArray(res, i);
         }
 
         // Process the tail
-        for (int i = vectorizedLength; i < lhs.length(); i++) {
-            result.set(i, lhs.get(i) - rhs.get(i));
+        for (int i = vectorizedLength; i < length; i++) {
+            res[i] = a.get(aOffset + i) - b.get(bOffset + i);
         }
 
-        return result;
+        return new ArrayVectorFloat(res);
     }
 
     static float assembleAndSum(float[] data, int dataBase, byte[] baseOffsets) {

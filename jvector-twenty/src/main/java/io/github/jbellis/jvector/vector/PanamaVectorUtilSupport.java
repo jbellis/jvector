@@ -78,8 +78,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
-        return SimdOps.sub((ArrayVectorFloat)lhs, (ArrayVectorFloat)rhs);
+    public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
+        if (a.length() != b.length()) {
+            throw new IllegalArgumentException("Vectors must be the same length");
+        }
+        return SimdOps.sub((ArrayVectorFloat)a, 0, (ArrayVectorFloat)b, 0, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        return SimdOps.sub((ArrayVectorFloat) a, aOffset, (ArrayVectorFloat) b, bOffset, length);
     }
 
     @Override

@@ -251,10 +251,15 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
-    VectorFloat<?> result = new ArrayVectorFloat(lhs.length());
-    for (int i = 0; i < lhs.length(); i++) {
-      result.set(i, lhs.get(i) - rhs.get(i));
+  public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
+    return sub(a, 0, b, 0, a.length());
+  }
+
+  @Override
+  public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+    VectorFloat<?> result = new ArrayVectorFloat(length);
+    for (int i = 0; i < length; i++) {
+      result.set(i, a.get(aOffset + i) - b.get(bOffset + i));
     }
     return result;
   }

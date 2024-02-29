@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -301,16 +302,11 @@ public class KMeansPlusPlusClusterer {
     /**
      * Calculates the weighted distance between two data points.
      */
-    private float weightedDistance(VectorFloat<?> x, int m, float parallelCostMultiplier) {
-        // sum up the contributions of each component
-        float parallelErrorSubtotal = 0.0f;
-        float residualSquaredNorm = 0.0f;
-        for (int i = 0; i < x.length(); i++) {
-            // TODO simd this
-            float residualCoord = centroids.get(m * x.length() + i) - x.get(i);
-            parallelErrorSubtotal += residualCoord * x.get(i);
-            residualSquaredNorm += square(residualCoord);
-        }
+    private float weightedDistance(VectorFloat<?> x, int centroid, float parallelCostMultiplier) {
+        var residual = VectorUtil.sub(centroids, centroid * x.length(), x, 0, x.length());
+
+        float parallelErrorSubtotal = VectorUtil.dotProduct(residual, x);
+        float residualSquaredNorm = VectorUtil.dotProduct(residual, residual);
         float parallelError = square(parallelErrorSubtotal);
         float perpendicularError = residualSquaredNorm - parallelError;
 
