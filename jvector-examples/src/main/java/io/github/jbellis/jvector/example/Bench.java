@@ -38,8 +38,6 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -221,10 +219,10 @@ public class Bench {
                 null, // uncompressed
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
+                // ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, 256, false, 0.99f),
                 ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
                                                   256,
-                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, 256, false, 0.99f));
+                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything

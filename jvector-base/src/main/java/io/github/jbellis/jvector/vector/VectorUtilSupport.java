@@ -67,8 +67,11 @@ public interface VectorUtilSupport {
   /** Subtracts v2 from v1, in place (v1 will be modified) */
   void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
-  /** @return lhs - rhs, element-wise */
-  VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs);
+  /** @return a - b, element-wise */
+  VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);
+
+  /** @return a - b, element-wise, starting at aOffset and bOffset respectively */
+  VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length);
 
   /**
    * Calculates the sum of sparse points in a vector.

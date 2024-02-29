@@ -141,6 +141,11 @@ public final class VectorUtil {
   public static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
     return impl.sub(lhs, rhs);
   }
+
+  public static VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+    return impl.sub(a, aOffset, b, bOffset, length);
+  }
+
   public static float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> dataOffsets) {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }

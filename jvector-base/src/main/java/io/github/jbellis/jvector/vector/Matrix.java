@@ -89,7 +89,6 @@ public class Matrix {
             // Eliminate below and above pivot
             for (int k = 0; k < N; k++) {
                 if (k != i) {
-                    // TODO use FMA
                     float factor = augmented.get(k, i);
                     for (int j = 0; j < 2 * N; j++) {
                         augmented.addTo(k, j, -factor * augmented.get(i, j));

@@ -29,7 +29,6 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
@@ -61,6 +60,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     private final VectorFloat<?> globalCentroid;
     final int[][] subvectorSizesAndOffsets;
     private final float anisotropicThreshold; // parallel cost multiplier
+    private final float[][] centroidNormsSquared; // precomputed norms of the centroids, for encoding
 
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
@@ -186,6 +186,15 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         this.subvectorSizesAndOffsets = subvectorSizesAndOffsets;
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
         this.anisotropicThreshold = anisotropicThreshold;
+
+        centroidNormsSquared = new float[M][clusterCount];
+        for (int i = 0; i < M; i++) {
+            for (int j = 0; j < clusterCount; j++) {
+                centroidNormsSquared[i][j] = dotProduct(codebooks[i], j * subvectorSizesAndOffsets[i][0],
+                                                        codebooks[i], j * subvectorSizesAndOffsets[i][0],
+                                                        subvectorSizesAndOffsets[i][0]);
+            }
+        }
     }
 
     @Override
@@ -217,8 +226,9 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             parallelResidualComponentSum += residuals[i][centroidIdx].parallelResidualComponent;
         }
 
-        // TODO SCANN sorts by residual norm (and adds a sorted->original subspace index map),
-        // presumably because that helps this converge faster
+        // SCANN sorts the subspaces by residual norm here (and adds a sorted->original subspace index map),
+        // presumably with the intent to help this converge faster, but profiling shows that almost 90% of the
+        // cost of this method is computeResiduals + initializeToMinResidualNorms, so we're not going to bother.
 
         // Optimize until convergence
         int MAX_ITERATIONS = 10; // borrowed from SCANN code without experimenting w/ other values
@@ -299,17 +309,23 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     }
 
     /**
-     * @return codebooks representing the cluster centroids for each subspace that minimize the residual norm
+     * @return codebook ordinals representing the cluster centroids for each subspace that minimize the residual norm
      */
     private ByteSequence<?> initializeToMinResidualNorms(Residual[][] residualStats) {
         var result = vectorTypeSupport.createByteSequence(residualStats.length);
-        IntStream.range(0, residualStats.length).forEach(i -> {
-            var b = (byte) IntStream.range(0, residualStats[i].length)
-                    .boxed()
-                    .min(Comparator.comparingDouble(j -> residualStats[i][j].residualNormSquared))
-                    .orElseThrow().intValue();
-            result.set(i, b);
-        });
+        // for each subspace
+        for (int i = 0; i < residualStats.length; i++) {
+            int minIndex = -1;
+            double minNormSquared = Double.MAX_VALUE;
+            // find the centroid with the smallest residual norm in this subspace
+            for (int j = 0; j < residualStats[i].length; j++) {
+                if (residualStats[i][j].residualNormSquared < minNormSquared) {
+                    minNormSquared = residualStats[i][j].residualNormSquared;
+                    minIndex = j;
+                }
+            }
+            result.set(i, (byte) minIndex);
+        }
         return result;
     }
 
@@ -321,11 +337,12 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
 
         float inverseNorm = (float) (1.0 / sqrt(dotProduct(vector, vector)));
         for (int i = 0; i < codebooks.length; i++) {
-            var subVector = getSubVector(vector, i, subvectorSizesAndOffsets);
+            var x = getSubVector(vector, i, subvectorSizesAndOffsets);
+            float xNormSquared = dotProduct(x, x);
             residuals[i] = new Residual[clusterCount];
 
             for (int j = 0; j < clusterCount; j++) {
-                residuals[i][j] = computeResidual(subVector, i, j, inverseNorm);
+                residuals[i][j] = computeResidual(x, codebooks[i], j, centroidNormsSquared[i][j], xNormSquared, inverseNorm);
             }
         }
 
@@ -345,16 +362,11 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         }
     }
 
-    private Residual computeResidual(VectorFloat<?> subvector, int m, int centroid, float inverseNorm) {
-        float residualNormSquared = 0.0f;
-        float parallelResidualComponent = 0.0f;
-        int subvectorSize = subvectorSizesAndOffsets[m][0];
-        var codebook = codebooks[m];
-        for (int i = 0; i < subvector.length(); i++) {
-            float residual = subvector.get(i) - codebook.get(centroid * subvectorSize + i);
-            residualNormSquared += square(residual);
-            parallelResidualComponent += residual * subvector.get(i) * inverseNorm;
-        }
+    private Residual computeResidual(VectorFloat<?> x, VectorFloat<?> centroids, int centroid, float cNormSquared, float xNormSquared, float inverseNorm) {
+        float cDotX = VectorUtil.dotProduct(centroids, centroid * x.length(), x, 0, x.length());
+        float residualNormSquared = cNormSquared - 2 * cDotX + xNormSquared;
+        float parallelErrorSubtotal = cDotX - xNormSquared;
+        float parallelResidualComponent = square(parallelErrorSubtotal) * inverseNorm;
         return new Residual(residualNormSquared, parallelResidualComponent);
     }
 

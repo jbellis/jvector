@@ -16,10 +16,11 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.vector.Matrix;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import io.github.jbellis.jvector.vector.Matrix;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -275,14 +276,23 @@ public class KMeansPlusPlusClusterer {
     private int updateAssignedPointsAnisotropic() {
         float pcm = computeParallelCostMultiplier(anisotropicThreshold, points[0].length());
 
+        // precompute norms for each centroid
+        float[] cNormSquared = new float[k];
+        for (int i = 0; i < k; i++) {
+            cNormSquared[i] = dotProduct(centroids, i * points[0].length(),
+                                         centroids, i * points[0].length(),
+                                         points[0].length());
+        }
+
         int changedCount = 0;
         for (int i = 0; i < points.length; i++) {
-            var point = points[i];
+            var x = points[i];
+            var xNormSquared = dotProduct(x, x);
 
             int index = assignments[i];
             float minDist = Float.MAX_VALUE;
             for (int j = 0; j < k; j++) {
-                float dist = weightedDistance(point, j, pcm);
+                float dist = weightedDistance(x, j, pcm, cNormSquared[j], xNormSquared);
                 if (dist < minDist) {
                     minDist = dist;
                     index = j;
@@ -301,16 +311,10 @@ public class KMeansPlusPlusClusterer {
     /**
      * Calculates the weighted distance between two data points.
      */
-    private float weightedDistance(VectorFloat<?> x, int m, float parallelCostMultiplier) {
-        // sum up the contributions of each component
-        float parallelErrorSubtotal = 0.0f;
-        float residualSquaredNorm = 0.0f;
-        for (int i = 0; i < x.length(); i++) {
-            // TODO simd this
-            float residualCoord = centroids.get(m * x.length() + i) - x.get(i);
-            parallelErrorSubtotal += residualCoord * x.get(i);
-            residualSquaredNorm += square(residualCoord);
-        }
+    private float weightedDistance(VectorFloat<?> x, int centroid, float parallelCostMultiplier, float cNormSquared, float xNormSquared) {
+        float cDotX = VectorUtil.dotProduct(centroids, centroid * x.length(), x, 0, x.length());
+        float parallelErrorSubtotal = cDotX - xNormSquared;
+        float residualSquaredNorm = cNormSquared - 2 * cDotX + xNormSquared;
         float parallelError = square(parallelErrorSubtotal);
         float perpendicularError = residualSquaredNorm - parallelError;
 
