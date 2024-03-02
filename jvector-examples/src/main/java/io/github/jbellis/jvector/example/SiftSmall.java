@@ -118,7 +118,7 @@ public class SiftSmall {
     }
 
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
-        var siftPath = "siftsmall";
+        var siftPath = "jvector/siftsmall";
         var baseVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_base.fvecs", siftPath));
         var queryVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_query.fvecs", siftPath));
         var groundTruth = SiftLoader.readIvecs(String.format("%s/siftsmall_groundtruth.ivecs", siftPath));
