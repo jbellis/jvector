@@ -42,6 +42,7 @@ import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 import static io.github.jbellis.jvector.pq.ProductQuantization.DEFAULT_CLUSTERS;
 import static io.github.jbellis.jvector.pq.ProductQuantization.getSubvectorSizesAndOffsets;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -208,6 +209,21 @@ public class TestProductQuantization extends RandomizedTest {
         try (var in = new SimpleMappedReader(file.getAbsolutePath())) {
             var pq2 = ProductQuantization.load(in);
             Assertions.assertEquals(pq, pq2);
+        }
+    }
+
+    @Test
+    public void testoadVersion0() throws Exception {
+        var file = new File("resources/version0.pq");
+        try (var in = new SimpleMappedReader(file.getAbsolutePath())) {
+            var pq = ProductQuantization.load(in);
+            assertEquals(2, pq.originalDimension);
+            assertNull(pq.globalCentroid);
+            assertEquals(1, pq.M);
+            assertEquals(1, pq.codebooks.length);
+            assertEquals(256, pq.getClusterCount());
+            assertEquals(pq.subvectorSizesAndOffsets[0][0] * pq.getClusterCount(), pq.codebooks[0].length());
+            assertEquals(UNWEIGHTED, pq.anisotropicThreshold, 1E-6); // v0 only supported (implicitly) unweighted
         }
     }
 }

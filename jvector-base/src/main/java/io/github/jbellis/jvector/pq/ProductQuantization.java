@@ -57,12 +57,12 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     public static final int MAX_PQ_TRAINING_SET_SIZE = 128000;
 
     final VectorFloat<?>[] codebooks; // array of codebooks, where each codebook is a VectorFloat consisting of k contiguous subvectors each of length M
-    private final int M; // codebooks.length, redundantly reproduced for convenience
+    final int M; // codebooks.length, redundantly reproduced for convenience
     private final int clusterCount; // codebooks[0].length, redundantly reproduced for convenience
     final int originalDimension;
-    private final VectorFloat<?> globalCentroid;
+    final VectorFloat<?> globalCentroid;
     final int[][] subvectorSizesAndOffsets;
-    private final float anisotropicThreshold; // parallel cost multiplier
+    final float anisotropicThreshold; // parallel cost multiplier
     private final float[][] centroidNormsSquared; // precomputed norms of the centroids, for encoding
 
     /**
