@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -25,12 +26,17 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
 import static io.github.jbellis.jvector.TestUtil.randomVector;
 import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 import static io.github.jbellis.jvector.pq.ProductQuantization.DEFAULT_CLUSTERS;
@@ -185,5 +191,23 @@ public class TestProductQuantization extends RandomizedTest {
             VectorUtil.addInPlace(v, cluster);
             return v;
         }).toArray(VectorFloat<?>[]::new);
+    }
+
+    @Test
+    public void testSaveLoad() throws Exception {
+        // Generate a PQ for random 2D vectors
+        var vectors = createRandomVectors(512, 2);
+        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, 256, false, 0.2f);
+
+        // Write
+        var file = File.createTempFile("pqtest", ".pq");
+        try (var out = new DataOutputStream(new FileOutputStream(file))) {
+            pq.write(out);
+        }
+        // Read
+        try (var in = new SimpleMappedReader(file.getAbsolutePath())) {
+            var pq2 = ProductQuantization.load(in);
+            Assertions.assertEquals(pq, pq2);
+        }
     }
 }

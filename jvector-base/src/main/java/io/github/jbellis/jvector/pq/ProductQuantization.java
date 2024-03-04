@@ -48,6 +48,9 @@ import static java.lang.Math.sqrt;
  * in particular, the source does not need to be evenly divisible by the target.
  */
 public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
+    private static final int MAGIC = 0x75EC4012; // JVECTOR, with some imagination
+    private static final int STORAGE_VERSION = 1;
+
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     static final int DEFAULT_CLUSTERS = 256; // number of clusters per subspace = one byte's worth
     static final int K_MEANS_ITERATIONS = 6;
@@ -491,6 +494,9 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
 
     public void write(DataOutput out) throws IOException
     {
+        out.writeInt(MAGIC);
+        out.writeInt(STORAGE_VERSION);
+
         if (globalCentroid == null) {
             out.writeInt(0);
         } else {
@@ -505,6 +511,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             out.writeInt(a[0]);
         }
 
+        out.writeFloat(anisotropicThreshold);
+
         assert codebooks.length == M;
         out.writeInt(clusterCount);
         for (int i = 0; i < M; i++) {
@@ -515,7 +523,18 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     }
 
     public static ProductQuantization load(RandomAccessReader in) throws IOException {
-        int globalCentroidLength = in.readInt();
+        int maybeMagic = in.readInt();
+        int version;
+        int globalCentroidLength;
+        if (maybeMagic != MAGIC) {
+            // old format, no magic or version, starts straight off with the centroid length
+            version = 0;
+            globalCentroidLength = maybeMagic;
+        } else {
+            version = in.readInt();
+            globalCentroidLength = in.readInt();
+        }
+
         VectorFloat<?> globalCentroid = null;
         if (globalCentroidLength > 0) {
             globalCentroid = vectorTypeSupport.readFloatVector(in, globalCentroidLength);
@@ -532,6 +551,16 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             offset += size;
         }
 
+        float anisotropicThreshold;
+        if (version == 0) {
+            anisotropicThreshold = UNWEIGHTED;
+        } else {
+            // clunky, but doesn't seem worth making everyone writing a readFloat method for this
+            var scratch = new float[1];
+            in.readFully(scratch);
+            anisotropicThreshold = scratch[0];
+        }
+
         int clusters = in.readInt();
         VectorFloat<?>[] codebooks = new VectorFloat<?>[M];
         for (int m = 0; m < M; m++) {
@@ -539,8 +568,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             codebooks[m] = codebook;
         }
 
-        // TODO save and load the anisotropic threshold
-        return new ProductQuantization(codebooks, clusters, subvectorSizes, globalCentroid, UNWEIGHTED);
+        return new ProductQuantization(codebooks, clusters, subvectorSizes, globalCentroid, anisotropicThreshold);
     }
 
     @Override
@@ -552,7 +580,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
                 && originalDimension == that.originalDimension
                 && Objects.equals(globalCentroid, that.globalCentroid)
                 && Arrays.deepEquals(subvectorSizesAndOffsets, that.subvectorSizesAndOffsets)
-                && Arrays.deepEquals(codebooks, that.codebooks);
+                && Arrays.deepEquals(codebooks, that.codebooks)
+                && anisotropicThreshold == that.anisotropicThreshold;
     }
 
     @Override
