@@ -213,7 +213,7 @@ public class TestProductQuantization extends RandomizedTest {
     }
 
     @Test
-    public void testoadVersion0() throws Exception {
+    public void testLoadVersion0() throws Exception {
         var file = new File("resources/version0.pq");
         try (var in = new SimpleMappedReader(file.getAbsolutePath())) {
             var pq = ProductQuantization.load(in);
