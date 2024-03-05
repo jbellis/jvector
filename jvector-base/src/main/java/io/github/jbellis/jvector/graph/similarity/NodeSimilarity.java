@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph;
+package io.github.jbellis.jvector.graph.similarity;
 
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
-import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
+/** Encapsulates comparing node distances. */
+public interface NodeSimilarity {
+    /** for one-off comparisons between nodes */
+    default float score(int node1, int node2) {
+        return scoreProvider(node1).similarityTo(node2);
+    }
 
-public interface ApproximateScoreProvider {
     /**
-     * @return a ScoreFunction suitable for performing approximate search between vectors.
-     * This is often done by searching against compressed or otherwise transformed vectors.
+     * For when we're going to compare node1 with multiple other nodes. This allows us to skip loading
+     * node1's vector (potentially from disk) redundantly for each comparison.
      */
-    ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
+    ScoreFunction scoreProvider(int node1);
+
 }

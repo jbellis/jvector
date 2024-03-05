@@ -21,6 +21,8 @@ import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
+import io.github.jbellis.jvector.graph.similarity.Reranker;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
@@ -57,7 +59,7 @@ public class Test2DThreshold extends LuceneTestCase {
         for (int i = 0; i < 10; i++) {
             TestParams tp = createTestParams(vectors);
 
-            NodeSimilarity.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
+            ScoreFunction.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
             var result = searcher.search(sf, null, vectors.length, tp.th, Bits.ALL);
 
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
@@ -77,7 +79,7 @@ public class Test2DThreshold extends LuceneTestCase {
             for (int i = 0; i < 10; i++) {
                 TestParams tp = createTestParams(vectors);
                 searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
-                var reranker = NodeSimilarity.Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
+                var reranker = Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
                 var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
                 var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
 

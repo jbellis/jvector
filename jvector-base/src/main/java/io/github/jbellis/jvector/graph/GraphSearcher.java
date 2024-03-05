@@ -25,6 +25,8 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.Experimental;
+import io.github.jbellis.jvector.graph.similarity.Reranker;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
@@ -56,8 +58,8 @@ public class GraphSearcher {
     private final NodeQueue evictedResults;
 
     // Search parameters that we save here for use by resume()
-    private NodeSimilarity.ScoreFunction scoreFunction;
-    private NodeSimilarity.Reranker reranker;
+    private ScoreFunction scoreFunction;
+    private Reranker reranker;
     private Bits acceptOrds;
 
     /**
@@ -79,7 +81,7 @@ public class GraphSearcher {
     public static SearchResult search(VectorFloat<?> targetVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
             var searcher = new GraphSearcher.Builder(view).withConcurrentUpdates().build();
-            NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
+            ScoreFunction.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
             return searcher.search(scoreFunction, null, topK, acceptOrds);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -130,8 +132,8 @@ public class GraphSearcher {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     @Experimental
-    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.Reranker reranker,
+    public SearchResult search(ScoreFunction scoreFunction,
+                               Reranker reranker,
                                int topK,
                                float threshold,
                                float rerankFloor,
@@ -155,8 +157,8 @@ public class GraphSearcher {
      *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.Reranker reranker,
+    public SearchResult search(ScoreFunction scoreFunction,
+                               Reranker reranker,
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
@@ -176,8 +178,8 @@ public class GraphSearcher {
      *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.Reranker reranker,
+    public SearchResult search(ScoreFunction scoreFunction,
+                               Reranker reranker,
                                int topK,
                                Bits acceptOrds)
     {
@@ -187,8 +189,8 @@ public class GraphSearcher {
     /**
      * Set up the state for a new search and kick it off
      */
-    SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
-                                NodeSimilarity.Reranker reranker,
+    SearchResult searchInternal(ScoreFunction scoreFunction,
+                                Reranker reranker,
                                 int topK,
                                 float threshold,
                                 float rerankFloor,
@@ -353,8 +355,8 @@ public class GraphSearcher {
     /**
      * Empty resultsQueue and rerank its contents, if necessary, and return them in sorted order.
      */
-    private static SearchResult.NodeScore[] extractScores(NodeSimilarity.ScoreFunction sf,
-                                                          NodeSimilarity.Reranker reranker,
+    private static SearchResult.NodeScore[] extractScores(ScoreFunction sf,
+                                                          Reranker reranker,
                                                           NodeQueue resultsQueue,
                                                           float rerankFloor)
     {

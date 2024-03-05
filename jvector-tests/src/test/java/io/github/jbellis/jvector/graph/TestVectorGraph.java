@@ -28,6 +28,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.FixedBitSet;
@@ -136,13 +137,13 @@ public class TestVectorGraph extends LuceneTestCase {
         var query = randomVector(dim);
         var searcher = new GraphSearcher.Builder(graph.getView()).build();
 
-        var initial = searcher.search((NodeSimilarity.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK, acceptOrds);
+        var initial = searcher.search((ScoreFunction.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK, acceptOrds);
         assertEquals(initialTopK, initial.getNodes().length);
 
         var resumed = searcher.resume(resumeTopK);
         assertEquals(resumeTopK, resumed.getNodes().length);
 
-        var expected = searcher.search((NodeSimilarity.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK + resumeTopK, acceptOrds);
+        var expected = searcher.search((ScoreFunction.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK + resumeTopK, acceptOrds);
         assertEquals(expected.getVisitedCount(), initial.getVisitedCount() + resumed.getVisitedCount());
         assertEquals(expected.getNodes().length, initial.getNodes().length + resumed.getNodes().length);
         var initialResumedResults = Stream.concat(Arrays.stream(initial.getNodes()), Arrays.stream(resumed.getNodes()))

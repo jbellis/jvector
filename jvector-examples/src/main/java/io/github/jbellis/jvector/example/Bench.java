@@ -29,9 +29,10 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.similarity.Reranker;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -188,13 +189,13 @@ public class Bench {
                 SearchResult sr;
                 if (cv != null) {
                     try (var view = index.getView()) {
-                        NodeSimilarity.ApproximateScoreFunction sf;
+                        ScoreFunction.ApproximateScoreFunction sf;
                         if (index instanceof CachingADCGraphIndex) {
                             sf = ((CachingADCGraphIndex.CachedView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                         } else {
                             sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
-                        var rr = NodeSimilarity.Reranker.from(queryVector, ds.similarityFunction, view);
+                        var rr = Reranker.from(queryVector, ds.similarityFunction, view);
                         sr = new GraphSearcher.Builder(view)
                                 .build()
                                 .search(sf, rr, efSearch, Bits.ALL);

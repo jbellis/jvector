@@ -18,6 +18,8 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.similarity.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
@@ -156,7 +158,7 @@ public class GraphIndexBuilder {
             var v = vectors.get();
             var vc = vectorsCopy.get();
             VectorFloat<?> v1 = v.vectorValue(node1);
-            return (NodeSimilarity.ExactScoreFunction) node2 -> similarityFunction.compare(v1, vc.vectorValue(node2));
+            return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(v1, vc.vectorValue(node2));
         };
         this.graph =
                 new OnHeapGraphIndex(
@@ -262,7 +264,7 @@ public class GraphIndexBuilder {
 
                     var notSelfBits = createNotSelfBits(node);
                     var value = v1.vectorValue(node);
-                    NodeSimilarity.ExactScoreFunction scoreFunction = i1 -> similarityFunction.compare(v2.vectorValue(i1), value);
+                    ScoreFunction.ExactScoreFunction scoreFunction = i1 -> similarityFunction.compare(v2.vectorValue(i1), value);
                     int ep = graph.entry();
                     var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
                     neighbors = new NodeArray(result.getNodes().length);
@@ -353,7 +355,7 @@ public class GraphIndexBuilder {
             var concurrentScratchPooled = concurrentScratch.get();
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
-            NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(vc.vectorValue(i), value);
+            ScoreFunction.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(vc.vectorValue(i), value);
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
@@ -422,7 +424,7 @@ public class GraphIndexBuilder {
         var naturalScratchPooled = naturalScratch.get();
         final VectorFloat<?> value = pv.vectorValue(node);
         int ep = graph.entry();
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(vc.vectorValue(i), value);
+        ScoreFunction.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(vc.vectorValue(i), value);
         var bits = new ExcludingBits(node);
         var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, bits);
         var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
@@ -517,7 +519,7 @@ public class GraphIndexBuilder {
         var v2 = vectorsCopy.get();
         var scratch = naturalScratch.get();
         var value = v1.vectorValue(node);
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(v2.vectorValue(i), value);
+        ScoreFunction.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(v2.vectorValue(i), value);
         int ep = graph.entry();
         var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
         var candidates = toScratchCandidates(result.getNodes(), scratch);
@@ -561,7 +563,7 @@ public class GraphIndexBuilder {
         } else {
             sf = similarityFunction;
         }
-        NodeSimilarity.ExactScoreFunction scoreFunction = i -> sf.compare(vc.vectorValue(i), centroid);
+        ScoreFunction.ExactScoreFunction scoreFunction = i -> sf.compare(vc.vectorValue(i), centroid);
         int ep = graph.entry();
         var result = gs.searchInternal(scoreFunction, null, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
         return result.getNodes()[0].node;

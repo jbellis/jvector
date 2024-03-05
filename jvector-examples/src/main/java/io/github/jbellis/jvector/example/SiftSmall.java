@@ -24,9 +24,10 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.similarity.Reranker;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -99,12 +100,12 @@ public class SiftSmall {
             var view = graph.getView();
             var searcher = new GraphSearcher.Builder(view).build();
             if (compressedVectors == null) {
-                NodeSimilarity.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
+                ScoreFunction.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
                 nn = searcher.search(sf, null, 100, Bits.ALL).getNodes();
             }
             else {
-                NodeSimilarity.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                var rr = NodeSimilarity.Reranker.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, view);
+                ScoreFunction.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                var rr = Reranker.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, view);
                 nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
             }
 

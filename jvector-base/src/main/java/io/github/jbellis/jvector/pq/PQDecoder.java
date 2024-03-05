@@ -15,7 +15,7 @@
  */
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -24,7 +24,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 /**
  * Performs similarity comparisons with compressed vectors without decoding them
  */
-abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
+abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
     protected final PQVectors cv;
 
     protected PQDecoder(PQVectors cv) {

@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.graph.ADCView;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -27,7 +27,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
  * Performs similarity comparisons with compressed vectors without decoding them.
  * These decoders use Quick(er) ADC-style transposed vectors fused into a graph.
  */
-public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateScoreFunction {
+public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScoreFunction {
     protected final PQVectors pqv;
 
     protected QuickADCPQDecoder(PQVectors pqv) {

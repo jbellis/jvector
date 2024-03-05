@@ -24,10 +24,11 @@ import io.github.jbellis.jvector.example.util.UpdatableRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.similarity.Reranker;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -269,9 +270,9 @@ public class IPCService
 
             SearchResult r;
             if (ctx.cv != null) {
-                NodeSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
+                ScoreFunction.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
-                    var rr = NodeSimilarity.Reranker.from(queryVector, ctx.similarityFunction, view);
+                    var rr = Reranker.from(queryVector, ctx.similarityFunction, view);
                     r = new GraphSearcher.Builder(ctx.index.getView()).build().search(sf, rr, searchEf, Bits.ALL);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
