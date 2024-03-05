@@ -27,6 +27,7 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
@@ -58,9 +59,8 @@ public class GraphSearcher {
     private final NodeQueue evictedResults;
 
     // Search parameters that we save here for use by resume()
-    private ScoreFunction scoreFunction;
-    private Reranker reranker;
     private Bits acceptOrds;
+    private SearchScoreProvider scoreProvider;
 
     /**
      * Creates a new graph searcher.
@@ -81,8 +81,9 @@ public class GraphSearcher {
     public static SearchResult search(VectorFloat<?> targetVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
             var searcher = new GraphSearcher.Builder(view).withConcurrentUpdates().build();
-            ScoreFunction.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
-            return searcher.search(scoreFunction, null, topK, acceptOrds);
+            ScoreFunction.ExactScoreFunction sf = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
+            var ssp = new SearchScoreProvider(sf, null);
+            return searcher.search(ssp, topK, acceptOrds);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -132,13 +133,12 @@ public class GraphSearcher {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     @Experimental
-    public SearchResult search(ScoreFunction scoreFunction,
-                               Reranker reranker,
+    public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
                                float threshold,
                                float rerankFloor,
                                Bits acceptOrds) {
-        return searchInternal(scoreFunction, reranker, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
+        return searchInternal(scoreProvider, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
     }
 
     /**
@@ -157,12 +157,11 @@ public class GraphSearcher {
      *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(ScoreFunction scoreFunction,
-                               Reranker reranker,
+    public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
-        return search(scoreFunction, reranker, topK, threshold, 0.0f, acceptOrds);
+        return search(scoreProvider, topK, threshold, 0.0f, acceptOrds);
     }
 
 
@@ -178,26 +177,24 @@ public class GraphSearcher {
      *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(ScoreFunction scoreFunction,
-                               Reranker reranker,
+    public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
                                Bits acceptOrds)
     {
-        return search(scoreFunction, reranker, topK, 0.0f, acceptOrds);
+        return search(scoreProvider, topK, 0.0f, acceptOrds);
     }
 
     /**
      * Set up the state for a new search and kick it off
      */
-    SearchResult searchInternal(ScoreFunction scoreFunction,
-                                Reranker reranker,
+    SearchResult searchInternal(SearchScoreProvider scoreProvider,
                                 int topK,
                                 float threshold,
                                 float rerankFloor,
                                 int ep,
                                 Bits rawAcceptOrds)
     {
-        if (!scoreFunction.isExact() && reranker == null) {
+        if (!scoreProvider.scoreFunction().isExact() && scoreProvider.reranker() == null) {
             throw new IllegalArgumentException("Either scoreFunction must be exact, or reranker must not be null");
         }
         if (rawAcceptOrds == null) {
@@ -205,8 +202,7 @@ public class GraphSearcher {
         }
 
         // save search parameters for potential later resume
-        this.scoreFunction = scoreFunction;
-        this.reranker = reranker;
+        this.scoreProvider = scoreProvider;
         this.acceptOrds = Bits.intersectionOf(rawAcceptOrds, view.liveNodes());
 
         // reset the scratch data structures
@@ -232,7 +228,7 @@ public class GraphSearcher {
         }
 
         // kick off the actual search at the entry point
-        float score = scoreFunction.similarityTo(ep);
+        float score = scoreProvider.scoreFunction().similarityTo(ep);
         visited.set(ep);
         candidates.push(ep, score);
         var sr = resume(topK, threshold, rerankFloor);
@@ -314,6 +310,7 @@ public class GraphSearcher {
                 continue;
             }
 
+            var scoreFunction = scoreProvider.scoreFunction();
             if (scoreFunction.supportsBulkSimilarity()) {
                 similarities = scoreFunction.bulkSimilarityTo(topCandidateNode);
             }
@@ -334,7 +331,7 @@ public class GraphSearcher {
         }
 
         assert resultsQueue.size() <= additionalK;
-        SearchResult.NodeScore[] nodes = extractScores(scoreFunction, reranker, resultsQueue, rerankFloor);
+        SearchResult.NodeScore[] nodes = extractScores(scoreProvider, resultsQueue, rerankFloor);
         return new SearchResult(nodes, visited, numVisited);
     }
 
@@ -355,13 +352,12 @@ public class GraphSearcher {
     /**
      * Empty resultsQueue and rerank its contents, if necessary, and return them in sorted order.
      */
-    private static SearchResult.NodeScore[] extractScores(ScoreFunction sf,
-                                                          Reranker reranker,
+    private static SearchResult.NodeScore[] extractScores(SearchScoreProvider scoreProvider,
                                                           NodeQueue resultsQueue,
                                                           float rerankFloor)
     {
         SearchResult.NodeScore[] nodes;
-        if (sf.isExact()) {
+        if (scoreProvider.scoreFunction().isExact()) {
             nodes = new SearchResult.NodeScore[resultsQueue.size()];
             for (int i = nodes.length - 1; i >= 0; i--) {
                 var nScore = resultsQueue.topScore();
@@ -369,7 +365,7 @@ public class GraphSearcher {
                 nodes[i] = new SearchResult.NodeScore(n, nScore);
             }
         } else {
-            nodes = resultsQueue.nodesCopy(reranker, rerankFloor);
+            nodes = resultsQueue.nodesCopy(scoreProvider.reranker(), rerankFloor);
             Arrays.sort(nodes, 0, nodes.length, Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
             resultsQueue.clear();
         }

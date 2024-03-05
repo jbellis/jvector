@@ -247,6 +247,7 @@ public class ConcurrentNeighborSet {
     private BitSet selectDiverse(NodeArray neighbors) {
         BitSet selected = new FixedBitSet(neighbors.size());
         int nSelected = 0;
+        int[] neighborNodes = neighbors.copyDenseNodes(); // TODO add a length parameter to Reranker.score to save the copy?
 
         // add diverse candidates, gradually increasing alpha to the threshold
         // (so that the nearest candidates are prioritized)
@@ -258,7 +259,7 @@ public class ConcurrentNeighborSet {
 
                 int cNode = neighbors.node()[i];
                 float cScore = neighbors.score()[i];
-                if (isDiverse(cNode, cScore, neighbors, selected, a)) {
+                if (isDiverse(cNode, cScore, neighborNodes, selected, a)) {
                     selected.set(i);
                     nSelected++;
                 }
@@ -382,19 +383,16 @@ public class ConcurrentNeighborSet {
 
     // is the candidate node with the given score closer to the base node than it is to any of the
     // existing neighbors
-    private boolean isDiverse(
-            int node, float score, NodeArray others, BitSet selected, float alpha) {
-        if (others.size() == 0) {
-            return true;
-        }
+    private boolean isDiverse(int node, float score, int[] others, BitSet selected, float alpha) {
+        assert others.length > 0;
 
-        var scoreProvider = this.scoreProvider.scoreFunctionFor(node);
+        var scores = scoreProvider.rerankerFor(node).score(others);
         for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-            int otherNode = others.node()[i];
+            int otherNode = others[i];
             if (node == otherNode) {
                 break;
             }
-            if (scoreProvider.similarityTo(otherNode) > score * alpha) {
+            if (scores.get(i) > score * alpha) {
                 return false;
             }
 

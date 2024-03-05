@@ -213,7 +213,7 @@ public class TestUtil {
 
     public static <T> OnHeapGraphIndex buildSequentially(GraphIndexBuilder builder, RandomAccessVectorValues vectors) {
         for (var i = 0; i < vectors.size(); i++) {
-            builder.addGraphNode(i, vectors);
+            builder.addGraphNode(i);
         }
         builder.cleanup();
         return builder.getGraph();

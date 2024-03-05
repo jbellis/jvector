@@ -33,6 +33,7 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -63,6 +64,7 @@ import java.util.stream.IntStream;
  */
 public class Bench {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     private static void testRecall(int M,
                                    int efConstruction,
                                    List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
@@ -73,42 +75,32 @@ public class Bench {
         var floatVectors = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
         var topK = ds.groundTruth.get(0).size();
 
-        var start = System.nanoTime();
-        var builder = new GraphIndexBuilder(floatVectors, ds.similarityFunction, M, efConstruction, 1.2f, 1.2f);
-        var onHeapGraph = builder.build();
-        System.out.format("Build M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
-                          M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, onHeapGraph.getAverageDegree(), onHeapGraph.getAverageShortEdges());
-
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         var fusedGraphPath = testDirectory.resolve("fusedgraph" + M + efConstruction + ds.name);
         try {
             for (var cf : compressionGrid) {
+                // compress vectors
                 var compressor = getCompressor(cf, ds);
                 CompressedVectors cv;
-                var fusedCompatible = compressor instanceof ProductQuantization && ((ProductQuantization) compressor).getClusterCount() == 32;
-                if (compressor == null) {
-                    cv = null;
-                    try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                        OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
-                    }
-                    System.out.format("Uncompressed vectors%n");
-                } else {
-                    start = System.nanoTime();
-                    var quantizedVectors = compressor.encodeAll(ds.baseVectors);
-                    cv = compressor.createCompressedVectors(quantizedVectors);
-                    System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
-                    try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                        OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
-                    }
-                    if (fusedCompatible) {
-                        try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(fusedGraphPath)))) {
-                            OnDiskADCGraphIndex.write(onHeapGraph, floatVectors, (PQVectors) cv, outputStream);
-                        }
-                    }
+                var start = System.nanoTime();
+                var quantizedVectors = compressor.encodeAll(ds.baseVectors);
+                cv = compressor.createCompressedVectors(quantizedVectors);
+                System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
+
+                // build
+                start = System.nanoTime();
+                var builder = new GraphIndexBuilder(floatVectors, ds.similarityFunction, M, efConstruction, 1.2f, 1.2f);
+                var onHeapGraph = builder.build(ds.getBaseRavv());
+                System.out.format("Build M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+                                  M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, onHeapGraph.getAverageDegree(), onHeapGraph.getAverageShortEdges());
+
+                // write
+                try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
+                    OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
                 }
 
-                try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? new CachingADCGraphIndex(new OnDiskADCGraphIndex(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
+                // query
+                try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0))) {
                     int queryRuns = 2;
                     for (int overquery : efSearchOptions) {
                         if (compressor == null) {
@@ -118,14 +110,6 @@ public class Bench {
                             var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
                             System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                                               "(memory)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-                        }
-                        if (fusedCompatible) {
-                            // include both fused and regular graphs for PQ if clusters == 32
-                            start = System.nanoTime();
-                            var pqr = performQueries(ds, floatVectors, cv, onDiskFusedGraph, topK, topK * overquery, queryRuns);
-                            var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                                              "(fused)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
                         }
                         start = System.nanoTime();
                         var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, topK * overquery, queryRuns);
@@ -196,9 +180,10 @@ public class Bench {
                             sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
                         var rr = Reranker.from(queryVector, ds.similarityFunction, view);
+                        var ssp = new SearchScoreProvider(sf, rr);
                         sr = new GraphSearcher.Builder(view)
                                 .build()
-                                .search(sf, rr, efSearch, Bits.ALL);
+                                .search(ssp, efSearch, Bits.ALL);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -222,10 +207,9 @@ public class Bench {
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
-                null, // uncompressed
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4,
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
                                    ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         // args is list of regexes, possibly needing to be split by whitespace.

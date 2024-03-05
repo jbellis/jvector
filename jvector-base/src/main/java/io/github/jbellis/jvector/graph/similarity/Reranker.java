@@ -10,13 +10,20 @@ public interface Reranker {
     VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     /**
-     * Rerank the nodes identified by the nodes array, storing the similarities in the results vector.
+     * Rerank the nodes identified by the nodes array relative to the Reranker's implicit
+     * instance-local vector, storing the similarities in the results vector.
      *
      * @param nodes   the nodes to calculate similarity for
      * @param results the similarity scores for each node, in the same order as the input nodes.
      *                This should be pre-allocated to the same size as nodes.length.
      */
     void score(int[] nodes, VectorFloat<?> results);
+
+    default VectorFloat<?> score(int[] nodes) {
+        var results = vectorTypeSupport.createFloatVector(nodes.length);
+        score(nodes, results);
+        return results;
+    }
 
     /**
      * Create a Reranker from a VectorSimilarityFunction, a query vector, and a graph view. This is a convenience

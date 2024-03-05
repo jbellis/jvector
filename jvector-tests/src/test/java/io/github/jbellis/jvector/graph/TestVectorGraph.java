@@ -302,16 +302,16 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 4, 10, 1.0f, 1.0f);
         // node 0 is added by the builder constructor
-        builder.addGraphNode(0, vectors);
-        builder.addGraphNode(1, vectors);
-        builder.addGraphNode(2, vectors);
+        builder.addGraphNode(0);
+        builder.addGraphNode(1);
+        builder.addGraphNode(2);
         // now every node has tried to attach every other node as a neighbor, but
         // some were excluded based on diversity check.
         assertNeighbors(builder.graph, 0, 1, 2);
         assertNeighbors(builder.graph, 1, 0);
         assertNeighbors(builder.graph, 2, 0);
 
-        builder.addGraphNode(3, vectors);
+        builder.addGraphNode(3);
         assertNeighbors(builder.graph, 0, 1, 2);
         // we added 3 here
         assertNeighbors(builder.graph, 1, 0, 3);
@@ -319,7 +319,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertNeighbors(builder.graph, 3, 1);
 
         // supplant an existing neighbor
-        builder.addGraphNode(4, vectors);
+        builder.addGraphNode(4);
         // 4 is the same distance from 0 that 2 is; we leave the existing node in place
         assertNeighbors(builder.graph, 0, 1, 2);
         assertNeighbors(builder.graph, 1, 0, 3, 4);
@@ -328,7 +328,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertNeighbors(builder.graph, 3, 1, 4);
         assertNeighbors(builder.graph, 4, 1, 3);
 
-        builder.addGraphNode(5, vectors);
+        builder.addGraphNode(5);
         assertNeighbors(builder.graph, 0, 1, 2);
         assertNeighbors(builder.graph, 1, 0, 3, 4, 5);
         assertNeighbors(builder.graph, 2, 0);
@@ -356,16 +356,16 @@ public class TestVectorGraph extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 2, 10, 1.0f, 1.0f);
-        builder.addGraphNode(0, vectors);
-        builder.addGraphNode(1, vectors);
-        builder.addGraphNode(2, vectors);
+        builder.addGraphNode(0);
+        builder.addGraphNode(1);
+        builder.addGraphNode(2);
         assertNeighbors(builder.graph, 0, 1, 2);
         // 2 is closer to 0 than 1, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 1, 0);
         // 1 is closer to 0 than 2, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 2, 0);
 
-        builder.addGraphNode(3, vectors);
+        builder.addGraphNode(3);
         // this is one case we are testing; 2 has been displaced by 3
         assertNeighbors(builder.graph, 0, 1, 3);
         assertNeighbors(builder.graph, 1, 0);
@@ -387,16 +387,16 @@ public class TestVectorGraph extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 2, 10, 1.0f, 1.0f);
-        builder.addGraphNode(0, vectors);
-        builder.addGraphNode(1, vectors);
-        builder.addGraphNode(2, vectors);
+        builder.addGraphNode(0);
+        builder.addGraphNode(1);
+        builder.addGraphNode(2);
         assertNeighbors(builder.graph, 0, 1, 2);
         // 2 is closer to 0 than 1, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 1, 0);
         // 1 is closer to 0 than 2, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 2, 0);
 
-        builder.addGraphNode(3, vectors);
+        builder.addGraphNode(3);
         // this is one case we are testing; 1 has been displaced by 3
         assertNeighbors(builder.graph, 0, 2, 3);
         assertNeighbors(builder.graph, 1, 0, 3);

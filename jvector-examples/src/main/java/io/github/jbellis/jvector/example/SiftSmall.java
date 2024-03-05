@@ -28,6 +28,7 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -68,7 +69,7 @@ public class SiftSmall {
 
         start = System.nanoTime();
         var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 32, 100, 1.5f, 1.4f);
-        var onHeapGraph = builder.build();
+        var onHeapGraph = builder.build(ravv);
         System.out.printf("  Building index took %s seconds%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var graphPath = testDirectory.resolve("graph_test");
@@ -96,18 +97,19 @@ public class SiftSmall {
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
-            SearchResult.NodeScore[] nn;
             var view = graph.getView();
             var searcher = new GraphSearcher.Builder(view).build();
+            SearchScoreProvider ssp;
             if (compressedVectors == null) {
                 ScoreFunction.ExactScoreFunction sf = (j) -> VectorSimilarityFunction.EUCLIDEAN.compare(queryVector, ravv.vectorValue(j));
-                nn = searcher.search(sf, null, 100, Bits.ALL).getNodes();
+                ssp = new SearchScoreProvider(sf, null);
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 var rr = Reranker.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, view);
-                nn = searcher.search(sf, rr, 100, Bits.ALL).getNodes();
+                ssp = new SearchScoreProvider(sf, rr);
             }
+            var nn = searcher.search(ssp, 100, Bits.ALL).getNodes();
 
             var gt = groundTruth.get(i);
             var n = IntStream.range(0, topK).filter(j -> gt.contains(nn[j].node)).count();
