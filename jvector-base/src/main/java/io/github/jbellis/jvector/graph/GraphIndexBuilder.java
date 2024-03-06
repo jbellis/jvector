@@ -45,7 +45,6 @@ import java.util.stream.IntStream;
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
 import static java.lang.Math.abs;
-import static java.lang.Math.sqrt;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -290,7 +289,7 @@ public class GraphIndexBuilder {
             var neighborNode = neighbors.node[i];
             var neighborScore = neighbors.score[i];
             if (connectionTargets.add(neighborNode)) {
-                graph.getNeighbors(neighborNode).insertNotDiverse(node, neighborScore, true);
+                graph.getNeighbors(neighborNode).insertNotDiverse(node, neighborScore);
                 return true;
             }
         }
@@ -485,7 +484,7 @@ public class GraphIndexBuilder {
                         break;
                     }
                 }
-                neighbors.padWithRandom(randomConnections);
+                neighbors.padWith(randomConnections);
             }
         }
 

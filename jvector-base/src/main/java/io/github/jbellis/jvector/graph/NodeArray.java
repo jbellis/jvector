@@ -74,15 +74,15 @@ public class NodeArray {
      * Add a new node to the NodeArray into a correct sort position according to its score.
      * Duplicate node + score pairs are ignored.
      *
-     * @return true if the new node + score pair did not already exist
+     * @return the insertion point of the new node, or -1 if it already existed
      */
-    public boolean insertSorted(int newNode, float newScore) {
+    public int insertSorted(int newNode, float newScore) {
         if (size == node.length) {
             growArrays();
         }
         int insertionPoint = descSortFindRightMostInsertionPoint(newScore);
         if (duplicateExistsNear(insertionPoint, newNode, newScore)) {
-            return false;
+            return -1;
         }
 
         System.arraycopy(node, insertionPoint, node, insertionPoint + 1, size - insertionPoint);
@@ -90,7 +90,7 @@ public class NodeArray {
         node[insertionPoint] = newNode;
         score[insertionPoint] = newScore;
         ++size;
-        return true;
+        return insertionPoint;
     }
 
     private boolean duplicateExistsNear(int insertionPoint, int newNode, float newScore) {
