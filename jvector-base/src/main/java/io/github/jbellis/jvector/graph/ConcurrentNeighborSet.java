@@ -34,9 +34,9 @@ public class ConcurrentNeighborSet {
     private final int nodeId;
 
     /**
-     * We use a copy-on-write NeighborArray to store the neighbors. Even though updating this is
+     * We use a copy-on-write {@link NodeArray} to store the neighbors. Even though updating this is
      * expensive, it is still faster than using a concurrent Collection because "iterate through a
-     * node's neighbors" is a hot loop in adding to the graph, and NeighborArray can do that much
+     * node's neighbors" is a hot loop in adding to the graph, and {@link NodeArray} can do that much
      * faster: no boxing/unboxing, all the data is stored sequentially instead of having to follow
      * references, and no fancy encoding necessary for node/score.
      */
@@ -45,6 +45,7 @@ public class ConcurrentNeighborSet {
     /** the diversity threshold; 1.0 is equivalent to HNSW; Vamana uses 1.2 or more */
     private final float alpha;
 
+    /** used to compute diversity */
     private final NodeSimilarity similarity;
 
     /** the maximum number of neighbors we can store */
