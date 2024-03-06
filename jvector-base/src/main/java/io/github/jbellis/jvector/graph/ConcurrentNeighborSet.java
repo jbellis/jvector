@@ -241,7 +241,10 @@ public class ConcurrentNeighborSet {
 
     private BitSet selectDiverse(NodeArray neighbors, int diverseBefore) {
         BitSet selected = new FixedBitSet(neighbors.size());
-        int nSelected = 0;
+        for (int i = 0; i < diverseBefore; i++) {
+            selected.set(i);
+        }
+        int nSelected = diverseBefore;
 
         // add diverse candidates, gradually increasing alpha to the threshold
         // (so that the nearest candidates are prioritized)
@@ -382,7 +385,7 @@ public class ConcurrentNeighborSet {
     }
 
     // is the candidate node with the given score closer to the base node than it is to any of the
-    // existing neighbors
+    // already-selected neighbors
     private boolean isDiverse(int node, float score, NodeArray others, BitSet selected, float alpha) {
         if (others.size() == 0) {
             return true;
