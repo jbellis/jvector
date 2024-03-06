@@ -370,13 +370,11 @@ public class ConcurrentNeighborSet {
 
             // batch up the enforcement of the max connection limit, since otherwise
             // we do a lot of duplicate work scanning nodes that we won't remove
-            int nextDiverseBefore;
+            int nextDiverseBefore = min(insertionPoint, old.diverseBefore);
             var hardMax = overflow * maxConnections;
             if (nextNodes.size > hardMax) {
-                nextNodes = removeAllNonDiverse(nextNodes, old.diverseBefore);
+                nextNodes = removeAllNonDiverse(nextNodes, nextDiverseBefore);
                 nextDiverseBefore = nextNodes.size;
-            } else {
-                nextDiverseBefore = min(insertionPoint, old.diverseBefore);
             }
 
             return new Neighbors(nextNodes, nextDiverseBefore);
