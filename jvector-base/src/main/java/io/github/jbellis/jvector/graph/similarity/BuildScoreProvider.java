@@ -17,16 +17,16 @@
 package io.github.jbellis.jvector.graph.similarity;
 
 /** Encapsulates comparing node distances. */
-public interface NodeSimilarity {
+public interface BuildScoreProvider {
     /** for one-off comparisons between nodes */
     default float score(int node1, int node2) {
-        return scoreProvider(node1).similarityTo(node2);
+        return scoreFunctionFor(node1).similarityTo(node2);
     }
 
     /**
      * For when we're going to compare node1 with multiple other nodes. This allows us to skip loading
      * node1's vector (potentially from disk) redundantly for each comparison.
      */
-    ScoreFunction scoreProvider(int node1);
+    ScoreFunction scoreFunctionFor(int node1);
 
 }

@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
-import io.github.jbellis.jvector.graph.similarity.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.ArrayUtil;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -49,7 +49,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var candidates = new NodeArray(10);
-    NodeSimilarity scoreBetween = a -> (ScoreFunction.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    BuildScoreProvider scoreBetween = a -> (ScoreFunction.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     // fill candidates with all the nodes except 7
     IntStream.range(0, 10)
         .filter(i -> i != 7)
@@ -75,7 +75,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var vectorsCopy = vectors.copy();
     var natural = new NodeArray(10);
     var concurrent = new NodeArray(10);
-    NodeSimilarity scoreBetween = a -> (ScoreFunction.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    BuildScoreProvider scoreBetween = a -> (ScoreFunction.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
     // "natural" candidates are [0..7), "concurrent" are [8..10)
     IntStream.range(0, 7)
         .forEach(
@@ -99,7 +99,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
     var vectorsCopy = vectors.copy();
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    NodeSimilarity scoreBetween = node1 -> {
+    BuildScoreProvider scoreBetween = node1 -> {
       VectorFloat<?> v1 = vectors.vectorValue(node1);
       return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(v1, vectorsCopy.vectorValue(node2));
     };

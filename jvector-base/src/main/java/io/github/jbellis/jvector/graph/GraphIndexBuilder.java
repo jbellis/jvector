@@ -18,7 +18,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.similarity.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
@@ -80,7 +80,7 @@ public class GraphIndexBuilder {
     private final Supplier<RandomAccessVectorValues> vectors;
     private final Supplier<RandomAccessVectorValues> vectorsCopy;
     private final int dimension; // for convenience so we don't have to go to the pool for this
-    private final NodeSimilarity similarity;
+    private final BuildScoreProvider scoreProvider;
 
     private final ForkJoinPool simdExecutor;
     private final ForkJoinPool parallelExecutor;
@@ -154,7 +154,7 @@ public class GraphIndexBuilder {
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
 
-        similarity = node1 -> {
+        scoreProvider = node1 -> {
             var v = vectors.get();
             var vc = vectorsCopy.get();
             VectorFloat<?> v1 = v.vectorValue(node1);
@@ -162,7 +162,7 @@ public class GraphIndexBuilder {
         };
         this.graph =
                 new OnHeapGraphIndex(
-                        M, (node, m) -> new ConcurrentNeighborSet(node, m, similarity, alpha));
+                        M, (node, m) -> new ConcurrentNeighborSet(node, m, scoreProvider, alpha));
         // this view will never get closed, but it's okay because we know it's an OHGI view, which has a no-op close
         this.graphSearcher = ExplicitThreadLocal.withInitial(() -> new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build());
 
@@ -632,9 +632,9 @@ public class GraphIndexBuilder {
             var ca = new NodeArray(maxDegree);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();
-                ca.addInOrder(neighbor, similarity.score(node, neighbor));
+                ca.addInOrder(neighbor, scoreProvider.score(node, neighbor));
             }
-            graph.addNode(node, new ConcurrentNeighborSet(node, maxDegree, similarity, alpha, ca));
+            graph.addNode(node, new ConcurrentNeighborSet(node, maxDegree, scoreProvider, alpha, ca));
         }
 
         graph.updateEntryNode(entryNode);
