@@ -92,7 +92,6 @@ public class SiftSmall {
         var topKfound = new AtomicInteger(0);
         var topK = 100;
         var graphType = graph.getClass().getSimpleName();
-        var dimension = ravv.dimension();
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
