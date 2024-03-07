@@ -72,6 +72,11 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
         graph.close();
     }
 
+    @Override
+    public String toString() {
+        return String.format("CachingGraphIndex(graph=%s)", graph);
+    }
+
     private class CachedView implements View {
         private final View view;
 

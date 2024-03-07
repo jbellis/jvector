@@ -133,4 +133,12 @@ public class BQVectors implements CompressedVectors {
         result = 31 * result + Arrays.deepHashCode(compressedVectors);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "BQVectors{" +
+               "bq=" + bq +
+               ", count=" + compressedVectors.length +
+               '}';
+    }
 }
