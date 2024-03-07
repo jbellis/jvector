@@ -43,7 +43,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static io.github.jbellis.jvector.graph.ConcurrentNeighborSet.mergeNeighbors;
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
 
@@ -547,7 +546,7 @@ public class GraphIndexBuilder {
         } else if (natural.size == 0) {
             toMerge = concurrent;
         } else {
-            toMerge = mergeNeighbors(natural, concurrent);
+            toMerge = NodeArray.merge(natural, concurrent);
         }
         // toMerge may be approximate-scored, but insertDiverse will compute exact scores for the diverse ones
         neighbors.insertDiverse(toMerge);

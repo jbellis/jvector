@@ -22,7 +22,6 @@ import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
-import org.agrona.collections.IntHashSet;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -197,9 +196,9 @@ public class ConcurrentNeighborSet {
                     for (int i = 0; i < old.nodes.size; i++) {
                         approximatedOld.insertSorted(old.nodes.node[i], sf.similarityTo(old.nodes.node[i]));
                     }
-                    merged = mergeNeighbors(approximatedOld, toMerge);
+                    merged = NodeArray.merge(approximatedOld, toMerge);
                 } else {
-                    merged = mergeNeighbors(old.nodes, toMerge);
+                    merged = NodeArray.merge(old.nodes, toMerge);
                 }
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
@@ -213,7 +212,7 @@ public class ConcurrentNeighborSet {
         // we deliberately do not perform diversity checks here
         // (it will be invoked when the cleanup code calls insertDiverse later
         // with the results of the nn descent rebuild)
-        neighborsRef.getAndUpdate(old -> new Neighbors(mergeNeighbors(old.nodes, connections), 0));
+        neighborsRef.getAndUpdate(old -> new Neighbors(NodeArray.merge(old.nodes, connections), 0));
     }
 
     void insertNotDiverse(int node, float score) {
@@ -328,89 +327,6 @@ public class ConcurrentNeighborSet {
 
     NodeArray getCurrent() {
         return neighborsRef.get().nodes;
-    }
-
-    // TODO move this to NodeArray
-    static NodeArray mergeNeighbors(NodeArray a1, NodeArray a2) {
-        NodeArray merged = new NodeArray(a1.size() + a2.size());
-        int i = 0, j = 0;
-
-        // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
-        // we need to remember all the nodes with the current score to avoid adding duplicates
-        var nodesWithLastScore = new IntHashSet();
-        float lastAddedScore = Float.NaN;
-
-        // loop through both source arrays, adding the highest score element to the merged array,
-        // until we reach the end of one of the sources
-        while (i < a1.size() && j < a2.size()) {
-            if (a1.score()[i] < a2.score[j]) {
-                // add from a2
-                if (a2.score[j] != lastAddedScore) {
-                    nodesWithLastScore.clear();
-                    lastAddedScore = a2.score[j];
-                }
-                if (nodesWithLastScore.add(a2.node[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
-                }
-                j++;
-            } else if (a1.score()[i] > a2.score[j]) {
-                // add from a1
-                if (a1.score()[i] != lastAddedScore) {
-                    nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
-                }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
-                }
-                i++;
-            } else {
-                // same score -- add both
-                if (a1.score()[i] != lastAddedScore) {
-                    nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
-                }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
-                }
-                if (nodesWithLastScore.add(a2.node()[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
-                }
-                i++;
-                j++;
-            }
-        }
-
-        // If elements remain in a1, add them
-        if (i < a1.size()) {
-            // avoid duplicates while adding nodes with the same score
-            while (i < a1.size && a1.score()[i] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
-                }
-                i++;
-            }
-            // the remaining nodes have a different score, so we can bulk-add them
-            System.arraycopy(a1.node, i, merged.node, merged.size, a1.size - i);
-            System.arraycopy(a1.score, i, merged.score, merged.size, a1.size - i);
-            merged.size += a1.size - i;
-        }
-
-        // If elements remain in a2, add them
-        if (j < a2.size()) {
-            // avoid duplicates while adding nodes with the same score
-            while (j < a2.size && a2.score[j] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a2.node[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
-                }
-                j++;
-            }
-            // the remaining nodes have a different score, so we can bulk-add them
-            System.arraycopy(a2.node, j, merged.node, merged.size, a2.size - j);
-            System.arraycopy(a2.score, j, merged.score, merged.size, a2.size - j);
-            merged.size += a2.size - j;
-        }
-
-        return merged;
     }
 
     /**

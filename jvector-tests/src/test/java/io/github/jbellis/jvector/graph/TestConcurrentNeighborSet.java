@@ -81,7 +81,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
     // only nodes 6 and 8 are diverse wrt 7
     var neighbors = new ConcurrentNeighborSet(7, 3, bsp);
-    neighbors.insertDiverse(ConcurrentNeighborSet.mergeNeighbors(natural, concurrent));
+    neighbors.insertDiverse(NodeArray.merge(natural, concurrent));
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
@@ -142,7 +142,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var arr2 = new NodeArray(1);
     arr2.addInOrder(0, 2.0f);
 
-    var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    var merged = NodeArray.merge(arr1, arr2);
     // Expected result: [0, 1]
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {0, 1}, Arrays.copyOf(merged.node(), 2));
@@ -157,7 +157,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     arr2.addInOrder(2, 2.0f);
     arr2.addInOrder(1, 1.0f);
 
-    merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    merged = NodeArray.merge(arr1, arr2);
     // Expected result: [4, 3, 2, 1]
     assertEquals(4, merged.size());
     assertArrayEquals(new int[] {4, 3, 2, 1}, Arrays.copyOf(merged.node(), 4));
@@ -171,7 +171,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     arr2 = new NodeArray(1);
     arr2.addInOrder(2, 2.0f);
 
-    merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    merged = NodeArray.merge(arr1, arr2);
     // Expected result: [3, 2]
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {3, 2}, Arrays.copyOf(merged.node(), 2));
@@ -216,7 +216,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     }
 
     // merge!
-    var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    var merged = NodeArray.merge(arr1, arr2);
 
     // sanity check
     assert merged.size <= arr1.size() + arr2.size();
