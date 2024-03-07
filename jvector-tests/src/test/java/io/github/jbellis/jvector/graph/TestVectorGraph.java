@@ -29,6 +29,7 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.FixedBitSet;
@@ -129,7 +130,7 @@ public class TestVectorGraph extends LuceneTestCase {
         int dim = 2;
         var vectors = vectorValues(size, dim);
         var builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
-        var graph = builder.build();
+        var graph = builder.build(vectors);
         Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
         int initialTopK = 10;
@@ -137,13 +138,14 @@ public class TestVectorGraph extends LuceneTestCase {
         var query = randomVector(dim);
         var searcher = new GraphSearcher.Builder(graph.getView()).build();
 
-        var initial = searcher.search((ScoreFunction.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK, acceptOrds);
+        var ssp = new SearchScoreProvider((ScoreFunction.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null);
+        var initial = searcher.search(ssp, initialTopK, acceptOrds);
         assertEquals(initialTopK, initial.getNodes().length);
 
         var resumed = searcher.resume(resumeTopK);
         assertEquals(resumeTopK, resumed.getNodes().length);
 
-        var expected = searcher.search((ScoreFunction.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null, initialTopK + resumeTopK, acceptOrds);
+        var expected = searcher.search(ssp, initialTopK + resumeTopK, acceptOrds);
         assertEquals(expected.getVisitedCount(), initial.getVisitedCount() + resumed.getVisitedCount());
         assertEquals(expected.getNodes().length, initial.getNodes().length + resumed.getNodes().length);
         var initialResumedResults = Stream.concat(Arrays.stream(initial.getNodes()), Arrays.stream(resumed.getNodes()))
@@ -302,16 +304,16 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 4, 10, 1.0f, 1.0f);
         // node 0 is added by the builder constructor
-        builder.addGraphNode(0);
-        builder.addGraphNode(1);
-        builder.addGraphNode(2);
+        builder.addGraphNode(0, vectors.vectorValue(0));
+        builder.addGraphNode(1, vectors.vectorValue(1));
+        builder.addGraphNode(2, vectors.vectorValue(2));
         // now every node has tried to attach every other node as a neighbor, but
         // some were excluded based on diversity check.
         assertNeighbors(builder.graph, 0, 1, 2);
         assertNeighbors(builder.graph, 1, 0);
         assertNeighbors(builder.graph, 2, 0);
 
-        builder.addGraphNode(3);
+        builder.addGraphNode(3, vectors.vectorValue(3));
         assertNeighbors(builder.graph, 0, 1, 2);
         // we added 3 here
         assertNeighbors(builder.graph, 1, 0, 3);
@@ -319,7 +321,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertNeighbors(builder.graph, 3, 1);
 
         // supplant an existing neighbor
-        builder.addGraphNode(4);
+        builder.addGraphNode(4, vectors.vectorValue(4));
         // 4 is the same distance from 0 that 2 is; we leave the existing node in place
         assertNeighbors(builder.graph, 0, 1, 2);
         assertNeighbors(builder.graph, 1, 0, 3, 4);
@@ -328,7 +330,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertNeighbors(builder.graph, 3, 1, 4);
         assertNeighbors(builder.graph, 4, 1, 3);
 
-        builder.addGraphNode(5);
+        builder.addGraphNode(5, vectors.vectorValue(5));
         assertNeighbors(builder.graph, 0, 1, 2);
         assertNeighbors(builder.graph, 1, 0, 3, 4, 5);
         assertNeighbors(builder.graph, 2, 0);
@@ -356,16 +358,16 @@ public class TestVectorGraph extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 2, 10, 1.0f, 1.0f);
-        builder.addGraphNode(0);
-        builder.addGraphNode(1);
-        builder.addGraphNode(2);
+        builder.addGraphNode(0, vectors.vectorValue(0));
+        builder.addGraphNode(1, vectors.vectorValue(1));
+        builder.addGraphNode(2, vectors.vectorValue(2));
         assertNeighbors(builder.graph, 0, 1, 2);
         // 2 is closer to 0 than 1, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 1, 0);
         // 1 is closer to 0 than 2, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 2, 0);
 
-        builder.addGraphNode(3);
+        builder.addGraphNode(3, vectors.vectorValue(3));
         // this is one case we are testing; 2 has been displaced by 3
         assertNeighbors(builder.graph, 0, 1, 3);
         assertNeighbors(builder.graph, 1, 0);
@@ -387,16 +389,16 @@ public class TestVectorGraph extends LuceneTestCase {
         // First add nodes until everybody gets a full neighbor list
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 2, 10, 1.0f, 1.0f);
-        builder.addGraphNode(0);
-        builder.addGraphNode(1);
-        builder.addGraphNode(2);
+        builder.addGraphNode(0, vectors.vectorValue(0));
+        builder.addGraphNode(1, vectors.vectorValue(1));
+        builder.addGraphNode(2, vectors.vectorValue(2));
         assertNeighbors(builder.graph, 0, 1, 2);
         // 2 is closer to 0 than 1, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 1, 0);
         // 1 is closer to 0 than 2, so it is excluded as non-diverse
         assertNeighbors(builder.graph, 2, 0);
 
-        builder.addGraphNode(3);
+        builder.addGraphNode(3, vectors.vectorValue(3));
         // this is one case we are testing; 1 has been displaced by 3
         assertNeighbors(builder.graph, 0, 2, 3);
         assertNeighbors(builder.graph, 1, 0, 3);
@@ -423,9 +425,8 @@ public class TestVectorGraph extends LuceneTestCase {
         int dim = between(2, 15);
         MockVectorValues vectors = vectorValues(size, dim);
         int topK = 5;
-        GraphIndexBuilder builder =
-                new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
-        var graph = builder.build();
+        GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
+        var graph = builder.build(vectors);
         Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
         int efSearch = 100;
@@ -481,7 +482,7 @@ public class TestVectorGraph extends LuceneTestCase {
     public void testConcurrentNeighbors() {
         RandomAccessVectorValues vectors = circularVectorValues(100);
         GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 2, 30, 1.0f, 1.4f);
-        var graph = builder.build();
+        var graph = builder.build(vectors);
         for (int i = 0; i < vectors.size(); i++) {
             assertTrue(graph.getNeighbors(i).size() <= 2);
         }
@@ -494,7 +495,7 @@ public class TestVectorGraph extends LuceneTestCase {
                                  vectorTypeSupport.createFloatVector(new float[] {1, 1}));
         var vectors = new ListRandomAccessVectorValues(rawVectors, 2);
         var builder = new GraphIndexBuilder(vectors, VectorSimilarityFunction.COSINE, 2, 2, 1.0f, 1.0f);
-        try (var graph = builder.build()) {
+        try (var graph = builder.build(vectors)) {
             var qv = vectorTypeSupport.createFloatVector(new float[] {0.5f, 0.5f});
             var results = GraphSearcher.search(qv, 1, vectors, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
             assertEquals(1, results.getNodes().length);

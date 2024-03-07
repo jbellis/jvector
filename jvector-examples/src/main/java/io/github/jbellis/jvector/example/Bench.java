@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.disk.CachingADCGraphIndex;
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskADCGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DataSetCreator;
@@ -31,6 +30,7 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -41,6 +41,7 @@ import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.BufferedOutputStream;
@@ -89,7 +90,58 @@ public class Bench {
 
                 // build
                 start = System.nanoTime();
-                var builder = new GraphIndexBuilder(floatVectors, ds.similarityFunction, M, efConstruction, 1.2f, 1.2f);
+                // TODO un-hardcode the 2* here
+                var builder = new GraphIndexBuilder(floatVectors, ds.similarityFunction, 2 * M, efConstruction, 1.2f, 1.2f);
+                var bsp = new BuildScoreProvider() {
+                    @Override
+                    public ScoreFunction scoreFunctionFor(int node1) {
+                        var v = floatVectors.vectorValue(node1);
+                        return cv.approximateScoreFunctionFor(v, ds.similarityFunction);
+                    }
+
+                    @Override
+                    public Reranker rerankerFor(int node1) {
+                        var v = floatVectors.vectorValue(node1);
+                        return rerankerFor(v);
+                    }
+
+                    private Reranker rerankerFor(VectorFloat<?> v) {
+                        return new Reranker() {
+                            @Override
+                            public void score(int[] nodes, VectorFloat<?> results) {
+                                var nodeCount = nodes.length;
+                                var dimension = v.length();
+                                var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * dimension);
+                                for (int i = 0; i < nodeCount; i++) {
+                                    var node = nodes[i];
+                                    packedVectors.copyFrom(floatVectors.vectorValue(node), 0, i * dimension, dimension);
+                                }
+                                ds.similarityFunction.compareMulti(v, packedVectors, results);
+                            }
+
+                            @Override
+                            public ScoreFunction.ExactScoreFunction scoreFunction() {
+                                return node2 -> ds.similarityFunction.compare(v, floatVectors.vectorValue(node2));
+                            }
+                        };
+                    }
+
+                    @Override
+                    public VectorFloat<?> approximateCentroid() {
+                        return ((PQVectors) cv).getCompressor().getOrComputeCentroid();
+                    }
+
+                    @Override
+                    public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
+                        return new SearchScoreProvider(cv.approximateScoreFunctionFor(vector, ds.similarityFunction), null);
+                    }
+
+                    @Override
+                    public boolean isExact() {
+                        return false;
+                    }
+                };
+                builder.setScoreProvider(bsp);
                 var onHeapGraph = builder.build(ds.getBaseRavv());
                 System.out.format("Build M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
                                   M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, onHeapGraph.getAverageDegree(), onHeapGraph.getAverageShortEdges());
@@ -103,14 +155,6 @@ public class Bench {
                 try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0))) {
                     int queryRuns = 2;
                     for (int overquery : efSearchOptions) {
-                        if (compressor == null) {
-                            // include both in-memory and on-disk search of uncompressed vectors
-                            start = System.nanoTime();
-                            var pqr = performQueries(ds, floatVectors, cv, onHeapGraph, topK, topK * overquery, queryRuns);
-                            var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
-                            System.out.format("  Query %s top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                                              "(memory)", topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-                        }
                         start = System.nanoTime();
                         var pqr = performQueries(ds, floatVectors, cv, onDiskGraph, topK, topK * overquery, queryRuns);
                         var recall = ((double) pqr.topKFound) / (queryRuns * ds.queryVectors.size() * topK);
@@ -209,7 +253,7 @@ public class Bench {
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 16,
                                    ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         // args is list of regexes, possibly needing to be split by whitespace.

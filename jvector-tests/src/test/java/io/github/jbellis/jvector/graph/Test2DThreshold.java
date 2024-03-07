@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
@@ -52,7 +53,7 @@ public class Test2DThreshold extends LuceneTestCase {
 
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
         var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.EUCLIDEAN, 6, 32, 1.2f, 1.4f);
-        var onHeapGraph = builder.build();
+        var onHeapGraph = builder.build(ravv);
 
         // test raw vectors
         var searcher = new GraphSearcher.Builder(onHeapGraph.getView()).build();
@@ -60,7 +61,7 @@ public class Test2DThreshold extends LuceneTestCase {
             TestParams tp = createTestParams(vectors);
 
             ScoreFunction.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
-            var result = searcher.search(sf, null, vectors.length, tp.th, Bits.ALL);
+            var result = searcher.search(new SearchScoreProvider(sf, null), vectors.length, tp.th, Bits.ALL);
 
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
@@ -81,7 +82,8 @@ public class Test2DThreshold extends LuceneTestCase {
                 searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
                 var reranker = Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
                 var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
-                var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
+                var ssp = new SearchScoreProvider(asf, reranker);
+                var result = searcher.search(ssp, vectors.length, tp.th, Bits.ALL);
 
                 assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             }

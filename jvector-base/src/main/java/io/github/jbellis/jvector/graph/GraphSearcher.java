@@ -194,9 +194,6 @@ public class GraphSearcher {
                                 int ep,
                                 Bits rawAcceptOrds)
     {
-        if (!scoreProvider.scoreFunction().isExact() && scoreProvider.reranker() == null) {
-            throw new IllegalArgumentException("Either scoreFunction must be exact, or reranker must not be null");
-        }
         if (rawAcceptOrds == null) {
             throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
         }
@@ -357,7 +354,7 @@ public class GraphSearcher {
                                                           float rerankFloor)
     {
         SearchResult.NodeScore[] nodes;
-        if (scoreProvider.scoreFunction().isExact()) {
+        if (scoreProvider.reranker() == null) {
             nodes = new SearchResult.NodeScore[resultsQueue.size()];
             for (int i = nodes.length - 1; i >= 0; i--) {
                 var nScore = resultsQueue.topScore();

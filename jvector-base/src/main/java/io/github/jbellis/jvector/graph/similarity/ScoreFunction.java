@@ -38,4 +38,8 @@ public interface ScoreFunction {
 
         float similarityTo(int node2);
     }
+
+    interface Provider {
+        ScoreFunction scoreFunctionFor(int node1);
+    }
 }

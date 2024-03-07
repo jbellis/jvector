@@ -55,7 +55,7 @@ public class GraphBuildBench {
     public void testGraphBuild(Blackhole bh, Parameters p) {
         long start = System.nanoTime();
         GraphIndexBuilder graphIndexBuilder =  new GraphIndexBuilder(p.ravv, p.ds.similarityFunction, 8, 60, 1.2f, 1.4f);
-        var onHeapGraph = graphIndexBuilder.build();
+        var onHeapGraph = graphIndexBuilder.build(p.ravv);
         var avgShortEdges = onHeapGraph.getAverageShortEdges();
         System.out.format("Build M=%d ef=%d in %.2fs with %.2f short edges%n",
                 32, 600, (System.nanoTime() - start) / 1_000_000_000.0, avgShortEdges);

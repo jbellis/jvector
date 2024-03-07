@@ -384,6 +384,29 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return result;
     }
 
+    public VectorFloat<?> getOrComputeCentroid() {
+        if (globalCentroid != null) {
+            return globalCentroid;
+        }
+
+        // typically we only precompute the centroid for Euclidean similarity
+        var centroid = vectorTypeSupport.createFloatVector(originalDimension);
+        for (int m = 0; m < M; m++) {
+            for (int i = 0; i < clusterCount; i++) {
+                var subspaceSize = subvectorSizesAndOffsets[m][0];
+                var subCentroid = vectorTypeSupport.createFloatVector(subspaceSize);
+                subCentroid.copyFrom(codebooks[m], i * subspaceSize, 0, subspaceSize);
+                // we don't have addInPlace for vectors of different length, so do it by hand
+                for (int j = 0; j < subspaceSize; j++) {
+                    var k = subvectorSizesAndOffsets[m][1] + j;
+                    centroid.set(k, centroid.get(k) + subCentroid.get(j));
+                }
+            }
+        }
+        VectorUtil.scale(centroid, 1.0f / M);
+        return centroid;
+    }
+
     public long memorySize() {
         long size = 0;
         for (VectorFloat<?> codebook : codebooks) {
