@@ -52,7 +52,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     private final int M; // codebooks.length, redundantly reproduced for convenience
     private final int clusterCount; // codebooks[0].length, redundantly reproduced for convenience
     final int originalDimension;
-    private final VectorFloat<?> globalCentroid;
+    final VectorFloat<?> globalCentroid;
     final int[][] subvectorSizesAndOffsets;
 
     /**
@@ -382,10 +382,6 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         result = 31 * result + Objects.hashCode(globalCentroid);
         result = 31 * result + Arrays.deepHashCode(subvectorSizesAndOffsets);
         return result;
-    }
-
-    public VectorFloat<?> getCenter() {
-        return globalCentroid;
     }
 
     public long memorySize() {

@@ -39,7 +39,7 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
             var pq = this.cv.pq;
             partialSums = cv.reusablePartialSums();
 
-            VectorFloat<?> center = pq.getCenter();
+            VectorFloat<?> center = pq.globalCentroid;
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
             for (var i = 0; i < pq.getSubspaceCount(); i++) {
                 int offset = pq.subvectorSizesAndOffsets[i][1];
@@ -91,7 +91,7 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
             aMagnitude = cv.reusablePartialMagnitudes();
             float bMagSum = 0.0f;
 
-            VectorFloat<?> center = pq.getCenter();
+            VectorFloat<?> center = pq.globalCentroid;
             VectorFloat<?> centeredQuery = center == null ? query : VectorUtil.sub(query, center);
 
             for (int m = 0; m < pq.getSubspaceCount(); ++m) {

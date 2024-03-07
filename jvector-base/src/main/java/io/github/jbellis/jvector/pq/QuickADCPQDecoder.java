@@ -41,7 +41,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
             partialSums = pqv.reusablePartialSums();
             var pq = this.pqv.pq;
 
-            VectorFloat<?> center = pq.getCenter();
+            VectorFloat<?> center = pq.globalCentroid;
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
             for (var i = 0; i < pq.getSubspaceCount(); i++) {
                 int offset = pq.subvectorSizesAndOffsets[i][1];
