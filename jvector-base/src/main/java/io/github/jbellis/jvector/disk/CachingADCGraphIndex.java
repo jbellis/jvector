@@ -81,6 +81,11 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
         graph.close();
     }
 
+    @Override
+    public String toString() {
+        return String.format("CachingADCGraphIndex(graph=%s)", graph);
+    }
+
     public class CachedView implements ADCView, ApproximateScoreProvider {
         private final ADCView view;
 

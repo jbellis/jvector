@@ -185,6 +185,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         readerSupplier.close();
     }
 
+    @Override
+    public String toString() {
+        return String.format("OnDiskGraphIndex(size=%d, entryPoint=%d)", size, entryNode);
+    }
+
     /**
      * @param graph the graph to write
      * @param vectors the vectors associated with each node
