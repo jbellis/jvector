@@ -16,8 +16,8 @@
 
 package io.github.jbellis.jvector.util;
 
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A thread-safe {@link BitSet} implementation that grows as needed to accommodate set(index) calls. When it
@@ -30,7 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ThreadSafeGrowableBitSet extends BitSet {
 
   private final java.util.BitSet bitSet;
-  private final Lock lock = new ReentrantLock();
+  private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
   public ThreadSafeGrowableBitSet(java.util.BitSet bitSet) {
     this.bitSet = bitSet;
@@ -42,69 +42,69 @@ public class ThreadSafeGrowableBitSet extends BitSet {
 
   @Override
   public void clear(int index) {
-    lock.lock();
+    lock.writeLock().lock();
     try {
       bitSet.clear(index);
     } finally {
-      lock.unlock();
+      lock.writeLock().unlock();
     }
   }
 
   @Override
   public void clear() {
-    lock.lock();
+    lock.writeLock().lock();
     try {
       bitSet.clear();
     } finally {
-      lock.unlock();
+      lock.writeLock().unlock();
     }
   }
 
   @Override
   public boolean get(int index) {
-    lock.lock();
+    lock.readLock().lock();
     try {
       return bitSet.get(index);
     } finally {
-      lock.unlock();
+      lock.readLock().unlock();
     }
   }
 
   @Override
   public boolean getAndSet(int index) {
-    lock.lock();
+    lock.writeLock().lock();
     try {
       boolean v = get(index);
       set(index);
       return v;
     } finally {
-      lock.unlock();
+      lock.writeLock().unlock();
     }
   }
 
   @Override
   public int length() {
-    lock.lock();
+    lock.readLock().lock();
     try {
       return bitSet.length();
     } finally {
-      lock.unlock();
+      lock.readLock().unlock();
     }
   }
 
   @Override
   public void set(int i) {
-    lock.lock();
+    lock.writeLock().lock();
     try {
       bitSet.set(i);
     } finally {
-      lock.unlock();
+      lock.writeLock().unlock();
     }
   }
 
   @Override
   public void clear(int startIndex, int endIndex) {
-    lock.lock();
+    lock.writeLock().lock();
     try {
       if (startIndex == 0 && endIndex == bitSet.length()) {
         bitSet.clear();
@@ -114,43 +114,43 @@ public class ThreadSafeGrowableBitSet extends BitSet {
       }
       bitSet.clear(startIndex, endIndex);
     } finally {
-      lock.unlock();
+      lock.writeLock().unlock();
     }
   }
 
   @Override
   public int cardinality() {
-    lock.lock();
+    lock.readLock().lock();
     try {
       return bitSet.cardinality();
     } finally {
-      lock.unlock();
+      lock.readLock().unlock();
     }
   }
 
   @Override
   public int approximateCardinality() {
-    lock.lock();
+    lock.readLock().lock();
     try {
       return bitSet.cardinality();
     } finally {
-      lock.unlock();
+      lock.readLock().unlock();
     }
   }
 
   @Override
   public int prevSetBit(int index) {
-    lock.lock();
+    lock.readLock().lock();
     try {
       return bitSet.previousSetBit(index);
     } finally {
-      lock.unlock();
+      lock.readLock().unlock();
     }
   }
 
   @Override
   public int nextSetBit(int i) {
-    lock.lock();
+    lock.readLock().lock();
     try {
       int next = bitSet.nextSetBit(i);
       if (next == -1) {
@@ -158,7 +158,7 @@ public class ThreadSafeGrowableBitSet extends BitSet {
       }
       return next;
     } finally {
-      lock.unlock();
+      lock.readLock().unlock();
     }
   }
 
