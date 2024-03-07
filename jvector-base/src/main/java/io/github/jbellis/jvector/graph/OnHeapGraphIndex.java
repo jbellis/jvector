@@ -29,7 +29,7 @@ import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import io.github.jbellis.jvector.util.SynchronizedGrowableBitSet;
+import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
@@ -50,7 +50,7 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
     private final AtomicInteger entryPoint = new AtomicInteger(-1);
 
     private final DenseIntMap<ConcurrentNeighborSet> nodes;
-    private final BitSet deletedNodes = new SynchronizedGrowableBitSet(0);
+    private final BitSet deletedNodes = new ThreadSafeGrowableBitSet(0);
     private final AtomicInteger maxNodeId = new AtomicInteger(-1);
 
     // max neighbors/edges per node

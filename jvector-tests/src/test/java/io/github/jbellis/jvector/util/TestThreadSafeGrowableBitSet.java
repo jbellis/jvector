@@ -16,11 +16,11 @@
 
 package io.github.jbellis.jvector.util;
 
-public class TestSynchronizedGrowableBitSet extends BaseBitSetTestCase<SynchronizedGrowableBitSet> {
+public class TestThreadSafeGrowableBitSet extends BaseBitSetTestCase<ThreadSafeGrowableBitSet> {
 
   @Override
-  public SynchronizedGrowableBitSet copyOf(BitSet bs, int length) {
-    final SynchronizedGrowableBitSet set = new SynchronizedGrowableBitSet(length);
+  public ThreadSafeGrowableBitSet copyOf(BitSet bs, int length) {
+    final ThreadSafeGrowableBitSet set = new ThreadSafeGrowableBitSet(length);
     for (int doc = bs.nextSetBit(0);
         doc != DocIdSetIterator.NO_MORE_DOCS;
         doc = doc + 1 >= length ? DocIdSetIterator.NO_MORE_DOCS : bs.nextSetBit(doc + 1)) {

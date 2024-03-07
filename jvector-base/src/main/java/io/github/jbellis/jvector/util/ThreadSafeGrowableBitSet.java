@@ -27,16 +27,16 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @see GrowableBitSet
  */
-public class SynchronizedGrowableBitSet extends BitSet {
+public class ThreadSafeGrowableBitSet extends BitSet {
 
   private final java.util.BitSet bitSet;
   private final Lock lock = new ReentrantLock();
 
-  public SynchronizedGrowableBitSet(java.util.BitSet bitSet) {
+  public ThreadSafeGrowableBitSet(java.util.BitSet bitSet) {
     this.bitSet = bitSet;
   }
 
-  public SynchronizedGrowableBitSet(int initialBits) {
+  public ThreadSafeGrowableBitSet(int initialBits) {
     this.bitSet = new java.util.BitSet(initialBits);
   }
 

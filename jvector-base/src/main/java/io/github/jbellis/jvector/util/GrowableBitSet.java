@@ -22,7 +22,7 @@ package io.github.jbellis.jvector.util;
  * needed in the future. This is the important difference from FixedBitSet + FBS.ensureCapacity,
  * which grows the minimum necessary each time.
  * <p>
- * For thread-safe version see {@link SynchronizedGrowableBitSet}.
+ * For thread-safe version see {@link ThreadSafeGrowableBitSet}.
  */
 public class GrowableBitSet extends BitSet {
 
