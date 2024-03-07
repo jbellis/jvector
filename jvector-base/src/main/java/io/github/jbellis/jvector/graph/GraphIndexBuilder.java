@@ -56,8 +56,6 @@ import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
  * that spawning a new Thread per call is not advisable.  This includes virtual threads.
  */
 public class GraphIndexBuilder {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
     private final int beamWidth;
     private final ExplicitThreadLocal<NodeArray> naturalScratch;
     private final ExplicitThreadLocal<NodeArray> concurrentScratch;
@@ -113,9 +111,8 @@ public class GraphIndexBuilder {
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
      * ordinals, using the given hyperparameter settings, and returns the resulting graph.
      *
-     * @param vectorValues     the vectors whose relations are represented by the graph - must provide a
-     *                         different view over those vectors than the one used to add via addGraphNode.
-     * @param M                – the maximum number of connections a node can have
+     * @param scoreProvider    describes how to determine the similarities between vectors
+     * @param M                the maximum number of connections a node can have
      * @param beamWidth        the size of the beam search to use when finding nearest neighbors.
      * @param neighborOverflow the ratio of extra neighbors to allow temporarily when inserting a
      *                         node. larger values will build more efficiently, but use more memory.
@@ -333,11 +330,11 @@ public class GraphIndexBuilder {
             var concurrentScratchPooled = concurrentScratch.get();
             // find ANN of the new node by searching the graph
             int ep = graph.entry();
-            var scoreFunction = scoreProvider.scoreFunctionFor(node);
 
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
-            var result = gs.searchInternal(scoreProvider.searchProviderFor(vector), beamWidth, 0.0f, 0.0f, ep, bits);
+            var ssp = scoreProvider.searchProviderFor(vector);
+            var result = gs.searchInternal(ssp, beamWidth, 0.0f, 0.0f, ep, bits);
 
             // Update neighbors with these candidates.
             // The DiskANN paper calls for using the entire set of visited nodes along the search path as
@@ -347,7 +344,7 @@ public class GraphIndexBuilder {
             // farther away than the ones in the topK, would not change the result.)
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
             var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
-            var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, scoreFunction);
+            var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, scoreProvider.exactScoreFunctionFor(vector));
             updateNeighbors(newNodeNeighbors, natural, concurrent);
 
             maybeUpdateEntryPoint(node);
@@ -444,7 +441,7 @@ public class GraphIndexBuilder {
             affectedLiveNodes.add(node);
 
             // add random connections if we've dropped below minimum
-            var scoreFunction = scoreProvider.scoreFunctionFor(node);
+            var sf = scoreProvider.scoreFunctionFor(node);
             int minConnections = 1 + graph.maxDegree() / 2;
             if (neighbors.size() < minConnections) {
                 // create a NeighborArray of random connections
@@ -453,7 +450,7 @@ public class GraphIndexBuilder {
                 for (int i = 0; i < 2 * graph.maxDegree(); i++) {
                     int randomNode = liveNodes[R.nextInt(liveNodes.length)];
                     if (randomNode != node && !randomConnections.contains(randomNode)) {
-                        float score = scoreFunction.similarityTo(randomNode);
+                        float score = sf.similarityTo(randomNode);
                         randomConnections.insertSorted(randomNode, score);
                     }
                     if (randomConnections.size == randomConnections.node.length) {
@@ -608,7 +605,7 @@ public class GraphIndexBuilder {
         for (int i = 0; i < size; i++) {
             int node = in.readInt();
             int nNeighbors = in.readInt();
-            var sf = scoreProvider.scoreFunctionFor(node);
+            var sf = scoreProvider.exactScoreFunctionFor(node);
             var ca = new NodeArray(maxDegree);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();

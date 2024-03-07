@@ -96,7 +96,12 @@ public class Bench {
                     @Override
                     public ScoreFunction scoreFunctionFor(int node1) {
                         var v = floatVectors.vectorValue(node1);
-                        return cv.approximateScoreFunctionFor(v, ds.similarityFunction);
+                        return scoreFunctionFor(v);
+                    }
+
+                    @Override
+                    public ScoreFunction scoreFunctionFor(VectorFloat<?> vector) {
+                        return cv.approximateScoreFunctionFor(vector, ds.similarityFunction);
                     }
 
                     @Override
@@ -105,7 +110,8 @@ public class Bench {
                         return rerankerFor(v);
                     }
 
-                    private Reranker rerankerFor(VectorFloat<?> v) {
+                    @Override
+                    public Reranker rerankerFor(VectorFloat<?> v) {
                         return new Reranker() {
                             @Override
                             public void score(int[] nodes, VectorFloat<?> results) {

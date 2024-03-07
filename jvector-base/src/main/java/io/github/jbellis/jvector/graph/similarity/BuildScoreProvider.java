@@ -23,12 +23,21 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
-/** Encapsulates comparing node distances for GraphIndexBuilder. */
+/**
+ * Encapsulates comparing node distances for GraphIndexBuilder.
+ * <p>
+ * It is frustrating but unavoidable that the implementor must write everything twice:
+ * once when we know the node id to compare against, but not its vector, and once
+ * when we only know the vector--which may not correspond to an existing node.
+ * <p>
+ * TODO I *think* that LVQ means we can't just define the former in terms of the latter,
+ * because the stored LVQ vectors will be a different dimension from the originals.
+ */
 public interface BuildScoreProvider {
     VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     /**
-     * For when we're going to compare node1 with multiple other nodes.  This allows us to skip loading
+     * For when we're going to compare `node1` with multiple other nodes.  This allows us to skip loading
      * node1's vector (potentially from disk) redundantly for each comparison.
      * <p>
      * Used during searches -- the scoreFunction may be approximate!
@@ -36,9 +45,33 @@ public interface BuildScoreProvider {
     ScoreFunction scoreFunctionFor(int node1);
 
     /**
-     * @return a Reranker that computes exact scores for neighbor candidates.  *Must* be exact!
+     * For when we're going to compare `vector` with multiple other nodes
+     * <p>
+     * Used during searches -- the scoreFunction may be approximate!
+     */
+    ScoreFunction scoreFunctionFor(VectorFloat<?> vector);
+
+    default ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
+        return isExact()
+                ? (ScoreFunction.ExactScoreFunction) scoreFunctionFor(node1)
+                : rerankerFor(node1).scoreFunction();
+    }
+
+    default ScoreFunction.ExactScoreFunction exactScoreFunctionFor(VectorFloat<?> vector) {
+        return isExact()
+                ? (ScoreFunction.ExactScoreFunction) scoreFunctionFor(vector)
+                : rerankerFor(vector).scoreFunction();
+    }
+
+    /**
+     * @return a Reranker that computes exact scores for neighbor candidates.
      */
     Reranker rerankerFor(int node1);
+
+    /**
+     * @return a Reranker that computes exact scores for neighbor candidates.
+     */
+    Reranker rerankerFor(VectorFloat<?> vector);
 
     /**
      * @return true if the score functions returned by this provider are exact.
@@ -75,6 +108,9 @@ public interface BuildScoreProvider {
         return new SearchScoreProvider(scoreFunctionFor(node), null);
     }
 
+    /**
+     * Returns a BSP that performs exact score comparisons using the given RandomAccessVectorValues and VectorSimilarityFunction.
+     */
     static BuildScoreProvider randomAccessScoreProvider(RandomAccessVectorValues ravv, VectorSimilarityFunction similarityFunction) {
         // We need two sources of vectors in order to perform diversity check comparisons without
         // colliding.  Usually it's obvious because you can see the different sources being used
@@ -86,9 +122,18 @@ public interface BuildScoreProvider {
         return new BuildScoreProvider() {
             @Override
             public ScoreFunction scoreFunctionFor(int node1) {
+                return scoreFunctionFor(vectors.get().vectorValue(node1));
+            }
+
+            @Override
+            public ScoreFunction scoreFunctionFor(VectorFloat<?> vector) {
                 var vc = vectorsCopy.get();
-                VectorFloat<?> v1 = vectors.get().vectorValue(node1);
-                return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(v1, vc.vectorValue(node2));
+                return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(vector, vc.vectorValue(node2));
+            }
+
+            @Override
+            public Reranker rerankerFor(VectorFloat<?> vector) {
+                return null;
             }
 
             @Override

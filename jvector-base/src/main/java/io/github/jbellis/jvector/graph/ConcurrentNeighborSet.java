@@ -40,6 +40,9 @@ public class ConcurrentNeighborSet {
      * node's neighbors" is a hot loop in adding to the graph, and {@link NodeArray} can do that much
      * faster: no boxing/unboxing, all the data is stored sequentially instead of having to follow
      * references, and no fancy encoding necessary for node/score.
+     * <p>
+     * While GraphIndexBuilder may use approximate scoring to find candidate neighbors, we
+     * always rerank them using exact scoring before storing them in the neighbor set.
      */
     private final AtomicReference<Neighbors> neighborsRef;
 
@@ -188,7 +191,9 @@ public class ConcurrentNeighborSet {
             // pruning back extras is expensive.
             NodeArray merged;
             if (old.nodes.size > 0) {
-                if (!scoreProvider.isExact()) {
+                if (scoreProvider.isExact()) {
+                    merged = NodeArray.merge(old.nodes, toMerge);
+                } else {
                     // merge assumes that node X will always have the same score in both arrays, so we need
                     // to compute approximate scores for the existing nodes to make the comparison valid
                     var approximatedOld = new NodeArray(old.nodes.size);
@@ -197,8 +202,6 @@ public class ConcurrentNeighborSet {
                         approximatedOld.insertSorted(old.nodes.node[i], sf.similarityTo(old.nodes.node[i]));
                     }
                     merged = NodeArray.merge(approximatedOld, toMerge);
-                } else {
-                    merged = NodeArray.merge(old.nodes, toMerge);
                 }
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
