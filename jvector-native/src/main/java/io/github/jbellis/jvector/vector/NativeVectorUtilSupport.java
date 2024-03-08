@@ -90,8 +90,16 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
-        return VectorSimdOps.sub((OffHeapVectorFloat)lhs, (OffHeapVectorFloat)rhs);
+    public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
+        if (a.length() != b.length()) {
+            throw new IllegalArgumentException("Vectors must be the same length");
+        }
+        return sub(a, 0, b, 0, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        return VectorSimdOps.sub((OffHeapVectorFloat) a, aOffset, (OffHeapVectorFloat) b, bOffset, length);
     }
 
     @Override
@@ -128,7 +136,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+    public void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
         NativeSimdOps.square_distance_multi_f32_512(((OffHeapVectorFloat)v1).get(), ((OffHeapVectorFloat)v2).get(), v1.length(), results.length(), ((OffHeapVectorFloat)results).get());
     }
 }

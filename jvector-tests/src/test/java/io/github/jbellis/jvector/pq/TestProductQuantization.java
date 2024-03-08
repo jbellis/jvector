@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -25,16 +26,25 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
 import static io.github.jbellis.jvector.TestUtil.randomVector;
+import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.pq.ProductQuantization.DEFAULT_CLUSTERS;
 import static io.github.jbellis.jvector.pq.ProductQuantization.getSubvectorSizesAndOffsets;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestProductQuantization extends RandomizedTest {
@@ -45,7 +55,7 @@ public class TestProductQuantization extends RandomizedTest {
         var R = getRandom();
 
         // exactly the same number of random vectors as clusters
-        List<VectorFloat<?>> v1 = IntStream.range(0, ProductQuantization.DEFAULT_CLUSTERS).mapToObj(
+        List<VectorFloat<?>> v1 = IntStream.range(0, DEFAULT_CLUSTERS).mapToObj(
                         i -> vectorTypeSupport.createFloatVector(new float[] {R.nextInt(100000), R.nextInt(100000), R.nextInt(100000)}))
                 .collect(Collectors.toList());
         assertPerfectQuantization(v1);
@@ -58,7 +68,7 @@ public class TestProductQuantization extends RandomizedTest {
 
     private static void assertPerfectQuantization(List<VectorFloat<?>> vectors) {
         var ravv = new ListRandomAccessVectorValues(vectors, 3);
-        var pq = ProductQuantization.compute(ravv, 2, false);
+        var pq = ProductQuantization.compute(ravv, 2, DEFAULT_CLUSTERS, false);
         var encoded = pq.encodeAll(vectors);
         var decodedScratch = vectorTypeSupport.createFloatVector(3);
         for (int i = 0; i < vectors.size(); i++) {
@@ -72,20 +82,21 @@ public class TestProductQuantization extends RandomizedTest {
     public void testIterativeImprovement() {
         for (int i = 0; i < 10; i++) {
             testIterativeImprovementOnce();
+            testConvergenceAnisotropic();
         }
     }
 
     public void testIterativeImprovementOnce() {
         var R = getRandom();
-        VectorFloat<?>[] vectors = generate(ProductQuantization.DEFAULT_CLUSTERS + R.nextInt(10*ProductQuantization.DEFAULT_CLUSTERS),
-                                     2 + R.nextInt(10),
-                                     1_000 + R.nextInt(10_000));
+        VectorFloat<?>[] vectors = generate(DEFAULT_CLUSTERS + R.nextInt(10* DEFAULT_CLUSTERS),
+                                            2 + R.nextInt(10),
+                                            1_000 + R.nextInt(10_000));
 
-        var clusterer = new KMeansPlusPlusClusterer(vectors, ProductQuantization.DEFAULT_CLUSTERS);
-        var initialLoss = loss(clusterer, vectors);
+        var clusterer = new KMeansPlusPlusClusterer(vectors, DEFAULT_CLUSTERS);
+        var initialLoss = loss(clusterer, vectors, Float.MIN_VALUE);
 
-        assert clusterer.clusterOnce() > 0;
-        var improvedLoss = loss(clusterer, vectors);
+        assert clusterer.clusterOnceUnweighted() > 0;
+        var improvedLoss = loss(clusterer, vectors, Float.MIN_VALUE);
 
         assertTrue("improvedLoss=" + improvedLoss + " initialLoss=" + initialLoss, improvedLoss < initialLoss);
     }
@@ -93,14 +104,14 @@ public class TestProductQuantization extends RandomizedTest {
     @Test
     public void testRefine() {
         var R = getRandom();
-        VectorFloat<?>[] vectors = generate(ProductQuantization.DEFAULT_CLUSTERS + R.nextInt(10*ProductQuantization.DEFAULT_CLUSTERS),
-                                     2 + R.nextInt(10),
-                                     1_000 + R.nextInt(10_000));
+        VectorFloat<?>[] vectors = generate(DEFAULT_CLUSTERS + R.nextInt(10* DEFAULT_CLUSTERS),
+                                            2 + R.nextInt(10),
+                                            1_000 + R.nextInt(10_000));
 
         // generate PQ codebooks from half of the dataset
         var half1 = Arrays.copyOf(vectors, vectors.length / 2);
         var ravv1 = new ListRandomAccessVectorValues(List.of(half1), vectors[0].length());
-        var pq1 = ProductQuantization.compute(ravv1, 1, false);
+        var pq1 = ProductQuantization.compute(ravv1, 1, DEFAULT_CLUSTERS, false);
 
         // refine the codebooks with the other half (so, drawn from the same distribution)
         int remaining = vectors.length - vectors.length / 2;
@@ -110,25 +121,57 @@ public class TestProductQuantization extends RandomizedTest {
         var pq2 = pq1.refine(ravv2);
 
         // the refined version should work better
-        var clusterer1 = new KMeansPlusPlusClusterer(half2, pq1.codebooks[0]);
-        var clusterer2 = new KMeansPlusPlusClusterer(half2, pq2.codebooks[0]);
-        var loss1 = loss(clusterer1, half2);
-        var loss2 = loss(clusterer2, half2);
+        var clusterer1 = new KMeansPlusPlusClusterer(half2, pq1.codebooks[0], UNWEIGHTED);
+        var clusterer2 = new KMeansPlusPlusClusterer(half2, pq2.codebooks[0], UNWEIGHTED);
+        var loss1 = loss(clusterer1, half2, UNWEIGHTED);
+        var loss2 = loss(clusterer2, half2, UNWEIGHTED);
         assertTrue("loss1=" + loss1 + " loss2=" + loss2, loss2 < loss1);
     }
 
+    public void testConvergenceAnisotropic() {
+        var R = getRandom();
+        var vectors = generate(DEFAULT_CLUSTERS + R.nextInt(10 * DEFAULT_CLUSTERS),
+                               2 + R.nextInt(10),
+                               1_000 + R.nextInt(10_000));
 
-    private static double loss(KMeansPlusPlusClusterer clusterer, VectorFloat<?>[] vectors) {
-        var pq = new ProductQuantization(new VectorFloat<?>[] { clusterer.getCentroids() }, ProductQuantization.DEFAULT_CLUSTERS,
-                getSubvectorSizesAndOffsets(vectors[0].length(), 1),
-                null);
+        float T = 0.2f;
+        var clusterer = new KMeansPlusPlusClusterer(vectors, DEFAULT_CLUSTERS, T);
+        var initialLoss = loss(clusterer, vectors, T);
+
+        int iterations = 0;
+        double improvedLoss = Double.MAX_VALUE;
+        while (true) {
+            int n = clusterer.clusterOnceAnisotropic();
+            if (n <= 0.01 * vectors.length) {
+                break;
+            }
+            improvedLoss = loss(clusterer, vectors, T);
+            iterations++;
+            // System.out.println("improvedLoss=" + improvedLoss + " n=" + n);
+        }
+        // System.out.println("iterations=" + iterations);
+
+        assertTrue(improvedLoss < initialLoss, "improvedLoss=" + improvedLoss + " initialLoss=" + initialLoss);
+    }
+
+    /**
+     * only include vectors whose dot product is greater than or equal to T
+     */
+    private static double loss(KMeansPlusPlusClusterer clusterer, VectorFloat<?>[] vectors, float T) {
+        var pq = new ProductQuantization(new VectorFloat<?>[] {clusterer.getCentroids()},
+                                         DEFAULT_CLUSTERS,
+                                         getSubvectorSizesAndOffsets(vectors[0].length(), 1),
+                                         null,
+                                         UNWEIGHTED);
 
         var encoded = pq.encodeAll(List.of(vectors));
         var loss = 0.0;
         var decodedScratch = vectorTypeSupport.createFloatVector(vectors[0].length());
         for (int i = 0; i < vectors.length; i++) {
             pq.decode(encoded[i], decodedScratch);
-            loss += 1 - VectorSimilarityFunction.EUCLIDEAN.compare(vectors[i], decodedScratch);
+            if (VectorUtil.dotProduct(vectors[i], decodedScratch) >= T) {
+                loss += 1 - VectorSimilarityFunction.EUCLIDEAN.compare(vectors[i], decodedScratch);
+            }
         }
         return loss;
     }
@@ -149,5 +192,38 @@ public class TestProductQuantization extends RandomizedTest {
             VectorUtil.addInPlace(v, cluster);
             return v;
         }).toArray(VectorFloat<?>[]::new);
+    }
+
+    @Test
+    public void testSaveLoad() throws Exception {
+        // Generate a PQ for random 2D vectors
+        var vectors = createRandomVectors(512, 2);
+        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, 256, false, 0.2f);
+
+        // Write
+        var file = File.createTempFile("pqtest", ".pq");
+        try (var out = new DataOutputStream(new FileOutputStream(file))) {
+            pq.write(out);
+        }
+        // Read
+        try (var in = new SimpleMappedReader(file.getAbsolutePath())) {
+            var pq2 = ProductQuantization.load(in);
+            Assertions.assertEquals(pq, pq2);
+        }
+    }
+
+    @Test
+    public void testLoadVersion0() throws Exception {
+        var file = new File("resources/version0.pq");
+        try (var in = new SimpleMappedReader(file.getAbsolutePath())) {
+            var pq = ProductQuantization.load(in);
+            assertEquals(2, pq.originalDimension);
+            assertNull(pq.globalCentroid);
+            assertEquals(1, pq.M);
+            assertEquals(1, pq.codebooks.length);
+            assertEquals(256, pq.getClusterCount());
+            assertEquals(pq.subvectorSizesAndOffsets[0][0] * pq.getClusterCount(), pq.codebooks[0].length());
+            assertEquals(UNWEIGHTED, pq.anisotropicThreshold, 1E-6); // v0 only supported (implicitly) unweighted
+        }
     }
 }

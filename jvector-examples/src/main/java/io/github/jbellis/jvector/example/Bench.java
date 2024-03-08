@@ -259,8 +259,10 @@ public class Bench {
         List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 16,
-                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+                ds -> ProductQuantization.compute(ds.getBaseRavv(),
+                                                  ds.getDimension() / 16,
+                                                  256,
+                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything
@@ -310,7 +312,7 @@ public class Bench {
         // 2D grid, built and calculated at runtime
         if (pattern.matcher("2dgrid").find()) {
             compressionGrid = Arrays.asList(null,
-                                            ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), true));
+                                            ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), 256, true));
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
             gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();

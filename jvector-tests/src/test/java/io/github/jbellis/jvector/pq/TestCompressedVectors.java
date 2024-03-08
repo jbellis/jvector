@@ -40,7 +40,7 @@ public class TestCompressedVectors extends RandomizedTest {
     public void testSaveLoadPQ() throws Exception {
         // Generate a PQ for random 2D vectors
         var vectors = createRandomVectors(512, 2);
-        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, false);
+        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, 256, false);
 
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
@@ -87,7 +87,7 @@ public class TestCompressedVectors extends RandomizedTest {
     private void testEncodings(int dimension, int codebooks) {
         // Generate a PQ for random 2D vectors
         var vectors = createRandomVectors(512, dimension);
-        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, dimension), codebooks, false);
+        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, dimension), codebooks, 256, false);
 
         // Compress the vectors
         var compressed = pq.encodeAll(vectors);
