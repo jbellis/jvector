@@ -111,9 +111,7 @@ public class GraphSearcher {
 
 
     /**
-     * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
-     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
@@ -141,9 +139,7 @@ public class GraphSearcher {
     }
 
     /**
-     * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
-     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
@@ -165,9 +161,7 @@ public class GraphSearcher {
 
 
     /**
-     * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
-     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
      * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
@@ -320,7 +314,9 @@ public class GraphSearcher {
                 }
                 numVisited++;
 
-                float friendSimilarity = scoreFunction.supportsBulkSimilarity() ? similarities.get(i) : scoreFunction.similarityTo(friendOrd);
+                float friendSimilarity = scoreFunction.supportsBulkSimilarity()
+                        ? similarities.get(i)
+                        : scoreFunction.similarityTo(friendOrd);
                 scoreTracker.track(friendSimilarity);
                 candidates.push(friendOrd, friendSimilarity);
             }
