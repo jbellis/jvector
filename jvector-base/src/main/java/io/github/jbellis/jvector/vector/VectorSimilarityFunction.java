@@ -37,7 +37,7 @@ public enum VectorSimilarityFunction {
   EUCLIDEAN {
     @Override
     public float compare(VectorFloat<?> v1, VectorFloat<?> v2) {
-      return 1 / (1 + VectorUtil.squareDistance(v1, v2));
+      return 1 / (1 + VectorUtil.squareL2Distance(v1, v2));
     }
 
     @Override

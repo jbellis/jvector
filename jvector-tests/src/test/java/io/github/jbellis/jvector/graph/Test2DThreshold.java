@@ -67,7 +67,7 @@ public class Test2DThreshold extends LuceneTestCase {
         // test compressed
         Path outputPath = Files.createTempFile("graph", ".jvector");
         TestUtil.writeGraph(onHeapGraph, ravv, outputPath);
-        var pq = ProductQuantization.compute(ravv, ravv.dimension(), false);
+        var pq = ProductQuantization.compute(ravv, ravv.dimension(), 256, false);
         var cv = new PQVectors(pq, pq.encodeAll(List.of(vectors)));
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());

@@ -67,8 +67,11 @@ public interface VectorUtilSupport {
   /** Subtracts v2 from v1, in place (v1 will be modified) */
   void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
-  /** @return lhs - rhs, element-wise */
-  VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs);
+  /** @return a - b, element-wise */
+  VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);
+
+  /** @return a - b, element-wise, starting at aOffset and bOffset respectively */
+  VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length);
 
   /**
    * Calculates the sum of sparse points in a vector.
@@ -109,7 +112,7 @@ public interface VectorUtilSupport {
     }
   }
 
-  default void squareDistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
+  default void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
     for (int i = 0; i < results.length(); i++) {
       results.set(i, 1 / (1 + squareDistance(v1, 0, v2, i * v1.length(), v1.length())));
     }

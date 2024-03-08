@@ -81,7 +81,7 @@ public final class VectorUtil {
    *
    * @throws IllegalArgumentException if the vectors' dimensions differ.
    */
-  public static float squareDistance(VectorFloat<?> a, VectorFloat<?> b) {
+  public static float squareL2Distance(VectorFloat<?> a, VectorFloat<?> b) {
     if (a.length() != b.length()) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length() + "!=" + b.length());
     }
@@ -93,7 +93,7 @@ public final class VectorUtil {
   /**
    * Returns the sum of squared differences of the two vectors, or subvectors, of the given length.
    */
-  public static float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
+  public static float squareL2Distance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
     float r = impl.squareDistance(a, aoffset, b, boffset, length);
     assert Float.isFinite(r);
     return r;
@@ -141,6 +141,11 @@ public final class VectorUtil {
   public static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
     return impl.sub(lhs, rhs);
   }
+
+  public static VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+    return impl.sub(a, aOffset, b, bOffset, length);
+  }
+
   public static float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> dataOffsets) {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }
@@ -176,7 +181,7 @@ public final class VectorUtil {
    * @param results the output vector to store the similarity scores. This should be pre-allocated to the same size as the number of vectors in v2.
    */
   public static void euclideanMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-    impl.squareDistanceMultiScore(v1, v2, results);
+    impl.squareL2DistanceMultiScore(v1, v2, results);
   }
 
   /**

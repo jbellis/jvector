@@ -38,8 +38,6 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -61,7 +59,6 @@ import java.util.stream.IntStream;
  * Tests GraphIndexes against vectors from various datasets
  */
 public class Bench {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private static void testRecall(int M,
                                    int efConstruction,
                                    List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
@@ -224,8 +221,10 @@ public class Bench {
                 null, // uncompressed
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4,
-                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+                // ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, 256, false, 0.99f),
+                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
+                                                  256,
+                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything
@@ -234,23 +233,20 @@ public class Bench {
         var pattern = Pattern.compile(regex);
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
-        var nwFiles = List.of(
+        var coreFiles = List.of(
 //                "colbert-10M", // WIP
-                "openai-v3-large-3072-100k",
-                "openai-v3-large-1536-100k",
+                "ada002-100k",
                 "openai-v3-small-100k",
                 "e5-small-v2-100k",
+                "gecko-100k");
+        executeNw(coreFiles, pattern, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+
+        var extraFiles = List.of(
+                "openai-v3-large-3072-100k",
+                "openai-v3-large-1536-100k",
                 "e5-base-v2-100k",
-                "e5-large-v2-100k",
-                "gecko-100k",
-                "ada002-100k");
-        for (var nwDatasetName : nwFiles) {
-            if (pattern.matcher(nwDatasetName).find()) {
-                var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
-                gridSearch(mfd.load(), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
-                cachedCompressors.clear();
-            }
-        }
+                "e5-large-v2-100k");
+        executeNw(extraFiles, pattern, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
 
         // smaller vectors from ann-benchmarks
         var hdf5Files = List.of(
@@ -275,10 +271,20 @@ public class Bench {
         // 2D grid, built and calculated at runtime
         if (pattern.matcher("2dgrid").find()) {
             compressionGrid = Arrays.asList(null,
-                                            ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), true));
+                                            ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), 256, true));
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
             gridSearch(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
             cachedCompressors.clear();
+        }
+    }
+
+    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, VectorCompressor<?>>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
+        for (var nwDatasetName : coreFiles) {
+            if (pattern.matcher(nwDatasetName).find()) {
+                var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
+                gridSearch(mfd.load(), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+                cachedCompressors.clear();
+            }
         }
     }
 
