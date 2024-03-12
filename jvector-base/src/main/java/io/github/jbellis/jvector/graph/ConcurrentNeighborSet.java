@@ -400,11 +400,6 @@ public class ConcurrentNeighborSet {
             if (scoreProvider.similarityTo(otherNode) > score * alpha) {
                 return false;
             }
-
-            // nextSetBit will error out if we're at the end of the bitset, so check this manually
-            if (i + 1 >= selected.length()) {
-                break;
-            }
         }
         return true;
     }
