@@ -37,17 +37,23 @@ import java.util.List;
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class Test2DThreshold extends LuceneTestCase {
     @Test
-    public void testThreshold() throws IOException {
+    public void testThreshold10k() throws IOException {
+        testThreshold(10_000, 8);
+    }
+
+    @Test
+    public void testThreshold20k() throws IOException {
+        testThreshold(20_000, 16);
+    }
+
+    public void testThreshold(int graphSize, int maxDegree) throws IOException {
         var R = getRandom();
         // generate 2D vectors
-        float[][] vectors = new float[10000][2];
-        for (int i = 0; i < vectors.length; i++) {
-            vectors[i][0] = R.nextFloat();
-            vectors[i][1] = R.nextFloat();
-        }
+        var vectors = TestFloatVectorGraph.createRandomFloatVectors(graphSize, 2, R);
 
+        // build index
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
-        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.EUCLIDEAN, 6, 32, 1.2f, 1.4f);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.EUCLIDEAN, maxDegree, 2 * maxDegree, 1.2f, 1.4f);
         var onHeapGraph = builder.build();
 
         // test raw vectors
@@ -57,7 +63,7 @@ public class Test2DThreshold extends LuceneTestCase {
 
             NodeSimilarity.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
             var result = searcher.search(sf, null, vectors.length, tp.th, Bits.ALL);
-
+            // System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
         }
@@ -78,30 +84,33 @@ public class Test2DThreshold extends LuceneTestCase {
                 var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
                 var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
 
+                // System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
                 assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
+                assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
             }
         }
-
     }
 
-    // it's not an interesting test if all the vectors are within the threshold
+    /**
+     * Create "interesting" test parameters -- shouldn't match too many (we want to validate
+     * that threshold code doesn't just crawl the entire graph) or too few (we might not find them)
+     */
     private TestParams createTestParams(float[][] vectors) {
         var R = getRandom();
 
-        long exactCount;
-        float[] q;
-        float th;
-        do {
-            q = new float[]{R.nextFloat(), R.nextFloat()};
-            th = (float) (0.2 + 0.8 * R.nextDouble());
-            float[] finalQ = q;
-            float finalTh = th;
-            exactCount = Arrays.stream(vectors).filter(v -> VectorSimilarityFunction.EUCLIDEAN.compare(finalQ, v) >= finalTh).count();
-        } while (!(exactCount < vectors.length * 0.8));
+        // Generate a random query vector and threshold
+        var q = TestUtil.randomVector(R, 2);
+        float th = (float) (0.3 + 0.45 * R.nextDouble());
+
+        // Count the number of vectors that have a similarity score greater than or equal to the threshold
+        long exactCount = Arrays.stream(vectors).filter(v -> VectorSimilarityFunction.EUCLIDEAN.compare(q, v) >= th).count();
 
         return new TestParams(exactCount, q, th);
     }
 
+    /**
+     * Encapsulates a search vector q and a threshold th with the exact number of matches in the graph
+     */
     private static class TestParams {
         public final long exactCount;
         public final float[] q;

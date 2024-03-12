@@ -266,10 +266,10 @@ public class GraphSearcher<T> {
 
         int numVisited = 0;
         // A bound that holds the minimum similarity to the query vector that a candidate vector must
-        // have to be considered.
+        // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
         var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
-        var scoreTracker = threshold > 0 ? new ScoreTracker.NormalDistributionTracker(threshold) : ScoreTracker.NO_OP;
-
+        // track scores to predict when we are done with threshold queries
+        var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : ScoreTracker.NO_OP;
         // add evicted results from the last call back to the candidates
         var previouslyEvicted = evictedResults.size() > 0 ? new GrowableBitSet(view.size()) : Bits.NONE;
         while (evictedResults.size() > 0) {
@@ -281,14 +281,13 @@ public class GraphSearcher<T> {
         evictedResults.clear();
 
         while (candidates.size() > 0) {
-            // done when best candidate is worse than the worst result so far
+            // we're done when we have K results and the best candidate is worse than the worst result so far
             float topCandidateScore = candidates.topScore();
             if (topCandidateScore < minAcceptedSimilarity) {
                 break;
             }
-
-            // periodically check whether we're likely to find a node above the threshold in the future
-            if (scoreTracker.shouldStop(numVisited)) {
+            // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
+            if (scoreTracker.shouldStop()) {
                 break;
             }
 
@@ -322,9 +321,10 @@ public class GraphSearcher<T> {
                 continue;
             }
 
-            // add its neighbors to the candidates queue
-            for (var it = view.getNeighborsIterator(topCandidateNode); it.hasNext(); ) {
-                int friendOrd = it.nextInt();
+            // score the neighbors of the top candidate and add them to the queue
+            var it = view.getNeighborsIterator(topCandidateNode);
+            for (int i = 0; i < it.size(); i++) {
+                var friendOrd = it.nextInt();
                 if (visited.getAndSet(friendOrd)) {
                     continue;
                 }
