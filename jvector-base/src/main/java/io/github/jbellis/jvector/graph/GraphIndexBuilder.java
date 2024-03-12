@@ -270,7 +270,7 @@ public class GraphIndexBuilder {
                     searchPathNeighbors.put(node, neighbors);
                 }
                 connectToClosestNeighbor(node, neighbors, connectionTargets);
-            }));
+            })).join();
             if (nReconnected.get() == 0) {
                 break;
             }
