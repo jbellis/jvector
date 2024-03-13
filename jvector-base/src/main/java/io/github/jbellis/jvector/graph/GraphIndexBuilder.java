@@ -588,11 +588,10 @@ public class GraphIndexBuilder {
     {
         scratch.clear();
         for (var n : inProgress) {
-            if (n != newNode) {
-                scratch.insertSorted(
-                        n,
-                        similarityFunction.compare(values.vectorValue(newNode), valuesCopy.vectorValue(n)));
+            if (n == newNode) {
+                continue;
             }
+            scratch.insertSorted(n, similarityFunction.compare(values.vectorValue(newNode), valuesCopy.vectorValue(n)));
         }
         return scratch;
     }
