@@ -472,9 +472,4 @@ public class SparseFixedBitSet extends BitSet {
   public long ramBytesUsed() {
     return ramBytesUsed;
   }
-
-  @Override
-  public String toString() {
-    return "SparseFixedBitSet(size=" + length + ",cardinality=~" + approximateCardinality();
-  }
 }
