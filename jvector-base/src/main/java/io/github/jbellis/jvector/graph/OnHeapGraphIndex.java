@@ -25,7 +25,6 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.util.Accountable;
-import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
@@ -33,7 +32,10 @@ import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.stream.IntStream;
 
@@ -45,13 +47,14 @@ import java.util.stream.IntStream;
  * and `nextNeighbor` operations.
  */
 public class OnHeapGraphIndex implements GraphIndex, Accountable {
+    static final int NO_ENTRY_POINT = -1;
 
-    // the current graph entry node, -1 if not set
-    private final AtomicInteger entryPoint = new AtomicInteger(-1);
+    // the current graph entry node, NO_ENTRY_POINT if not set
+    private final AtomicInteger entryPoint = new AtomicInteger(NO_ENTRY_POINT);
 
     private final DenseIntMap<ConcurrentNeighborSet> nodes;
-    private final BitSet deletedNodes = new ThreadSafeGrowableBitSet(0);
-    private final AtomicInteger maxNodeId = new AtomicInteger(-1);
+    private final ThreadSafeGrowableBitSet deletedNodes = new ThreadSafeGrowableBitSet(0);
+    private final AtomicInteger maxNodeId = new AtomicInteger(NO_ENTRY_POINT);
 
     // max neighbors/edges per node
     final int maxDegree;
@@ -94,8 +97,7 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
      */
     public ConcurrentNeighborSet addNode(int node) {
         var newNeighborSet = neighborFactory.apply(node, maxDegree());
-        nodes.put(node, newNeighborSet);
-        maxNodeId.accumulateAndGet(node, Math::max);
+        addNode(node, newNeighborSet);
         return newNeighborSet;
     }
 
@@ -103,6 +105,7 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
      * Only for use by Builder loading a saved graph
      */
     void addNode(int node, ConcurrentNeighborSet neighbors) {
+        assert neighbors != null;
         nodes.put(node, neighbors);
         maxNodeId.accumulateAndGet(node, Math::max);
     }
@@ -192,7 +195,7 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
      * <p>Multiple Views may be searched concurrently.
      */
     @Override
-    public GraphIndex.View getView() {
+    public ConcurrentGraphIndexView getView() {
         return new ConcurrentGraphIndexView();
     }
 
@@ -206,25 +209,24 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
         }
     }
 
-    public BitSet getDeletedNodes() {
+    public ThreadSafeGrowableBitSet getDeletedNodes() {
         return deletedNodes;
     }
 
     /**
-     * @return true iff the node was present
+     * @return true iff the node was present.
      */
     boolean removeNode(int node) {
-        return nodes.remove(node) != null;
+        try {
+            return nodes.remove(node) != null;
+        } finally {
+            deletedNodes.clear(node);
+        }
     }
 
     @Override
     public int getIdUpperBound() {
         return maxNodeId.get() + 1;
-    }
-
-    int[] rawNodes() {
-        // it's okay if this is a bit inefficient
-        return nodes.keySet().stream().mapToInt(i -> i).toArray();
     }
 
     public boolean containsNode(int nodeId) {
@@ -247,7 +249,28 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
                 .orElse(Double.NaN);
     }
 
-    private class ConcurrentGraphIndexView implements GraphIndex.View {
+    // These allow GraphIndexBuilder to tell when it is safe to remove nodes from the graph.
+    AtomicLong viewStamp = new AtomicLong(0);
+    Set<Long> activeViews = ConcurrentHashMap.newKeySet();
+    @SuppressWarnings("BusyWait")
+    public void waitForViewsBefore(long stamp) {
+        while (activeViews.stream().anyMatch(v -> v < stamp)) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    class ConcurrentGraphIndexView implements GraphIndex.View {
+        final long stamp;
+
+        public ConcurrentGraphIndexView() {
+            stamp = viewStamp.incrementAndGet();
+            activeViews.add(stamp);
+        }
+
         @Override
         public VectorFloat<?> getVector(int node) {
             throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
@@ -259,7 +282,9 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
         }
 
         public NodesIterator getNeighborsIterator(int node) {
-            return getNeighbors(node).iterator();
+            var neighbors = getNeighbors(node);
+            assert neighbors != null : "Node " + node + " not found @" + stamp;
+            return neighbors.iterator();
         }
 
         @Override
@@ -291,7 +316,7 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
 
         @Override
         public void close() {
-            // no-op
+            activeViews.remove(stamp);
         }
     }
 

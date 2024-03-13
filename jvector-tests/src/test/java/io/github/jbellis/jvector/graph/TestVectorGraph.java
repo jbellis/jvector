@@ -43,7 +43,9 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.Assert.*;
@@ -544,12 +546,16 @@ public class TestVectorGraph extends LuceneTestCase {
         });
     }
 
-    public static VectorFloat<?>[] createRandomFloatVectors(int size, int dimension, Random random) {
-        VectorFloat<?>[] vectors = new VectorFloat<?>[size];
-        for (int offset = 0; offset < size; offset++) {
-            vectors[offset] = TestUtil.randomVector(random, dimension);
-        }
-        return vectors;
+    public static VectorFloat<?>[] createRandomFloatVectors(int size, int dimension, Random R) {
+        return IntStream.range(0, size).mapToObj(i -> {
+            return TestUtil.randomVector(R, dimension);
+        }).toArray(sz -> new VectorFloat<?>[sz]);
+    }
+
+    public static VectorFloat<?>[] createRandomFloatVectorsParallel(int size, int dimension) {
+        return IntStream.range(0, size).parallel().mapToObj(i -> {
+            return TestUtil.randomVector(ThreadLocalRandom.current(), dimension);
+        }).toArray(sz -> new VectorFloat<?>[sz]);
     }
 
     /**

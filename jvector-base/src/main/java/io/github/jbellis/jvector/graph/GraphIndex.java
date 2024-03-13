@@ -52,7 +52,14 @@ public interface GraphIndex extends AutoCloseable {
     NodesIterator getNodes();
 
     /**
-     * Return a View with which to navigate the graph.  Views are not threadsafe.
+     * Return a View with which to navigate the graph.  Views are not threadsafe -- that is,
+     * only one search at a time should be run per View.
+     * <p>
+     * Additionally, the View represents a point of consistency in the graph, and in-use
+     * Views prevent the removal of marked-deleted nodes from graphs that are being
+     * concurrently modified.  Thus, it is good (and encouraged) to re-use Views for
+     * on-disk, read-only graphs, but for in-memory graphs, it is better to create a new
+     * View per search.
      */
     View getView();
 
