@@ -44,7 +44,7 @@ import static java.lang.Math.min;
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
  * search algorithm, see {@link GraphIndex}.
  */
-public class GraphSearcher {
+public class GraphSearcher implements AutoCloseable {
 
     private final GraphIndex.View view;
 
@@ -373,4 +373,8 @@ public class GraphSearcher {
         return nodes;
     }
 
+    @Override
+    public void close() throws Exception {
+        view.close();
+    }
 }

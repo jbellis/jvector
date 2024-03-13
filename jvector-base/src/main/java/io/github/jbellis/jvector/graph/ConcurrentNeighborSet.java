@@ -22,7 +22,6 @@ import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import org.agrona.collections.IntHashSet;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 
@@ -92,6 +91,7 @@ public class ConcurrentNeighborSet {
             int nbr = neighbors.node[i];
             float nbrScore = neighbors.score[i];
             ConcurrentNeighborSet nbrNbr = neighborhoodOf.apply(nbr);
+            assert nbrNbr != null : "Node " + nbr + " not found";
             nbrNbr.insert(nodeId, nbrScore, overflow);
         }
     }
@@ -108,38 +108,22 @@ public class ConcurrentNeighborSet {
         });
     }
 
-    /**
-     * @return true if we had deleted neighbors
-     */
-    public boolean removeDeletedNeighbors(Bits deletedNodes) {
-        AtomicBoolean found = new AtomicBoolean();
+    public void replaceDeletedNeighbors(Bits deletedNodes, NodeArray candidates) {
         neighborsRef.getAndUpdate(old -> {
-            var nodes = old.nodes;
-            int nextDiverseBefore = old.diverseBefore;
-            // build a set of the entries we want to retain
-            var toRetain = new FixedBitSet(nodes.size);
-            for (int i = 0; i < nodes.size; i++) {
-                if (deletedNodes.get(nodes.node[i])) {
-                    found.set(true);
-                    if (i < nextDiverseBefore) {
-                        nextDiverseBefore--;
-                    }
-                } else {
-                    toRetain.set(i);
+            // copy the non-deleted neighbors to a new NodeArray
+            var liveNeighbors = new NodeArray(old.nodes.size);
+            for (int i = 0; i < old.nodes.size(); i++) {
+                int node = old.nodes.node[i];
+                if (!deletedNodes.get(node)) {
+                    liveNeighbors.addInOrder(node, old.nodes.score[i]);
                 }
             }
 
-            // if we're retaining everything, no need to make a copy
-            if (!found.get()) {
-                return old;
-            }
-
-            // copy and purge the deleted ones
-            var nextNodes = nodes.copy();
-            nextNodes.retain(toRetain);
-            return new Neighbors(nextNodes, nextDiverseBefore);
+            // merge the live neighbors with the candidates and prune down to diverse edges
+            var merged = mergeNeighbors(liveNeighbors, candidates);
+            var newNeighbors = copyDiverse(merged, selectDiverse(merged, 0));
+            return new Neighbors(newNeighbors, newNeighbors.size);
         });
-        return found.get();
     }
 
     private static class NeighborIterator extends NodesIterator {
@@ -199,13 +183,6 @@ public class ConcurrentNeighborSet {
             merged.retain(selected);
             return new Neighbors(merged, merged.size);
         });
-    }
-
-    void padWith(NodeArray connections) {
-        // we deliberately do not perform diversity checks here
-        // (it will be invoked when the cleanup code calls insertDiverse later
-        // with the results of the nn descent rebuild)
-        neighborsRef.getAndUpdate(old -> new Neighbors(mergeNeighbors(old.nodes, connections), 0));
     }
 
     void insertNotDiverse(int node, float score) {
