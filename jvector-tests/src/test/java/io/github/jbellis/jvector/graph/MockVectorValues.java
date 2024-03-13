@@ -47,9 +47,7 @@ public class MockVectorValues implements RandomAccessVectorValues {
 
     @Override
     public MockVectorValues copy() {
-        return new MockVectorValues(dimension,
-                                    ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length)
-        );
+        return new MockVectorValues(dimension, ArrayUtil.copyOfSubArray(denseValues, 0, denseValues.length));
     }
 
     @Override
@@ -62,9 +60,7 @@ public class MockVectorValues implements RandomAccessVectorValues {
         VectorFloat<?> original = denseValues[targetOrd];
         // present a single vector reference to callers like the disk-backed RAVV implmentations,
         // to catch cases where they are not making a copy
-           for (int i = 0; i < dimension; i++) {
-                scratch.set(i, original.get(i));
-            }
+        scratch.copyFrom(original, 0, 0, dimension);
         return scratch;
     }
 

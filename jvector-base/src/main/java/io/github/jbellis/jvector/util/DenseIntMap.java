@@ -58,11 +58,9 @@ public class DenseIntMap<T> {
         }
 
         ensureCapacity(key);
-        long stamp;
-        boolean isInsert = false;
         rwl.readLock().lock();
         try {
-            isInsert = objects.getAndSet(key, value) == null || isInsert;
+            var isInsert = objects.getAndSet(key, value) == null;
             if (isInsert) {
                 size.incrementAndGet();
             }
