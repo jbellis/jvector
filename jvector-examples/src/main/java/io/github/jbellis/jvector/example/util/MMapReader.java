@@ -77,7 +77,7 @@ public class MMapReader implements RandomAccessReader {
 
     @Override
     public void read(int[] ints, int offset, int count) {
-        int bytesToRead = (count - offset) * Integer.BYTES;
+        int bytesToRead = count * Integer.BYTES;
         if (scratch.length < bytesToRead) {
             scratch = new byte[bytesToRead];
         }

@@ -240,6 +240,11 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
         readerSupplier.close();
     }
 
+    @Override
+    public String toString() {
+        return String.format("OnDiskADCGraphIndex(size=%d, entryPoint=%d)", size, entryNode);
+    }
+
     /**
      * @param graph the graph to write
      * @param vectors the vectors associated with each node

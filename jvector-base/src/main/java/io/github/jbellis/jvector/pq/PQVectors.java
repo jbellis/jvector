@@ -154,4 +154,12 @@ public class PQVectors implements CompressedVectors {
         long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors[0]);
         return codebooksSize + (compressedVectorSize * compressedVectors.length);
     }
+
+    @Override
+    public String toString() {
+        return "PQVectors{" +
+                "pq=" + pq +
+                ", count=" + compressedVectors.length +
+                '}';
+    }
 }

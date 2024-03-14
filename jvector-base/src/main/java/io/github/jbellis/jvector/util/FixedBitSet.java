@@ -268,8 +268,12 @@ public final class FixedBitSet extends BitSet {
 
     @Override
     public int nextSetBit(int index) {
+        if (index >= numBits) {
+            return DocIdSetIterator.NO_MORE_DOCS;
+        }
+
         // Depends on the ghost bits being clear!
-        assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+        assert index >= 0 : "index=" + index + ", numBits=" + numBits;
         int i = index >> 6;
         long word = bits[i] >> index; // skip all the bits to the right of index
 

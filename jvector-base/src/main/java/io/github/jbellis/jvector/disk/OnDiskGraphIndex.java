@@ -140,7 +140,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                         (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES) +
                         (node * (long) Integer.BYTES * (maxDegree + 1)));
                 int neighborCount = reader.readInt();
-                assert neighborCount <= maxDegree : String.format("neighborCount %d > M %d", neighborCount, maxDegree);
+                assert neighborCount <= maxDegree : String.format("Node %d neighborCount %d > M %d", node, neighborCount, maxDegree);
                 reader.read(neighbors, 0, neighborCount);
                 return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
             }
@@ -183,6 +183,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     public void close() throws IOException {
         readerSupplier.close();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("OnDiskGraphIndex(size=%d, entryPoint=%d)", size, entryNode);
     }
 
     /**

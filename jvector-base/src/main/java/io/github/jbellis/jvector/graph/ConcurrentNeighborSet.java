@@ -23,7 +23,6 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 
@@ -97,6 +96,7 @@ public class ConcurrentNeighborSet {
             int nbr = neighbors.node[i];
             float nbrScore = neighbors.score[i];
             ConcurrentNeighborSet nbrNbr = neighborhoodOf.apply(nbr);
+            assert nbrNbr != null : "Node " + nbr + " not found";
             nbrNbr.insert(nodeId, nbrScore, overflow);
         }
     }
@@ -113,38 +113,30 @@ public class ConcurrentNeighborSet {
         });
     }
 
-    /**
-     * @return true if we had deleted neighbors
-     */
-    public boolean removeDeletedNeighbors(Bits deletedNodes) {
-        AtomicBoolean found = new AtomicBoolean();
+    public void replaceDeletedNeighbors(Bits deletedNodes, NodeArray candidates) {
         neighborsRef.getAndUpdate(old -> {
-            var nodes = old.nodes;
-            int nextDiverseBefore = old.diverseBefore;
-            // build a set of the entries we want to retain
-            var toRetain = new FixedBitSet(nodes.size);
-            for (int i = 0; i < nodes.size; i++) {
-                if (deletedNodes.get(nodes.node[i])) {
-                    found.set(true);
-                    if (i < nextDiverseBefore) {
-                        nextDiverseBefore--;
-                    }
-                } else {
-                    toRetain.set(i);
+            // copy the non-deleted neighbors to a new NodeArray
+            var liveNeighbors = new NodeArray(old.nodes.size);
+            for (int i = 0; i < old.nodes.size(); i++) {
+                int node = old.nodes.node[i];
+                if (!deletedNodes.get(node)) {
+                    liveNeighbors.addInOrder(node, old.nodes.score[i]);
                 }
             }
 
-            // if we're retaining everything, no need to make a copy
-            if (!found.get()) {
-                return old;
+            // TODO extract this and the same code in insertDiverse
+            NodeArray merged;
+            if (scoreProvider.isExact()) {
+                merged = NodeArray.merge(liveNeighbors, candidates);
+            } else {
+                // merge assumes that node X will always have the same score in both arrays, so we need
+                // to compute approximate scores for the existing nodes to make the comparison valid
+                var approximatedOld = computeApproximatelyScored(liveNeighbors);
+                merged = NodeArray.merge(approximatedOld, candidates);
             }
-
-            // copy and purge the deleted ones
-            var nextNodes = nodes.copy();
-            nextNodes.retain(toRetain);
-            return new Neighbors(nextNodes, nextDiverseBefore);
+            retainDiverse(merged, 0, scoreProvider.isExact());
+            return new Neighbors(merged, merged.size);
         });
-        return found.get();
     }
 
     private static class NeighborIterator extends NodesIterator {
@@ -196,11 +188,7 @@ public class ConcurrentNeighborSet {
                 } else {
                     // merge assumes that node X will always have the same score in both arrays, so we need
                     // to compute approximate scores for the existing nodes to make the comparison valid
-                    var approximatedOld = new NodeArray(old.nodes.size);
-                    var sf = scoreProvider.scoreFunctionFor(nodeId);
-                    for (int i = 0; i < old.nodes.size; i++) {
-                        approximatedOld.insertSorted(old.nodes.node[i], sf.similarityTo(old.nodes.node[i]));
-                    }
+                    var approximatedOld = computeApproximatelyScored(old.nodes);
                     merged = NodeArray.merge(approximatedOld, toMerge);
                 }
             } else {
@@ -211,11 +199,14 @@ public class ConcurrentNeighborSet {
         });
     }
 
-    void padWith(NodeArray connections) {
-        // we deliberately do not perform diversity checks here
-        // (it will be invoked when the cleanup code calls insertDiverse later
-        // with the results of the nn descent rebuild)
-        neighborsRef.getAndUpdate(old -> new Neighbors(NodeArray.merge(old.nodes, connections), 0));
+    private NodeArray computeApproximatelyScored(NodeArray exact) {
+        var approximated = new NodeArray(exact.size);
+        var sf = scoreProvider.scoreFunctionFor(nodeId);
+        assert !sf.isExact();
+        for (int i = 0; i < exact.size; i++) {
+            approximated.insertSorted(exact.node[i], sf.similarityTo(exact.node[i]));
+        }
+        return approximated;
     }
 
     void insertNotDiverse(int node, float score) {

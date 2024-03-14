@@ -16,9 +16,12 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.annotations.VisibleForTesting;
-import org.apache.commons.math3.distribution.NormalDistribution;
+import io.github.jbellis.jvector.util.AbstractLongHeap;
+import io.github.jbellis.jvector.util.BoundedLongHeap;
 import org.apache.commons.math3.stat.StatUtils;
+
+import static io.github.jbellis.jvector.util.NumericUtils.floatToSortableInt;
+import static io.github.jbellis.jvector.util.NumericUtils.sortableIntToFloat;
 
 interface ScoreTracker {
 
@@ -26,62 +29,70 @@ interface ScoreTracker {
 
     void track(float score);
 
-    boolean shouldStop(int numVisited);
+    boolean shouldStop();
 
     class NoOpTracker implements ScoreTracker {
         @Override
         public void track(float score) { }
 
         @Override
-        public boolean shouldStop(int numVisited) {
+        public boolean shouldStop() {
             return false;
         }
     }
 
-    class NormalDistributionTracker implements ScoreTracker {
-        @VisibleForTesting
-        // in TestSearchProbability, 100 is not enough to stay within a 10% error rate, but 300 is
-        static final int RECENT_SCORES_TRACKED = 300;
+    /**
+     * Follows the methodology of section 3.1 in "VBase: Unifying Online Vector Similarity Search
+     * and Relational Queries via Relaxed Monotonicity" to determine when we've left phase 1
+     * (finding the local maximum) and entered phase 2 (mostly just finding worse options)
+     */
+    class TwoPhaseTracker implements ScoreTracker {
+        static final int RECENT_SCORES_TRACKED = 500;
+        static final int BEST_SCORES_TRACKED = 100;
 
+        // a sliding window of recent scores
         private final double[] recentScores;
-        private int index;
+        private int recentEntryIndex;
+
+        // Heap of the best scores seen so far
+        AbstractLongHeap bestScores;
+
+        // observation count
+        private int observationCount;
+
         private final double threshold;
 
-        NormalDistributionTracker(double threshold) {
+        TwoPhaseTracker(double threshold) {
             this.recentScores = new double[RECENT_SCORES_TRACKED];
+            this.bestScores = new BoundedLongHeap(BEST_SCORES_TRACKED);
             this.threshold = threshold;
         }
 
         @Override
         public void track(float score) {
-            recentScores[index] = score;
-            index = (index + 1) % recentScores.length;
+            bestScores.push(floatToSortableInt(score));
+            recentScores[recentEntryIndex] = score;
+            recentEntryIndex = (recentEntryIndex + 1) % recentScores.length;
+            observationCount++;
         }
 
         @Override
-        public boolean shouldStop(int numVisited) {
-            if (numVisited < recentScores.length) {
+        public boolean shouldStop() {
+            // don't stop if we don't have enough data points
+            if (observationCount < RECENT_SCORES_TRACKED) {
                 return false;
             }
-            return numVisited % 100 == 0 && futureProbabilityAboveThreshold(recentScores, threshold) < 0.01;
-        }
+            // evaluation is expensive so only do it 1% of the time
+            if (observationCount % 100 != 0) {
+                return false;
+            }
 
-        /**
-         * Return the probability of finding a node above the given threshold in the future,
-         * given the similarities observed recently.
-         */
-        @VisibleForTesting
-        static double futureProbabilityAboveThreshold(double[] recentSimilarities, double threshold) {
-            // Calculate sample mean and standard deviation
-            double sampleMean = StatUtils.mean(recentSimilarities);
-            double sampleStd = Math.sqrt(StatUtils.variance(recentSimilarities));
-
-            // Z-score for the threshold
-            double zScore = (threshold - sampleMean) / sampleStd;
-
-            // Probability of finding a node above the threshold in the future
-            NormalDistribution normalDistribution = new NormalDistribution(sampleMean, sampleStd);
-            return 1 - normalDistribution.cumulativeProbability(zScore);
+            // we're in phase 2 if the 99th percentile of the recent scores is worse than the best score
+            // (paper suggests median, but experimentally that is too prone to false positives.
+            // 90th does seem to be enough, but 99th doesn't result in much extra work, so we'll be conservative)
+            double windowMedian = StatUtils.percentile(recentScores, 99);
+            double worstBest = sortableIntToFloat((int) bestScores.top());
+            return windowMedian < worstBest && windowMedian < threshold;
         }
     }
 }

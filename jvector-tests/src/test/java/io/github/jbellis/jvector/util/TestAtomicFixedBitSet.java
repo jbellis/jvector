@@ -25,9 +25,7 @@ public class TestAtomicFixedBitSet extends BaseBitSetTestCase<AtomicFixedBitSet>
   @Override
   public AtomicFixedBitSet copyOf(BitSet bs, int length) {
     final AtomicFixedBitSet set = new AtomicFixedBitSet(length);
-    for (int doc = bs.nextSetBit(0);
-        doc != DocIdSetIterator.NO_MORE_DOCS;
-        doc = doc + 1 >= length ? DocIdSetIterator.NO_MORE_DOCS : bs.nextSetBit(doc + 1)) {
+    for (int doc = bs.nextSetBit(0); doc != DocIdSetIterator.NO_MORE_DOCS; doc = bs.nextSetBit(doc + 1)) {
       set.set(doc);
     }
     return set;

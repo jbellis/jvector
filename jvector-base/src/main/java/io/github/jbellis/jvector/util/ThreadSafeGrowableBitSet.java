@@ -166,4 +166,13 @@ public class ThreadSafeGrowableBitSet extends BitSet {
   public long ramBytesUsed() {
     throw new UnsupportedOperationException();
   }
+
+  public ThreadSafeGrowableBitSet copy() {
+    lock.readLock().lock();
+    try {
+      return new ThreadSafeGrowableBitSet((java.util.BitSet) bitSet.clone());
+    } finally {
+      lock.readLock().unlock();
+    }
+  }
 }

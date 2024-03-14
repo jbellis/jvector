@@ -76,4 +76,9 @@ public abstract class BitSet implements Bits, Accountable {
    * DocIdSetIterator#NO_MORE_DOCS} is returned if there are no more set bits.
    */
   public abstract int nextSetBit(int index);
+
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(length=" + length() + ", cardinality=~" + approximateCardinality() + ")";
+  }
 }
