@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
@@ -146,7 +147,7 @@ public class TestDeletions extends LuceneTestCase {
         var ravv = MockVectorValues.fromValues(createRandomFloatVectorsParallel(count, dimension));
         var bsp = BuildScoreProvider.randomAccessScoreProvider(ravv, VectorSimilarityFunction.DOT_PRODUCT);
         var builder = new GraphIndexBuilder(bsp, 2, 32, 10, 1.0f, 1.0f,
-                                            new ForkJoinPool(Runtime.getRuntime().availableProcessors()),
+                                            PhysicalCoreExecutor.pool(),
                                             new ForkJoinPool(Runtime.getRuntime().availableProcessors()));
 
         // need to use a non-reentrant lock because otherwise the thread scheduler thinks that
@@ -167,8 +168,6 @@ public class TestDeletions extends LuceneTestCase {
                     builder.markNodeDeleted(n);
                 }
             } else {
-                // removeDeletedNodes is threadsafe via synchronized, we just don't want to tie up a bunch of our
-                // worker threads waiting for a turn to run it
                 if (deleteLock.tryLock()) {
                     try {
                         builder.removeDeletedNodes();
@@ -204,7 +203,7 @@ public class TestDeletions extends LuceneTestCase {
         }
 
         @Override
-        public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
+        public boolean tryLock(long time, TimeUnit unit) {
             throw new UnsupportedOperationException();
         }
 

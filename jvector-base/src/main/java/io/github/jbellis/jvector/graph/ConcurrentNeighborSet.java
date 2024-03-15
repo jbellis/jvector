@@ -124,16 +124,8 @@ public class ConcurrentNeighborSet {
                 }
             }
 
-            // TODO extract this and the same code in insertDiverse
-            NodeArray merged;
-            if (scoreProvider.isExact()) {
-                merged = NodeArray.merge(liveNeighbors, candidates);
-            } else {
-                // merge assumes that node X will always have the same score in both arrays, so we need
-                // to compute approximate scores for the existing nodes to make the comparison valid
-                var approximatedOld = computeApproximatelyScored(liveNeighbors);
-                merged = NodeArray.merge(approximatedOld, candidates);
-            }
+            // merge the remaining neighbors with the candidates
+            NodeArray merged = rescoreAndMerge(liveNeighbors, candidates);
             retainDiverse(merged, 0, scoreProvider.isExact());
             return new Neighbors(merged, merged.size);
         });
@@ -183,20 +175,26 @@ public class ConcurrentNeighborSet {
             // pruning back extras is expensive.
             NodeArray merged;
             if (old.nodes.size > 0) {
-                if (scoreProvider.isExact()) {
-                    merged = NodeArray.merge(old.nodes, toMerge);
-                } else {
-                    // merge assumes that node X will always have the same score in both arrays, so we need
-                    // to compute approximate scores for the existing nodes to make the comparison valid
-                    var approximatedOld = computeApproximatelyScored(old.nodes);
-                    merged = NodeArray.merge(approximatedOld, toMerge);
-                }
+                merged = rescoreAndMerge(old.nodes, toMerge);
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
             }
             retainDiverse(merged, 0, scoreProvider.isExact());
             return new Neighbors(merged, merged.size);
         });
+    }
+
+    private NodeArray rescoreAndMerge(NodeArray old, NodeArray toMerge) {
+        NodeArray merged;
+        if (scoreProvider.isExact()) {
+            merged = NodeArray.merge(old, toMerge);
+        } else {
+            // merge assumes that node X will always have the same score in both arrays, so we need
+            // to compute approximate scores for the existing nodes to make the comparison valid
+            var approximatedOld = computeApproximatelyScored(old);
+            merged = NodeArray.merge(approximatedOld, toMerge);
+        }
+        return merged;
     }
 
     private NodeArray computeApproximatelyScored(NodeArray exact) {

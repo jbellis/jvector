@@ -480,7 +480,7 @@ public class GraphIndexBuilder {
 
         // Remove deleted nodes from neighbors lists;
         // Score the new edges, and connect the most diverse ones as neighbors
-        parallelExecutor.submit(() -> {
+        simdExecutor.submit(() -> {
             newEdges.entrySet().stream().parallel().forEach(e -> {
                 // turn the new edges into a NodeArray
                 int node = e.getKey();
