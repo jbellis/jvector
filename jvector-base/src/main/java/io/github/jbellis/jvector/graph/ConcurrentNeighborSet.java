@@ -24,6 +24,7 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 
@@ -245,22 +246,13 @@ public class ConcurrentNeighborSet {
             retainDiverseInternal(neighbors, maxConnections, 0, selected, dp::scoreFunctionFor);
 
             // compute exact scores
+            var neighborNodes = Arrays.copyOf(neighbors.node, neighbors.size);
             var sf = dp.exactScoreFunctionFor(nodeId);
-            var exactScoredNeighbors = new NodeArray(neighbors.size);
-            for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-                int neighborId = neighbors.node[i];
-                float score = sf.similarityTo(neighborId);
-                exactScoredNeighbors.insertSorted(neighborId, score);
-            }
-
-            // second pass
-            selected.clear();
-            retainDiverseInternal(exactScoredNeighbors, maxConnections, 0, selected, dp::exactScoreFunctionFor);
-
-            // copy the final result into the original container
             neighbors.clear();
             for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-                neighbors.addInOrder(exactScoredNeighbors.node[i], exactScoredNeighbors.score[i]);
+                int neighborId = neighborNodes[i];
+                float score = sf.similarityTo(neighborId);
+                neighbors.insertSorted(neighborId, score);
             }
         }
     }
@@ -304,11 +296,6 @@ public class ConcurrentNeighborSet {
             }
             if (sf.similarityTo(otherNode) > score * alpha) {
                 return false;
-            }
-
-            // nextSetBit will error out if we're at the end of the bitset, so check this manually
-            if (i + 1 >= selected.length()) {
-                break;
             }
         }
         return true;
