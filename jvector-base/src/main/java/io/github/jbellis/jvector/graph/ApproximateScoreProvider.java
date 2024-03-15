@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+// TODO replace this with SimilarityFunction.ApproximateProvider
 public interface ApproximateScoreProvider {
     /**
      * @return a ScoreFunction suitable for performing approximate search between vectors.

@@ -84,7 +84,7 @@ public class Test2DThreshold extends LuceneTestCase {
                 TestParams tp = createTestParams(vectors);
                 searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
                 var reranker = Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
-                var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
+                var asf = cv.precomputedScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
                 var ssp = new SearchScoreProvider(asf, reranker);
                 var result = searcher.search(ssp, vectors.length, tp.th, Bits.ALL);
 

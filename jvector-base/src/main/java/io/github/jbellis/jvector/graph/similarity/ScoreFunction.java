@@ -42,4 +42,8 @@ public interface ScoreFunction {
     interface Provider {
         ScoreFunction scoreFunctionFor(int node1);
     }
+
+    interface ExactProvider extends Provider {
+        ExactScoreFunction scoreFunctionFor(int node1);
+    }
 }

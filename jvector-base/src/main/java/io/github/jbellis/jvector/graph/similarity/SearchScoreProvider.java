@@ -33,4 +33,10 @@ public final class SearchScoreProvider {
     public Reranker reranker() {
         return reranker;
     }
+
+    public ScoreFunction.ExactScoreFunction exactScoreFunction() {
+        return scoreFunction instanceof ScoreFunction.ExactScoreFunction
+                ? (ScoreFunction.ExactScoreFunction) scoreFunction
+                : reranker().scoreFunction();
+    }
 }

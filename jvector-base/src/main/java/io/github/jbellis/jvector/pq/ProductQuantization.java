@@ -423,7 +423,6 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return M;
     }
 
-
     /**
      * @return number of clusters per subspace
      */
@@ -593,6 +592,9 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return result;
     }
 
+    /**
+     * @return the centroid of the codebooks
+     */
     public VectorFloat<?> getOrComputeCentroid() {
         if (globalCentroid != null) {
             return globalCentroid;

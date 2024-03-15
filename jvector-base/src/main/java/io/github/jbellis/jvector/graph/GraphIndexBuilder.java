@@ -345,7 +345,7 @@ public class GraphIndexBuilder {
             // farther away than the ones in the topK, would not change the result.)
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
             var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
-            var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, scoreProvider.exactScoreFunctionFor(vector));
+            var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, ssp.scoreFunction());
             updateNeighbors(newNodeNeighbors, natural, concurrent);
 
             maybeUpdateEntryPoint(node);
@@ -484,7 +484,8 @@ public class GraphIndexBuilder {
             newEdges.entrySet().stream().parallel().forEach(e -> {
                 // turn the new edges into a NodeArray
                 int node = e.getKey();
-                var sf = scoreProvider.scoreFunctionFor(node);
+                // TODO support approximate scoring here
+                var sf = scoreProvider.searchProviderFor(node).exactScoreFunction();
                 var neighbors = graph.getNeighbors(node);
                 var candidates = new NodeArray(graph.maxDegree);
                 for (var k : e.getValue()) {
@@ -629,7 +630,8 @@ public class GraphIndexBuilder {
 
     private NodeArray getConcurrentCandidates(int newNode,
                                               Set<Integer> inProgress,
-                                              NodeArray scratch, ScoreFunction scoreFunction)
+                                              NodeArray scratch,
+                                              ScoreFunction scoreFunction)
     {
         scratch.clear();
         for (var n : inProgress) {
@@ -720,7 +722,7 @@ public class GraphIndexBuilder {
         for (int i = 0; i < size; i++) {
             int node = in.readInt();
             int nNeighbors = in.readInt();
-            var sf = scoreProvider.exactScoreFunctionFor(node);
+            var sf = scoreProvider.searchProviderFor(node).exactScoreFunction();
             var ca = new NodeArray(maxDegree);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();

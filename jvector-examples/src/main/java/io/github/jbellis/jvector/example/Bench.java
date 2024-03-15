@@ -19,6 +19,8 @@ package io.github.jbellis.jvector.example;
 import io.github.jbellis.jvector.disk.CachingADCGraphIndex;
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.disk.SimpleReader;
+import io.github.jbellis.jvector.disk.SimpleWriter;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DataSetCreator;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
@@ -31,6 +33,7 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
+import io.github.jbellis.jvector.graph.similarity.DiversityScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -39,13 +42,17 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import org.agrona.collections.Int2ObjectHashMap;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,6 +61,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -77,6 +85,7 @@ public class Bench {
         var topK = ds.groundTruth.get(0).size();
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
+        var vectorsPath = testDirectory.resolve("vectors" + ds.name);
         var fusedGraphPath = testDirectory.resolve("fusedgraph" + M + efConstruction + ds.name);
         try {
             for (var cf : compressionGrid) {
@@ -89,66 +98,94 @@ public class Bench {
                 System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
 
                 // build
-                start = System.nanoTime();
-                // TODO un-hardcode the 2* here
-                var builder = new GraphIndexBuilder(floatVectors, ds.similarityFunction, 2 * M, efConstruction, 1.2f, 1.2f);
+                var vectorsWriter = new SimpleWriter(vectorsPath);
+                var vr = ExplicitThreadLocal.withInitial(() -> {
+                    try {
+                        return new SimpleReader(vectorsPath);
+                    } catch (FileNotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
                 var bsp = new BuildScoreProvider() {
                     @Override
-                    public ScoreFunction scoreFunctionFor(int node1) {
-                        var v = floatVectors.vectorValue(node1);
-                        return scoreFunctionFor(v);
+                    public boolean isExact() {
+                        return false;
+                    }
+
+                    private VectorFloat<?> loadVector(int node) {
+                        // TODO implement RandomAccessVectorValues with shared semantics to avoid allocating every time?
+                        // (allocation is not a bottleneck)
+                        var vectorsReader = vr.get();
+                        try {
+                            vectorsReader.seek((long) node * floatVectors.dimension() * Float.BYTES);
+                            var data = new float[floatVectors.dimension()];
+                            vectorsReader.readFully(data);
+                            return vectorTypeSupport.createFloatVector(data);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
 
                     @Override
-                    public ScoreFunction scoreFunctionFor(VectorFloat<?> vector) {
-                        return cv.approximateScoreFunctionFor(vector, ds.similarityFunction);
-                    }
+                    public DiversityScoreProvider diversityProvider() {
+                        return new DiversityScoreProvider() {
+                            private final Int2ObjectHashMap<VectorFloat<?>> cache = new Int2ObjectHashMap<>();
 
-                    @Override
-                    public Reranker rerankerFor(int node1) {
-                        var v = floatVectors.vectorValue(node1);
-                        return rerankerFor(v);
-                    }
-
-                    @Override
-                    public Reranker rerankerFor(VectorFloat<?> v) {
-                        return new Reranker() {
                             @Override
-                            public void score(int[] nodes, VectorFloat<?> results) {
-                                var nodeCount = nodes.length;
-                                var dimension = v.length();
-                                var packedVectors = vectorTypeSupport.createFloatVector(nodeCount * dimension);
-                                for (int i = 0; i < nodeCount; i++) {
-                                    var node = nodes[i];
-                                    packedVectors.copyFrom(floatVectors.vectorValue(node), 0, i * dimension, dimension);
-                                }
-                                ds.similarityFunction.compareMulti(v, packedVectors, results);
+                            public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(int node1) {
+                                var v1 = cache.computeIfAbsent(node1, __ -> loadVector(node1));
+                                return cv.scoreFunctionFor(v1, ds.similarityFunction);
                             }
 
                             @Override
-                            public ScoreFunction.ExactScoreFunction scoreFunction() {
-                                return node2 -> ds.similarityFunction.compare(v, floatVectors.vectorValue(node2));
+                            public ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
+                                var v1 = cache.computeIfAbsent(node1, __ -> loadVector(node1));
+                                return node2 -> {
+                                    var v2 = cache.computeIfAbsent(node2, __ -> loadVector(node2));
+                                    return ds.similarityFunction.compare(v1, v2);
+                                };
                             }
                         };
+                    }
+
+                    @Override
+                    public SearchScoreProvider searchProviderFor(int node) {
+                        return searchProviderFor(loadVector(node));
+                    }
+
+                    @Override
+                    public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
+                        return new SearchScoreProvider(cv.precomputedScoreFunctionFor(vector, ds.similarityFunction), null);
                     }
 
                     @Override
                     public VectorFloat<?> approximateCentroid() {
                         return ((PQVectors) cv).getCompressor().getOrComputeCentroid();
                     }
-
-                    @Override
-                    public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
-                        return new SearchScoreProvider(cv.approximateScoreFunctionFor(vector, ds.similarityFunction), null);
-                    }
-
-                    @Override
-                    public boolean isExact() {
-                        return false;
-                    }
                 };
-                builder.setScoreProvider(bsp);
-                var onHeapGraph = builder.build(ds.getBaseRavv());
+                start = System.nanoTime();
+                // TODO un-hardcode the 2* here
+                var simdExecutor = PhysicalCoreExecutor.pool();
+                var builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f,
+                                                    simdExecutor, ForkJoinPool.commonPool());
+                var vv = floatVectors.threadLocalSupplier();
+                simdExecutor.submit(() -> {
+                    IntStream.range(0, ds.baseVectors.size()).parallel().forEach(node -> {
+                        var vector = vv.get().vectorValue(node);
+                        synchronized (vectorsWriter) {
+                            try {
+                                vectorsWriter.seek((long) node * floatVectors.dimension() * Float.BYTES);
+                                vectorsWriter.writeFully(vector);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        builder.addGraphNode(node, vector);
+                    });
+                }).join();
+
+                builder.cleanup();
+                var onHeapGraph = builder.getGraph();
                 System.out.format("Build M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
                                   M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, onHeapGraph.getAverageDegree(), onHeapGraph.getAverageShortEdges());
 
@@ -171,6 +208,7 @@ public class Bench {
             }
         } finally {
             Files.deleteIfExists(graphPath);
+            Files.deleteIfExists(vectorsPath);
             Files.deleteIfExists(fusedGraphPath);
         }
     }
@@ -227,7 +265,7 @@ public class Bench {
                         if (index instanceof CachingADCGraphIndex) {
                             sf = ((CachingADCGraphIndex.CachedView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
                         } else {
-                            sf = cv.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+                            sf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
                         var rr = Reranker.from(queryVector, ds.similarityFunction, view);
                         var ssp = new SearchScoreProvider(sf, rr);
@@ -260,7 +298,7 @@ public class Bench {
                 /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
                 ds -> ProductQuantization.compute(ds.getBaseRavv(),
-                                                  ds.getDimension() / 16,
+                                                  ds.getDimension() / 4,
                                                   256,
                                                   ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
 
@@ -273,9 +311,9 @@ public class Bench {
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var nwFiles = List.of(
 //                "colbert-10M", // WIP
-                "openai-v3-large-3072-100k",
-                "openai-v3-large-1536-100k",
-                "openai-v3-small-100k",
+//                "openai-v3-large-3072-100k",
+//                "openai-v3-large-1536-100k",
+//                "openai-v3-small-100k",
                 "e5-small-v2-100k",
                 "e5-base-v2-100k",
                 "e5-large-v2-100k",

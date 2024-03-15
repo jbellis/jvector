@@ -272,7 +272,7 @@ public class IPCService
 
             SearchResult r;
             if (ctx.cv != null) {
-                ScoreFunction.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
+                ScoreFunction.ApproximateScoreFunction sf = ctx.cv.precomputedScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
                     var rr = Reranker.from(queryVector, ctx.similarityFunction, view);
                     var ssp = new SearchScoreProvider(sf, rr);

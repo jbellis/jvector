@@ -98,7 +98,7 @@ public class TestCompressedVectors extends RandomizedTest {
             double delta = 0;
             for (int i = 0; i < 10; i++) {
                 var q = TestUtil.randomVector(getRandom(), dimension);
-                var f = cv.approximateScoreFunctionFor(q, vsf);
+                var f = cv.precomputedScoreFunctionFor(q, vsf);
                 for (int j = 0; j < vectors.size(); j++) {
                     delta += abs(f.similarityTo(j) - vsf.compare(q, vectors.get(j)));
                 }

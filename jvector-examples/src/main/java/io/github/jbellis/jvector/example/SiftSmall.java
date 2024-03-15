@@ -107,7 +107,7 @@ public class SiftSmall {
                 ssp = new SearchScoreProvider(sf, null);
             }
             else {
-                ScoreFunction.ApproximateScoreFunction sf = compressedVectors.approximateScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 var rr = Reranker.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, view);
                 ssp = new SearchScoreProvider(sf, rr);
             }

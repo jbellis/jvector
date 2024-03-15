@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -104,7 +105,7 @@ public class PQVectors implements CompressedVectors {
     }
 
     @Override
-    public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+    public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
                 return new PQDecoder.DotProductDecoder(this, q);
@@ -112,6 +113,28 @@ public class PQVectors implements CompressedVectors {
                 return new PQDecoder.EuclideanDecoder(this, q);
             case COSINE:
                 return new PQDecoder.CosineDecoder(this, q);
+            default:
+                throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
+        }
+    }
+
+    @Override
+    public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        switch (similarityFunction) {
+            case DOT_PRODUCT:
+                return (node2) -> {
+                    var encoded = get(node2);
+                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
+                    float dp = 0;
+                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
+                        dp += VectorUtil.dotProduct(pq.codebooks[m], centroidIndex * centroidLength, q, centroidOffset, centroidLength);
+                    }
+                    // scale to [0, 1]
+                    return (1 + dp) / 2;
+                };
             default:
                 throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
         }

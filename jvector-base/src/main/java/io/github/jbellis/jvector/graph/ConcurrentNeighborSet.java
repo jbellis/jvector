@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
+import io.github.jbellis.jvector.graph.similarity.DiversityScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
@@ -199,7 +200,7 @@ public class ConcurrentNeighborSet {
 
     private NodeArray computeApproximatelyScored(NodeArray exact) {
         var approximated = new NodeArray(exact.size);
-        var sf = scoreProvider.scoreFunctionFor(nodeId);
+        var sf = scoreProvider.diversityProvider().scoreFunctionFor(nodeId);
         assert !sf.isExact();
         for (int i = 0; i < exact.size; i++) {
             approximated.insertSorted(exact.node[i], sf.similarityTo(exact.node[i]));
@@ -229,26 +230,32 @@ public class ConcurrentNeighborSet {
             selected.set(i);
         }
 
+        var dp = scoreProvider.diversityProvider();
         if (isExactScored) {
-            retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, scoreProvider::scoreFunctionFor);
-        } else {
-            // reranking for diversity!  first pass against the approximate scores
-            assert diverseBefore == 0;
-            retainDiverseInternal(neighbors, 2 * maxConnections, 0, selected, scoreProvider::scoreFunctionFor);
+            // either the provider is natively exact, or we're on the backlink->insert path,
+            // so we don't have "extra" neighbors to choose from and we should use the exact provider.
+            retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, dp::exactScoreFunctionFor);
             neighbors.retain(selected);
+        } else {
+            // provider is natively approximate and we're on the insertDiverse path.  There are
+            // lots of neighbors to choose from, so we can use a reranking approach.
+            // first pass against the approximate scores
+            assert !scoreProvider.isExact();
+            assert diverseBefore == 0;
+            retainDiverseInternal(neighbors, 2 * maxConnections, 0, selected, dp::scoreFunctionFor);
 
             // compute exact scores
-            var exactScores = scoreProvider.rerankerFor(nodeId).score(neighbors.node);
+            var sf = dp.exactScoreFunctionFor(nodeId);
             var exactScoredNeighbors = new NodeArray(neighbors.size);
-            for (int i = 0; i < neighbors.size; i++) {
-                int node = neighbors.node[i];
-                float score = exactScores.get(i);
-                exactScoredNeighbors.insertSorted(node, score);
+            for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
+                int neighborId = neighbors.node[i];
+                float score = sf.similarityTo(neighborId);
+                exactScoredNeighbors.insertSorted(neighborId, score);
             }
 
             // second pass
             selected.clear();
-            retainDiverseInternal(exactScoredNeighbors, maxConnections, 0, selected, node1 -> scoreProvider.rerankerFor(node1).scoreFunction());
+            retainDiverseInternal(exactScoredNeighbors, maxConnections, 0, selected, dp::exactScoreFunctionFor);
 
             // copy the final result into the original container
             neighbors.clear();
@@ -270,7 +277,8 @@ public class ConcurrentNeighborSet {
 
                 int cNode = neighbors.node()[i];
                 float cScore = neighbors.score()[i];
-                if (isDiverse(cNode, cScore, neighbors, scoreProvider.scoreFunctionFor(cNode), selected, a)) {
+                var sf = scoreProvider.scoreFunctionFor(cNode);
+                if (isDiverse(cNode, cScore, neighbors, sf, selected, a)) {
                     selected.set(i);
                     nSelected++;
                 }
@@ -282,8 +290,6 @@ public class ConcurrentNeighborSet {
                 shortEdges = nSelected / (float) maxConnections;
             }
         }
-
-        neighbors.retain(selected);
     }
 
     // is the candidate node with the given score closer to the base node than it is to any of the

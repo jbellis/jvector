@@ -36,46 +36,6 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 public interface BuildScoreProvider {
     VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
-    /**
-     * For when we're going to compare `node1` with multiple other nodes.  This allows us to skip loading
-     * node1's vector (potentially from disk) redundantly for each comparison.
-     * <p>
-     * Used during searches -- the scoreFunction may be approximate!
-     */
-    ScoreFunction scoreFunctionFor(int node1);
-
-    /**
-     * For when we're going to compare `vector` with multiple other nodes
-     * <p>
-     * Used during searches -- the scoreFunction may be approximate!
-     */
-    ScoreFunction scoreFunctionFor(VectorFloat<?> vector);
-
-    default ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
-        return isExact()
-                ? (ScoreFunction.ExactScoreFunction) scoreFunctionFor(node1)
-                : rerankerFor(node1).scoreFunction();
-    }
-
-    default ScoreFunction.ExactScoreFunction exactScoreFunctionFor(VectorFloat<?> vector) {
-        return isExact()
-                ? (ScoreFunction.ExactScoreFunction) scoreFunctionFor(vector)
-                : rerankerFor(vector).scoreFunction();
-    }
-
-    /**
-     * @return a Reranker that computes exact scores for neighbor candidates.
-     */
-    Reranker rerankerFor(int node1);
-
-    /**
-     * @return a Reranker that computes exact scores for neighbor candidates.
-     */
-    Reranker rerankerFor(VectorFloat<?> vector);
-
-    /**
-     * @return true if the score functions returned by this provider are exact.
-     */
     boolean isExact();
 
     /**
@@ -104,9 +64,9 @@ public interface BuildScoreProvider {
      * <p>
      * @param node the graph node to provide similarity scores against
      */
-    default SearchScoreProvider searchProviderFor(int node) {
-        return new SearchScoreProvider(scoreFunctionFor(node), null);
-    }
+    SearchScoreProvider searchProviderFor(int node);
+
+    DiversityScoreProvider diversityProvider();
 
     /**
      * Returns a BSP that performs exact score comparisons using the given RandomAccessVectorValues and VectorSimilarityFunction.
@@ -121,24 +81,8 @@ public interface BuildScoreProvider {
 
         return new BuildScoreProvider() {
             @Override
-            public ScoreFunction scoreFunctionFor(int node1) {
-                return scoreFunctionFor(vectors.get().vectorValue(node1));
-            }
-
-            @Override
-            public ScoreFunction scoreFunctionFor(VectorFloat<?> vector) {
-                var vc = vectorsCopy.get();
-                return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(vector, vc.vectorValue(node2));
-            }
-
-            @Override
-            public Reranker rerankerFor(VectorFloat<?> vector) {
-                return null;
-            }
-
-            @Override
-            public Reranker rerankerFor(int node1) {
-                return null;
+            public boolean isExact() {
+                return true;
             }
 
             @Override
@@ -155,13 +99,33 @@ public interface BuildScoreProvider {
             @Override
             public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
                 var vc = vectorsCopy.get();
-                var sf = (ScoreFunction.ExactScoreFunction) node -> similarityFunction.compare(vector, vc.vectorValue(node));
+                var sf = (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(vector, vc.vectorValue(node2));
                 return new SearchScoreProvider(sf, null);
             }
 
             @Override
-            public boolean isExact() {
-                return true;
+            public SearchScoreProvider searchProviderFor(int node1) {
+                var v = vectors.get().vectorValue(node1);
+                return searchProviderFor(v);
+            }
+
+            @Override
+            public DiversityScoreProvider diversityProvider() {
+                return new DiversityScoreProvider() {
+                    @Override
+                    public ScoreFunction.ExactScoreFunction scoreFunctionFor(int node1) {
+                        var v = vectors.get().vectorValue(node1);
+                        return (node2) -> {
+                            var vc = vectorsCopy.get();
+                            return similarityFunction.compare(v, vc.vectorValue(node2));
+                        };
+                    }
+
+                    @Override
+                    public ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
+                        return scoreFunctionFor(node1);
+                    }
+                };
             }
         };
     }
