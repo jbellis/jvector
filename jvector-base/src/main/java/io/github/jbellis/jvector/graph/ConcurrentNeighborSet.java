@@ -242,7 +242,7 @@ public class ConcurrentNeighborSet {
             // first pass against the approximate scores
             assert !scoreProvider.isExact();
             assert diverseBefore == 0;
-            retainDiverseInternal(neighbors, 2 * maxConnections, 0, selected, dp::scoreFunctionFor);
+            retainDiverseInternal(neighbors, maxConnections, 0, selected, dp::scoreFunctionFor);
 
             // compute exact scores
             var sf = dp.exactScoreFunctionFor(nodeId);
