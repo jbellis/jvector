@@ -249,6 +249,7 @@ public class Bench {
 //                "colbert-10M", // WIP
                 "ada002-100k",
                 "openai-v3-small-100k",
+                "nemo-100k",
                 "e5-small-v2-100k",
                 "gecko-100k");
         executeNw(coreFiles, pattern, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
