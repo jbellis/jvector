@@ -246,10 +246,10 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var coreFiles = List.of(
-//                "colbert-10M", // WIP
                 "ada002-100k",
                 "openai-v3-small-100k",
                 "nemo-100k",
+                "colbert-1M",
                 "e5-small-v2-100k",
                 "gecko-100k");
         executeNw(coreFiles, pattern, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
