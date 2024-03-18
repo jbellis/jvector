@@ -234,18 +234,19 @@ public class ConcurrentNeighborSet {
         var dp = scoreProvider.diversityProvider();
         if (isExactScored) {
             // either the provider is natively exact, or we're on the backlink->insert path,
-            // so we don't have "extra" neighbors to choose from and we should use the exact provider.
+            // so `neighbors` is exact-scored
             retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, dp::exactScoreFunctionFor);
             neighbors.retain(selected);
         } else {
-            // provider is natively approximate and we're on the insertDiverse path.  There are
-            // lots of neighbors to choose from, so we can use a reranking approach.
-            // first pass against the approximate scores
+            // provider is natively approximate and we're on the insertDiverse path,
+            // so `neighbors` is approximately-scored
             assert !scoreProvider.isExact();
             assert diverseBefore == 0;
             retainDiverseInternal(neighbors, maxConnections, 0, selected, dp::scoreFunctionFor);
 
-            // compute exact scores
+            // using approximate scores is sufficiently accurate for the diversity computation,
+            // but we want to maintain the invariant that the neighbors are exact-scored before
+            // we use them in a search
             var neighborNodes = Arrays.copyOf(neighbors.node, neighbors.size);
             var sf = dp.exactScoreFunctionFor(nodeId);
             neighbors.clear();

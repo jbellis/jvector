@@ -37,9 +37,9 @@ public interface CompressedVectors extends Accountable {
     /** @return the compressor used by this instance */
     VectorCompressor<?> getCompressor();
 
-    /** precomputes partial scores for the given query with every centroid, suitable for most searches */
+    /** precomputes partial scores for the given query with every centroid; suitable for most searches */
     ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
 
-    /** no precomputation, suitable for just a handful of score computations */
+    /** no precomputation; suitable when just a handful of score computations are performed */
     ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
 }
