@@ -100,7 +100,7 @@ float dot_product_f32_256(const float* a, int aoffset, const float* b, int boffs
         }
 
         // Horizontal sum of the vector to get dot product
-        __attribute__((aligned(16))) float result[8];
+        __attribute__((aligned(32))) float result[8];
         _mm256_store_ps(result, sum);
 
         for(int i = 0; i < 8; ++i) {
@@ -135,12 +135,7 @@ float dot_product_f32_512(const float* a, int aoffset, const float* b, int boffs
         }
 
         // Horizontal sum of the vector to get dot product
-        __attribute__((aligned(16)))  float result[16];
-        _mm512_store_ps(result, sum);
-
-        for(int i = 0; i < 16; ++i) {
-            dot += result[i];
-        }
+        dot = _mm512_reduce_add_ps(sum);
     }
 
     for (; ao < alim && bo < blim; ao++, bo++) {
@@ -268,12 +263,7 @@ float euclidean_f32_512(const float* a, int aoffset, const float* b, int boffset
         }
 
         // Horizontal sum of the vector to get dot product
-        __attribute__((aligned(64)))  float result[16];
-        _mm512_store_ps(result, sum);
-
-        for(int i = 0; i < 16; ++i) {
-            squareDistance += result[i];
-        }
+        squareDistance = _mm512_reduce_add_ps(sum);
     }
 
     for (; ao < alim && bo < blim; ao++, bo++) {
@@ -423,13 +413,8 @@ void dot_product_multi_f32_512(const float* v1, const float* packedv2, int v1Len
         }
 
         // Horizontal sum of the vectors to get K dot products
-        __attribute__((aligned(64))) float result[16];
         for (int k = 0; k < resultsLength; ++k) {
-            _mm512_store_ps(result, sums[k]);
-
-            for (int i = 0; i < 16; ++i) {
-                results[k] += result[i];
-            }
+            results[k] = _mm512_reduce_add_ps(sums[k]);
         }
     }
 
@@ -470,13 +455,8 @@ void square_distance_multi_f32_512(const float* v1, const float* packedv2, int v
         }
 
         // Horizontal sum of the vectors to get K dot products
-        __attribute__((aligned(64))) float result[16];
         for (int k = 0; k < resultsLength; ++k) {
-            _mm512_store_ps(result, sums[k]);
-
-            for (int i = 0; i < 16; ++i) {
-                results[k] += result[i];
-            }
+            results[k] = _mm512_reduce_add_ps(sums[k]);
         }
     }
 
