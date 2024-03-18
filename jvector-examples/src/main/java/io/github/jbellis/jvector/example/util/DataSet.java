@@ -76,50 +76,51 @@ public class DataSet {
      */
     public static DataSet getScrubbedDataSet(String pathStr, VectorSimilarityFunction similarityFunction,
                                              List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<HashSet<Integer>> groundTruth) {
+        if (similarityFunction == VectorSimilarityFunction.EUCLIDEAN) {
+            // Euclidean comparisons are not sensitive to zero vectors or normalization
+            return new DataSet(pathStr, similarityFunction, baseVectors, queryVectors, groundTruth);
+        }
+
+        // remove zero vectors, noting that this will change the indexes of the ground truth answers
         List<VectorFloat<?>> scrubbedBaseVectors;
         List<VectorFloat<?>> scrubbedQueryVectors;
         List<HashSet<Integer>> gtSet;
-        if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
-            // verify that vectors are normalized and sane.
-            // this is necessary b/c NYT (and NW) dataset(s) contain(s) zero vectors (!)
-            scrubbedBaseVectors = new ArrayList<>(baseVectors.size());
-            scrubbedQueryVectors = new ArrayList<>(queryVectors.size());
-            gtSet = new ArrayList<>(groundTruth.size());
-            // remove zero vectors, noting that this will change the indexes of the ground truth answers
-            Map<Integer, Integer> rawToScrubbed = new HashMap<>();
-            {
-                int j = 0;
-                for (int i = 0; i < baseVectors.size(); i++) {
-                    VectorFloat<?> v = baseVectors.get(i);
-                    if (Math.abs(normOf(v)) > 1e-5) {
-                        scrubbedBaseVectors.add(v);
-                        rawToScrubbed.put(i, j++);
-                    }
-                }
-            }
-            for (int i = 0; i < queryVectors.size(); i++) {
-                VectorFloat<?> v = queryVectors.get(i);
+        scrubbedBaseVectors = new ArrayList<>(baseVectors.size());
+        scrubbedQueryVectors = new ArrayList<>(queryVectors.size());
+        gtSet = new ArrayList<>(groundTruth.size());
+        Map<Integer, Integer> rawToScrubbed = new HashMap<>();
+        {
+            int j = 0;
+            for (int i = 0; i < baseVectors.size(); i++) {
+                VectorFloat<?> v = baseVectors.get(i);
                 if (Math.abs(normOf(v)) > 1e-5) {
-                    scrubbedQueryVectors.add(v);
-                    var gt = new HashSet<Integer>();
-                    for (int j : groundTruth.get(i)) {
-                        gt.add(rawToScrubbed.get(j));
-                    }
-                    gtSet.add(gt);
+                    scrubbedBaseVectors.add(v);
+                    rawToScrubbed.put(i, j++);
                 }
             }
-            // now that the zero vectors are removed, we can normalize if it looks like they aren't already
+        }
+        // also remove zero query vectors
+        for (int i = 0; i < queryVectors.size(); i++) {
+            VectorFloat<?> v = queryVectors.get(i);
+            if (Math.abs(normOf(v)) > 1e-5) {
+                scrubbedQueryVectors.add(v);
+                var gt = new HashSet<Integer>();
+                for (int j : groundTruth.get(i)) {
+                    gt.add(rawToScrubbed.get(j));
+                }
+                gtSet.add(gt);
+            }
+        }
+
+        // now that the zero vectors are removed, we can normalize if it looks like they aren't already
+        if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
             if (Math.abs(normOf(baseVectors.get(0)) - 1.0) > 1e-5) {
                 normalizeAll(scrubbedBaseVectors);
                 normalizeAll(scrubbedQueryVectors);
             }
-            assert scrubbedQueryVectors.size() == gtSet.size();
-        } else {
-            scrubbedBaseVectors = baseVectors;
-            scrubbedQueryVectors = queryVectors;
-            gtSet = groundTruth;
         }
 
+        assert scrubbedQueryVectors.size() == gtSet.size();
         return new DataSet(pathStr, similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
 
