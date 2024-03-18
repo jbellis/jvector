@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.vector.VectorUtil;
  * Performs similarity comparisons with compressed vectors without decoding them
  */
 abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
+
     protected final PQVectors cv;
 
     protected PQDecoder(PQVectors cv) {
@@ -94,9 +95,25 @@ abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
             super(cv);
             var pq = this.cv.pq;
 
+            // this part is not query-dependent, so we can cache it
+            aMagnitude = cv.partialMagnitudes().updateAndGet(current -> {
+                if (current != null) {
+                    return current;
+                }
+
+                var partialMagnitudes = new float[pq.getSubspaceCount() * pq.getClusterCount()];
+                for (int m = 0; m < pq.getSubspaceCount(); ++m) {
+                    for (int j = 0; j < pq.getClusterCount(); ++j) {
+                        float[] centroidSubvector = pq.codebooks[m][j];
+                        partialMagnitudes[(m * pq.getClusterCount()) + j] = VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, centroidSubvector.length);
+                    }
+                }
+                return partialMagnitudes;
+            });
+
+
             // Compute and cache partial sums and magnitudes for query vector
             partialSums = cv.reusablePartialSums();
-            aMagnitude = cv.reusablePartialMagnitudes();
             float bMagSum = 0.0f;
 
             float[] center = pq.getCenter();
@@ -107,7 +124,6 @@ abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
                 for (int j = 0; j < ProductQuantization.CLUSTERS; ++j) {
                     float[] centroidSubvector = pq.codebooks[m][j];
                     partialSums[(m * ProductQuantization.CLUSTERS) + j] = VectorUtil.dotProduct(centroidSubvector, 0, centeredQuery, offset, centroidSubvector.length);
-                    aMagnitude[(m * ProductQuantization.CLUSTERS) + j] = VectorUtil.dotProduct(centroidSubvector, 0, centroidSubvector, 0, centroidSubvector.length);
                 }
 
                 bMagSum += VectorUtil.dotProduct(centeredQuery, offset, centeredQuery, offset, pq.subvectorSizesAndOffsets[m][0]);

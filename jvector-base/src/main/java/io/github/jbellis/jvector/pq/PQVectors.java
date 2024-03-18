@@ -25,19 +25,20 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class PQVectors implements CompressedVectors {
     final ProductQuantization pq;
     private final byte[][] compressedVectors;
     private final ThreadLocal<float[]> partialSums; // for dot product, euclidean, and cosine
-    private final ThreadLocal<float[]> partialMagnitudes; // for cosine
+    private final AtomicReference<float[]> partialMagnitudes; // for cosine
 
     public PQVectors(ProductQuantization pq, byte[][] compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
         this.partialSums = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
-        this.partialMagnitudes = ThreadLocal.withInitial(() -> new float[pq.getSubspaceCount() * ProductQuantization.CLUSTERS]);
+        this.partialMagnitudes = new AtomicReference<>(null);
     }
 
     @Override
@@ -121,8 +122,8 @@ public class PQVectors implements CompressedVectors {
         return partialSums.get();
     }
 
-    float[] reusablePartialMagnitudes() {
-        return partialMagnitudes.get();
+    AtomicReference<float[]> partialMagnitudes() {
+        return partialMagnitudes;
     }
 
     @Override

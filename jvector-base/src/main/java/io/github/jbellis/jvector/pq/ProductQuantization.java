@@ -415,6 +415,10 @@ public class ProductQuantization implements VectorCompressor<byte[]> {
         return size;
     }
 
+    public int getClusterCount() {
+        return ProductQuantization.CLUSTERS;
+    }
+
     @Override
     public String toString() {
         return String.format("ProductQuantization(%s)", M);
