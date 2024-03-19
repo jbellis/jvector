@@ -117,7 +117,8 @@ public class GraphSearcher implements AutoCloseable {
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
      *                        with a large topK to find (approximately) all nodes above the given threshold.
      *                        If threshold > 0 then the search will stop when it is probabilistically unlikely
-     *                        to find more nodes above the threshold, even if `topK` results have not yet been found.
+     *                        to find more nodes above the threshold, or when `topK` results have been found,
+     *                        whichever comes first.
      * @param rerankFloor     (Experimental!) Candidates whose approximate similarity is at least this value
      *                        will not be reranked with the exact score (which requires loading the raw vector)
      *                        and included in the final results.  (Potentially leaving fewer than topK entries
@@ -148,7 +149,8 @@ public class GraphSearcher implements AutoCloseable {
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
      *                        with a large topK to find (approximately) all nodes above the given threshold.
      *                        If threshold > 0 then the search will stop when it is probabilistically unlikely
-     *                        to find more nodes above the threshold, even if `topK` results have not yet been found.
+     *                        to find more nodes above the threshold, or when `topK` results have been found,
+     *                        whichever comes first.
      * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
      *                        If {@link Bits#ALL}, all nodes are acceptable.
      *                        It is caller's responsibility to ensure that there are enough acceptable nodes
@@ -277,6 +279,7 @@ public class GraphSearcher implements AutoCloseable {
             if (topCandidateScore < minAcceptedSimilarity) {
                 break;
             }
+            scoreTracker.track(topCandidateScore);
             // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
             if (scoreTracker.shouldStop()) {
                 break;
@@ -325,7 +328,6 @@ public class GraphSearcher implements AutoCloseable {
                 numVisited++;
 
                 float friendSimilarity = scoreFunction.supportsBulkSimilarity() ? similarities.get(i) : scoreFunction.similarityTo(friendOrd);
-                scoreTracker.track(friendSimilarity);
                 candidates.push(friendOrd, friendSimilarity);
             }
         }

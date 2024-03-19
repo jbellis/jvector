@@ -16,14 +16,15 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.util.AbstractLongHeap;
-import io.github.jbellis.jvector.util.BoundedLongHeap;
-import org.apache.commons.math3.stat.StatUtils;
+import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
-import static io.github.jbellis.jvector.util.NumericUtils.floatToSortableInt;
-import static io.github.jbellis.jvector.util.NumericUtils.sortableIntToFloat;
+import static java.lang.Math.max;
 
 interface ScoreTracker {
+    VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     ScoreTracker NO_OP = new NoOpTracker();
 
@@ -47,32 +48,27 @@ interface ScoreTracker {
      * (finding the local maximum) and entered phase 2 (mostly just finding worse options)
      */
     class TwoPhaseTracker implements ScoreTracker {
-        static final int RECENT_SCORES_TRACKED = 500;
-        static final int BEST_SCORES_TRACKED = 100;
+        static final int RECENT_SCORES_TRACKED = 100;
 
         // a sliding window of recent scores
-        private final double[] recentScores;
+        private final VectorFloat<?> recentScores;
         private int recentEntryIndex;
-
-        // Heap of the best scores seen so far
-        AbstractLongHeap bestScores;
 
         // observation count
         private int observationCount;
+        private float bestMean;
 
-        private final double threshold;
+        private final float threshold;
 
-        TwoPhaseTracker(double threshold) {
-            this.recentScores = new double[RECENT_SCORES_TRACKED];
-            this.bestScores = new BoundedLongHeap(BEST_SCORES_TRACKED);
+        TwoPhaseTracker(float threshold) {
+            this.recentScores = vts.createFloatVector(RECENT_SCORES_TRACKED);
             this.threshold = threshold;
         }
 
         @Override
         public void track(float score) {
-            bestScores.push(floatToSortableInt(score));
-            recentScores[recentEntryIndex] = score;
-            recentEntryIndex = (recentEntryIndex + 1) % recentScores.length;
+            recentScores.set(recentEntryIndex, score);
+            recentEntryIndex = (recentEntryIndex + 1) % recentScores.length();
             observationCount++;
         }
 
@@ -82,17 +78,19 @@ interface ScoreTracker {
             if (observationCount < RECENT_SCORES_TRACKED) {
                 return false;
             }
-            // evaluation is expensive so only do it 1% of the time
-            if (observationCount % 100 != 0) {
+            // evaluation is expensive so only do it 10% of the time
+            if (observationCount % 10 != 0) {
                 return false;
             }
 
-            // we're in phase 2 if the 99th percentile of the recent scores is worse than the best score
-            // (paper suggests median, but experimentally that is too prone to false positives.
-            // 90th does seem to be enough, but 99th doesn't result in much extra work, so we'll be conservative)
-            double windowMedian = StatUtils.percentile(recentScores, 99);
-            double worstBest = sortableIntToFloat((int) bestScores.top());
-            return windowMedian < worstBest && windowMedian < threshold;
+            // we're in phase 2 if the median of the recent scores is worse than the worst best score,
+            // indicating that we found the local maximum and are unlikely to find better options
+            float windowMean = VectorUtil.sum(recentScores) / recentScores.length();
+            try {
+                return windowMean < bestMean && windowMean < threshold;
+            } finally {
+                bestMean = max(bestMean, windowMean);
+            }
         }
     }
 }

@@ -46,6 +46,33 @@ public class Test2DThreshold extends LuceneTestCase {
         testThreshold(20_000, 16);
     }
 
+    @Test
+    public void testThresholdReducesNodesVisited() {
+        var R = getRandom();
+        var vectors = TestVectorGraph.createRandomFloatVectors(10_000, 2, R);
+
+        var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.EUCLIDEAN, 6, 12, 1.2f, 1.4f);
+        var onHeapGraph = builder.build();
+
+        var searcher = new GraphSearcher.Builder(onHeapGraph.getView()).build();
+        for (int i = 0; i < 10; i++) {
+            var q = TestUtil.randomVector(R, 2);
+
+            var sf = new NodeSimilarity.ExactScoreFunction() {
+                public float similarityTo(int j) {
+                    return VectorSimilarityFunction.EUCLIDEAN.compare(q, ravv.vectorValue(j));
+                }
+            };
+            var result = searcher.search(sf, null, 10, 0.0f, Bits.ALL);
+            var visited = result.getVisitedCount();
+                float th = 1.0f;
+                var r2 = searcher.search(sf, null, 10, th, Bits.ALL);
+                System.out.printf("%d:%d @%.2f%n", r2.getVisitedCount(), visited, th);
+                assert r2.getVisitedCount() <= visited : "visited " + r2.getVisitedCount() + " nodes for threshold " + th + " but should have visited fewer than " + visited;
+        }
+    }
+
     public void testThreshold(int graphSize, int maxDegree) throws IOException {
         var R = getRandom();
 
@@ -62,7 +89,7 @@ public class Test2DThreshold extends LuceneTestCase {
 
             NodeSimilarity.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
             var result = searcher.search(sf, null, vectors.length, tp.th, Bits.ALL);
-            // System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
+             System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
         }
@@ -84,7 +111,7 @@ public class Test2DThreshold extends LuceneTestCase {
                 var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
                 var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
 
-                // System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
+                 System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
                 assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
                 assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
             }
