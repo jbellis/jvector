@@ -46,6 +46,35 @@ public class Test2DThreshold extends LuceneTestCase {
         testThreshold(20_000, 16);
     }
 
+    @Test
+    public void testThresholdReducesNodesVisited() {
+        var R = getRandom();
+        var vectors = TestFloatVectorGraph.createRandomFloatVectors(10_000, 2, R);
+
+        var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
+        var builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.EUCLIDEAN, 6, 12, 1.2f, 1.4f);
+        var onHeapGraph = builder.build();
+
+        var searcher = new GraphSearcher.Builder<>(onHeapGraph.getView()).build();
+        for (int i = 0; i < 10; i++) {
+            var q = TestUtil.randomVector(R, 2);
+
+            var sf = new NodeSimilarity.ExactScoreFunction() {
+                public float similarityTo(int j) {
+                    return VectorSimilarityFunction.EUCLIDEAN.compare(q, ravv.vectorValue(j));
+                }
+            };
+            var result = searcher.search(sf, null, 10, 0.0f, Bits.ALL);
+            var visited = result.getVisitedCount();
+            for (int j = 1; j <= 10; j++) {
+                float th = 0.1f * j;
+                var r2 = searcher.search(sf, null, 10, th, Bits.ALL);
+                System.out.printf("%d:%d @%.2f%n", r2.getVisitedCount(), visited, th);
+                assert r2.getVisitedCount() <= visited : "visited " + r2.getVisitedCount() + " nodes for threshold " + th + " but should have visited fewer than " + visited;
+            }
+        }
+    }
+
     public void testThreshold(int graphSize, int maxDegree) throws IOException {
         var R = getRandom();
         // generate 2D vectors
