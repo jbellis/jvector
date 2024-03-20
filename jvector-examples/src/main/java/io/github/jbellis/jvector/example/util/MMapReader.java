@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.example.util;
 import com.indeed.util.mmap.MMapBuffer;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -40,6 +41,15 @@ public class MMapReader implements RandomAccessReader {
             return buffer.memory().getInt(position);
         } finally {
             position += Integer.BYTES;
+        }
+    }
+
+    @Override
+    public float readFloat() throws IOException {
+        try {
+            return buffer.memory().getFloat(position);
+        } finally {
+            position += Float.BYTES;
         }
     }
 

@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
@@ -606,7 +607,6 @@ final class SimdOps {
         return res;
     }
 
-
     public static void bulkShuffleSimilarity(ArrayByteSequence shuffles, int codebookCount, ArrayVectorFloat partials, ArrayVectorFloat results, VectorSimilarityFunction vsf) {
         for (int i = 0; i < codebookCount; i++) {
             for (int j = 0; j < 32; j++) {
@@ -625,6 +625,317 @@ final class SimdOps {
                 default:
                     throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
             }
+        }
+    }
+
+    public static float max(ArrayVectorFloat v) {
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MIN_VALUE);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v.get(), i);
+            accum = accum.max(a);
+        }
+        float max = accum.reduceLanes(VectorOperators.MAX);
+        for (int i = vectorizedLength; i < v.length(); i++) {
+            max = Math.max(max, v.get(i));
+        }
+        return max;
+    }
+
+    public static float min(ArrayVectorFloat v) {
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v.get(), i);
+            accum = accum.min(a);
+        }
+        float min = accum.reduceLanes(VectorOperators.MIN);
+        for (int i = vectorizedLength; i < v.length(); i++) {
+            min = Math.min(min, v.get(i));
+        }
+        return min;
+    }
+
+    private static float lvqDotProduct256(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        var sequenceBacking = (ArrayByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragmentA and packedFragmentB only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use packedFragmentA, packedFragmentB, packedFragmentA >>> 8 & 0xff, packedFragmentB >>> 8 & 0xff
+        IntVector packedFragmentA = null;
+        IntVector packedFragmentB = null;
+        FloatVector lvqFloats;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector fullFloats = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromArray(ByteVector.SPECIES_256, sequenceBacking.get(), i);
+                packedFragmentA = tempBytes.reinterpretAsInts();
+                tempBytes = ByteVector.fromArray(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32);
+                packedFragmentB = tempBytes.reinterpretAsInts();
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                packedFragmentA = packedFragmentA.lanewise(VectorOperators.LSHR, 8);
+                packedFragmentB = packedFragmentB.lanewise(VectorOperators.LSHR, 8);
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                lvqFloats = (FloatVector) packedFragmentB.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            sum = fullFloats.fma(lvqFloats, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i)
+            res += vector.get(i) * packedVector.getQuantized(i);
+
+        res = res * packedVector.scale + vectorSum * packedVector.bias;
+
+        return res;
+    }
+
+    private static float lvqDotProduct512(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        var sequenceBacking = (ArrayByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragment only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        IntVector packedFragment = null;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector fullFloats = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromArray(ByteVector.SPECIES_512, sequenceBacking.get(), i);
+                packedFragment = byteVector.reinterpretAsInts();
+            } else {
+                packedFragment = packedFragment.lanewise(VectorOperators.LSHR, 8);
+            }
+            FloatVector lvqFloats = (FloatVector) packedFragment.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            sum = fullFloats.fma(lvqFloats, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i)
+            res += vector.get(i) * packedVector.getQuantized(i);
+
+        res = res * packedVector.scale + vectorSum * packedVector.bias;
+
+        return res;
+    }
+
+    public static float lvqDotProduct(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+        if (HAS_AVX512) {
+            return lvqDotProduct512(vector, packedVector, vectorSum);
+        } else {
+            return lvqDotProduct256(vector, packedVector, vectorSum);
+        }
+    }
+
+    private static float lvqSquareL2Distance256(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        var sequenceBacking = (ArrayByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragmentA and packedFragmentB only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use packedFragmentA, packedFragmentB, packedFragmentA >>> 8 & 0xff, packedFragmentB >>> 8 & 0xff
+        IntVector packedFragmentA = null;
+        IntVector packedFragmentB = null;
+        FloatVector lvqFloats;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector fullFloats = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromArray(ByteVector.SPECIES_256, sequenceBacking.get(), i);
+                packedFragmentA = tempBytes.reinterpretAsInts();
+                tempBytes = ByteVector.fromArray(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32);
+                packedFragmentB = tempBytes.reinterpretAsInts();
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                packedFragmentA = packedFragmentA.lanewise(VectorOperators.LSHR, 8);
+                packedFragmentB = packedFragmentB.lanewise(VectorOperators.LSHR, 8);
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                lvqFloats = (FloatVector) packedFragmentB.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            var diff = fullFloats.sub(lvqFloats);
+            sum = diff.fma(diff, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = vector.get(i) - packedVector.getDequantized(i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+    private static float lvqSquareL2Distance512(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        var sequenceBacking = (ArrayByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragment only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        IntVector packedFragment = null;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector fullFloats = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromArray(ByteVector.SPECIES_512, sequenceBacking.get(), i);
+                packedFragment = tempBytes.reinterpretAsInts();
+            } else {
+                packedFragment = packedFragment.lanewise(VectorOperators.LSHR, 8);
+            }
+            FloatVector lvqFloats = (FloatVector) packedFragment.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            var diff = fullFloats.sub(lvqFloats);
+            sum = diff.fma(diff, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = vector.get(i) - packedVector.getDequantized(i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+    public static float lvqSquareL2Distance(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+        if (HAS_AVX512) {
+            return lvqSquareL2Distance512(vector, packedVector);
+        } else {
+            return lvqSquareL2Distance256(vector, packedVector);
+        }
+    }
+
+    private static float lvqCosine256(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, ArrayVectorFloat centroid) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        var sequenceBacking = (ArrayByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragmentA and packedFragmentB only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use packedFragmentA, packedFragmentB, packedFragmentA >>> 8 & 0xff, packedFragmentB >>> 8 & 0xff
+        IntVector packedFragmentA = null;
+        IntVector packedFragmentB = null;
+        FloatVector lvqFloats;
+        var vsum = FloatVector.zero(FloatVector.SPECIES_256);
+        var vFullMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        var vLvqMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector fullVector = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+            FloatVector centroidVector = FloatVector.fromArray(FloatVector.SPECIES_256, centroid.get(), i);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromArray(ByteVector.SPECIES_256, sequenceBacking.get(), i);
+                packedFragmentA = tempBytes.reinterpretAsInts();
+                tempBytes = ByteVector.fromArray(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32);
+                packedFragmentB = tempBytes.reinterpretAsInts();
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                packedFragmentA = packedFragmentA.lanewise(VectorOperators.LSHR, 8);
+                packedFragmentB = packedFragmentB.lanewise(VectorOperators.LSHR, 8);
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                lvqFloats = (FloatVector) packedFragmentB.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            lvqFloats = lvqFloats.add(centroidVector);
+            vsum = fullVector.fma(lvqFloats, vsum);
+            vFullMagnitude = fullVector.fma(fullVector, vFullMagnitude);
+            vLvqMagnitude = lvqFloats.fma(lvqFloats, vLvqMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float fullMagnitude = vFullMagnitude.reduceLanes(VectorOperators.ADD);
+        float lvqMagnitude = vLvqMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var lvqVal = packedVector.getDequantized(i) + centroid.get(i);
+            var fullVal = vector.get(i);
+            sum += fullVal * lvqVal;
+            fullMagnitude += fullVal * fullVal;
+            lvqMagnitude += lvqVal * lvqVal;
+        }
+
+        return (float) (sum / Math.sqrt(fullMagnitude * lvqMagnitude));
+    }
+
+    private static float lvqCosine512(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, ArrayVectorFloat centroid) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        var sequenceBacking = (ArrayByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragment only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        IntVector packedFragment = null;
+        var vsum = FloatVector.zero(FloatVector.SPECIES_512);
+        var vFullMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        var vLvqMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector fullVector = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
+            FloatVector centroidVector = FloatVector.fromArray(FloatVector.SPECIES_512, centroid.get(), i);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromArray(ByteVector.SPECIES_512, sequenceBacking.get(), i);
+                packedFragment = tempBytes.reinterpretAsInts();
+            } else {
+                packedFragment = packedFragment.lanewise(VectorOperators.LSHR, 8);
+            }
+            var lvqFloats = (FloatVector) packedFragment.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            lvqFloats = lvqFloats.add(centroidVector);
+            vsum = fullVector.fma(lvqFloats, vsum);
+            vFullMagnitude = fullVector.fma(fullVector, vFullMagnitude);
+            vLvqMagnitude = lvqFloats.fma(lvqFloats, vLvqMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float fullMagnitude = vFullMagnitude.reduceLanes(VectorOperators.ADD);
+        float lvqMagnitude = vLvqMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var lvqVal = packedVector.getDequantized(i) + centroid.get(i);
+            var fullVal = vector.get(i);
+            sum += fullVal * lvqVal;
+            fullMagnitude += fullVal * fullVal;
+            lvqMagnitude += lvqVal * lvqVal;
+        }
+
+        return (float) (sum / Math.sqrt(fullMagnitude * lvqMagnitude));
+    }
+
+    public static float lvqCosine(ArrayVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, ArrayVectorFloat centroid) {
+        if (HAS_AVX512) {
+            return lvqCosine512(vector, packedVector, centroid);
+        } else {
+            return lvqCosine256(vector, packedVector, centroid);
         }
     }
 }
