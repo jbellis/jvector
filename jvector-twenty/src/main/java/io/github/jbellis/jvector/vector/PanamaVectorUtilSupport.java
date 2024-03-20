@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -107,6 +108,21 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public int hammingDistance(long[] v1, long[] v2) {
         return SimdOps.hammingDistance(v1, v2);
+    }
+
+    @Override
+    public float max(VectorFloat<?> vector) {
+        return SimdOps.max((ArrayVectorFloat) vector);
+    }
+
+    @Override
+    public float min(VectorFloat<?> vector) {
+        return SimdOps.min((ArrayVectorFloat) vector);
+    }
+
+    @Override
+    public float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        return SimdOps.lvqDot((ArrayVectorFloat) query, vector, querySum);
     }
 
     @Override

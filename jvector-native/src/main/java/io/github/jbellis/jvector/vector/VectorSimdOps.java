@@ -16,8 +16,11 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.VectorOperators;
 
@@ -529,6 +532,66 @@ final class VectorSimdOps {
         for (int i = vectorizedLength; i < a.length; i++) {
             res += Long.bitCount(a[i] ^ b[i]);
         }
+
+        return res;
+    }
+
+    public static float max(MemorySegmentVectorFloat vector) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        float max = Float.MIN_VALUE;
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            max = Math.max(max, a.reduceLanes(VectorOperators.MAX));
+        }
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            max = Math.max(max, vector.get(i));
+        }
+        return max;
+    }
+
+    public static float min(MemorySegmentVectorFloat vector) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        float min = Float.MAX_VALUE;
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            min = Math.min(min, a.reduceLanes(VectorOperators.MIN));
+        }
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            min = Math.min(min, vector.get(i));
+        }
+        return min;
+    }
+
+    public static float lvqDot(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        IntVector b = null;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                b = byteVector.reinterpretAsInts();
+            } else {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+            }
+            var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            sum = a.fma(c, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i)
+            res += query.get(i) * vector.get(i);
+
+        res = res * vector.scale + querySum * vector.bias;
 
         return res;
     }

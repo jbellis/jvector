@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -318,5 +319,34 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
           throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
       }
     }
+  }
+
+  @Override
+  public float max(VectorFloat<?> v) {
+      float max = Float.MIN_VALUE;
+      for (int i = 0; i < v.length(); i++) {
+        max = Math.max(max, v.get(i));
+      }
+      return max;
+  }
+
+  @Override
+  public float min(VectorFloat<?> v) {
+      float min = Float.MAX_VALUE;
+      for (int i = 0; i < v.length(); i++) {
+        min = Math.min(min, v.get(i));
+      }
+      return min;
+  }
+
+  @Override
+  public float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+    float sum = 0;
+    for (int i = 0; i < query.length(); i++) {
+      sum += query.get(i) * vector.get(i);
+    }
+    sum *= vector.scale;
+    sum += vector.bias * querySum;
+    return sum;
   }
 }

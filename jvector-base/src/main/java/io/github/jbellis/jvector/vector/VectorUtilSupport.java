@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -106,6 +107,9 @@ public interface VectorUtilSupport {
 
   void calculatePartialSums(VectorFloat<?> codebook, int baseOffset, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums);
 
+  float max(VectorFloat<?> v);
+  float min(VectorFloat<?> v);
+
   default void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
     for (int i = 0; i < results.length(); i++) {
       results.set(i, (1 + dotProduct(v1, 0, v2, i * v1.length(), v1.length())) / 2);
@@ -123,4 +127,6 @@ public interface VectorUtilSupport {
       results.set(i, (1 + cosine(v1, 0, v2, i * v1.length(), v1.length())) / 2);
     }
   }
+
+  float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum);
 }
