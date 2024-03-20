@@ -54,9 +54,7 @@ final class ArrayVectorProvider implements VectorTypeSupport
 
     @Override
     public void readFloatVector(RandomAccessReader r, int size, VectorFloat<?> vector, int offset) throws IOException {
-        float[] v = new float[size];
-        r.readFully(v);
-        System.arraycopy(v, 0, ((ArrayVectorFloat)vector).get(), offset, size);
+        r.read(((ArrayVectorFloat) vector).get(), offset, size);
     }
 
     @Override

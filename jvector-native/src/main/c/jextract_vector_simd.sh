@@ -42,3 +42,6 @@ jextract \
   -I . \
   --header-class-name NativeSimdOps \
   jvector_simd.h
+
+# Set critical linker option with heap-based segments for all generated methods
+sed -i 's/DESC)/DESC, Linker.Option.critical(true))/g' ../java/io/github/jbellis/jvector/vector/cnative/NativeSimdOps.java

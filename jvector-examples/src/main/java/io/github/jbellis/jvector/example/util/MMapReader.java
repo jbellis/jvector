@@ -87,6 +87,17 @@ public class MMapReader implements RandomAccessReader {
     }
 
     @Override
+    public void read(float[] floats, int offset, int count) {
+        int bytesToRead = count * Float.BYTES;
+        if (scratch.length < bytesToRead) {
+            scratch = new byte[bytesToRead];
+        }
+        read(scratch, 0, bytesToRead);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(scratch).order(ByteOrder.BIG_ENDIAN);
+        byteBuffer.asFloatBuffer().get(floats, offset, count);
+    }
+
+    @Override
     public void readFully(long[] vector) {
         int bytesToRead = vector.length * Long.BYTES;
         if (scratch.length < bytesToRead) {

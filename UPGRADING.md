@@ -2,7 +2,7 @@
 
 ## New features
 - Experimental support for native code acceleration has been added. This currently only supports Linux x86-64 
-  with certain AVX-512 extensions. This is opt-in and requires the use of off-heap `VectorFloat`/`ByteSequence`
+  with certain AVX-512 extensions. This is opt-in and requires the use of MemorySegment `VectorFloat`/`ByteSequence`
   representations.
 - Experimental support for fused graph indexes has been added. These work in best concert with native code acceleration.
   This explores a design space allowing for packed representations of vectors fused into the graph in shapes optimal

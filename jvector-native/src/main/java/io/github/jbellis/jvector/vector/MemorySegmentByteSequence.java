@@ -18,32 +18,31 @@ package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.Buffer;
 
 /**
- * ByteSequence implementation backed by an off-heap MemorySegment.
+ * ByteSequence implementation backed by an on-heap MemorySegment.
  */
-public class OffHeapByteSequence implements ByteSequence<MemorySegment> {
+public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     private final MemorySegment segment;
     private final int length;
 
-    OffHeapByteSequence(int length) {
-        this.segment = Arena.ofAuto().allocate(length, 1);
+    MemorySegmentByteSequence(int length) {
         this.length = length;
+        segment = MemorySegment.ofArray(new byte[length]);
     }
 
-    OffHeapByteSequence(Buffer data) {
+    MemorySegmentByteSequence(Buffer data) {
         this(data.remaining());
         segment.copyFrom(MemorySegment.ofBuffer(data));
     }
 
-    OffHeapByteSequence(byte[] data) {
-        this(data.length);
-        segment.copyFrom(MemorySegment.ofArray(data));
+    MemorySegmentByteSequence(byte[] data) {
+        this.segment = MemorySegment.ofArray(data);
+        this.length = data.length;
     }
 
     @Override
@@ -53,7 +52,7 @@ public class OffHeapByteSequence implements ByteSequence<MemorySegment> {
 
     @Override
     public void copyFrom(ByteSequence<?> src, int srcOffset, int destOffset, int length) {
-        OffHeapByteSequence csrc = (OffHeapByteSequence) src;
+        MemorySegmentByteSequence csrc = (MemorySegmentByteSequence) src;
         segment.asSlice(destOffset, length).copyFrom(csrc.segment.asSlice(srcOffset));
     }
 
@@ -84,7 +83,7 @@ public class OffHeapByteSequence implements ByteSequence<MemorySegment> {
 
     @Override
     public ByteSequence<MemorySegment> copy() {
-        OffHeapByteSequence copy = new OffHeapByteSequence(length());
+        MemorySegmentByteSequence copy = new MemorySegmentByteSequence(length());
         copy.copyFrom(this, 0, 0, length());
         return copy;
     }
@@ -110,7 +109,7 @@ public class OffHeapByteSequence implements ByteSequence<MemorySegment> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        OffHeapByteSequence that = (OffHeapByteSequence) o;
+        MemorySegmentByteSequence that = (MemorySegmentByteSequence) o;
         return segment.mismatch(that.segment) == -1;
     }
 
