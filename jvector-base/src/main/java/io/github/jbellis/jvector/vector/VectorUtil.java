@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -193,5 +194,18 @@ public final class VectorUtil {
    */
   public static void cosineMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
     impl.cosineMultiScore(v1, v2, results);
+  }
+
+  public static float max(VectorFloat<?> v) {
+    return impl.max(v);
+  }
+
+  public static float min(VectorFloat<?> v) {
+    return impl.min(v);
+  }
+
+
+  public static float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+    return impl.lvqDot(query, vector, querySum);
   }
 }

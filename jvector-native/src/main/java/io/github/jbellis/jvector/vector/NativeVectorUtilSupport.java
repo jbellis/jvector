@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -106,6 +107,16 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public float max(VectorFloat<?> vector) {
+        return VectorSimdOps.max((MemorySegmentVectorFloat) vector);
+    }
+
+    @Override
+    public float min(VectorFloat<?> vector) {
+        return VectorSimdOps.min((MemorySegmentVectorFloat) vector);
+    }
+
+    @Override
     public void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results) {
         switch (vsf) {
             case DOT_PRODUCT -> NativeSimdOps.bulk_shuffle_dot_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentVectorFloat) partials).get(), ((MemorySegmentVectorFloat) results).get());
@@ -131,5 +142,10 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
         NativeSimdOps.square_distance_multi_f32_512(((MemorySegmentVectorFloat)v1).get(), ((MemorySegmentVectorFloat)v2).get(), v1.length(), results.length(), ((MemorySegmentVectorFloat)results).get());
+    }
+
+    @Override
+    public float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        return VectorSimdOps.lvqDot((MemorySegmentVectorFloat) query, vector, querySum);
     }
 }

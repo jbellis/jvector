@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
@@ -606,7 +607,6 @@ final class SimdOps {
         return res;
     }
 
-
     public static void bulkShuffleSimilarity(ArrayByteSequence shuffles, int codebookCount, ArrayVectorFloat partials, ArrayVectorFloat results, VectorSimilarityFunction vsf) {
         for (int i = 0; i < codebookCount; i++) {
             for (int j = 0; j < 32; j++) {
@@ -626,5 +626,67 @@ final class SimdOps {
                     throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
             }
         }
+    }
+
+    public static float max(ArrayVectorFloat v) {
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MIN_VALUE);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v.get(), i);
+            accum = accum.max(a);
+        }
+        float max = accum.reduceLanes(VectorOperators.MAX);
+        for (int i = vectorizedLength; i < v.length(); i++) {
+            max = Math.max(max, v.get(i));
+        }
+        return max;
+    }
+
+    public static float min(ArrayVectorFloat v) {
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v.get(), i);
+            accum = accum.min(a);
+        }
+        float min = accum.reduceLanes(VectorOperators.MIN);
+        for (int i = vectorizedLength; i < v.length(); i++) {
+            min = Math.min(min, v.get(i));
+        }
+        return min;
+    }
+
+    public static float lvqDot(ArrayVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var sequenceBacking = (ArrayByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        IntVector b = null;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, query.get(), i);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, sequenceBacking.get(), i);
+                b = byteVector.reinterpretAsInts();
+            } else {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+            }
+            var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            sum = a.fma(c, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i)
+            res += query.get(i) * vector.get(i);
+
+        res = res * vector.scale + querySum * vector.bias;
+
+        return res;
     }
 }
