@@ -18,7 +18,7 @@ jobs:
         cancel-in-progress: true
     strategy:
       matrix:
-        jdk: [ 11, 20 ] # 22 is not yet released, but it needs to be added
+        jdk: [ 11, 20, 22]
         os: [ ubuntu-latest, windows-latest ]
     runs-on: ${{ matrix.os }}
     steps:
