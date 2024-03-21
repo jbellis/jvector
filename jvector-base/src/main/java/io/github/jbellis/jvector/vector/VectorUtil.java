@@ -204,8 +204,11 @@ public final class VectorUtil {
     return impl.min(v);
   }
 
+  public static float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+    return impl.lvqDotProduct(query, vector, querySum);
+  }
 
-  public static float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
-    return impl.lvqDot(query, vector, querySum);
+  public static float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+    return impl.lvqSquareL2Distance(query, vector);
   }
 }

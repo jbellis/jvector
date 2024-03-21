@@ -285,7 +285,7 @@ public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountab
                 }
 
                 out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                quantizedVectors[originalOrdinal].write(out);
+                quantizedVectors[originalOrdinal].writePacked(out);
 
                 var neighbors = view.getNeighborsIterator(originalOrdinal);
                 out.writeInt(neighbors.size());

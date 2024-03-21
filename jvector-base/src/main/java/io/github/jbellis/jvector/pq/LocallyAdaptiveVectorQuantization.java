@@ -76,7 +76,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         float delta = (maxFloat - minFloat) / 255;
 
         // Apply the quantization formula
-        int quantizedValue = Math.round(((value - minFloat) / delta) + 0.5f) + (int)minFloat;
+        int quantizedValue = Math.round((value - minFloat) / delta);
 
         // Ensure the quantized value is within the 0 to 255 range
         if (quantizedValue < 0) quantizedValue = 0;
@@ -95,7 +95,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         return Integer.BYTES + globalMean.length() * Float.BYTES;
     }
 
-    public NodeSimilarity.Reranker rerankerFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQView view) {
+    private NodeSimilarity.Reranker dotProductRerankerFrom(VectorFloat<?> query, LVQView view) {
         var querySum = VectorUtil.sum(query);
         var queryGlobalBias = VectorUtil.dotProduct(query, globalMean);
         return (nodes, scores) -> {
@@ -103,11 +103,35 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
             for (int i = 0; i < nodeCount; i++) {
                 var node = nodes[i];
                 var vector = view.getPackedVector(node);
-                var lvqDot = VectorUtil.lvqDot(query, vector, querySum);
+                var lvqDot = VectorUtil.lvqDotProduct(query, vector, querySum);
                 lvqDot = lvqDot + queryGlobalBias;
                 scores.set(i, (1 + lvqDot) / 2);
             }
         };
+    }
+
+    private NodeSimilarity.Reranker euclideanRerankerFrom(VectorFloat<?> query, LVQView view) {
+        var shiftedQuery = VectorUtil.sub(query, globalMean);
+        return (nodes, scores) -> {
+            var nodeCount = nodes.length;
+            for (int i = 0; i < nodeCount; i++) {
+                var node = nodes[i];
+                var vector = view.getPackedVector(node);
+                var lvqDist = VectorUtil.lvqSquareL2Distance(shiftedQuery, vector);
+                scores.set(i, 1 / (1 + lvqDist));
+            }
+        };
+    }
+
+    public NodeSimilarity.Reranker rerankerFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQView view) {
+        switch (similarityFunction) {
+            case DOT_PRODUCT:
+                return dotProductRerankerFrom(query, view);
+            case EUCLIDEAN:
+                return euclideanRerankerFrom(query, view);
+            default:
+                throw new IllegalArgumentException("Unsupported similarity function: " + similarityFunction);
+        }
     }
 
     @Override
@@ -141,7 +165,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
             this.scale = scale;
         }
 
-        public void write(DataOutput out) throws IOException {
+        public void writePacked(DataOutput out) throws IOException {
             // write the min and max
             // write the encoded vector
             out.writeFloat(bias);
@@ -196,13 +220,17 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
             this.scale = scale;
         }
 
-        public int get(int index) {
+        public int getQuantized(int index) {
             var blockId = index / 64; // 64 bytes per block
             var inBlockId = index % 64; // switch to an in-block index
             var laneId = inBlockId % 16; // 4 bytes per lane
             var laneOffset = inBlockId / 16; // 16 lanes per block
             var packedIndex = blockId * 64 + laneId * 4 + laneOffset;
             return Byte.toUnsignedInt(packedVector.get(packedIndex));
+        }
+
+        public float getDequantized(int index) {
+            return (getQuantized(index) * scale) + bias;
         }
     }
 }

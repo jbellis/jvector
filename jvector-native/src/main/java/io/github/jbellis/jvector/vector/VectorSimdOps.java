@@ -565,15 +565,15 @@ final class VectorSimdOps {
         return min;
     }
 
-    public static float lvqDot(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+    public static float lvqDotProduct(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
         if (HAS_AVX512) {
-            return lvqDot512(query, vector, querySum);
+            return lvqDotProduct512(query, vector, querySum);
         } else {
-            return lvqDot256(query, vector, querySum);
+            return lvqDotProduct256(query, vector, querySum);
         }
     }
 
-    private static float lvqDot256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+    private static float lvqDotProduct256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
         var length = query.length();
         final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
@@ -609,14 +609,14 @@ final class VectorSimdOps {
 
         // Process the tail
         for (; i < length; ++i)
-            res += query.get(i) * vector.get(i);
+            res += query.get(i) * vector.getQuantized(i);
 
         res = res * vector.scale + querySum * vector.bias;
 
         return res;
     }
 
-    private static float lvqDot512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+    private static float lvqDotProduct512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
         var length = query.length();
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -636,17 +636,106 @@ final class VectorSimdOps {
                 b = b.lanewise(VectorOperators.LSHR, 8);
             }
             var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            sum = a.fma(c, sum);
+            sum = a.fma(c, sum);Vector<Float
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
         for (; i < length; ++i)
-            res += query.get(i) * vector.get(i);
+            res += query.get(i) * vector.getQuantized(i);
 
         res = res * vector.scale + querySum * vector.bias;
 
         return res;
+    }
+
+    private static float lvqSquareL2Distance256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b and c only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
+        IntVector b = null;
+        IntVector c = null;
+        Vector<Float> d;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                b = byteVector.reinterpretAsInts();
+                byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
+                c = byteVector.reinterpretAsInts();
+                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+                c = c.lanewise(VectorOperators.LSHR, 8);
+                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                d = c.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            d = d.mul(FloatVector.broadcast(FloatVector.SPECIES_256, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_256, vector.bias));
+            var diff = a.sub(d);
+            sum = diff.fma(diff, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = query.get(i) - vector.getDequantized(i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+    private static float lvqSquareL2Distance512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        IntVector b = null;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_512, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                b = byteVector.reinterpretAsInts();
+            } else {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+            }
+            var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0).reinterpretAsFloats();
+            c = c.mul(FloatVector.broadcast(FloatVector.SPECIES_512, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_512, vector.bias));
+            var diff = a.sub(c);
+            sum = diff.fma(diff, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = query.get(i) - vector.getDequantized(i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+    public static float lvqSquareL2Distance(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+        if (HAS_AVX512) {
+            return lvqSquareL2Distance512(query, vector);
+        } else {
+            return lvqSquareL2Distance256(query, vector);
+        }
     }
 }

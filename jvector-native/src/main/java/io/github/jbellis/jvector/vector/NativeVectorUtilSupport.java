@@ -145,7 +145,12 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
-        return VectorSimdOps.lvqDot((MemorySegmentVectorFloat) query, vector, querySum);
+    public float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        return VectorSimdOps.lvqDotProduct((MemorySegmentVectorFloat) query, vector, querySum);
+    }
+
+    @Override
+    public float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+        return VectorSimdOps.lvqSquareL2Distance((MemorySegmentVectorFloat) query, vector);
     }
 }
