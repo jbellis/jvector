@@ -22,6 +22,7 @@ import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
+import jdk.incubator.vector.Vector;
 import jdk.incubator.vector.VectorOperators;
 
 import java.nio.ByteOrder;
@@ -31,6 +32,8 @@ import java.util.List;
  * Support class for vector operations using a mix of native and Panama SIMD.
  */
 final class VectorSimdOps {
+    static final boolean HAS_AVX512 = IntVector.SPECIES_PREFERRED == IntVector.SPECIES_512;
+
     static float sum(MemorySegmentVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
@@ -563,6 +566,57 @@ final class VectorSimdOps {
     }
 
     public static float lvqDot(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        if (HAS_AVX512) {
+            return lvqDot512(query, vector, querySum);
+        } else {
+            return lvqDot256(query, vector, querySum);
+        }
+    }
+
+    private static float lvqDot256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b and c only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
+        IntVector b = null;
+        IntVector c = null;
+        Vector<Float> d;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                b = byteVector.reinterpretAsInts();
+                byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
+                c = byteVector.reinterpretAsInts();
+                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+                c = c.lanewise(VectorOperators.LSHR, 8);
+                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                d = c.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            sum = a.fma(d, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i)
+            res += query.get(i) * vector.get(i);
+
+        res = res * vector.scale + querySum * vector.bias;
+
+        return res;
+    }
+
+    private static float lvqDot512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
         var length = query.length();
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
