@@ -340,13 +340,23 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float lvqDot(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+  public float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
     float sum = 0;
     for (int i = 0; i < query.length(); i++) {
-      sum += query.get(i) * vector.get(i);
+      sum += query.get(i) * vector.getQuantized(i);
     }
     sum *= vector.scale;
     sum += vector.bias * querySum;
+    return sum;
+  }
+
+  @Override
+  public float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+    float sum = 0;
+    for (int i = 0; i < query.length(); i++) {
+      var diff = query.get(i) - vector.getDequantized(i);
+      sum += diff * diff;
+    }
     return sum;
   }
 }
