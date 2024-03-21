@@ -39,10 +39,7 @@ public class SimpleReader implements RandomAccessReader {
 
     @Override
     public void readFully(float[] floats) throws IOException {
-        ByteBuffer bb = ByteBuffer.allocate(floats.length * Float.BYTES);
-        raf.getChannel().read(bb);
-        bb.flip().order(ByteOrder.BIG_ENDIAN);
-        bb.asFloatBuffer().get(floats);
+        read(floats, 0, floats.length);
     }
 
     @Override
@@ -57,6 +54,14 @@ public class SimpleReader implements RandomAccessReader {
         for (int i = 0; i < count; i++) {
             ints[i] = raf.readInt();
         }
+    }
+
+    @Override
+    public void read(float[] floats, int offset, int count) throws IOException {
+        ByteBuffer bb = ByteBuffer.allocate(count * Float.BYTES);
+        raf.getChannel().read(bb);
+        bb.flip().order(ByteOrder.BIG_ENDIAN);
+        bb.asFloatBuffer().get(floats, offset, count);
     }
 
     @Override

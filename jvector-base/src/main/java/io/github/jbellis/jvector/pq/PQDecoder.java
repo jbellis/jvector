@@ -18,13 +18,17 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /**
  * Performs similarity comparisons with compressed vectors without decoding them
  */
 abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
+    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     protected final PQVectors cv;
 
     protected PQDecoder(PQVectors cv) {
@@ -86,9 +90,26 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
             super(cv);
             var pq = this.cv.pq;
 
+            // this part is not query-dependent, so we can cache it
+            aMagnitude = cv.partialMagnitudes().updateAndGet(current -> {
+                if (current != null) {
+                    return current;
+                }
+
+                var partialMagnitudes = vts.createFloatVector(pq.getSubspaceCount() * pq.getClusterCount());
+                for (int m = 0; m < pq.getSubspaceCount(); ++m) {
+                    int size = pq.subvectorSizesAndOffsets[m][0];
+                    var codebook = pq.codebooks[m];
+                    for (int j = 0; j < pq.getClusterCount(); ++j) {
+                        partialMagnitudes.set((m * pq.getClusterCount()) + j, VectorUtil.dotProduct(codebook, j * size, codebook, j * size, size));
+                    }
+                }
+                return partialMagnitudes;
+            });
+
+
             // Compute and cache partial sums and magnitudes for query vector
             partialSums = cv.reusablePartialSums();
-            aMagnitude = cv.reusablePartialMagnitudes();
             float bMagSum = 0.0f;
 
             VectorFloat<?> center = pq.globalCentroid;
@@ -100,7 +121,6 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
                 var codebook = pq.codebooks[m];
                 for (int j = 0; j < pq.getClusterCount(); ++j) {
                     partialSums.set((m * pq.getClusterCount()) + j, VectorUtil.dotProduct(codebook, j * size, centeredQuery, offset, size));
-                    aMagnitude.set((m * pq.getClusterCount()) + j, VectorUtil.dotProduct(codebook, j * size, codebook, j * size, size));
                 }
 
                 bMagSum += VectorUtil.dotProduct(centeredQuery, offset, centeredQuery, offset, pq.subvectorSizesAndOffsets[m][0]);

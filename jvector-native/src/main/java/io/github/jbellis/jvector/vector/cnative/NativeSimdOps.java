@@ -102,7 +102,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("check_compatibility"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -154,7 +154,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("dot_product_f32"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -206,7 +206,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("euclidean_f32"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -255,7 +255,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("bulk_shuffle_dot_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -304,7 +304,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("bulk_shuffle_euclidean_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -354,7 +354,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("assemble_and_sum_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -406,7 +406,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("calculate_partial_sums_dot_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -458,7 +458,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("calculate_partial_sums_euclidean_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -508,7 +508,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("dot_product_multi_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -558,7 +558,7 @@ public class NativeSimdOps {
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
                     NativeSimdOps.findOrThrow("square_distance_multi_f32_512"),
-                    DESC);
+                    DESC, Linker.Option.critical(true));
     }
 
     /**

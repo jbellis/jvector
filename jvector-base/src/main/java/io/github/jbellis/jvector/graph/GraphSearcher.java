@@ -249,6 +249,7 @@ public class GraphSearcher implements AutoCloseable {
         // track scores to predict when we are done with threshold queries
         var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : ScoreTracker.NO_OP;
         VectorFloat<?> similarities = null;
+
         // add evicted results from the last call back to the candidates
         var previouslyEvicted = evictedResults.size() > 0 ? new GrowableBitSet(view.size()) : Bits.NONE;
         while (evictedResults.size() > 0) {
@@ -305,6 +306,7 @@ public class GraphSearcher implements AutoCloseable {
             if (scoreFunction.supportsBulkSimilarity()) {
                 similarities = scoreFunction.bulkSimilarityTo(topCandidateNode);
             }
+
             var it = view.getNeighborsIterator(topCandidateNode);
             for (int i = 0; i < it.size(); i++) {
                 var friendOrd = it.nextInt();

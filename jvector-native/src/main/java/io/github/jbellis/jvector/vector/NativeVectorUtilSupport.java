@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import jdk.incubator.vector.FloatVector;
 
 import java.util.List;
 
@@ -35,12 +34,12 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
-        return VectorSimdOps.cosineSimilarity((OffHeapVectorFloat)v1, (OffHeapVectorFloat)v2);
+        return VectorSimdOps.cosineSimilarity((MemorySegmentVectorFloat)v1, (MemorySegmentVectorFloat)v2);
     }
 
     @Override
     public float cosine(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
-        return VectorSimdOps.cosineSimilarity((OffHeapVectorFloat)a, aoffset, (OffHeapVectorFloat)b, boffset, length);
+        return VectorSimdOps.cosineSimilarity((MemorySegmentVectorFloat)a, aoffset, (MemorySegmentVectorFloat)b, boffset, length);
     }
 
     @Override
@@ -50,18 +49,12 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
-        if (length <= 32)
-            return VectorSimdOps.squareDistance((OffHeapVectorFloat) a, aoffset, (OffHeapVectorFloat) b, boffset, length);
-        else
-            return NativeSimdOps.euclidean_f32(FloatVector.SPECIES_PREFERRED.vectorBitSize(), ((OffHeapVectorFloat)a).get(), aoffset, ((OffHeapVectorFloat)b).get(), boffset, length);
+        return VectorSimdOps.squareDistance((MemorySegmentVectorFloat) a, aoffset, (MemorySegmentVectorFloat) b, boffset, length);
     }
 
     @Override
     public float dotProduct(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
-        if (length <= 32)
-            return VectorSimdOps.dotProduct((OffHeapVectorFloat)a, aoffset, (OffHeapVectorFloat)b, boffset, length);
-        else
-            return NativeSimdOps.dot_product_f32(FloatVector.SPECIES_PREFERRED.vectorBitSize(), ((OffHeapVectorFloat)a).get(), aoffset, ((OffHeapVectorFloat)b).get(), boffset, length);
+        return VectorSimdOps.dotProduct((MemorySegmentVectorFloat) a, aoffset, (MemorySegmentVectorFloat) b, boffset, length);
     }
 
     @Override
@@ -71,22 +64,22 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float sum(VectorFloat<?> vector) {
-        return VectorSimdOps.sum((OffHeapVectorFloat) vector);
+        return VectorSimdOps.sum((MemorySegmentVectorFloat) vector);
     }
 
     @Override
     public void scale(VectorFloat<?> vector, float multiplier) {
-        VectorSimdOps.scale((OffHeapVectorFloat) vector, multiplier);
+        VectorSimdOps.scale((MemorySegmentVectorFloat) vector, multiplier);
     }
 
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
-        VectorSimdOps.addInPlace((OffHeapVectorFloat)v1, (OffHeapVectorFloat)v2);
+        VectorSimdOps.addInPlace((MemorySegmentVectorFloat)v1, (MemorySegmentVectorFloat)v2);
     }
 
     @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
-        VectorSimdOps.subInPlace((OffHeapVectorFloat)v1, (OffHeapVectorFloat)v2);
+        VectorSimdOps.subInPlace((MemorySegmentVectorFloat)v1, (MemorySegmentVectorFloat)v2);
     }
 
     @Override
@@ -99,12 +92,12 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
-        return VectorSimdOps.sub((OffHeapVectorFloat) a, aOffset, (OffHeapVectorFloat) b, bOffset, length);
+        return VectorSimdOps.sub((MemorySegmentVectorFloat) a, aOffset, (MemorySegmentVectorFloat) b, bOffset, length);
     }
 
     @Override
     public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
-        return NativeSimdOps.assemble_and_sum_f32_512(((OffHeapVectorFloat)data).get(), dataBase, ((OffHeapByteSequence)baseOffsets).get(), baseOffsets.length());
+        return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat)data).get(), dataBase, ((MemorySegmentByteSequence)baseOffsets).get(), baseOffsets.length());
     }
 
     @Override
@@ -115,8 +108,8 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results) {
         switch (vsf) {
-            case DOT_PRODUCT -> NativeSimdOps.bulk_shuffle_dot_f32_512(((OffHeapByteSequence) shuffles).get(), codebookCount, ((OffHeapVectorFloat) partials).get(), ((OffHeapVectorFloat) results).get());
-            case EUCLIDEAN -> NativeSimdOps.bulk_shuffle_euclidean_f32_512(((OffHeapByteSequence) shuffles).get(), codebookCount, ((OffHeapVectorFloat) partials).get(), ((OffHeapVectorFloat) results).get());
+            case DOT_PRODUCT -> NativeSimdOps.bulk_shuffle_dot_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentVectorFloat) partials).get(), ((MemorySegmentVectorFloat) results).get());
+            case EUCLIDEAN -> NativeSimdOps.bulk_shuffle_euclidean_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentVectorFloat) partials).get(), ((MemorySegmentVectorFloat) results).get());
             case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for bulkShuffleSimilarity");
         }
     }
@@ -124,19 +117,19 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         switch (vsf) {
-            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32_512(((OffHeapVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((OffHeapVectorFloat)query).get(), queryOffset, ((OffHeapVectorFloat)partialSums).get());
-            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(((OffHeapVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((OffHeapVectorFloat)query).get(), queryOffset, ((OffHeapVectorFloat)partialSums).get());
+            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get());
+            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get());
             case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
         }
     }
 
     @Override
     public void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-        NativeSimdOps.dot_product_multi_f32_512(((OffHeapVectorFloat)v1).get(), ((OffHeapVectorFloat)v2).get(), v1.length(), results.length(), ((OffHeapVectorFloat)results).get());
+        NativeSimdOps.dot_product_multi_f32_512(((MemorySegmentVectorFloat)v1).get(), ((MemorySegmentVectorFloat)v2).get(), v1.length(), results.length(), ((MemorySegmentVectorFloat)results).get());
     }
 
     @Override
     public void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-        NativeSimdOps.square_distance_multi_f32_512(((OffHeapVectorFloat)v1).get(), ((OffHeapVectorFloat)v2).get(), v1.length(), results.length(), ((OffHeapVectorFloat)results).get());
+        NativeSimdOps.square_distance_multi_f32_512(((MemorySegmentVectorFloat)v1).get(), ((MemorySegmentVectorFloat)v2).get(), v1.length(), results.length(), ((MemorySegmentVectorFloat)results).get());
     }
 }

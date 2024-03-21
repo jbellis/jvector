@@ -114,6 +114,13 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     @Override
+    public void read(float[] floats, int offset, int count) {
+        for (int i = 0; i < count; i++) {
+            floats[offset + i] = mbb.getFloat();
+        }
+    }
+
+    @Override
     public void close() {
         if (unsafe != null) {
             try {

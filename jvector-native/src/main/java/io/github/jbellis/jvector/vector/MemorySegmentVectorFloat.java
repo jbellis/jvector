@@ -18,39 +18,34 @@ package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.Buffer;
 
 /**
- * VectorFloat implementation backed by an off-heap MemorySegment.
+ * VectorFloat implementation backed by an on-heap MemorySegment.
  */
-final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
+final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment>
 {
     private final MemorySegment segment;
-    private final int length;
 
-    OffHeapVectorFloat(int length) {
-        this.segment = Arena.ofAuto().allocate(length * Float.BYTES, 4);
-        this.length = length;
+    MemorySegmentVectorFloat(int length) {
+        segment = MemorySegment.ofArray(new float[length]);
     }
 
-    OffHeapVectorFloat(Buffer buffer) {
+    MemorySegmentVectorFloat(Buffer buffer) {
         this(buffer.remaining());
         segment.copyFrom(MemorySegment.ofBuffer(buffer));
     }
 
-    OffHeapVectorFloat(float[] data) {
-        this(data.length);
-        segment.copyFrom(MemorySegment.ofArray(data));
+    MemorySegmentVectorFloat(float[] data) {
+        this.segment = MemorySegment.ofArray(data);
     }
 
     @Override
     public long ramBytesUsed()
     {
-        return MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_FLOAT).byteSize();
+        return segment.byteSize();
     }
 
     @Override
@@ -78,7 +73,7 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
 
     @Override
     public int length() {
-        return length;
+        return (int) (segment.byteSize() / Float.BYTES);
     }
 
     @Override
@@ -90,7 +85,7 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
     @Override
     public VectorFloat<MemorySegment> copy()
     {
-        OffHeapVectorFloat copy = new OffHeapVectorFloat(length());
+        MemorySegmentVectorFloat copy = new MemorySegmentVectorFloat(length());
         copy.copyFrom(this, 0, 0, length());
         return copy;
     }
@@ -98,7 +93,7 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
     @Override
     public void copyFrom(VectorFloat<?> src, int srcOffset, int destOffset, int length)
     {
-        OffHeapVectorFloat csrc = (OffHeapVectorFloat) src;
+        MemorySegmentVectorFloat csrc = (MemorySegmentVectorFloat) src;
         segment.asSlice((long) destOffset * Float.BYTES, (long) length * Float.BYTES)
                 .copyFrom(csrc.segment.asSlice((long) srcOffset * Float.BYTES, (long) length * Float.BYTES));
     }
@@ -107,13 +102,13 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
-        for (int i = 0; i < Math.min(length, 25); i++) {
+        for (int i = 0; i < Math.min(length(), 25); i++) {
             sb.append(get(i));
-            if (i < length - 1) {
+            if (i < length() - 1) {
                 sb.append(", ");
             }
         }
-        if (length > 25) {
+        if (length() > 25) {
             sb.append("...");
         }
         sb.append("]");
@@ -125,7 +120,7 @@ final public class OffHeapVectorFloat implements VectorFloat<MemorySegment>
     {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        OffHeapVectorFloat that = (OffHeapVectorFloat) o;
+        MemorySegmentVectorFloat that = (MemorySegmentVectorFloat) o;
         return segment.mismatch(that.segment) == -1;
     }
 

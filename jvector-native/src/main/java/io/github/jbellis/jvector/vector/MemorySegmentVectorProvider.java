@@ -24,54 +24,39 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.Buffer;
-import java.nio.ByteOrder;
 
 /**
- * VectorTypeSupport using off-heap MemorySegments.
+ * VectorTypeSupport using MemorySegments.
  */
-public class OffHeapVectorProvider implements VectorTypeSupport
+public class MemorySegmentVectorProvider implements VectorTypeSupport
 {
     @Override
     public VectorFloat<?> createFloatVector(Object data)
     {
         if (data instanceof Buffer)
-            return new OffHeapVectorFloat((Buffer) data);
+            return new MemorySegmentVectorFloat((Buffer) data);
 
-        return new OffHeapVectorFloat((float[]) data);
+        return new MemorySegmentVectorFloat((float[]) data);
     }
 
     @Override
     public VectorFloat<?> createFloatVector(int length)
     {
-        return new OffHeapVectorFloat(length);
+        return new MemorySegmentVectorFloat(length);
     }
 
     @Override
     public VectorFloat<?> readFloatVector(RandomAccessReader r, int size) throws IOException
     {
-        var vector = new OffHeapVectorFloat(size);
-        var buffer = vector.get().asByteBuffer();
-        r.readFully(buffer);
-        buffer.order(ByteOrder.LITTLE_ENDIAN);
-        buffer.flip();
-        for (int i = 0; i < buffer.capacity(); i = i + 4) {
-            var val = buffer.getInt(i);
-            buffer.putInt(i, Integer.reverseBytes(val));
-        }
-        return vector;
+        float[] data = new float[size];
+        r.readFully(data);
+        return new MemorySegmentVectorFloat(data);
     }
 
     @Override
     public void readFloatVector(RandomAccessReader r, int count, VectorFloat<?> vector, int offset) throws IOException {
-        var destBuffer = ((OffHeapVectorFloat) vector).get().asByteBuffer();
-        destBuffer.position(offset * Float.BYTES);
-        destBuffer.limit(destBuffer.position() + count * Float.BYTES);
-        r.readFully(destBuffer);
-        destBuffer.order(ByteOrder.LITTLE_ENDIAN);
-        for (int i = offset * Float.BYTES; i < destBuffer.limit(); i = i + 4) {
-            var val = destBuffer.getInt(i);
-            destBuffer.putInt(i, Integer.reverseBytes(val));
-        }
+        float[] dest = (float[]) ((MemorySegmentVectorFloat) vector).get().heapBase().get();
+        r.read(dest, offset, count);
     }
 
     @Override
@@ -85,28 +70,28 @@ public class OffHeapVectorProvider implements VectorTypeSupport
     public ByteSequence<?> createByteSequence(Object data)
     {
         if (data instanceof Buffer)
-            return new OffHeapByteSequence((Buffer) data);
+            return new MemorySegmentByteSequence((Buffer) data);
 
-        return new OffHeapByteSequence((byte[]) data);
+        return new MemorySegmentByteSequence((byte[]) data);
     }
 
     @Override
     public ByteSequence<?> createByteSequence(int length)
     {
-        return new OffHeapByteSequence(length);
+        return new MemorySegmentByteSequence(length);
     }
 
     @Override
     public ByteSequence<?> readByteSequence(RandomAccessReader r, int size) throws IOException
     {
-        var vector = new OffHeapByteSequence(size);
+        var vector = new MemorySegmentByteSequence(size);
         r.readFully(vector.get().asByteBuffer());
         return vector;
     }
 
     @Override
     public void readByteSequence(RandomAccessReader r, ByteSequence<?> sequence) throws IOException {
-        r.readFully(((OffHeapByteSequence) sequence).get().asByteBuffer());
+        r.readFully(((MemorySegmentByteSequence) sequence).get().asByteBuffer());
     }
 
 
