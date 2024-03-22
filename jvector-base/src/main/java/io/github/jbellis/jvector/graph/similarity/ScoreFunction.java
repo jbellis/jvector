@@ -1,6 +1,10 @@
 package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /**
  * Provides an API for encapsulating similarity to another node or vector.  Used both for
@@ -11,15 +15,17 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
  * can be defined as a simple lambda.
  */
 public interface ScoreFunction {
+    VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     boolean isExact();
 
     float similarityTo(int node2);
 
-    default boolean supportsBulkSimilarity() {
+    default boolean supportsEdgeLoadingSimilarity() {
         return false;
     }
 
-    default VectorFloat<?> bulkSimilarityTo(int node2) {
+    default VectorFloat<?> edgeLoadingSimilarityTo(int node2) {
         throw new UnsupportedOperationException("bulk similarity not supported");
     }
 
@@ -27,16 +33,12 @@ public interface ScoreFunction {
         default boolean isExact() {
             return true;
         }
-
-        float similarityTo(int node2);
     }
 
     interface ApproximateScoreFunction extends ScoreFunction {
         default boolean isExact() {
             return false;
         }
-
-        float similarityTo(int node2);
     }
 
     interface Provider {

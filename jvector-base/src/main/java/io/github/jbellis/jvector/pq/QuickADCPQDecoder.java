@@ -73,7 +73,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
 
         @Override
-        public VectorFloat<?> bulkSimilarityTo(int origin) {
+        public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
             var permutedNodes = view.getPackedNeighbors(origin);
             results.zero();
             VectorUtil.bulkShuffleSimilarity(permutedNodes, view.getPQVectors().getCompressedSize(), partialSums, results, VectorSimilarityFunction.DOT_PRODUCT);
@@ -81,7 +81,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
 
         @Override
-        public boolean supportsBulkSimilarity() {
+        public boolean supportsEdgeLoadingSimilarity() {
             return true;
         }
     }
@@ -103,7 +103,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
 
         @Override
-        public VectorFloat<?> bulkSimilarityTo(int origin) {
+        public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
             var permutedNodes = view.getPackedNeighbors(origin);
             results.zero();
             VectorUtil.bulkShuffleSimilarity(permutedNodes, view.getPQVectors().getCompressedSize(), partialSums, results, VectorSimilarityFunction.EUCLIDEAN);
@@ -111,7 +111,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
 
         @Override
-        public boolean supportsBulkSimilarity() {
+        public boolean supportsEdgeLoadingSimilarity() {
             return true;
         }
     }
