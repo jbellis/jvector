@@ -17,16 +17,29 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 public interface ScoreFunction {
     VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
 
+    /**
+     * @return true if the ScoreFunction returns exact, full-resolution scores
+     */
     boolean isExact();
 
+    /**
+     * @return the similarity to one other node
+     */
     float similarityTo(int node2);
 
-    default boolean supportsEdgeLoadingSimilarity() {
-        return false;
-    }
-
+    /**
+     * @return the similarity to all of the nodes that `node2` has an edge towards.
+     * Used when expanding the neighbors of a search candidate.
+     */
     default VectorFloat<?> edgeLoadingSimilarityTo(int node2) {
         throw new UnsupportedOperationException("bulk similarity not supported");
+    }
+
+    /**
+     * @return true if `edgeLoadingSimilarityTo` is supported
+     */
+    default boolean supportsEdgeLoadingSimilarity() {
+        return false;
     }
 
     interface ExactScoreFunction extends ScoreFunction {
