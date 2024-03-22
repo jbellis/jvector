@@ -235,7 +235,6 @@ public class GraphIndexBuilder {
                 if (neighbors == null) {
                     SearchResult result;
                     try (var gs = createSearcher()) {
-
                         var notSelfBits = createNotSelfBits(node);
                         var ssp = scoreProvider.searchProviderFor(node);
                         int ep = graph.entry();

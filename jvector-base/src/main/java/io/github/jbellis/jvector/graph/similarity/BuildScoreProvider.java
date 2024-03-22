@@ -33,13 +33,6 @@ import java.util.function.Supplier;
 
 /**
  * Encapsulates comparing node distances for GraphIndexBuilder.
- * <p>
- * It is frustrating but unavoidable that the implementor must write everything twice:
- * once when we know the node id to compare against, but not its vector, and once
- * when we only know the vector--which may not correspond to an existing node.
- * <p>
- * TODO I *think* that LVQ means we can't just define the former in terms of the latter,
- * because the stored LVQ vectors will be a different dimension from the originals.
  */
 public interface BuildScoreProvider {
     VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
