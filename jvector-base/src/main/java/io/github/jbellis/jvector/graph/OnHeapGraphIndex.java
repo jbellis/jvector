@@ -271,16 +271,6 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
             activeViews.add(stamp);
         }
 
-        @Override
-        public VectorFloat<?> getVector(int node) {
-            throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
-        }
-
-        @Override
-        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
-            throw new UnsupportedOperationException("All searches done with OnHeapGraphIndex should be exact");
-        }
-
         public NodesIterator getNeighborsIterator(int node) {
             var neighbors = getNeighbors(node);
             assert neighbors != null : "Node " + node + " not found @" + stamp;

@@ -32,7 +32,7 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.VectorProvider;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -104,14 +104,34 @@ public class Bench {
                         throw new RuntimeException(e);
                     }
                 });
-                var vp = new VectorProvider(ds.getDimension()) {
+                var vp = new RandomAccessVectorValues() {
                     @Override
-                    public void getInto(int nodeId, VectorFloat<?> result, int offset) {
+                    public int size() {
+                        return cv.count();
+                    }
+
+                    @Override
+                    public int dimension() {
+                        return cv.getOriginalSize() / Float.BYTES;
+                    }
+
+                    @Override
+                    public boolean isValueShared() {
+                        return false;
+                    }
+
+                    @Override
+                    public RandomAccessVectorValues copy() {
+                        return this;
+                    }
+
+                    @Override
+                    public void getVectorInto(int nodeId, VectorFloat<?> result, int offset) {
                         throw new UnsupportedOperationException();
                     }
 
                     @Override
-                    public VectorFloat<?> get(int nodeId) {
+                    public VectorFloat<?> getVector(int nodeId) {
                         // allocating a new float[] for every call seems inefficient, but so far it
                         // does not appear to be a bottleneck in the profile compared to doing the actual read from disk
                         var vectorsReader = vr.get();
@@ -229,7 +249,14 @@ public class Bench {
                         } else {
                             sf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
-                        var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, VectorProvider.from(view, ds.getDimension()));
+                        RandomAccessVectorValues vectorsForQuery;
+                        if (view instanceof GraphIndex.ViewWithVectors) {
+                            // exercise the from-disk path
+                            vectorsForQuery = (GraphIndex.ViewWithVectors) view;
+                        } else {
+                            vectorsForQuery = exactVv;
+                        }
+                        ScoreFunction.ExactScoreFunction rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, vectorsForQuery);
                         var ssp = new SearchScoreProvider(sf, rr);
                         sr = new GraphSearcher.Builder(view)
                                 .build()

@@ -46,7 +46,7 @@ public class UpdatableRandomAccessVectorValues implements RandomAccessVectorValu
     }
 
     @Override
-    public VectorFloat<?> vectorValue(int targetOrd) {
+    public VectorFloat<?> getVector(int targetOrd) {
         return data.get(targetOrd);
     }
 

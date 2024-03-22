@@ -140,7 +140,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var query = randomVector(dim);
         var searcher = new GraphSearcher.Builder(graph.getView()).build();
 
-        var ssp = new SearchScoreProvider((ScoreFunction.ExactScoreFunction) i -> similarityFunction.compare(query, vectors.vectorValue(i)), null);
+        var ssp = new SearchScoreProvider(ScoreFunction.ExactScoreFunction.from(query, similarityFunction, vectors), null);
         var initial = searcher.search(ssp, initialTopK, acceptOrds);
         assertEquals(initialTopK, initial.getNodes().length);
 
@@ -509,7 +509,6 @@ public class TestVectorGraph extends LuceneTestCase {
      * Returns vectors evenly distributed around the upper unit semicircle.
      */
     public static class CircularFloatVectorValues implements RandomAccessVectorValues {
-
         private final int size;
 
         public CircularFloatVectorValues(int size) {
@@ -532,7 +531,7 @@ public class TestVectorGraph extends LuceneTestCase {
         }
 
         @Override
-        public VectorFloat<?> vectorValue(int ord) {
+        public VectorFloat<?> getVector(int ord) {
             return unitVector2d(ord / (double) size);
         }
 

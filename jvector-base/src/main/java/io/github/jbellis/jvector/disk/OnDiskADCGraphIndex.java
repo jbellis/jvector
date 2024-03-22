@@ -61,7 +61,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
     private final int size;
     private final int entryNode;
     private final int maxDegree;
-    private final int dimension;
+    final int dimension;
     final PQVectors pqv;
     final ThreadLocal<VectorFloat<?>> results;
 
@@ -134,6 +134,21 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
             this.reader = reader;
             this.neighbors = new int[maxDegree];
             this.packedNeighbors = vectorTypeSupport.createByteSequence(maxDegree * pqv.getCompressedSize());
+        }
+
+        @Override
+        public int dimension() {
+            return dimension;
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            return this;
         }
 
         public VectorFloat<?> getVector(int node) {

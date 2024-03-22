@@ -48,6 +48,11 @@ public class PQVectors implements CompressedVectors {
     }
 
     @Override
+    public int count() {
+        return compressedVectors.length;
+    }
+
+    @Override
     public void write(DataOutput out) throws IOException
     {
         // pq codebooks

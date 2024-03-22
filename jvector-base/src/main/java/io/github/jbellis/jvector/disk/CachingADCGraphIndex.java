@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.ADCView;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.QuickADCPQDecoder;
@@ -99,6 +100,21 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
                 return new NodesIterator.ArrayNodesIterator(cached.neighbors, cached.neighbors.length);
             }
             return view.getNeighborsIterator(node);
+        }
+
+        @Override
+        public int dimension() {
+            return graph.dimension;
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            return this;
         }
 
         @Override

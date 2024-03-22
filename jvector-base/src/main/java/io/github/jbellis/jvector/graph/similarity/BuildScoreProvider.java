@@ -18,7 +18,7 @@ package io.github.jbellis.jvector.graph.similarity;
 
 import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.VectorProvider;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -119,7 +119,7 @@ public interface BuildScoreProvider {
             @Override
             public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
                 var vc = vectorsCopy.get();
-                var sf = ScoreFunction.ExactScoreFunction.from(vector, similarityFunction, VectorProvider.from(vc));
+                var sf = ScoreFunction.ExactScoreFunction.from(vector, similarityFunction, vc);
                 return new SearchScoreProvider(sf, null);
             }
 
@@ -134,7 +134,7 @@ public interface BuildScoreProvider {
                 return (int node1) -> {
                     var v = vectors.get().vectorValue(node1);
                     var vc = vectorsCopy.get();
-                    var sf = ScoreFunction.ExactScoreFunction.from(v, similarityFunction, VectorProvider.from(vc));
+                    var sf = ScoreFunction.ExactScoreFunction.from(v, similarityFunction, vc);
                     return new SearchScoreProvider(sf, null);
                 };
             }
@@ -146,7 +146,7 @@ public interface BuildScoreProvider {
      * with reranking performed using full resolutions vectors read from the reader
      */
     static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf,
-                                                   VectorProvider vp,
+                                                   RandomAccessVectorValues vp,
                                                    PQVectors cv)
     {
         int dimension = cv.getOriginalSize() / Float.BYTES;
@@ -161,22 +161,42 @@ public interface BuildScoreProvider {
             public SearchScoreProvider.Factory diversityProvider() {
                 var cache = new Int2ObjectHashMap<VectorFloat<?>>();
                 return node1 -> {
-                    var v1 = cache.computeIfAbsent(node1, vp::get);
+                    var v1 = cache.computeIfAbsent(node1, vp::getVector);
                     var sf = cv.scoreFunctionFor(v1, vsf);
 
-                    var cachingVectorProvider = new VectorProvider(dimension) {
+                    var cachedVectors = new RandomAccessVectorValues() {
                         @Override
-                        public void getInto(int node2, VectorFloat<?> result, int offset) {
-                            // getInto is only called by reranking, not diversity code
+                        public int size() {
+                            return cv.count();
+                        }
+
+                        @Override
+                        public int dimension() {
+                            return dimension;
+                        }
+
+                        @Override
+                        public boolean isValueShared() {
+                            return false;
+                        }
+
+                        @Override
+                        public RandomAccessVectorValues copy() {
+                            return this;
+                        }
+
+                        @Override
+                        public void getVectorInto(int node2, VectorFloat<?> result, int offset) {
+                            // getVectorInto is only called by reranking, not diversity code
                             throw new UnsupportedOperationException();
                         }
 
                         @Override
-                        public VectorFloat<?> get(int nodeId) {
-                            return cache.computeIfAbsent(nodeId, vp::get);
+                        public VectorFloat<?> getVector(int nodeId) {
+                            return cache.computeIfAbsent(nodeId, vp::getVector);
                         }
                     };
-                    var rr = ScoreFunction.ExactScoreFunction.from(v1, vsf, cachingVectorProvider);
+                    var rr = ScoreFunction.ExactScoreFunction.from(v1, vsf, cachedVectors);
 
                     return new SearchScoreProvider(sf, rr);
                 };
@@ -184,7 +204,7 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(int node) {
-                return searchProviderFor(vp.get(node));
+                return searchProviderFor(vp.getVector(node));
             }
 
             @Override

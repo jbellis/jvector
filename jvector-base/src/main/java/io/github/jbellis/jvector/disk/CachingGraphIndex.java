@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -77,10 +78,10 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return String.format("CachingGraphIndex(graph=%s)", graph);
     }
 
-    private class CachedView implements View {
-        private final View view;
+    private class CachedView implements ViewWithVectors {
+        private final ViewWithVectors view;
 
-        public CachedView(View view) {
+        public CachedView(ViewWithVectors view) {
             this.view = view;
         }
 
@@ -91,6 +92,21 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 return new NodesIterator.ArrayNodesIterator(cached.neighbors, cached.neighbors.length);
             }
             return view.getNeighborsIterator(node);
+        }
+
+        @Override
+        public int dimension() {
+            return graph.dimension;
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            return null;
         }
 
         @Override

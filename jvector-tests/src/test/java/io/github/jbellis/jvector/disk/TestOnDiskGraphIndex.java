@@ -154,9 +154,9 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
-    private static void validateVectors(GraphIndex.View view, RandomAccessVectorValues ravv) {
+    private static void validateVectors(GraphIndex.ViewWithVectors view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
-            assertEquals(view.getVector(i), ravv.vectorValue(i));
+            assertEquals(view.getVector(i), ravv.getVector(i));
         }
     }
 

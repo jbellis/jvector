@@ -38,6 +38,11 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
+    public int count() {
+        return compressedVectors.length;
+    }
+
+    @Override
     public void write(DataOutput out) throws IOException {
         // BQ centering data
         bq.write(out);

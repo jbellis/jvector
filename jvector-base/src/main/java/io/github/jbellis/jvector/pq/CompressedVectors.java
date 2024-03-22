@@ -42,4 +42,7 @@ public interface CompressedVectors extends Accountable {
 
     /** no precomputation; suitable when just a handful of score computations are performed */
     ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
+
+    /** the number of vectors */
+    int count();
 }

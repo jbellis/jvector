@@ -66,7 +66,7 @@ public class GraphIndexBench {
         }
 
         @Override
-        public VectorFloat<?> vectorValue(int targetOrd) {
+        public VectorFloat<?> getVector(int targetOrd) {
             return values[targetOrd];
         }
 

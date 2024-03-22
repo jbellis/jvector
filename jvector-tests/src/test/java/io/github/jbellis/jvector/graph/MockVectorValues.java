@@ -56,7 +56,7 @@ public class MockVectorValues implements RandomAccessVectorValues {
     }
 
     @Override
-    public VectorFloat<?> vectorValue(int targetOrd) {
+    public VectorFloat<?> getVector(int targetOrd) {
         VectorFloat<?> original = denseValues[targetOrd];
         // present a single vector reference to callers like the disk-backed RAVV implmentations,
         // to catch cases where they are not making a copy

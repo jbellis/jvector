@@ -43,7 +43,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     private final int size;
     private final int entryNode;
     private final int maxDegree;
-    private final int dimension;
+    final int dimension;
 
     public OnDiskGraphIndex(ReaderSupplier readerSupplier, long offset)
     {
@@ -96,7 +96,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return new OnDiskView(readerSupplier.get());
     }
 
-    public class OnDiskView implements GraphIndex.View, AutoCloseable
+    public class OnDiskView implements GraphIndex.ViewWithVectors, AutoCloseable
     {
         private final RandomAccessReader reader;
         private final int[] neighbors;
@@ -106,6 +106,21 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             super();
             this.reader = reader;
             this.neighbors = new int[maxDegree];
+        }
+
+        @Override
+        public int dimension() {
+            return dimension;
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            return this;
         }
 
         public VectorFloat<?> getVector(int node) {

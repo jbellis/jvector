@@ -1,7 +1,6 @@
 package io.github.jbellis.jvector.graph.similarity;
 
-import io.github.jbellis.jvector.graph.GraphIndex;
-import io.github.jbellis.jvector.graph.VectorProvider;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -54,7 +53,7 @@ public interface ScoreFunction {
          */
         VectorFloat<?> similarityTo(int[] nodes);
 
-        static ExactScoreFunction from(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, VectorProvider vp) {
+        static ExactScoreFunction from(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, RandomAccessVectorValues vp) {
             return new ExactScoreFunction() {
                 @Override
                 public VectorFloat<?> similarityTo(int[] nodes) {
@@ -64,7 +63,7 @@ public interface ScoreFunction {
                     var packedVectors = vts.createFloatVector(nodeCount * dimension);
                     for (int i1 = 0; i1 < nodeCount; i1++) {
                         var node = nodes[i1];
-                        vp.getInto(node, packedVectors, i1 * dimension);
+                        vp.getVectorInto(node, packedVectors, i1 * dimension);
                     }
                     vsf.compareMulti(queryVector, packedVectors, results);
                     return results;
@@ -72,7 +71,7 @@ public interface ScoreFunction {
 
                 @Override
                 public float similarityTo(int node2) {
-                    return vsf.compare(queryVector, vp.get(node2));
+                    return vsf.compare(queryVector, vp.getVector(node2));
                 }
             };
         }

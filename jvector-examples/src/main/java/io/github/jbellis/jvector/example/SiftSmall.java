@@ -25,7 +25,7 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.VectorProvider;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -49,8 +49,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 public class SiftSmall {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
     public static void testRecall(ArrayList<VectorFloat<?>> baseVectors, ArrayList<VectorFloat<?>> queryVectors, ArrayList<HashSet<Integer>> groundTruth, Path testDirectory) throws IOException, InterruptedException, ExecutionException {
         int originalDimension = baseVectors.get(0).length();
         var ravv = new ListRandomAccessVectorValues(baseVectors, originalDimension);
@@ -103,12 +101,12 @@ public class SiftSmall {
             var searcher = new GraphSearcher.Builder(view).build();
             SearchScoreProvider ssp;
             if (compressedVectors == null) {
-                var sf = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, VectorProvider.from(view, ravv.dimension()));
+                var sf = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, ravv);
                 ssp = new SearchScoreProvider(sf, null);
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                var rr = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, VectorProvider.from(view, ravv.dimension()));
+                var rr = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, (GraphIndex.ViewWithVectors) view);
                 ssp = new SearchScoreProvider(sf, rr);
             }
             var nn = searcher.search(ssp, 100, Bits.ALL).getNodes();
