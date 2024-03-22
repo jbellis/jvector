@@ -32,6 +32,10 @@ public abstract class VectorProvider {
         };
     }
 
+    // TODO I don't love this design because
+    // (1) lots of call points don't actually need getInto
+    // (2) implementing get() in terms of getInto() seems to be mostly not what we want
+    // perhaps defaulting getInto as Unsupported, and make get() abstract is a better approach
     public abstract void getInto(int nodeId, VectorFloat<?> result, int offset);
 
     public VectorFloat<?> get(int nodeId) {

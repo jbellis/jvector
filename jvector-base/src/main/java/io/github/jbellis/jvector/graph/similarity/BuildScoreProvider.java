@@ -146,8 +146,8 @@ public interface BuildScoreProvider {
      * with reranking performed using full resolutions vectors read from the reader
      */
     static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf,
-                                                   Supplier<SimpleReader> readerSupplier,
-                                                   CompressedVectors cv)
+                                                   VectorProvider vp,
+                                                   PQVectors cv)
     {
         int dimension = cv.getOriginalSize() / Float.BYTES;
 
@@ -157,28 +157,14 @@ public interface BuildScoreProvider {
                 return false;
             }
 
-            private VectorFloat<?> loadVector(int node) {
-                // TODO implement RandomAccessVectorValues with shared semantics to avoid allocating every time?
-                // (allocation is not a bottleneck)
-                var vectorsReader = readerSupplier.get();
-                try {
-                    vectorsReader.seek((long) node * dimension * Float.BYTES);
-                    var data = new float[dimension];
-                    vectorsReader.readFully(data);
-                    return vectorTypeSupport.createFloatVector(data);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
             @Override
             public SearchScoreProvider.Factory diversityProvider() {
                 var cache = new Int2ObjectHashMap<VectorFloat<?>>();
                 return node1 -> {
-                    var v1 = cache.computeIfAbsent(node1, this::loadVector);
+                    var v1 = cache.computeIfAbsent(node1, vp::get);
                     var sf = cv.scoreFunctionFor(v1, vsf);
 
-                    var vp = new VectorProvider(dimension) {
+                    var cachingVectorProvider = new VectorProvider(dimension) {
                         @Override
                         public void getInto(int node2, VectorFloat<?> result, int offset) {
                             // getInto is only called by reranking, not diversity code
@@ -187,10 +173,10 @@ public interface BuildScoreProvider {
 
                         @Override
                         public VectorFloat<?> get(int nodeId) {
-                            return cache.computeIfAbsent(nodeId, n -> loadVector(n));
+                            return cache.computeIfAbsent(nodeId, vp::get);
                         }
                     };
-                    var rr = ScoreFunction.ExactScoreFunction.from(v1, vsf, vp);
+                    var rr = ScoreFunction.ExactScoreFunction.from(v1, vsf, cachingVectorProvider);
 
                     return new SearchScoreProvider(sf, rr);
                 };
@@ -198,7 +184,7 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(int node) {
-                return searchProviderFor(loadVector(node));
+                return searchProviderFor(vp.get(node));
             }
 
             @Override
@@ -208,7 +194,7 @@ public interface BuildScoreProvider {
 
             @Override
             public VectorFloat<?> approximateCentroid() {
-                return ((PQVectors) cv).getCompressor().getOrComputeCentroid();
+                return cv.getCompressor().getOrComputeCentroid();
             }
         };
     }

@@ -37,6 +37,7 @@ import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
@@ -44,6 +45,7 @@ import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.BufferedOutputStream;
@@ -102,9 +104,29 @@ public class Bench {
                         throw new RuntimeException(e);
                     }
                 });
-                var bsp = BuildScoreProvider.pqBuildScoreProvider(ds, vr, floatVectors, cv);
+                var vp = new VectorProvider(ds.getDimension()) {
+                    @Override
+                    public void getInto(int nodeId, VectorFloat<?> result, int offset) {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public VectorFloat<?> get(int nodeId) {
+                        // allocating a new float[] for every call seems inefficient, but so far it
+                        // does not appear to be a bottleneck in the profile compared to doing the actual read from disk
+                        var vectorsReader = vr.get();
+                        try {
+                            vectorsReader.seek((long) nodeId * ds.getDimension() * Float.BYTES);
+                            var data = new float[ds.getDimension()];
+                            vectorsReader.readFully(data);
+                            return vectorTypeSupport.createFloatVector(data);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                };
+                var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, vp, (PQVectors) cv);
                 start = System.nanoTime();
-                // TODO un-hardcode the 2* here
                 var simdExecutor = PhysicalCoreExecutor.pool();
                 var builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f,
                                                     simdExecutor, ForkJoinPool.commonPool());
