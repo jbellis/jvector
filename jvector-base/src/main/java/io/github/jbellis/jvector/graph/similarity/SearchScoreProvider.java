@@ -39,4 +39,13 @@ public final class SearchScoreProvider {
                 ? (ScoreFunction.ExactScoreFunction) scoreFunction
                 : reranker;
     }
+
+    /**
+     * This interface allows implementations to cache the vectors needed
+     * for its lifetime of a single ConcurrentNeighborSet diversity computation,
+     * since diversity computations are done pairwise for each of the potential neighbors.
+     */
+    public interface Factory {
+        SearchScoreProvider createFor(int node1);
+    }
 }

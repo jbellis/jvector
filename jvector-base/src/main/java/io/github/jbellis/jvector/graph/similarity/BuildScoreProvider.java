@@ -79,7 +79,7 @@ public interface BuildScoreProvider {
      * that the diversity provider MUST include a non-null ExactScoreFunction if the
      * primary score function is approximate.
      */
-    DiversityScoreProvider diversityProvider();
+    SearchScoreProvider.Factory diversityProvider();
 
     /**
      * Returns a BSP that performs exact score comparisons using the given RandomAccessVectorValues and VectorSimilarityFunction.
@@ -123,19 +123,12 @@ public interface BuildScoreProvider {
             }
 
             @Override
-            public DiversityScoreProvider diversityProvider() {
-                return new DiversityScoreProvider() {
-                    @Override
-                    public ScoreFunction.ExactScoreFunction scoreFunctionFor(int node1) {
-                        var v = vectors.get().vectorValue(node1);
-                        var vc = vectorsCopy.get();
-                        return ScoreFunction.ExactScoreFunction.from(v, similarityFunction, VectorProvider.from(vc));
-                    }
-
-                    @Override
-                    public ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
-                        return scoreFunctionFor(node1);
-                    }
+            public SearchScoreProvider.Factory diversityProvider() {
+                return (int node1) -> {
+                    var v = vectors.get().vectorValue(node1);
+                    var vc = vectorsCopy.get();
+                    var sf = ScoreFunction.ExactScoreFunction.from(v, similarityFunction, VectorProvider.from(vc));
+                    return new SearchScoreProvider(sf, null);
                 };
             }
         };

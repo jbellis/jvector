@@ -34,7 +34,6 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.VectorProvider;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
-import io.github.jbellis.jvector.graph.similarity.DiversityScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -127,33 +126,27 @@ public class Bench {
                     }
 
                     @Override
-                    public DiversityScoreProvider diversityProvider() {
-                        return new DiversityScoreProvider() {
-                            private final Int2ObjectHashMap<VectorFloat<?>> cache = new Int2ObjectHashMap<>();
+                    public SearchScoreProvider.Factory diversityProvider() {
+                        var cache = new Int2ObjectHashMap<VectorFloat<?>>();
+                        return node1 -> {
+                            var v1 = cache.computeIfAbsent(node1, this::loadVector);
+                            var sf = cv.scoreFunctionFor(v1, ds.similarityFunction);
 
-                            @Override
-                            public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(int node1) {
-                                var v1 = cache.computeIfAbsent(node1, n -> loadVector(n));
-                                return cv.scoreFunctionFor(v1, ds.similarityFunction);
-                            }
+                            var vp = new VectorProvider(ds.getDimension()) {
+                                @Override
+                                public void getInto(int node2, VectorFloat<?> result, int offset) {
+                                    // getInto is only called by reranking, not diversity code
+                                    throw new UnsupportedOperationException();
+                                }
 
-                            @Override
-                            public ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
-                                var v1 = cache.computeIfAbsent(node1, n -> loadVector(n));
-                                var vp = new VectorProvider(ds.getDimension()) {
-                                    @Override
-                                    public void getInto(int node2, VectorFloat<?> result, int offset) {
-                                        // getInto is only called by reranking, not diversity code
-                                        throw new UnsupportedOperationException();
-                                    }
+                                @Override
+                                public VectorFloat<?> get(int nodeId) {
+                                    return cache.computeIfAbsent(nodeId, n -> loadVector(n));
+                                }
+                            };
+                            var rr = ScoreFunction.ExactScoreFunction.from(v1, ds.similarityFunction, vp);
 
-                                    @Override
-                                    public VectorFloat<?> get(int nodeId) {
-                                        return cache.computeIfAbsent(nodeId, n -> loadVector(n));
-                                    }
-                                };
-                                return ScoreFunction.ExactScoreFunction.from(v1, ds.similarityFunction, vp);
-                            }
+                            return new SearchScoreProvider(sf, rr);
                         };
                     }
 

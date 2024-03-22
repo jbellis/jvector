@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
-import io.github.jbellis.jvector.graph.similarity.DiversityScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
@@ -201,7 +200,7 @@ public class ConcurrentNeighborSet {
 
     private NodeArray computeApproximatelyScored(NodeArray exact) {
         var approximated = new NodeArray(exact.size);
-        var sf = scoreProvider.diversityProvider().scoreFunctionFor(nodeId);
+        var sf = scoreProvider.diversityProvider().createFor(nodeId).scoreFunction();
         assert !sf.isExact();
         for (int i = 0; i < exact.size; i++) {
             approximated.insertSorted(exact.node[i], sf.similarityTo(exact.node[i]));
@@ -235,20 +234,20 @@ public class ConcurrentNeighborSet {
         if (isExactScored) {
             // either the provider is natively exact, or we're on the backlink->insert path,
             // so `neighbors` is exact-scored
-            retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, dp::exactScoreFunctionFor);
+            retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction());
             neighbors.retain(selected);
         } else {
             // provider is natively approximate and we're on the insertDiverse path,
             // so `neighbors` is approximately-scored
             assert !scoreProvider.isExact();
             assert diverseBefore == 0;
-            retainDiverseInternal(neighbors, maxConnections, 0, selected, dp::scoreFunctionFor);
+            retainDiverseInternal(neighbors, maxConnections, 0, selected, node1 -> dp.createFor(node1).scoreFunction());
 
             // using approximate scores is sufficiently accurate for the diversity computation,
             // but we want to maintain the invariant that the neighbors are exact-scored before
             // we use them in a search
             var neighborNodes = Arrays.copyOf(neighbors.node, neighbors.size);
-            var sf = dp.exactScoreFunctionFor(nodeId);
+            var sf = dp.createFor(nodeId).exactScoreFunction();
             neighbors.clear();
             for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
                 int neighborId = neighborNodes[i];
