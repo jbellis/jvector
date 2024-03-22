@@ -16,13 +16,20 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.VectorProvider;
+import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import org.agrona.collections.Int2ObjectHashMap;
+
+import java.io.IOException;
+import java.util.function.Supplier;
 
 /**
  * Encapsulates comparing node distances for GraphIndexBuilder.
@@ -130,6 +137,78 @@ public interface BuildScoreProvider {
                     var sf = ScoreFunction.ExactScoreFunction.from(v, similarityFunction, VectorProvider.from(vc));
                     return new SearchScoreProvider(sf, null);
                 };
+            }
+        };
+    }
+
+    /**
+     * Returns a BSP that performs approximate score comparisons using the given CompressedVectors,
+     * with reranking performed using full resolutions vectors read from the reader
+     */
+    static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf,
+                                                   Supplier<SimpleReader> readerSupplier,
+                                                   CompressedVectors cv)
+    {
+        int dimension = cv.getOriginalSize() / Float.BYTES;
+
+        return new BuildScoreProvider() {
+            @Override
+            public boolean isExact() {
+                return false;
+            }
+
+            private VectorFloat<?> loadVector(int node) {
+                // TODO implement RandomAccessVectorValues with shared semantics to avoid allocating every time?
+                // (allocation is not a bottleneck)
+                var vectorsReader = readerSupplier.get();
+                try {
+                    vectorsReader.seek((long) node * dimension * Float.BYTES);
+                    var data = new float[dimension];
+                    vectorsReader.readFully(data);
+                    return vectorTypeSupport.createFloatVector(data);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            public SearchScoreProvider.Factory diversityProvider() {
+                var cache = new Int2ObjectHashMap<VectorFloat<?>>();
+                return node1 -> {
+                    var v1 = cache.computeIfAbsent(node1, this::loadVector);
+                    var sf = cv.scoreFunctionFor(v1, vsf);
+
+                    var vp = new VectorProvider(dimension) {
+                        @Override
+                        public void getInto(int node2, VectorFloat<?> result, int offset) {
+                            // getInto is only called by reranking, not diversity code
+                            throw new UnsupportedOperationException();
+                        }
+
+                        @Override
+                        public VectorFloat<?> get(int nodeId) {
+                            return cache.computeIfAbsent(nodeId, n -> loadVector(n));
+                        }
+                    };
+                    var rr = ScoreFunction.ExactScoreFunction.from(v1, vsf, vp);
+
+                    return new SearchScoreProvider(sf, rr);
+                };
+            }
+
+            @Override
+            public SearchScoreProvider searchProviderFor(int node) {
+                return searchProviderFor(loadVector(node));
+            }
+
+            @Override
+            public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
+                return new SearchScoreProvider(cv.precomputedScoreFunctionFor(vector, vsf), null);
+            }
+
+            @Override
+            public VectorFloat<?> approximateCentroid() {
+                return ((PQVectors) cv).getCompressor().getOrComputeCentroid();
             }
         };
     }

@@ -37,7 +37,6 @@ import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
@@ -45,9 +44,7 @@ import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import org.agrona.collections.Int2ObjectHashMap;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -105,66 +102,7 @@ public class Bench {
                         throw new RuntimeException(e);
                     }
                 });
-                var bsp = new BuildScoreProvider() {
-                    @Override
-                    public boolean isExact() {
-                        return false;
-                    }
-
-                    private VectorFloat<?> loadVector(int node) {
-                        // TODO implement RandomAccessVectorValues with shared semantics to avoid allocating every time?
-                        // (allocation is not a bottleneck)
-                        var vectorsReader = vr.get();
-                        try {
-                            vectorsReader.seek((long) node * floatVectors.dimension() * Float.BYTES);
-                            var data = new float[floatVectors.dimension()];
-                            vectorsReader.readFully(data);
-                            return vectorTypeSupport.createFloatVector(data);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-
-                    @Override
-                    public SearchScoreProvider.Factory diversityProvider() {
-                        var cache = new Int2ObjectHashMap<VectorFloat<?>>();
-                        return node1 -> {
-                            var v1 = cache.computeIfAbsent(node1, this::loadVector);
-                            var sf = cv.scoreFunctionFor(v1, ds.similarityFunction);
-
-                            var vp = new VectorProvider(ds.getDimension()) {
-                                @Override
-                                public void getInto(int node2, VectorFloat<?> result, int offset) {
-                                    // getInto is only called by reranking, not diversity code
-                                    throw new UnsupportedOperationException();
-                                }
-
-                                @Override
-                                public VectorFloat<?> get(int nodeId) {
-                                    return cache.computeIfAbsent(nodeId, n -> loadVector(n));
-                                }
-                            };
-                            var rr = ScoreFunction.ExactScoreFunction.from(v1, ds.similarityFunction, vp);
-
-                            return new SearchScoreProvider(sf, rr);
-                        };
-                    }
-
-                    @Override
-                    public SearchScoreProvider searchProviderFor(int node) {
-                        return searchProviderFor(loadVector(node));
-                    }
-
-                    @Override
-                    public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
-                        return new SearchScoreProvider(cv.precomputedScoreFunctionFor(vector, ds.similarityFunction), null);
-                    }
-
-                    @Override
-                    public VectorFloat<?> approximateCentroid() {
-                        return ((PQVectors) cv).getCompressor().getOrComputeCentroid();
-                    }
-                };
+                var bsp = BuildScoreProvider.pqBuildScoreProvider(ds, vr, floatVectors, cv);
                 start = System.nanoTime();
                 // TODO un-hardcode the 2* here
                 var simdExecutor = PhysicalCoreExecutor.pool();
