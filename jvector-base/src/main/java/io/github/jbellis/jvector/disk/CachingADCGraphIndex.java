@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.ADCView;
-import io.github.jbellis.jvector.graph.ApproximateScoreProvider;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
@@ -86,7 +85,7 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
         return String.format("CachingADCGraphIndex(graph=%s)", graph);
     }
 
-    public class CachedView implements ADCView, ApproximateScoreProvider {
+    public class CachedView implements ADCView {
         private final ADCView view;
 
         public CachedView(ADCView view) {
@@ -129,7 +128,6 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
             return view.getPackedNeighbors(node);
         }
 
-        @Override
         public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
             return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
         }

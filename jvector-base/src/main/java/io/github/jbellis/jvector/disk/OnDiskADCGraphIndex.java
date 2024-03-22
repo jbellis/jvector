@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.ADCView;
-import io.github.jbellis.jvector.graph.ApproximateScoreProvider;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
@@ -123,7 +122,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
         return new OnDiskView(readerSupplier.get());
     }
 
-    public class OnDiskView implements ADCView, ApproximateScoreProvider, AutoCloseable
+    public class OnDiskView implements ADCView, AutoCloseable
     {
         private final RandomAccessReader reader;
         private final int[] neighbors;
@@ -191,7 +190,6 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
             }
         }
 
-        @Override
         public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
             return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
         }
