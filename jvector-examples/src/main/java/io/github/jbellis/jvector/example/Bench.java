@@ -32,9 +32,9 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.VectorProvider;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.DiversityScoreProvider;
-import io.github.jbellis.jvector.graph.similarity.Reranker;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -133,17 +133,26 @@ public class Bench {
 
                             @Override
                             public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(int node1) {
-                                var v1 = cache.computeIfAbsent(node1, __ -> loadVector(node1));
+                                var v1 = cache.computeIfAbsent(node1, n -> loadVector(n));
                                 return cv.scoreFunctionFor(v1, ds.similarityFunction);
                             }
 
                             @Override
                             public ScoreFunction.ExactScoreFunction exactScoreFunctionFor(int node1) {
-                                var v1 = cache.computeIfAbsent(node1, __ -> loadVector(node1));
-                                return node2 -> {
-                                    var v2 = cache.computeIfAbsent(node2, __ -> loadVector(node2));
-                                    return ds.similarityFunction.compare(v1, v2);
+                                var v1 = cache.computeIfAbsent(node1, n -> loadVector(n));
+                                var vp = new VectorProvider(ds.getDimension()) {
+                                    @Override
+                                    public void getInto(int node2, VectorFloat<?> result, int offset) {
+                                        // getInto is only called by reranking, not diversity code
+                                        throw new UnsupportedOperationException();
+                                    }
+
+                                    @Override
+                                    public VectorFloat<?> get(int nodeId) {
+                                        return cache.computeIfAbsent(nodeId, n -> loadVector(n));
+                                    }
                                 };
+                                return ScoreFunction.ExactScoreFunction.from(v1, ds.similarityFunction, vp);
                             }
                         };
                     }
@@ -267,7 +276,7 @@ public class Bench {
                         } else {
                             sf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
                         }
-                        var rr = Reranker.from(queryVector, ds.similarityFunction, view);
+                        var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, VectorProvider.from(view, ds.getDimension()));
                         var ssp = new SearchScoreProvider(sf, rr);
                         sr = new GraphSearcher.Builder(view)
                                 .build()

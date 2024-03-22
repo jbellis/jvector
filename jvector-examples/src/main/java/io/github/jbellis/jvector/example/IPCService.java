@@ -27,7 +27,7 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.similarity.Reranker;
+import io.github.jbellis.jvector.graph.VectorProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -274,7 +274,7 @@ public class IPCService
             if (ctx.cv != null) {
                 ScoreFunction.ApproximateScoreFunction sf = ctx.cv.precomputedScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
-                    var rr = Reranker.from(queryVector, ctx.similarityFunction, view);
+                    var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ctx.similarityFunction, VectorProvider.from(view, ctx.dimension));
                     var ssp = new SearchScoreProvider(sf, rr);
                     r = new GraphSearcher.Builder(ctx.index.getView()).build().search(ssp, searchEf, Bits.ALL);
                 } catch (Exception e) {

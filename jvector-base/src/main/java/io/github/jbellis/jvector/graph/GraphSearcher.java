@@ -77,10 +77,10 @@ public class GraphSearcher implements AutoCloseable {
      * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
      * is the unique owner of the vectors instance passed in here.
      */
-    public static SearchResult search(VectorFloat<?> targetVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
+    public static SearchResult search(VectorFloat<?> queryVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
             var searcher = new GraphSearcher.Builder(view).withConcurrentUpdates().build();
-            ScoreFunction.ExactScoreFunction sf = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
+            var sf = ScoreFunction.ExactScoreFunction.from(queryVector, similarityFunction, VectorProvider.from(vectors));
             var ssp = new SearchScoreProvider(sf, null);
             return searcher.search(ssp, topK, acceptOrds);
         } catch (Exception e) {

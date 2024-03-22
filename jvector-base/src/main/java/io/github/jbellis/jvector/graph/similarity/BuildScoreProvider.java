@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph.similarity;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.VectorProvider;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -111,7 +112,7 @@ public interface BuildScoreProvider {
             @Override
             public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
                 var vc = vectorsCopy.get();
-                var sf = (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(vector, vc.vectorValue(node2));
+                var sf = ScoreFunction.ExactScoreFunction.from(vector, similarityFunction, VectorProvider.from(vc));
                 return new SearchScoreProvider(sf, null);
             }
 
@@ -127,10 +128,8 @@ public interface BuildScoreProvider {
                     @Override
                     public ScoreFunction.ExactScoreFunction scoreFunctionFor(int node1) {
                         var v = vectors.get().vectorValue(node1);
-                        return (node2) -> {
-                            var vc = vectorsCopy.get();
-                            return similarityFunction.compare(v, vc.vectorValue(node2));
-                        };
+                        var vc = vectorsCopy.get();
+                        return ScoreFunction.ExactScoreFunction.from(v, similarityFunction, VectorProvider.from(vc));
                     }
 
                     @Override

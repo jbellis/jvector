@@ -1,6 +1,7 @@
 package io.github.jbellis.jvector.graph.similarity;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.VectorProvider;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -45,6 +46,35 @@ public interface ScoreFunction {
     interface ExactScoreFunction extends ScoreFunction {
         default boolean isExact() {
             return true;
+        }
+
+        /**
+         * @return a vector of size `nodes.length` containing the corresponding score for
+         * each of the nodes in `nodes`.  Used when reranking search results.
+         */
+        VectorFloat<?> similarityTo(int[] nodes);
+
+        static ExactScoreFunction from(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, VectorProvider vp) {
+            return new ExactScoreFunction() {
+                @Override
+                public VectorFloat<?> similarityTo(int[] nodes) {
+                    var results = vts.createFloatVector(nodes.length);
+                    var nodeCount = nodes.length;
+                    var dimension = queryVector.length();
+                    var packedVectors = vts.createFloatVector(nodeCount * dimension);
+                    for (int i1 = 0; i1 < nodeCount; i1++) {
+                        var node = nodes[i1];
+                        vp.getInto(node, packedVectors, i1 * dimension);
+                    }
+                    vsf.compareMulti(queryVector, packedVectors, results);
+                    return results;
+                }
+
+                @Override
+                public float similarityTo(int node2) {
+                    return vsf.compare(queryVector, vp.get(node2));
+                }
+            };
         }
     }
 
