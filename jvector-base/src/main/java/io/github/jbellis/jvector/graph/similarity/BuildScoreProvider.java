@@ -36,6 +36,11 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 public interface BuildScoreProvider {
     VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
+    /**
+     * @return true if the primary score functions used for construction are exact.  This
+     * is modestly redundant, but it saves having to allocate new Search/Diversity provider
+     * objects in some hot construction loops.
+     */
     boolean isExact();
 
     /**
@@ -66,6 +71,13 @@ public interface BuildScoreProvider {
      */
     SearchScoreProvider searchProviderFor(int node);
 
+    /**
+     * Create a diversity score provider to use internally during construction.
+     * <p>
+     * The difference between the diversity provider and the search provider is
+     * that the diversity provider MUST include a non-null ExactScoreFunction if the
+     * primary score function is approximate.
+     */
     DiversityScoreProvider diversityProvider();
 
     /**

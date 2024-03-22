@@ -24,6 +24,9 @@ public interface Reranker {
      */
     ScoreFunction.ExactScoreFunction scoreFunction();
 
+    /**
+     * Convenience function that allocates a vector to return the scores in
+     */
     default VectorFloat<?> score(int[] nodes) {
         var results = vectorTypeSupport.createFloatVector(nodes.length);
         score(nodes, results);
