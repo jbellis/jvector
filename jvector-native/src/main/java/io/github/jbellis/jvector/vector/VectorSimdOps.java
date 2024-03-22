@@ -636,7 +636,7 @@ final class VectorSimdOps {
                 b = b.lanewise(VectorOperators.LSHR, 8);
             }
             var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            sum = a.fma(c, sum);Vector<Float
+            sum = a.fma(c, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
