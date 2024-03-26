@@ -483,8 +483,9 @@ public class GraphIndexBuilder {
             newEdges.entrySet().stream().parallel().forEach(e -> {
                 // turn the new edges into a NodeArray
                 int node = e.getKey();
-                // TODO support approximate scoring here
-                var sf = scoreProvider.searchProviderFor(node).exactScoreFunction();
+                // each deleted node has ALL of its neighbors added as candidates, so using approximate
+                // scoring and then re-scoring only the best options later makes sense here
+                var sf = scoreProvider.searchProviderFor(node).scoreFunction();
                 var neighbors = graph.getNeighbors(node);
                 var candidates = new NodeArray(graph.maxDegree);
                 for (var k : e.getValue()) {
