@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.example.util.CompressorParameters;
-import io.github.jbellis.jvector.example.util.CompressorParameters.NoCompressionParameters;
 import io.github.jbellis.jvector.example.util.CompressorParameters.PQParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DataSetCreator;
@@ -45,11 +44,11 @@ public class Bench {
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
-                __ -> new NoCompressionParameters()
+                __ -> CompressorParameters.NONE
                 // ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
-                        __ -> new NoCompressionParameters(),
+                        __ -> CompressorParameters.NONE,
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
 
@@ -97,8 +96,8 @@ public class Bench {
 
         // 2D grid, built and calculated at runtime
         if (pattern.matcher("2dgrid").find()) {
-            searchCompression = Arrays.asList(__ -> new NoCompressionParameters(),
-                                            ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
+            searchCompression = Arrays.asList(__ -> CompressorParameters.NONE,
+                                              ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
             Grid.runAll(grid2d, mGrid, efConstructionGrid, buildCompression, searchCompression, efSearchGrid);
         }

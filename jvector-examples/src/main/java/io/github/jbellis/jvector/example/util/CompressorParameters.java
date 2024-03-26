@@ -5,6 +5,8 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 
 public abstract class CompressorParameters {
+    public static final CompressorParameters NONE = new NoCompressionParameters();
+
     public boolean supportsCaching() {
         return false;
     }
@@ -52,7 +54,7 @@ public abstract class CompressorParameters {
         }
     }
 
-    public static class NoCompressionParameters extends CompressorParameters {
+    private static class NoCompressionParameters extends CompressorParameters {
         @Override
         public VectorCompressor<?> computeCompressor(DataSet ds) {
             return null;
