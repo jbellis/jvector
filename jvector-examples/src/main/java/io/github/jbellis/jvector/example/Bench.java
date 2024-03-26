@@ -16,12 +16,14 @@
 
 package io.github.jbellis.jvector.example;
 
+import io.github.jbellis.jvector.example.util.CompressorParameters;
+import io.github.jbellis.jvector.example.util.CompressorParameters.NoCompressionParameters;
+import io.github.jbellis.jvector.example.util.CompressorParameters.PQParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DataSetCreator;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
 import io.github.jbellis.jvector.pq.ProductQuantization;
-import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
@@ -30,6 +32,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
@@ -41,14 +45,10 @@ public class Bench {
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
-        List<Function<DataSet, VectorCompressor<?>>> compressionGrid = Arrays.asList(
-                null, // uncompressed
-                /*ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 4, 32,
-                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN),*/
-                // ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8, 256, false, 0.99f),
-                ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension() / 8,
-                                                  256,
-                                                  ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN));
+        List<Function<DataSet, CompressorParameters>> compressionGrid = Arrays.asList(
+                __ -> new NoCompressionParameters(),
+                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
+        );
 
         // args is list of regexes, possibly needing to be split by whitespace.
         // generate a regex that matches any regex in args, or if args is empty/null, match everything
@@ -94,14 +94,14 @@ public class Bench {
 
         // 2D grid, built and calculated at runtime
         if (pattern.matcher("2dgrid").find()) {
-            compressionGrid = Arrays.asList(null,
-                                            ds -> ProductQuantization.compute(ds.getBaseRavv(), ds.getDimension(), 256, true));
+            compressionGrid = Arrays.asList(__ -> new NoCompressionParameters(),
+                                            ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
             Grid.runAll(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
         }
     }
 
-    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, VectorCompressor<?>>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
+    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, CompressorParameters>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
         for (var nwDatasetName : coreFiles) {
             if (pattern.matcher(nwDatasetName).find()) {
                 var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);

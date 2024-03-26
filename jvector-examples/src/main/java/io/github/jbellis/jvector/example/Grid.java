@@ -4,6 +4,7 @@ import io.github.jbellis.jvector.disk.CachingADCGraphIndex;
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskADCGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.graph.GraphIndex;
@@ -23,8 +24,10 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
@@ -40,10 +43,12 @@ import java.util.stream.IntStream;
  * Tests a grid of configurations against a dataset
  */
 public class Grid {
+    private static final String pqCacheDir = "pq_cache";
+
     private static final String dirPrefix = "BenchGraphDir";
 
     static void runAll(DataSet ds,
-                       List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
+                       List<Function<DataSet, CompressorParameters>> compressionGrid,
                        List<Integer> mGrid,
                        List<Integer> efConstructionGrid,
                        List<Integer> efSearchFactor) throws IOException
@@ -63,7 +68,7 @@ public class Grid {
 
     static void runOneGraph(int M,
                             int efConstruction,
-                            List<Function<DataSet, VectorCompressor<?>>> compressionGrid,
+                            List<Function<DataSet, CompressorParameters>> compressionGrid,
                             List<Integer> efSearchOptions,
                             DataSet ds,
                             Path testDirectory) throws IOException
@@ -82,8 +87,8 @@ public class Grid {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
 
-            for (var cf : compressionGrid) {
-                var compressor = getCompressor(cf, ds);
+            for (var cpSupplier : compressionGrid) {
+                var compressor = getCompressor(cpSupplier, ds);
                 CompressedVectors cv = null;
                 var fusedCompatible = compressor instanceof ProductQuantization && ((ProductQuantization) compressor).getClusterCount() == 32;
                 if (compressor == null) {
@@ -124,7 +129,7 @@ public class Grid {
     }
 
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
-    static final Map<Function<DataSet, VectorCompressor<?>>, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
+    static final Map<String, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
 
     private static void testConfiguration(ConfiguredSystem cs, List<Integer> efSearchOptions) {
         var topK = cs.ds.groundTruth.get(0).size();
@@ -139,14 +144,42 @@ public class Grid {
         }
     }
 
-    private static VectorCompressor<?> getCompressor(Function<DataSet, VectorCompressor<?>> cf, DataSet ds) {
-        if (cf == null) {
-            return null;
+    private static VectorCompressor<?> getCompressor(Function<DataSet, CompressorParameters> cpSupplier, DataSet ds) {
+        var cp = cpSupplier.apply(ds);
+        if (!cp.supportsCaching()) {
+            return cp.computeCompressor(ds);
         }
-        return cachedCompressors.computeIfAbsent(cf, __ -> {
+
+        var fname = cp.idStringFor(ds);
+        return cachedCompressors.computeIfAbsent(fname, __ -> {
+            var path = Paths.get(pqCacheDir).resolve(fname);
+            if (path.toFile().exists()) {
+                try {
+                    try (var readerSupplier = ReaderSupplierFactory.open(path)) {
+                        try (var rar = readerSupplier.get()) {
+                            var pq = ProductQuantization.load(rar);
+                            System.out.format("%s loaded from %s%n", pq, fname);
+                            return pq;
+                        }
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
+
             var start = System.nanoTime();
-            var compressor = cf.apply(ds);
+            var compressor = cp.computeCompressor(ds);
             System.out.format("%s build in %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
+            if (cp.supportsCaching()) {
+                try {
+                    Files.createDirectories(path.getParent());
+                    try (var writer = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
+                        compressor.write(writer);
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
             return compressor;
         });
     }
