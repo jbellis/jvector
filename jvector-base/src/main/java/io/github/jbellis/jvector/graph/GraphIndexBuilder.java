@@ -66,7 +66,7 @@ public class GraphIndexBuilder {
     final OnHeapGraphIndex graph;
     private final ConcurrentSkipListSet<Integer> insertionsInProgress = new ConcurrentSkipListSet<>();
 
-    private volatile BuildScoreProvider scoreProvider;
+    private final BuildScoreProvider scoreProvider;
 
     private final ForkJoinPool simdExecutor;
     private final ForkJoinPool parallelExecutor;
@@ -644,10 +644,6 @@ public class GraphIndexBuilder {
             scratch.insertSorted(n, scoreFunction.similarityTo(n));
         }
         return scratch;
-    }
-
-    public void setScoreProvider(BuildScoreProvider scoreProvider) {
-        this.scoreProvider = scoreProvider;
     }
 
     @VisibleForTesting
