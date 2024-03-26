@@ -23,7 +23,6 @@ import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DataSetCreator;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
-import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
@@ -45,8 +44,12 @@ public class Bench {
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
-        List<Function<DataSet, CompressorParameters>> compressionGrid = Arrays.asList(
-                __ -> new NoCompressionParameters(),
+        List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
+                __ -> new NoCompressionParameters()
+                // ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
+        );
+        List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
+                        __ -> new NoCompressionParameters(),
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
 
@@ -64,14 +67,14 @@ public class Bench {
                 "colbert-1M",
                 "e5-small-v2-100k",
                 "gecko-100k");
-        executeNw(coreFiles, pattern, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+        executeNw(coreFiles, pattern, buildCompression, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
 
         var extraFiles = List.of(
                 "openai-v3-large-3072-100k",
                 "openai-v3-large-1536-100k",
                 "e5-base-v2-100k",
                 "e5-large-v2-100k");
-        executeNw(extraFiles, pattern, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+        executeNw(extraFiles, pattern, buildCompression, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
 
         // smaller vectors from ann-benchmarks
         var hdf5Files = List.of(
@@ -88,24 +91,24 @@ public class Bench {
         for (var f : hdf5Files) {
             if (pattern.matcher(f).find()) {
                 DownloadHelper.maybeDownloadHdf5(f);
-                Grid.runAll(Hdf5Loader.load(f), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+                Grid.runAll(Hdf5Loader.load(f), mGrid, efConstructionGrid, buildCompression, searchCompression, efSearchGrid);
             }
         }
 
         // 2D grid, built and calculated at runtime
         if (pattern.matcher("2dgrid").find()) {
-            compressionGrid = Arrays.asList(__ -> new NoCompressionParameters(),
+            searchCompression = Arrays.asList(__ -> new NoCompressionParameters(),
                                             ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
-            Grid.runAll(grid2d, compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+            Grid.runAll(grid2d, mGrid, efConstructionGrid, buildCompression, searchCompression, efSearchGrid);
         }
     }
 
-    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, CompressorParameters>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
+    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, CompressorParameters>> buildCompression, List<Function<DataSet, CompressorParameters>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
         for (var nwDatasetName : coreFiles) {
             if (pattern.matcher(nwDatasetName).find()) {
                 var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
-                Grid.runAll(mfd.load(), compressionGrid, mGrid, efConstructionGrid, efSearchGrid);
+                Grid.runAll(mfd.load(), mGrid, efConstructionGrid, buildCompression, compressionGrid, efSearchGrid);
             }
         }
     }

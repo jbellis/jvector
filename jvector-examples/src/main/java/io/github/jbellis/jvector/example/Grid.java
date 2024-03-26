@@ -12,6 +12,7 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -19,6 +20,7 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.BufferedOutputStream;
@@ -34,6 +36,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -48,16 +51,20 @@ public class Grid {
     private static final String dirPrefix = "BenchGraphDir";
 
     static void runAll(DataSet ds,
-                       List<Function<DataSet, CompressorParameters>> compressionGrid,
                        List<Integer> mGrid,
                        List<Integer> efConstructionGrid,
+                       List<Function<DataSet, CompressorParameters>> buildCompressors,
+                       List<Function<DataSet, CompressorParameters>> compressionGrid,
                        List<Integer> efSearchFactor) throws IOException
     {
         var testDirectory = Files.createTempDirectory(dirPrefix);
         try {
             for (int M : mGrid) {
                 for (int efC : efConstructionGrid) {
-                    runOneGraph(M, efC, compressionGrid, efSearchFactor, ds, testDirectory);
+                    for (var bc : buildCompressors) {
+                        var compressor = getCompressor(bc, ds);
+                        runOneGraph(M, efC, compressor, compressionGrid, efSearchFactor, ds, testDirectory);
+                    }
                 }
             }
         } finally {
@@ -68,17 +75,35 @@ public class Grid {
 
     static void runOneGraph(int M,
                             int efConstruction,
+                            VectorCompressor<?> buildCompressor,
                             List<Function<DataSet, CompressorParameters>> compressionGrid,
                             List<Integer> efSearchOptions,
                             DataSet ds,
                             Path testDirectory) throws IOException
     {
         var floatVectors = ds.getBaseRavv();
-        var builder = new GraphIndexBuilder(floatVectors, ds.similarityFunction, M, efConstruction, 1.2f, 1.2f);
+        GraphIndexBuilder builder;
+        if (buildCompressor == null) {
+            var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
+            builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f,
+                                            PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        } else {
+            var quantized = buildCompressor.encodeAll(ds.baseVectors);
+            var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
+            var ravv = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
+            var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ravv, pq);
+            builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f,
+                                            PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        }
         var start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
-        System.out.format("Build M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
-                          M, efConstruction, (System.nanoTime() - start) / 1_000_000_000.0, onHeapGraph.getAverageDegree(), onHeapGraph.getAverageShortEdges());
+        System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+                          buildCompressor == null ? "full res" : buildCompressor.toString(),
+                          M,
+                          efConstruction,
+                          (System.nanoTime() - start) / 1_000_000_000.0,
+                          onHeapGraph.getAverageDegree(),
+                          onHeapGraph.getAverageShortEdges());
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         var fusedGraphPath = testDirectory.resolve("fusedgraph" + M + efConstruction + ds.name);
