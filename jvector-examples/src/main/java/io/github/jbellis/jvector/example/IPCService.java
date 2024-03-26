@@ -27,7 +27,6 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -146,7 +145,7 @@ public class IPCService
 
             ((UpdatableRandomAccessVectorValues)ctx.ravv).add(vector);
             var node = ctx.ravv.size() - 1;
-            ctx.indexBuilder.addGraphNode(node, ctx.ravv.vectorValue(node));
+            ctx.indexBuilder.addGraphNode(node, ctx.ravv.getVector(node));
         }
     }
 
@@ -191,7 +190,7 @@ public class IPCService
         PhysicalCoreExecutor.instance.execute(() ->
             IntStream.range(0, quantizedVectors.length).parallel().forEach(i -> {
                 var localRavv = ravvCopy.get();
-                quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
+                quantizedVectors[i] = pq.encode(localRavv.getVector(i));
             })
         );
 

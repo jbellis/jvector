@@ -133,7 +133,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
                         .filter(i -> ThreadLocalRandom.current().nextFloat() < P)
                         .mapToObj(targetOrd -> {
                             var localRavv = ravvCopy.get();
-                            VectorFloat<?> v = localRavv.vectorValue(targetOrd);
+                            VectorFloat<?> v = localRavv.getVector(targetOrd);
                             return localRavv.isValueShared() ? v.copy() : v;
                         })
                         .collect(Collectors.toList()))

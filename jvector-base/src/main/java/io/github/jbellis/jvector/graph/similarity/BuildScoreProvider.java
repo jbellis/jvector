@@ -16,10 +16,7 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
-import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -27,9 +24,6 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.agrona.collections.Int2ObjectHashMap;
-
-import java.io.IOException;
-import java.util.function.Supplier;
 
 /**
  * Encapsulates comparing node distances for GraphIndexBuilder.
@@ -103,7 +97,7 @@ public interface BuildScoreProvider {
                 var vv = vectors.get();
                 var centroid = vectorTypeSupport.createFloatVector(vv.dimension());
                 for (int i = 0; i < vv.size(); i++) {
-                    VectorUtil.addInPlace(centroid, vv.vectorValue(i));
+                    VectorUtil.addInPlace(centroid, vv.getVector(i));
                 }
                 VectorUtil.scale(centroid, 1.0f / vv.size());
                 return centroid;
@@ -118,14 +112,16 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(int node1) {
-                var v = vectors.get().vectorValue(node1);
+                RandomAccessVectorValues randomAccessVectorValues = vectors.get();
+                var v = randomAccessVectorValues.getVector(node1);
                 return searchProviderFor(v);
             }
 
             @Override
             public SearchScoreProvider.Factory diversityProvider() {
                 return (int node1) -> {
-                    var v = vectors.get().vectorValue(node1);
+                    RandomAccessVectorValues randomAccessVectorValues = vectors.get();
+                    var v = randomAccessVectorValues.getVector(node1);
                     var vc = vectorsCopy.get();
                     var sf = ScoreFunction.ExactScoreFunction.from(v, similarityFunction, vc);
                     return new SearchScoreProvider(sf, null);

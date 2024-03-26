@@ -32,7 +32,6 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -153,7 +152,8 @@ public class Bench {
                 var vv = floatVectors.threadLocalSupplier();
                 simdExecutor.submit(() -> {
                     IntStream.range(0, ds.baseVectors.size()).parallel().forEach(node -> {
-                        var vector = vv.get().vectorValue(node);
+                        RandomAccessVectorValues randomAccessVectorValues = vv.get();
+                        var vector = randomAccessVectorValues.getVector(node);
                         synchronized (vectorsWriter) {
                             try {
                                 vectorsWriter.seek((long) node * floatVectors.dimension() * Float.BYTES);

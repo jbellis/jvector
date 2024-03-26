@@ -65,7 +65,7 @@ public class TestDeletions extends LuceneTestCase {
             }
         }
         // check that asking for the entire graph back still doesn't surface the deleted one
-        var v = ravv.vectorValue(n);
+        var v = ravv.getVector(n);
         var results = GraphSearcher.search(v, ravv.size(), ravv, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
         assertEquals(GraphIndex.prettyPrint(graph), ravv.size() - 1, results.getNodes().length);
         for (var ns : results.getNodes()) {
@@ -102,7 +102,7 @@ public class TestDeletions extends LuceneTestCase {
         assertEquals(ravv.size() - nDeleted, graph.size());
 
         // cleanup should have added new connections to the node that would otherwise have been disconnected
-        var v = ravv.vectorValue(nodeToIsolate).copy();
+        var v = ravv.getVector(nodeToIsolate).copy();
         var results = GraphSearcher.search(v, 10, ravv, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
         assertEquals(nodeToIsolate, results.getNodes()[0].node);
 
@@ -159,7 +159,7 @@ public class TestDeletions extends LuceneTestCase {
         IntStream.range(0, count).parallel().forEach(i -> {
             var R = ThreadLocalRandom.current();
             if (R.nextDouble() < 0.6) {
-                builder.addGraphNode(i, ravv.vectorValue(i));
+                builder.addGraphNode(i, ravv.getVector(i));
             } else if (R.nextDouble() < 0.5) {
                 GraphSearcher.search(TestUtil.randomVector(R, dimension), 10, ravv, VectorSimilarityFunction.DOT_PRODUCT, builder.getGraph(), Bits.ALL);
             } else if (R.nextDouble() < 0.9) {

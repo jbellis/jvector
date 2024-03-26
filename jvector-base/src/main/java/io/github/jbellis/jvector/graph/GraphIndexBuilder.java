@@ -155,7 +155,10 @@ public class GraphIndexBuilder {
         int size = ravv.size();
 
         simdExecutor.submit(() -> {
-            IntStream.range(0, size).parallel().forEach(node -> addGraphNode(node, vv.get().vectorValue(node)));
+            IntStream.range(0, size).parallel().forEach(node -> {
+                RandomAccessVectorValues randomAccessVectorValues = vv.get();
+                addGraphNode(node, randomAccessVectorValues.getVector(node));
+            });
         }).join();
 
         cleanup();
@@ -305,7 +308,7 @@ public class GraphIndexBuilder {
 
     @Deprecated
     public long addGraphNode(int node, RandomAccessVectorValues ravv) {
-        return addGraphNode(node, ravv.vectorValue(node));
+        return addGraphNode(node, ravv.getVector(node));
     }
 
     /**

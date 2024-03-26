@@ -341,7 +341,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
                 }
 
                 out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                vectorTypeSupport.writeFloatVector(out, vectors.vectorValue(originalOrdinal));
+                vectorTypeSupport.writeFloatVector(out, vectors.getVector(originalOrdinal));
                 var neighbors = view.getNeighborsIterator(originalOrdinal);
                 int n = 0;
                 var neighborSize = neighbors.size();

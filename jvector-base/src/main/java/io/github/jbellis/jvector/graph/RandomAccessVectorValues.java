@@ -83,7 +83,7 @@ public interface RandomAccessVectorValues {
     /**
      * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
      * access different values at once, to avoid overwriting the underlying float vector returned by
-     * a shared {@link RandomAccessVectorValues#vectorValue}.
+     * a shared {@link RandomAccessVectorValues#getVector}.
      * <p>
      * Un-shared implementations may simply return `this`.
      */
