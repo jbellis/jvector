@@ -188,6 +188,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         this.clusterCount = clusterCount;
         this.subvectorSizesAndOffsets = subvectorSizesAndOffsets;
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
+        if (globalCentroid != null && globalCentroid.length() != originalDimension) {
+            var msg = String.format("Global centroid length %d does not match vector dimensionality %d", globalCentroid.length(), originalDimension);
+            throw new IllegalArgumentException(msg);
+        }
         this.anisotropicThreshold = anisotropicThreshold;
 
         centroidNormsSquared = new float[M][clusterCount];
