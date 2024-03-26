@@ -61,7 +61,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
   }
 
   private static float scoreBetween(BuildScoreProvider bsp, int i, int j) {
-    return bsp.searchProviderFor(i).scoreFunction().similarityTo(j);
+    return bsp.searchProviderFor(i).exactScoreFunction().similarityTo(j);
   }
 
   @Test

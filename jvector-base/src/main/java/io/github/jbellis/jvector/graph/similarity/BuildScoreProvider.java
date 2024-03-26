@@ -39,8 +39,11 @@ public interface BuildScoreProvider {
     boolean isExact();
 
     /**
-     * @return the approximate centroid of the known nodes.  This is called every time the graph
-     * size doubles, and does not block searches or modifications, so it is okay for it to be O(N).
+     * @return the approximate centroid of the known nodes.  We use the closest node
+     * to this centroid as the graph entry point, so this is called when the entry point is deleted
+     * or every time the graph size doubles.
+     * <p>
+     * This is not called on a path that blocks searches or modifications, so it is okay for it to be O(N).
      */
     VectorFloat<?> approximateCentroid();
 
@@ -48,8 +51,8 @@ public interface BuildScoreProvider {
      * Create a search score provider to use *internally* during construction.
      * <p>
      * "Internally" means that this may differ from a typical SSP in that it may use
-     * approximate scores *without* reranking.  (Reranking will be done separately
-     * by the ConcurrentNeighborSet diversity code.)
+     * approximate scores *without* reranking.  (In this case, reranking will be done
+     * separately by the ConcurrentNeighborSet diversity code.)
      * <p>
      * @param vector the query vector to provide similarity scores against
      */
@@ -72,6 +75,9 @@ public interface BuildScoreProvider {
      * The difference between the diversity provider and the search provider is
      * that the diversity provider MUST include a non-null ExactScoreFunction if the
      * primary score function is approximate.
+     * <p>
+     * When scoring is approximate, the scores from the search and diversity provider
+     * must be consistent, i.e. mixing different types of CompressedVectors will cause problems.
      */
     SearchScoreProvider.Factory diversityProvider();
 
@@ -80,9 +86,7 @@ public interface BuildScoreProvider {
      */
     static BuildScoreProvider randomAccessScoreProvider(RandomAccessVectorValues ravv, VectorSimilarityFunction similarityFunction) {
         // We need two sources of vectors in order to perform diversity check comparisons without
-        // colliding.  Usually it's obvious because you can see the different sources being used
-        // in the same method.  The only tricky place is in addGraphNode, which uses `vectors` immediately,
-        // and `vectorsCopy` later on when defining the ScoreFunction for search.
+        // colliding.  ThreadLocalSupplier makes this a no-op if the RAVV is actually un-shared.
         var vectors = ravv.threadLocalSupplier();
         var vectorsCopy = ravv.threadLocalSupplier();
 
@@ -131,7 +135,7 @@ public interface BuildScoreProvider {
     }
 
     /**
-     * Returns a BSP that performs approximate score comparisons using the given CompressedVectors,
+     * Returns a BSP that performs approximate score comparisons using the given PQVectors,
      * with reranking performed using full resolutions vectors read from the reader
      */
     static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf,
