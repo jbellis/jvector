@@ -114,7 +114,9 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
 
         @Override
         public RandomAccessVectorValues copy() {
-            return this;
+            // we would need to be able to copy the View to do this correctly, but it's simple to just
+            // avoid calling copy() for non-shared RAVV instances like this
+            throw new UnsupportedOperationException();
         }
 
         @Override
