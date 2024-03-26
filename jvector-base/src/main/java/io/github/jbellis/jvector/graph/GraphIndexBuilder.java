@@ -580,14 +580,9 @@ public class GraphIndexBuilder {
 
         var centroid = scoreProvider.approximateCentroid();
         // if the centroid is the zero vector, pick a random node
-        // (this is not scenario likely to arise outside of small, contrived tests)
+        // (this is not a scenario likely to arise outside of small, contrived tests)
         if (dotProduct(centroid, centroid) < 1E-6) {
-            while (true) {
-                int randomNode = ThreadLocalRandom.current().nextInt(graph.getIdUpperBound());
-                if (graph.containsNode(randomNode) && !graph.getDeletedNodes().get(randomNode)) {
-                    return randomNode;
-                }
-            }
+            return randomLiveNode();
         }
 
         int ep = graph.entry();
