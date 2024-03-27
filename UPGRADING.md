@@ -46,14 +46,6 @@ If you only read one thing, read this!
   These are used in place of `float[]` and `byte[]` in many places in the API. This is to permit the
   possibility of alternative implementations of these types. This requires changes to many internal/external API
   surfaces.
-- Support for indexes over byte vectors has been removed. This is because the implementation
-  was becoming increasingly specialized for float vectors, leaving byte vector support as a 
-  secondary concern. This specializes many structures that were previously generic over vector type.
-- `GraphIndexBuilder` `M` parameter now represents the maximum degree of the graph,
-  instead of half the maximum degree.  (The former behavior was motivated by making
-  it easy to make apples-to-apples comparisons with Lucene HNSW graphs.)  So,
-  if you were building a graph of M=16 with JVector2, you should build it with M=32
-  with JVector3.
 - `NodeSimilarity` has been removed.  `ScoreFunction` is now a top-level interface; grouping of functions
   for build and for search are now done by `BuildScoreProvider` and `SearchScoreProvider`.
   - BuildScoreProvider allows the creation of larger-than-memory indexes by using compressed vectors
@@ -67,6 +59,10 @@ If you only read one thing, read this!
 - `RandomAccessVectorValues::vectorValue` is deprecated, replaced by `getVector` (which has the same semantics
   as `vectorValue`) and `getVectorInto`.  The latter allows JVector to avoid an unnecessary copy when there
   is a specific destination already created that needs the data.
+- `CompressedVectors::approximateScoreFunctionFor` is deprecated, replaced by `precomputedScoreFunctionFor`
+  (which has the same semantics as `approximateScoreFunctionFor`) and `scoreFunctionFor`, which does not
+  precompute partial similarities across the codebooks and is more suitable for cases when only a few
+  similarities will be calculated.
 - `VectorUtil.divInPlace` is replaced by its inverse, `VectorUtil.scale`
 - `PoolingSupport` is removed in favor of direct usage of `ExplicitThreadLocal`
 
