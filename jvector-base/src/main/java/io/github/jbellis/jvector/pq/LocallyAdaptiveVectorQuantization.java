@@ -123,12 +123,26 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         };
     }
 
+    private NodeSimilarity.Reranker cosineRerankerFrom(VectorFloat<?> query, LVQView view) {
+        return (nodes, scores) -> {
+            var nodeCount = nodes.length;
+            for (int i = 0; i < nodeCount; i++) {
+                var node = nodes[i];
+                var vector = view.getPackedVector(node);
+                var lvqCosine = VectorUtil.lvqCosine(query, vector, globalMean);
+                scores.set(i, (1 + lvqCosine) / 2);
+            }
+        };
+    }
+
     public NodeSimilarity.Reranker rerankerFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQView view) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
                 return dotProductRerankerFrom(query, view);
             case EUCLIDEAN:
                 return euclideanRerankerFrom(query, view);
+            case COSINE:
+                return cosineRerankerFrom(query, view);
             default:
                 throw new IllegalArgumentException("Unsupported similarity function: " + similarityFunction);
         }

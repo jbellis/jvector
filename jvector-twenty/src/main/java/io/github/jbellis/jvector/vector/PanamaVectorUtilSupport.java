@@ -131,6 +131,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+        return SimdOps.lvqCosine((ArrayVectorFloat) query, vector, (ArrayVectorFloat) centroid);
+    }
+
+
+    @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         for (int i = 0; i < clusterCount; i++) {
             switch (vsf) {

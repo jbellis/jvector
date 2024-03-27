@@ -211,4 +211,8 @@ public final class VectorUtil {
   public static float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
     return impl.lvqSquareL2Distance(query, vector);
   }
+
+  public static float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+    return impl.lvqCosine(query, vector, centroid);
+  }
 }
