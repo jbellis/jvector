@@ -137,7 +137,7 @@ public abstract class VectorizationProvider {
         throw new AssertionError(th);
       }
     } else if (runtimeVersion >= 23) {
-      LOG.warning("You are running with Java 23 or later. To make full use of the Vector API, please update jvector.");
+      LOG.warning("You are running with Java 24 or later. To make full use of the Vector API, please update jvector.");
     } else {
       LOG.warning("You are running with Java 19 or earlier, which do not support the required incubating Vector API. Falling back to slower defaults.");
     }

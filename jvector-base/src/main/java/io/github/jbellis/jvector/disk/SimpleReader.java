@@ -44,6 +44,11 @@ public class SimpleReader implements RandomAccessReader {
     }
 
     @Override
+    public float readFloat() throws IOException {
+        return raf.readFloat();
+    }
+
+    @Override
     public void readFully(byte[] bytes) throws IOException {
         raf.readFully(bytes);
     }

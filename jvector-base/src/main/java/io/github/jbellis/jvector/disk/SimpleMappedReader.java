@@ -107,6 +107,11 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     @Override
+    public float readFloat() throws IOException {
+        return mbb.getFloat();
+    }
+
+    @Override
     public void read(int[] ints, int offset, int count) {
         for (int i = 0; i < count; i++) {
             ints[offset + i] = mbb.getInt();
