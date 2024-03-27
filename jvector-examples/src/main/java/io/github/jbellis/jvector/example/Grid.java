@@ -18,20 +18,24 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.disk.CachingADCGraphIndex;
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.disk.CachingLVQGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskADCGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.disk.OnDiskLVQGraphIndex;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.LVQView;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -123,9 +127,15 @@ public class Grid {
 
         var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
         var fusedGraphPath = testDirectory.resolve("fusedgraph" + M + efConstruction + ds.name);
+        var lvqGraphPath = testDirectory.resolve("lvqgraph" + M + efConstruction + ds.name);
         try {
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
                 OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+            }
+
+            var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
+            try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(lvqGraphPath)))) {
+                OnDiskLVQGraphIndex.write(onHeapGraph, floatVectors, lvq, outputStream);
             }
 
             for (var cpSupplier : compressionGrid) {
@@ -148,11 +158,15 @@ public class Grid {
                 }
 
                 try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0));
+                     var onDiskLVQGraph = compressor == null ? null : new CachingLVQGraphIndex(new OnDiskLVQGraphIndex(ReaderSupplierFactory.open(lvqGraphPath), 0));
                      var onDiskFusedGraph = fusedCompatible ? new CachingADCGraphIndex(new OnDiskADCGraphIndex(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
                     List<GraphIndex> graphs = new ArrayList<>();
                     graphs.add(onDiskGraph);
                     if (onDiskFusedGraph != null) {
                         graphs.add(onDiskFusedGraph);
+                    }
+                    if (onDiskLVQGraph != null) {
+                        graphs.add(onDiskLVQGraph);
                     }
                     if (cv == null) {
                         graphs.add(onHeapGraph); // if we have no cv, compare on-heap/on-disk with exact searches
@@ -166,6 +180,7 @@ public class Grid {
         } finally {
             Files.deleteIfExists(graphPath);
             Files.deleteIfExists(fusedGraphPath);
+            Files.deleteIfExists(lvqGraphPath);
         }
     }
 
@@ -286,8 +301,15 @@ public class Grid {
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
-            var ravv = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
-            var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, ravv);
+
+            ScoreFunction.ExactScoreFunction rr;
+            if (index instanceof CachingLVQGraphIndex) {
+                rr = ((CachingLVQGraphIndex) index).graph.lvq.scoreFunctionFrom(queryVector, ds.similarityFunction, (LVQView) view);
+            } else {
+                var ravv = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
+                rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, ravv);
+            }
+
             return new SearchScoreProvider(asf, rr);
         }
     }
