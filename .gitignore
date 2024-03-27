@@ -2,6 +2,13 @@ target/
 .mvn/wrapper/maven-wrapper.jar
 .java-version
 
+### Bench caches
+pq_cache/
+
+### JVM crashes
+hs_err_pid*
+replay_pid*
+
 ### IntelliJ IDEA ###
 .idea
 *.iml
