@@ -17,9 +17,10 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -44,6 +45,11 @@ public class PQVectors implements CompressedVectors {
         this.compressedVectors = compressedVectors;
         this.partialSums = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(pq.getSubspaceCount() * pq.getClusterCount()));
         this.partialMagnitudes = new AtomicReference<>(null);
+    }
+
+    @Override
+    public int count() {
+        return compressedVectors.length;
     }
 
     @Override
@@ -105,7 +111,7 @@ public class PQVectors implements CompressedVectors {
     }
 
     @Override
-    public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+    public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
                 return new PQDecoder.DotProductDecoder(this, q);
@@ -113,6 +119,61 @@ public class PQVectors implements CompressedVectors {
                 return new PQDecoder.EuclideanDecoder(this, q);
             case COSINE:
                 return new PQDecoder.CosineDecoder(this, q);
+            default:
+                throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
+        }
+    }
+
+    @Override
+    public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        switch (similarityFunction) {
+            case DOT_PRODUCT:
+                return (node2) -> {
+                    var encoded = get(node2);
+                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
+                    float dp = 0;
+                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
+                        dp += VectorUtil.dotProduct(pq.codebooks[m], centroidIndex * centroidLength, q, centroidOffset, centroidLength);
+                    }
+                    // scale to [0, 1]
+                    return (1 + dp) / 2;
+                };
+            case COSINE:
+                float norm1 = VectorUtil.dotProduct(q, q);
+                return (node2) -> {
+                    var encoded = get(node2);
+                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
+                    float sum = 0;
+                    float norm2 = 0;
+                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
+                        var codebookOffset = centroidIndex * centroidLength;
+                        sum += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, q, centroidOffset, centroidLength);
+                        norm2 += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, pq.codebooks[m], codebookOffset, centroidLength);
+                    }
+                    float cosine = sum / (float) Math.sqrt(norm1 * norm2);
+                    // scale to [0, 1]
+                    return (1 + cosine) / 2;
+                };
+            case EUCLIDEAN:
+                return (node2) -> {
+                    var encoded = get(node2);
+                    // compute the euclidean distance between the query and the codebook centroids corresponding to the encoded points
+                    float sum = 0;
+                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
+                        sum += VectorUtil.squareL2Distance(pq.codebooks[m], centroidIndex * centroidLength, q, centroidOffset, centroidLength);
+                    }
+                    // scale to [0, 1]
+                    return 1 / (1 + sum);
+                };
             default:
                 throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
         }

@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph;
+package io.github.jbellis.jvector.disk;
 
-import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-public interface ApproximateScoreProvider {
-    /**
-     * @return a ScoreFunction suitable for performing approximate search between vectors.
-     * This is often done by searching against compressed or otherwise transformed vectors.
-     */
-    NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
+import java.io.IOException;
+
+public interface RandomAccessWriter extends AutoCloseable {
+    void seek(long position) throws IOException;
+
+    void writeFully(VectorFloat<?> vector) throws IOException;
 }

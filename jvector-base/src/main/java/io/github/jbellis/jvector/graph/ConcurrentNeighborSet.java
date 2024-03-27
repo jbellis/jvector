@@ -16,12 +16,14 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
-import org.agrona.collections.IntHashSet;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 
@@ -33,18 +35,22 @@ public class ConcurrentNeighborSet {
     private final int nodeId;
 
     /**
-     * We use a copy-on-write NeighborArray to store the neighbors. Even though updating this is
+     * We use a copy-on-write {@link NodeArray} to store the neighbors. Even though updating this is
      * expensive, it is still faster than using a concurrent Collection because "iterate through a
-     * node's neighbors" is a hot loop in adding to the graph, and NeighborArray can do that much
+     * node's neighbors" is a hot loop in adding to the graph, and {@link NodeArray} can do that much
      * faster: no boxing/unboxing, all the data is stored sequentially instead of having to follow
      * references, and no fancy encoding necessary for node/score.
+     * <p>
+     * While GraphIndexBuilder may use approximate scoring to find candidate neighbors, we
+     * always rerank them using exact scoring before storing them in the neighbor set.
      */
     private final AtomicReference<Neighbors> neighborsRef;
 
     /** the diversity threshold; 1.0 is equivalent to HNSW; Vamana uses 1.2 or more */
     private final float alpha;
 
-    private final NodeSimilarity similarity;
+    /** used to compute diversity */
+    private final BuildScoreProvider scoreProvider;
 
     /** the maximum number of neighbors we can store */
     private final int maxConnections;
@@ -52,23 +58,23 @@ public class ConcurrentNeighborSet {
     /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
     private float shortEdges = Float.NaN;
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, NodeSimilarity similarity) {
-        this(nodeId, maxConnections, similarity, 1.0f);
+    public ConcurrentNeighborSet(int nodeId, int maxConnections, BuildScoreProvider scoreProvider) {
+        this(nodeId, maxConnections, scoreProvider, 1.0f);
     }
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, NodeSimilarity similarity, float alpha) {
-        this(nodeId, maxConnections, similarity, alpha, new NodeArray(maxConnections));
+    public ConcurrentNeighborSet(int nodeId, int maxConnections, BuildScoreProvider scoreProvider, float alpha) {
+        this(nodeId, maxConnections, scoreProvider, alpha, new NodeArray(maxConnections));
     }
 
     ConcurrentNeighborSet(int nodeId,
                           int maxConnections,
-                          NodeSimilarity similarity,
+                          BuildScoreProvider scoreProvider,
                           float alpha,
                           NodeArray nodes)
     {
         this.nodeId = nodeId;
         this.maxConnections = maxConnections;
-        this.similarity = similarity;
+        this.scoreProvider = scoreProvider;
         this.alpha = alpha;
         this.neighborsRef = new AtomicReference<>(new Neighbors(nodes, 0));
     }
@@ -119,10 +125,10 @@ public class ConcurrentNeighborSet {
                 }
             }
 
-            // merge the live neighbors with the candidates and prune down to diverse edges
-            var merged = mergeNeighbors(liveNeighbors, candidates);
-            var newNeighbors = copyDiverse(merged, selectDiverse(merged, 0));
-            return new Neighbors(newNeighbors, newNeighbors.size);
+            // merge the remaining neighbors with the candidates
+            NodeArray merged = rescoreAndMerge(liveNeighbors, candidates);
+            retainDiverse(merged, 0, scoreProvider.isExact());
+            return new Neighbors(merged, merged.size);
         });
     }
 
@@ -157,32 +163,49 @@ public class ConcurrentNeighborSet {
      * were selected by this method, or were added as a "backlink" to a node inserted concurrently
      * that chose this one as a neighbor.
      */
-    public void insertDiverse(NodeArray natural, NodeArray concurrent) {
-        if (natural.size() == 0 && concurrent.size() == 0) {
+    public void insertDiverse(NodeArray toMerge) {
+        if (toMerge.size() == 0) {
             return;
         }
 
         neighborsRef.getAndUpdate(old -> {
-            // if either natural or concurrent is empty, skip the merge
-            NodeArray toMerge;
-            if (concurrent.size == 0) {
-                toMerge = natural;
-            } else if (natural.size == 0) {
-                toMerge = concurrent;
-            } else {
-                toMerge = mergeNeighbors(natural, concurrent);
-            }
-
             // merge all the candidates into a single array and compute the diverse ones to keep
             // from that.  we do this first by selecting the ones to keep, and then by copying
             // only those into a new NeighborArray.  This is less expensive than doing the
             // diversity computation in-place, since we are going to do multiple passes and
             // pruning back extras is expensive.
-            var merged = mergeNeighbors(old.nodes, toMerge);
-            BitSet selected = selectDiverse(merged, 0);
-            merged.retain(selected);
+            NodeArray merged;
+            if (old.nodes.size > 0) {
+                merged = rescoreAndMerge(old.nodes, toMerge);
+            } else {
+                merged = toMerge.copy(); // still need to copy in case we lose the race
+            }
+            retainDiverse(merged, 0, scoreProvider.isExact());
             return new Neighbors(merged, merged.size);
         });
+    }
+
+    private NodeArray rescoreAndMerge(NodeArray old, NodeArray toMerge) {
+        NodeArray merged;
+        if (scoreProvider.isExact()) {
+            merged = NodeArray.merge(old, toMerge);
+        } else {
+            // merge assumes that node X will always have the same score in both arrays, so we need
+            // to compute approximate scores for the existing nodes to make the comparison valid
+            var approximatedOld = computeApproximatelyScored(old);
+            merged = NodeArray.merge(approximatedOld, toMerge);
+        }
+        return merged;
+    }
+
+    private NodeArray computeApproximatelyScored(NodeArray exact) {
+        var approximated = new NodeArray(exact.size);
+        var sf = scoreProvider.diversityProvider().createFor(nodeId).scoreFunction();
+        assert !sf.isExact();
+        for (int i = 0; i < exact.size; i++) {
+            approximated.insertSorted(exact.node[i], sf.similarityTo(exact.node[i]));
+        }
+        return approximated;
     }
 
     void insertNotDiverse(int node, float score) {
@@ -199,140 +222,96 @@ public class ConcurrentNeighborSet {
     }
 
     /**
-     * Copies the selected neighbors from the merged array into a new array.
+     * Retain the diverse neighbors, updating `neighbors` in place
      */
-    private NodeArray copyDiverse(NodeArray merged, BitSet selected) {
-        NodeArray next = new NodeArray(maxConnections);
-        for (int i = 0; i < merged.size(); i++) {
-            if (!selected.get(i)) {
-                continue;
-            }
-            int node = merged.node()[i];
-            assert node != nodeId : "can't add self as neighbor at node " + nodeId;
-            float score = merged.score()[i];
-            next.addInOrder(node, score);
-        }
-        assert next.size <= maxConnections;
-        return next;
-    }
-
-    private BitSet selectDiverse(NodeArray neighbors, int diverseBefore) {
+    private void retainDiverse(NodeArray neighbors, int diverseBefore, boolean isExactScored) {
         BitSet selected = new FixedBitSet(neighbors.size());
-        for (int i = 0; i < diverseBefore; i++) {
+        for (int i = 0; i < min(diverseBefore, maxConnections); i++) {
             selected.set(i);
         }
-        int nSelected = diverseBefore;
 
+        var dp = scoreProvider.diversityProvider();
+        if (isExactScored) {
+            // either the provider is natively exact, or we're on the backlink->insert path,
+            // so `neighbors` is exact-scored
+            retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction());
+            neighbors.retain(selected);
+        } else {
+            // provider is natively approximate and we're on the insertDiverse path,
+            // so `neighbors` is approximately-scored
+            assert !scoreProvider.isExact();
+            assert diverseBefore == 0;
+            retainDiverseInternal(neighbors, maxConnections, 0, selected, node1 -> dp.createFor(node1).scoreFunction());
+
+            // using approximate scores is sufficiently accurate for the diversity computation,
+            // but we want to maintain the invariant that the neighbors are exact-scored before
+            // we use them in a search
+            var neighborNodes = Arrays.copyOf(neighbors.node, neighbors.size);
+            var sf = dp.createFor(nodeId).exactScoreFunction();
+            neighbors.clear();
+            for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
+                int neighborId = neighborNodes[i];
+                float score = sf.similarityTo(neighborId);
+                neighbors.insertSorted(neighborId, score);
+            }
+        }
+    }
+
+    private void retainDiverseInternal(NodeArray neighbors, int max, int diverseBefore, BitSet selected, ScoreFunction.Provider scoreProvider) {
+        int nSelected = diverseBefore;
         // add diverse candidates, gradually increasing alpha to the threshold
         // (so that the nearest candidates are prioritized)
-        for (float a = 1.0f; a <= alpha + 1E-6 && nSelected < maxConnections; a += 0.2f) {
-            for (int i = diverseBefore; i < neighbors.size() && nSelected < maxConnections; i++) {
+        for (float a = 1.0f; a <= alpha + 1E-6 && nSelected < max; a += 0.2f) {
+            for (int i = diverseBefore; i < neighbors.size() && nSelected < max; i++) {
                 if (selected.get(i)) {
                     continue;
                 }
 
                 int cNode = neighbors.node()[i];
                 float cScore = neighbors.score()[i];
-                if (isDiverse(cNode, cScore, neighbors, selected, a)) {
+                var sf = scoreProvider.scoreFunctionFor(cNode);
+                if (isDiverse(cNode, cScore, neighbors, sf, selected, a)) {
                     selected.set(i);
                     nSelected++;
                 }
             }
 
-            if (a == 1.0f) {
+            if (a == 1.0f && max == maxConnections) {
                 // this isn't threadsafe, but (for now) we only care about the result after calling cleanup(),
                 // when we don't have to worry about concurrent changes
                 shortEdges = nSelected / (float) maxConnections;
             }
         }
+    }
 
-        return selected;
+    // is the candidate node with the given score closer to the base node than it is to any of the
+    // already-selected neighbors
+    private boolean isDiverse(int node, float score, NodeArray others, ScoreFunction sf, BitSet selected, float alpha) {
+        assert others.size > 0;
+
+        for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
+            int otherNode = others.node()[i];
+            if (node == otherNode) {
+                break;
+            }
+            if (sf.similarityTo(otherNode) > score * alpha) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private NodeArray removeAllNonDiverse(NodeArray neighbors, int diverseBefore) {
+        if (neighbors.size <= maxConnections) {
+            return neighbors;
+        }
+        var copy = neighbors.copy();
+        retainDiverse(copy, diverseBefore, true);
+        return copy;
     }
 
     NodeArray getCurrent() {
         return neighborsRef.get().nodes;
-    }
-
-    static NodeArray mergeNeighbors(NodeArray a1, NodeArray a2) {
-        NodeArray merged = new NodeArray(a1.size() + a2.size());
-        int i = 0, j = 0;
-
-        // since nodes are only guaranteed to be sorted by score -- ties can appear in any node order --
-        // we need to remember all the nodes with the current score to avoid adding duplicates
-        var nodesWithLastScore = new IntHashSet();
-        float lastAddedScore = Float.NaN;
-
-        // loop through both source arrays, adding the highest score element to the merged array,
-        // until we reach the end of one of the sources
-        while (i < a1.size() && j < a2.size()) {
-            if (a1.score()[i] < a2.score[j]) {
-                // add from a2
-                if (a2.score[j] != lastAddedScore) {
-                    nodesWithLastScore.clear();
-                    lastAddedScore = a2.score[j];
-                }
-                if (nodesWithLastScore.add(a2.node[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
-                }
-                j++;
-            } else if (a1.score()[i] > a2.score[j]) {
-                // add from a1
-                if (a1.score()[i] != lastAddedScore) {
-                    nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
-                }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
-                }
-                i++;
-            } else {
-                // same score -- add both
-                if (a1.score()[i] != lastAddedScore) {
-                    nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
-                }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
-                }
-                if (nodesWithLastScore.add(a2.node()[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
-                }
-                i++;
-                j++;
-            }
-        }
-
-        // If elements remain in a1, add them
-        if (i < a1.size()) {
-            // avoid duplicates while adding nodes with the same score
-            while (i < a1.size && a1.score()[i] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
-                }
-                i++;
-            }
-            // the remaining nodes have a different score, so we can bulk-add them
-            System.arraycopy(a1.node, i, merged.node, merged.size, a1.size - i);
-            System.arraycopy(a1.score, i, merged.score, merged.size, a1.size - i);
-            merged.size += a1.size - i;
-        }
-
-        // If elements remain in a2, add them
-        if (j < a2.size()) {
-            // avoid duplicates while adding nodes with the same score
-            while (j < a2.size && a2.score[j] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a2.node[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
-                }
-                j++;
-            }
-            // the remaining nodes have a different score, so we can bulk-add them
-            System.arraycopy(a2.node, j, merged.node, merged.size, a2.size - j);
-            System.arraycopy(a2.score, j, merged.score, merged.size, a2.size - j);
-            merged.size += a2.size - j;
-        }
-
-        return merged;
     }
 
     /**
@@ -359,34 +338,6 @@ public class ConcurrentNeighborSet {
 
             return new Neighbors(nextNodes, nextDiverseBefore);
         });
-    }
-
-    // is the candidate node with the given score closer to the base node than it is to any of the
-    // already-selected neighbors
-    private boolean isDiverse(int node, float score, NodeArray others, BitSet selected, float alpha) {
-        if (others.size() == 0) {
-            return true;
-        }
-
-        var scoreProvider = similarity.scoreProvider(node);
-        for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-            int otherNode = others.node()[i];
-            if (node == otherNode) {
-                break;
-            }
-            if (scoreProvider.similarityTo(otherNode) > score * alpha) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private NodeArray removeAllNonDiverse(NodeArray neighbors, int diverseBefore) {
-        if (neighbors.size <= maxConnections) {
-            return neighbors;
-        }
-        BitSet selected = selectDiverse(neighbors, diverseBefore);
-        return copyDiverse(neighbors, selected);
     }
 
     /** Only for testing; this is a linear search */

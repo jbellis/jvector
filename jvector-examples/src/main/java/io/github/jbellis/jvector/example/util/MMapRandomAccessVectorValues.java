@@ -64,7 +64,7 @@ public class MMapRandomAccessVectorValues implements RandomAccessVectorValues, C
     }
 
     @Override
-    public VectorFloat<?> vectorValue(int targetOrd) {
+    public VectorFloat<?> getVector(int targetOrd) {
         long offset = (long) targetOrd * dimension * Float.BYTES;
         int i = 0;
         for (long o = offset; o < offset + ((long) dimension * Float.BYTES); o += Float.BYTES, i++)

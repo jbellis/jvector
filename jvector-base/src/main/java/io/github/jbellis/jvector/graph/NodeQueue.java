@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -137,13 +138,12 @@ public class NodeQueue {
         return nodes;
     }
 
-    public SearchResult.NodeScore[] nodesCopy(NodeSimilarity.Reranker rr, float rerankFloor) {
+    public SearchResult.NodeScore[] nodesCopy(ScoreFunction.ExactScoreFunction reranker, float rerankFloor) {
         var ids = IntStream.range(0, size())
                                     .mapToLong(i -> heap.get(i + 1))
                                     .filter(m -> decodeScore(m) >= rerankFloor)
                                     .mapToInt(this::decodeNodeId).toArray();
-        var scores = vectorTypeSupport.createFloatVector(ids.length);
-        rr.score(ids, scores);
+        var scores = reranker.similarityTo(ids);
         var nodeScores = new SearchResult.NodeScore[ids.length];
         for (int i = 0; i < ids.length; i++) {
             nodeScores[i] = new SearchResult.NodeScore(ids[i], scores.get(i));

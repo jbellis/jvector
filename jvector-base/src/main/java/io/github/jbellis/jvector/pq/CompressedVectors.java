@@ -16,13 +16,15 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.ApproximateScoreProvider;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
 import java.io.IOException;
 
-public interface CompressedVectors extends Accountable, ApproximateScoreProvider {
+public interface CompressedVectors extends Accountable {
     /** write the compressed vectors to the given DataOutput */
     void write(DataOutput out) throws IOException;
 
@@ -34,4 +36,18 @@ public interface CompressedVectors extends Accountable, ApproximateScoreProvider
 
     /** @return the compressor used by this instance */
     VectorCompressor<?> getCompressor();
+
+    /** precomputes partial scores for the given query with every centroid; suitable for most searches */
+    ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
+
+    /** no precomputation; suitable when just a handful of score computations are performed */
+    ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction);
+
+    @Deprecated
+    default ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        return precomputedScoreFunctionFor(q, similarityFunction);
+    }
+
+    /** the number of vectors */
+    int count();
 }

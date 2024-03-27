@@ -29,7 +29,6 @@ import java.util.List;
  * This will be as threadsafe as the provided List.
  */
 public class ListRandomAccessVectorValues implements RandomAccessVectorValues {
-
     private final List<VectorFloat<?>> vectors;
     private final int dimension;
 
@@ -55,7 +54,7 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues {
     }
 
     @Override
-    public VectorFloat<?> vectorValue(int targetOrd) {
+    public VectorFloat<?> getVector(int targetOrd) {
         return vectors.get(targetOrd);
     }
 

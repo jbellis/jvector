@@ -24,10 +24,11 @@ import io.github.jbellis.jvector.example.util.UpdatableRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -143,7 +144,8 @@ public class IPCService
                 vector.set(k, Float.parseFloat(values[k]));
 
             ((UpdatableRandomAccessVectorValues)ctx.ravv).add(vector);
-            ctx.indexBuilder.addGraphNode(ctx.ravv.size() - 1, ctx.ravv);
+            var node = ctx.ravv.size() - 1;
+            ctx.indexBuilder.addGraphNode(node, ctx.ravv.getVector(node));
         }
     }
 
@@ -168,7 +170,7 @@ public class IPCService
         var ravv = new MMapRandomAccessVectorValues(f, ctx.dimension);
         var indexBuilder = new GraphIndexBuilder(ravv, ctx.similarityFunction, ctx.M, ctx.efConstruction, 1.2f, 1.4f);
         System.out.println("BulkIndexing " + ravv.size());
-        ctx.index = flushGraphIndex(indexBuilder.build(), ravv);
+        ctx.index = flushGraphIndex(indexBuilder.build(ravv), ravv);
         ctx.cv = pqIndex(ravv, ctx);
 
         //Finished with raw data we can close/cleanup
@@ -188,7 +190,7 @@ public class IPCService
         PhysicalCoreExecutor.instance.execute(() ->
             IntStream.range(0, quantizedVectors.length).parallel().forEach(i -> {
                 var localRavv = ravvCopy.get();
-                quantizedVectors[i] = pq.encode(localRavv.vectorValue(i));
+                quantizedVectors[i] = pq.encode(localRavv.getVector(i));
             })
         );
 
@@ -269,10 +271,12 @@ public class IPCService
 
             SearchResult r;
             if (ctx.cv != null) {
-                NodeSimilarity.ApproximateScoreFunction sf = ctx.cv.approximateScoreFunctionFor(queryVector, ctx.similarityFunction);
+                ScoreFunction.ApproximateScoreFunction sf = ctx.cv.precomputedScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
-                    var rr = NodeSimilarity.Reranker.from(queryVector, ctx.similarityFunction, view);
-                    r = new GraphSearcher.Builder(ctx.index.getView()).build().search(sf, rr, searchEf, Bits.ALL);
+                    var vp = view instanceof GraphIndex.ViewWithVectors ? (GraphIndex.ViewWithVectors) view : ctx.ravv;
+                    var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ctx.similarityFunction, vp);
+                    var ssp = new SearchScoreProvider(sf, rr);
+                    r = new GraphSearcher.Builder(ctx.index.getView()).build().search(ssp, searchEf, Bits.ALL);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

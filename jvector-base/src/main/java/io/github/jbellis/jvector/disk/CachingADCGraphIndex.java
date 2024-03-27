@@ -18,10 +18,10 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.ADCView;
-import io.github.jbellis.jvector.graph.ApproximateScoreProvider;
 import io.github.jbellis.jvector.graph.GraphIndex;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.QuickADCPQDecoder;
 import io.github.jbellis.jvector.util.Accountable;
@@ -86,7 +86,7 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
         return String.format("CachingADCGraphIndex(graph=%s)", graph);
     }
 
-    public class CachedView implements ADCView, ApproximateScoreProvider {
+    public class CachedView implements ADCView {
         private final ADCView view;
 
         public CachedView(ADCView view) {
@@ -100,6 +100,23 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
                 return new NodesIterator.ArrayNodesIterator(cached.neighbors, cached.neighbors.length);
             }
             return view.getNeighborsIterator(node);
+        }
+
+        @Override
+        public int dimension() {
+            return graph.dimension;
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            // we would need to be able to copy the View to do this correctly, but it's simple to just
+            // avoid calling copy() for non-shared RAVV instances like this
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -129,8 +146,7 @@ public class CachingADCGraphIndex implements GraphIndex, AutoCloseable, Accounta
             return view.getPackedNeighbors(node);
         }
 
-        @Override
-        public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
             return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
         }
 

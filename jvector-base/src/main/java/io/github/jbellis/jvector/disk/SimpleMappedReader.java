@@ -69,7 +69,7 @@ public class SimpleMappedReader implements RandomAccessReader {
 
     @Override
     public void seek(long offset) {
-        mbb.position((int) (offset >= mbb.limit() ? mbb.limit() : offset));
+        mbb.position(Math.toIntExact(offset));
     }
 
     @Override

@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.graph.ADCView;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -27,7 +27,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
  * Performs similarity comparisons with compressed vectors without decoding them.
  * These decoders use Quick(er) ADC-style transposed vectors fused into a graph.
  */
-public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateScoreFunction {
+public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScoreFunction {
     protected final PQVectors pqv;
 
     protected QuickADCPQDecoder(PQVectors pqv) {
@@ -41,7 +41,7 @@ public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateSco
             partialSums = pqv.reusablePartialSums();
             var pq = this.pqv.pq;
 
-            VectorFloat<?> center = pq.getCenter();
+            VectorFloat<?> center = pq.globalCentroid;
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
             for (var i = 0; i < pq.getSubspaceCount(); i++) {
                 int offset = pq.subvectorSizesAndOffsets[i][1];
@@ -73,7 +73,7 @@ public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateSco
         }
 
         @Override
-        public VectorFloat<?> bulkSimilarityTo(int origin) {
+        public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
             var permutedNodes = view.getPackedNeighbors(origin);
             results.zero();
             VectorUtil.bulkShuffleSimilarity(permutedNodes, view.getPQVectors().getCompressedSize(), partialSums, results, VectorSimilarityFunction.DOT_PRODUCT);
@@ -81,7 +81,7 @@ public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateSco
         }
 
         @Override
-        public boolean supportsBulkSimilarity() {
+        public boolean supportsEdgeLoadingSimilarity() {
             return true;
         }
     }
@@ -103,7 +103,7 @@ public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateSco
         }
 
         @Override
-        public VectorFloat<?> bulkSimilarityTo(int origin) {
+        public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
             var permutedNodes = view.getPackedNeighbors(origin);
             results.zero();
             VectorUtil.bulkShuffleSimilarity(permutedNodes, view.getPQVectors().getCompressedSize(), partialSums, results, VectorSimilarityFunction.EUCLIDEAN);
@@ -111,7 +111,7 @@ public abstract class QuickADCPQDecoder implements NodeSimilarity.ApproximateSco
         }
 
         @Override
-        public boolean supportsBulkSimilarity() {
+        public boolean supportsEdgeLoadingSimilarity() {
             return true;
         }
     }

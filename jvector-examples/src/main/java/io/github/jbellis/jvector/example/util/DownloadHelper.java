@@ -39,6 +39,8 @@ import java.nio.file.StandardCopyOption;
 public class DownloadHelper {
     private static final String bucketName = "astra-vector";
 
+    private static final String fvecDir = "fvec";
+
     private static S3AsyncClientBuilder s3AsyncClientBuilder() {
         return S3AsyncClient.builder()
                 .region(Region.US_EAST_1)
@@ -57,7 +59,7 @@ public class DownloadHelper {
 
         // get directory from paths in keys
         try {
-            Files.createDirectories(Paths.get("fvec").resolve(mfd.directory()));
+            Files.createDirectories(Paths.get(fvecDir).resolve(mfd.directory()));
         } catch (IOException e) {
             System.err.println("Failed to create directory: " + e.getMessage());
         }
@@ -65,7 +67,7 @@ public class DownloadHelper {
         try (S3AsyncClient s3Client = s3AsyncClientBuilder().build()) {
             S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
             for (var remotePath : mfd.paths()) {
-                Path path = Paths.get("fvec").resolve(remotePath);
+                Path path = Paths.get(fvecDir).resolve(remotePath);
                 if (Files.exists(path)) {
                     continue;
                 }

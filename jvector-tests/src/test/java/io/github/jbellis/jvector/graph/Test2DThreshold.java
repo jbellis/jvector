@@ -19,18 +19,14 @@ package io.github.jbellis.jvector.graph;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.disk.SimpleMappedReader;
-import io.github.jbellis.jvector.pq.PQVectors;
-import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 
@@ -53,16 +49,16 @@ public class Test2DThreshold extends LuceneTestCase {
         VectorFloat<?>[] vectors = TestVectorGraph.createRandomFloatVectors(graphSize, 2, R);
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
         var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.EUCLIDEAN, maxDegree, 2 * maxDegree, 1.2f, 1.4f);
-        var onHeapGraph = builder.build();
+        var onHeapGraph = builder.build(ravv);
 
         // test raw vectors
         var searcher = new GraphSearcher.Builder(onHeapGraph.getView()).build();
         for (int i = 0; i < 10; i++) {
             TestParams tp = createTestParams(vectors);
 
-            NodeSimilarity.ExactScoreFunction sf = j -> VectorSimilarityFunction.EUCLIDEAN.compare(tp.q, ravv.vectorValue(j));
-            var result = searcher.search(sf, null, vectors.length, tp.th, Bits.ALL);
-            // System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
+            var sf = ScoreFunction.ExactScoreFunction.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, ravv);
+            var result = searcher.search(new SearchScoreProvider(sf, null), vectors.length, tp.th, Bits.ALL);
+
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
         }
@@ -81,9 +77,10 @@ public class Test2DThreshold extends LuceneTestCase {
 //            for (int i = 0; i < 10; i++) {
 //                TestParams tp = createTestParams(vectors);
 //                searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
-//                var reranker = NodeSimilarity.Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
-//                var asf = cv.approximateScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
-//                var result = searcher.search(asf, reranker, vectors.length, tp.th, Bits.ALL);
+//                var reranker = Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
+//                var asf = cv.precomputedScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
+//                var ssp = new SearchScoreProvider(asf, reranker);
+//                var result = searcher.search(ssp, vectors.length, tp.th, Bits.ALL);
 //
 //                // System.out.printf("visited %d to find %d/%d results for threshold %s%n", result.getVisitedCount(), result.getNodes().length, tp.exactCount, tp.th);
 //                assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;

@@ -27,7 +27,6 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
@@ -76,7 +75,7 @@ public class TestUtil {
         try {
             Files.walkFileTree(targetPath, new FileVisitor<>() {
                 @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                     return FileVisitResult.CONTINUE;
                 }
 
@@ -87,7 +86,7 @@ public class TestUtil {
                 }
 
                 @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+                public FileVisitResult visitFileFailed(Path file, IOException exc) {
                     System.err.println("deleteQuietly encountered an Exception when visiting file: " + exc.toString());
                     return FileVisitResult.TERMINATE;
 
@@ -120,20 +119,11 @@ public class TestUtil {
         return vec;
     }
 
-    public static ByteSequence<?> randomVector8(VectorTypeSupport vts, Random random, int dim) {
-        VectorFloat<?> fvec = randomVector(random, dim);
-        ByteSequence<?> bvec = vts.createByteSequence(dim);
-        for (int i = 0; i < dim; i++) {
-            bvec.set(i, (byte) (fvec.get(i) * 127));
-        }
-        return bvec;
-    }
-
     public static List<VectorFloat<?>> createRandomVectors(int count, int dimension) {
         return IntStream.range(0, count).mapToObj(i -> TestUtil.randomVector(getRandom(), dimension)).collect(Collectors.toList());
     }
 
-    public static <T> void writeGraph(GraphIndex graph, RandomAccessVectorValues vectors, Path outputPath) throws IOException {
+    public static void writeGraph(GraphIndex graph, RandomAccessVectorValues vectors, Path outputPath) throws IOException {
         try (var out = openFileForWriting(outputPath))
         {
             OnDiskGraphIndex.write(graph, vectors, out);
@@ -141,7 +131,7 @@ public class TestUtil {
         }
     }
 
-    public static <T> void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues vectors, PQVectors pq, Path outputPath) throws IOException {
+    public static void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues vectors, PQVectors pq, Path outputPath) throws IOException {
         try (var out = openFileForWriting(outputPath))
         {
             OnDiskADCGraphIndex.write(graph, vectors, pq, out);
@@ -211,9 +201,9 @@ public class TestUtil {
         }
     }
 
-    public static <T> OnHeapGraphIndex buildSequentially(GraphIndexBuilder builder, RandomAccessVectorValues vectors) {
+    public static OnHeapGraphIndex buildSequentially(GraphIndexBuilder builder, RandomAccessVectorValues vectors) {
         for (var i = 0; i < vectors.size(); i++) {
-            builder.addGraphNode(i, vectors);
+            builder.addGraphNode(i, vectors.getVector(i));
         }
         builder.cleanup();
         return builder.getGraph();
@@ -266,16 +256,6 @@ public class TestUtil {
             @Override
             public int entryNode() {
                 return entryNode;
-            }
-
-            @Override
-            public VectorFloat<?> getVector(int node) {
-                throw new UnsupportedOperationException("No vectors associated with FullyConnectedGraphIndex");
-            }
-
-            @Override
-            public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
-                throw new UnsupportedOperationException("No vectors associated with FullyConnectedGraphIndex");
             }
 
             @Override
@@ -345,7 +325,6 @@ public class TestUtil {
                 return new NodesIterator.ArrayNodesIterator(nodes.get(node));
             }
 
-            @Override
             public int size() {
                 return size;
             }
@@ -353,16 +332,6 @@ public class TestUtil {
             @Override
             public int entryNode() {
                 return entryNode;
-            }
-
-            @Override
-            public VectorFloat<?> getVector(int node) {
-                throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
-            }
-
-            @Override
-            public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
-                throw new UnsupportedOperationException("No vectors associated with RandomlyConnectedGraphIndex");
             }
 
             @Override

@@ -15,7 +15,7 @@
  */
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -26,7 +26,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 /**
  * Performs similarity comparisons with compressed vectors without decoding them
  */
-abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
+abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
     private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     protected final PQVectors cv;
@@ -43,7 +43,7 @@ abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
             var pq = this.cv.pq;
             partialSums = cv.reusablePartialSums();
 
-            VectorFloat<?> center = pq.getCenter();
+            VectorFloat<?> center = pq.globalCentroid;
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
             for (var i = 0; i < pq.getSubspaceCount(); i++) {
                 int offset = pq.subvectorSizesAndOffsets[i][1];
@@ -112,7 +112,7 @@ abstract class PQDecoder implements NodeSimilarity.ApproximateScoreFunction {
             partialSums = cv.reusablePartialSums();
             float bMagSum = 0.0f;
 
-            VectorFloat<?> center = pq.getCenter();
+            VectorFloat<?> center = pq.globalCentroid;
             VectorFloat<?> centeredQuery = center == null ? query : VectorUtil.sub(query, center);
 
             for (int m = 0; m < pq.getSubspaceCount(); ++m) {

@@ -66,7 +66,7 @@ public class GraphIndexBench {
         }
 
         @Override
-        public VectorFloat<?> vectorValue(int targetOrd) {
+        public VectorFloat<?> getVector(int targetOrd) {
             return values[targetOrd];
         }
 
@@ -97,7 +97,7 @@ public class GraphIndexBench {
     @OutputTimeUnit(TimeUnit.SECONDS)
     public void testGraphBuild(Blackhole bh, Parameters p) {
         GraphIndexBuilder graphIndexBuilder =  new GraphIndexBuilder(p.vectors, VectorSimilarityFunction.DOT_PRODUCT, 8, 60, 1.2f, 1.4f);
-        bh.consume(graphIndexBuilder.build());
+        bh.consume(graphIndexBuilder.build(p.vectors));
     }
 }
 

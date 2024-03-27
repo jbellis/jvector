@@ -25,6 +25,8 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.Experimental;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
@@ -56,9 +58,8 @@ public class GraphSearcher implements AutoCloseable {
     private final NodeQueue evictedResults;
 
     // Search parameters that we save here for use by resume()
-    private NodeSimilarity.ScoreFunction scoreFunction;
-    private NodeSimilarity.Reranker reranker;
     private Bits acceptOrds;
+    private SearchScoreProvider scoreProvider;
 
     /**
      * Creates a new graph searcher.
@@ -76,11 +77,12 @@ public class GraphSearcher implements AutoCloseable {
      * Convenience function for simple one-off searches.  It is caller's responsibility to make sure that it
      * is the unique owner of the vectors instance passed in here.
      */
-    public static SearchResult search(VectorFloat<?> targetVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
+    public static SearchResult search(VectorFloat<?> queryVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
             var searcher = new GraphSearcher.Builder(view).withConcurrentUpdates().build();
-            NodeSimilarity.ExactScoreFunction scoreFunction = i -> similarityFunction.compare(targetVector, vectors.vectorValue(i));
-            return searcher.search(scoreFunction, null, topK, acceptOrds);
+            var sf = ScoreFunction.ExactScoreFunction.from(queryVector, similarityFunction, vectors);
+            var ssp = new SearchScoreProvider(sf, null);
+            return searcher.search(ssp, topK, acceptOrds);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -109,9 +111,7 @@ public class GraphSearcher implements AutoCloseable {
 
 
     /**
-     * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
-     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
@@ -130,19 +130,16 @@ public class GraphSearcher implements AutoCloseable {
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
     @Experimental
-    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.Reranker reranker,
+    public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
                                float threshold,
                                float rerankFloor,
                                Bits acceptOrds) {
-        return searchInternal(scoreFunction, reranker, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
+        return searchInternal(scoreProvider, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
     }
 
     /**
-     * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
-     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
@@ -155,19 +152,16 @@ public class GraphSearcher implements AutoCloseable {
      *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.Reranker reranker,
+    public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
-        return search(scoreFunction, reranker, topK, threshold, 0.0f, acceptOrds);
+        return search(scoreProvider, topK, threshold, 0.0f, acceptOrds);
     }
 
 
     /**
-     * @param scoreFunction   a function returning the similarity of a given node to the query vector
-     * @param reranker        if scoreFunction is approximate, this should be non-null and perform exact
-     *                        comparisons of the vectors for re-ranking at the end of the search.
+     * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
      * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
@@ -176,35 +170,29 @@ public class GraphSearcher implements AutoCloseable {
      *                        that we don't search the entire graph trying to satisfy topK.
      * @return a SearchResult containing the topK results and the number of nodes visited during the search.
      */
-    public SearchResult search(NodeSimilarity.ScoreFunction scoreFunction,
-                               NodeSimilarity.Reranker reranker,
+    public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
                                Bits acceptOrds)
     {
-        return search(scoreFunction, reranker, topK, 0.0f, acceptOrds);
+        return search(scoreProvider, topK, 0.0f, acceptOrds);
     }
 
     /**
      * Set up the state for a new search and kick it off
      */
-    SearchResult searchInternal(NodeSimilarity.ScoreFunction scoreFunction,
-                                NodeSimilarity.Reranker reranker,
+    SearchResult searchInternal(SearchScoreProvider scoreProvider,
                                 int topK,
                                 float threshold,
                                 float rerankFloor,
                                 int ep,
                                 Bits rawAcceptOrds)
     {
-        if (!scoreFunction.isExact() && reranker == null) {
-            throw new IllegalArgumentException("Either scoreFunction must be exact, or reranker must not be null");
-        }
         if (rawAcceptOrds == null) {
             throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
         }
 
         // save search parameters for potential later resume
-        this.scoreFunction = scoreFunction;
-        this.reranker = reranker;
+        this.scoreProvider = scoreProvider;
         this.acceptOrds = Bits.intersectionOf(rawAcceptOrds, view.liveNodes());
 
         // reset the scratch data structures
@@ -230,7 +218,7 @@ public class GraphSearcher implements AutoCloseable {
         }
 
         // kick off the actual search at the entry point
-        float score = scoreFunction.similarityTo(ep);
+        float score = scoreProvider.scoreFunction().similarityTo(ep);
         visited.set(ep);
         candidates.push(ep, score);
         var sr = resume(topK, threshold, rerankFloor);
@@ -314,8 +302,9 @@ public class GraphSearcher implements AutoCloseable {
             }
 
             // score the neighbors of the top candidate and add them to the queue
-            if (scoreFunction.supportsBulkSimilarity()) {
-                similarities = scoreFunction.bulkSimilarityTo(topCandidateNode);
+            var scoreFunction = scoreProvider.scoreFunction();
+            if (scoreFunction.supportsEdgeLoadingSimilarity()) {
+                similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
             }
 
             var it = view.getNeighborsIterator(topCandidateNode);
@@ -326,14 +315,16 @@ public class GraphSearcher implements AutoCloseable {
                 }
                 numVisited++;
 
-                float friendSimilarity = scoreFunction.supportsBulkSimilarity() ? similarities.get(i) : scoreFunction.similarityTo(friendOrd);
+                float friendSimilarity = scoreFunction.supportsEdgeLoadingSimilarity()
+                        ? similarities.get(i)
+                        : scoreFunction.similarityTo(friendOrd);
                 scoreTracker.track(friendSimilarity);
                 candidates.push(friendOrd, friendSimilarity);
             }
         }
 
         assert resultsQueue.size() <= additionalK;
-        SearchResult.NodeScore[] nodes = extractScores(scoreFunction, reranker, resultsQueue, rerankFloor);
+        SearchResult.NodeScore[] nodes = extractScores(scoreProvider, resultsQueue, rerankFloor);
         return new SearchResult(nodes, visited, numVisited);
     }
 
@@ -354,13 +345,12 @@ public class GraphSearcher implements AutoCloseable {
     /**
      * Empty resultsQueue and rerank its contents, if necessary, and return them in sorted order.
      */
-    private static SearchResult.NodeScore[] extractScores(NodeSimilarity.ScoreFunction sf,
-                                                          NodeSimilarity.Reranker reranker,
+    private static SearchResult.NodeScore[] extractScores(SearchScoreProvider scoreProvider,
                                                           NodeQueue resultsQueue,
                                                           float rerankFloor)
     {
         SearchResult.NodeScore[] nodes;
-        if (sf.isExact()) {
+        if (scoreProvider.reranker() == null) {
             nodes = new SearchResult.NodeScore[resultsQueue.size()];
             for (int i = nodes.length - 1; i >= 0; i--) {
                 var nScore = resultsQueue.topScore();
@@ -368,7 +358,7 @@ public class GraphSearcher implements AutoCloseable {
                 nodes[i] = new SearchResult.NodeScore(n, nScore);
             }
         } else {
-            nodes = resultsQueue.nodesCopy(reranker, rerankFloor);
+            nodes = resultsQueue.nodesCopy(scoreProvider.reranker(), rerankFloor);
             Arrays.sort(nodes, 0, nodes.length, Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
             resultsQueue.clear();
         }

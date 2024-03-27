@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -35,6 +35,11 @@ public class BQVectors implements CompressedVectors {
     public BQVectors(BinaryQuantization bq, long[][] compressedVectors) {
         this.bq = bq;
         this.compressedVectors = compressedVectors;
+    }
+
+    @Override
+    public int count() {
+        return compressedVectors.length;
     }
 
     @Override
@@ -87,7 +92,12 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
-    public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+    public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        return scoreFunctionFor(q, similarityFunction);
+    }
+
+    @Override
+    public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         var qBQ = bq.encode(q);
         return node2 -> {
             var vBQ = compressedVectors[node2];

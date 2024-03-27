@@ -38,6 +38,8 @@ import static java.lang.Math.max;
 public class KMeansPlusPlusClusterer {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
+    public static final float UNWEIGHTED = -1.0f;
+
     // number of centroids to compute
     private final int k;
 
@@ -50,7 +52,6 @@ public class KMeansPlusPlusClusterer {
 
     // the threshold of relevance for anisotropic angular distance shaping, -1.0 < anisotropicThreshold <= 1.0
     private final float anisotropicThreshold;
-    static final float UNWEIGHTED = -1.0f;
 
     // used to accelerate updating clusters by unweighted L2 distance.  (not used for anisotropic clustering)
     private final int[] centroidDenoms; // the number of points assigned to each cluster

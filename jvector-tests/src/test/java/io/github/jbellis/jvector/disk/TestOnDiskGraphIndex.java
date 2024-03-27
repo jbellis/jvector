@@ -148,15 +148,15 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
-            assertEquals(onDiskView.getVector(0), ravv.vectorValue(2));
-            assertEquals(onDiskView.getVector(1), ravv.vectorValue(1));
-            assertEquals(onDiskView.getVector(2), ravv.vectorValue(0));
+            assertEquals(onDiskView.getVector(0), ravv.getVector(2));
+            assertEquals(onDiskView.getVector(1), ravv.getVector(1));
+            assertEquals(onDiskView.getVector(2), ravv.getVector(0));
         }
     }
 
-    private static void validateVectors(GraphIndex.View view, RandomAccessVectorValues ravv) {
+    private static void validateVectors(GraphIndex.ViewWithVectors view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
-            assertEquals(view.getVector(i), ravv.vectorValue(i));
+            assertEquals(view.getVector(i), ravv.getVector(i));
         }
     }
 

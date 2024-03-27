@@ -55,20 +55,35 @@ public interface RandomAccessVectorValues {
      * reference (for instance) for every requested ordinal. If you want to use those values across
      * calls, you should make a copy.
      *
-     * @param targetOrd a valid ordinal, &ge; 0 and &lt; {@link #size()}.
+     * @param nodeId a valid ordinal, &ge; 0 and &lt; {@link #size()}.
      */
-    VectorFloat<?> vectorValue(int targetOrd);
+    VectorFloat<?> getVector(int nodeId);
+
+    @Deprecated
+    default VectorFloat<?> vectorValue(int targetOrd) {
+        return getVector(targetOrd);
+    }
 
     /**
-     * @return true iff the vector returned is shared.  A shared vector will
-     * only be valid until the next call to vectorValue overwrites it.
+     * Retrieve the vector associated with a given node, and store it in the destination vector at the given offset.
+     * @param node the node to retrieve
+     * @param destinationVector the vector to store the result in
+     * @param offset the offset in the destination vector to store the result
+     */
+    default void getVectorInto(int node, VectorFloat<?> destinationVector, int offset) {
+        destinationVector.copyFrom(getVector(node), 0, offset, dimension());
+    }
+
+    /**
+     * @return true iff the vector returned by `getVector` is shared.  A shared vector will
+     * only be valid until the next call to getVector overwrites it.
      */
     boolean isValueShared();
 
     /**
      * Creates a new copy of this {@link RandomAccessVectorValues}. This is helpful when you need to
      * access different values at once, to avoid overwriting the underlying float vector returned by
-     * a shared {@link RandomAccessVectorValues#vectorValue}.
+     * a shared {@link RandomAccessVectorValues#getVector}.
      * <p>
      * Un-shared implementations may simply return `this`.
      */

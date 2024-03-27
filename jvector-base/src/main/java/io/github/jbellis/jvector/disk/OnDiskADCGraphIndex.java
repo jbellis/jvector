@@ -18,12 +18,11 @@ package io.github.jbellis.jvector.disk;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.ADCView;
-import io.github.jbellis.jvector.graph.ApproximateScoreProvider;
 import io.github.jbellis.jvector.graph.GraphIndex;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.QuickADCPQDecoder;
 import io.github.jbellis.jvector.util.Accountable;
@@ -62,7 +61,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
     private final int size;
     private final int entryNode;
     private final int maxDegree;
-    private final int dimension;
+    final int dimension;
     final PQVectors pqv;
     final ThreadLocal<VectorFloat<?>> results;
 
@@ -123,7 +122,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
         return new OnDiskView(readerSupplier.get());
     }
 
-    public class OnDiskView implements ADCView, ApproximateScoreProvider, AutoCloseable
+    public class OnDiskView implements ADCView, AutoCloseable
     {
         private final RandomAccessReader reader;
         private final int[] neighbors;
@@ -135,6 +134,21 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
             this.reader = reader;
             this.neighbors = new int[maxDegree];
             this.packedNeighbors = vectorTypeSupport.createByteSequence(maxDegree * pqv.getCompressedSize());
+        }
+
+        @Override
+        public int dimension() {
+            return dimension;
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            return this;
         }
 
         public VectorFloat<?> getVector(int node) {
@@ -191,8 +205,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
             }
         }
 
-        @Override
-        public NodeSimilarity.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
             return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
         }
 
@@ -328,7 +341,7 @@ public class OnDiskADCGraphIndex implements GraphIndex, AutoCloseable, Accountab
                 }
 
                 out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                vectorTypeSupport.writeFloatVector(out, vectors.vectorValue(originalOrdinal));
+                vectorTypeSupport.writeFloatVector(out, vectors.getVector(originalOrdinal));
                 var neighbors = view.getNeighborsIterator(originalOrdinal);
                 int n = 0;
                 var neighborSize = neighbors.size();

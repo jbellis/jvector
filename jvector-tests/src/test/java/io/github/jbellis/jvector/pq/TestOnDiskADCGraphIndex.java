@@ -79,10 +79,10 @@ public class TestOnDiskADCGraphIndex extends RandomizedTest {
 
                 for (var similarity : List.of(VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.EUCLIDEAN)) {
                     var fusedScoreFunction = cachedOnDiskView.approximateScoreFunctionFor(queryVector, similarity);
-                    var scoreFunction = pqv.approximateScoreFunctionFor(queryVector, similarity);
+                    var scoreFunction = pqv.precomputedScoreFunctionFor(queryVector, similarity);
                     for (int i = 0; i < 100; i++) {
                         var ordinal = getRandom().nextInt(graph.size());
-                        var bulkSimilarities = fusedScoreFunction.bulkSimilarityTo(ordinal);
+                        var bulkSimilarities = fusedScoreFunction.edgeLoadingSimilarityTo(ordinal);
                         var neighbors = cachedOnDiskView.getNeighborsIterator(ordinal);
                         for (int j = 0; neighbors.hasNext(); j++) {
                             var neighbor = neighbors.next();

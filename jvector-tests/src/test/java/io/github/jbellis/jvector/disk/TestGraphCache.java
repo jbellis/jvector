@@ -68,7 +68,7 @@ public class TestGraphCache extends RandomizedTest {
             // move from caching entry node to entry node + all its neighbors (5)
             assertEquals(one.ramBytesUsed(), zero.ramBytesUsed() * (onDiskGraph.size()));
             for (int i = 0; i < 6; i++) {
-                assertEquals(one.getNode(i).vector, vectors.vectorValue(i));
+                assertEquals(one.getNode(i).vector, vectors.getVector(i));
                 // fully connected,
                 assertEquals(one.getNode(i).neighbors.length, onDiskGraph.maxDegree());
             }

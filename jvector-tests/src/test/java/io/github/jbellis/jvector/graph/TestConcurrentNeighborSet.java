@@ -17,10 +17,9 @@
 package io.github.jbellis.jvector.graph;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.util.ArrayUtil;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -28,11 +27,11 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.stream.IntStream;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TestConcurrentNeighborSet extends RandomizedTest {
-  protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
   private static void validateSortedByScore(NodeArray na) {
     for (int i = 0; i < na.size() - 1; i++) {
       assertTrue(na.score[i] >= na.score[i + 1]);
@@ -41,49 +40,48 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testInsertDiverse() {
-    // set up scoreBetween
+    // set up BSP
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
-    var vectorsCopy = vectors.copy();
     var candidates = new NodeArray(10);
-    NodeSimilarity scoreBetween = a -> (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    var bsp = BuildScoreProvider.randomAccessScoreProvider(vectors, similarityFunction);
     // fill candidates with all the nodes except 7
     IntStream.range(0, 10)
         .filter(i -> i != 7)
-        .forEach(
-            i -> candidates.insertSorted(i, scoreBetween.score(7, i)));
+        .forEach(i -> candidates.insertSorted(i, scoreBetween(bsp, 7, i)));
     assert candidates.size() == 9;
 
     // only nodes 6 and 8 are diverse wrt 7
-    var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween);
-    var empty = new NodeArray(0);
-    neighbors.insertDiverse(candidates, empty);
+    var neighbors = new ConcurrentNeighborSet(7, 3, bsp);
+    neighbors.insertDiverse(candidates);
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
     validateSortedByScore(neighbors.getCurrent());
   }
 
+  private static float scoreBetween(BuildScoreProvider bsp, int i, int j) {
+    return bsp.searchProviderFor(i).exactScoreFunction().similarityTo(j);
+  }
+
   @Test
   public void testInsertDiverseConcurrent() {
-    // set up scoreBetween
-    var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
+    // set up BSP
+    var sf = VectorSimilarityFunction.DOT_PRODUCT;
     var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
-    var vectorsCopy = vectors.copy();
     var natural = new NodeArray(10);
     var concurrent = new NodeArray(10);
-    NodeSimilarity scoreBetween = a -> (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    var bsp = BuildScoreProvider.randomAccessScoreProvider(vectors, sf);
     // "natural" candidates are [0..7), "concurrent" are [8..10)
     IntStream.range(0, 7)
-        .forEach(
-            i -> natural.insertSorted(i, scoreBetween.score(7, i)));
+        .forEach(i -> natural.insertSorted(i, scoreBetween(bsp, 7, i)));
     IntStream.range(8, 10)
         .forEach(
-            i -> concurrent.insertSorted(i, scoreBetween.score(7, i)));
+            i -> concurrent.insertSorted(i, scoreBetween(bsp, 7, i)));
 
     // only nodes 6 and 8 are diverse wrt 7
-    var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween);
-    neighbors.insertDiverse(natural, concurrent);
+    var neighbors = new ConcurrentNeighborSet(7, 3, bsp);
+    neighbors.insertDiverse(NodeArray.merge(natural, concurrent));
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
@@ -92,21 +90,20 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
 
   @Test
   public void testInsertDiverseRetainsNatural() {
-    // set up scoreBetween
+    // set up BSP
     var vectors = new TestVectorGraph.CircularFloatVectorValues(10);
-    var vectorsCopy = vectors.copy();
     var similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
-    NodeSimilarity scoreBetween = a -> (NodeSimilarity.ExactScoreFunction) b -> similarityFunction.compare(vectors.vectorValue(a), vectorsCopy.vectorValue(b));
+    var bsp = BuildScoreProvider.randomAccessScoreProvider(vectors, similarityFunction);
 
     // check that the new neighbor doesn't replace the existing one (since both are diverse, and the max degree accommodates both)
     var cna = new NodeArray(1);
-    cna.addInOrder(6, scoreBetween.score(7, 6));
+    cna.addInOrder(6, scoreBetween(bsp, 7, 6));
 
     var cna2 = new NodeArray(1);
-    cna2.addInOrder(8, scoreBetween.score(7, 6));
+    cna2.addInOrder(8, scoreBetween(bsp, 7, 6));
 
-    var neighbors = new ConcurrentNeighborSet(7, 3, scoreBetween, 1.0f, cna);
-    neighbors.insertDiverse(cna2, NodeArray.EMPTY);
+    var neighbors = new ConcurrentNeighborSet(7, 3, bsp, 1.0f, cna);
+    neighbors.insertDiverse(cna2);
     assertEquals(2, neighbors.size());
   }
 
@@ -145,7 +142,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var arr2 = new NodeArray(1);
     arr2.addInOrder(0, 2.0f);
 
-    var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    var merged = NodeArray.merge(arr1, arr2);
     // Expected result: [0, 1]
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {0, 1}, Arrays.copyOf(merged.node(), 2));
@@ -160,7 +157,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     arr2.addInOrder(2, 2.0f);
     arr2.addInOrder(1, 1.0f);
 
-    merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    merged = NodeArray.merge(arr1, arr2);
     // Expected result: [4, 3, 2, 1]
     assertEquals(4, merged.size());
     assertArrayEquals(new int[] {4, 3, 2, 1}, Arrays.copyOf(merged.node(), 4));
@@ -174,7 +171,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     arr2 = new NodeArray(1);
     arr2.addInOrder(2, 2.0f);
 
-    merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    merged = NodeArray.merge(arr1, arr2);
     // Expected result: [3, 2]
     assertEquals(2, merged.size());
     assertArrayEquals(new int[] {3, 2}, Arrays.copyOf(merged.node(), 2));
@@ -219,7 +216,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     }
 
     // merge!
-    var merged = ConcurrentNeighborSet.mergeNeighbors(arr1, arr2);
+    var merged = NodeArray.merge(arr1, arr2);
 
     // sanity check
     assert merged.size <= arr1.size() + arr2.size();
