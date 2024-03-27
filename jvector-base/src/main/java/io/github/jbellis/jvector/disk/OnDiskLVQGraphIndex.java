@@ -149,6 +149,16 @@ public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountab
             // TODO HACK
         }
 
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            throw new UnsupportedOperationException();
+        }
+
         public NodesIterator getNeighborsIterator(int node) {
             try {
                 reader.seek(neighborsOffset +
@@ -167,6 +177,11 @@ public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountab
         @Override
         public int size() {
             return OnDiskLVQGraphIndex.this.size();
+        }
+
+        @Override
+        public int dimension() {
+            return OnDiskLVQGraphIndex.this.dimension;
         }
 
         @Override

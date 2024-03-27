@@ -18,8 +18,8 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.LVQView;
-import io.github.jbellis.jvector.graph.NodeSimilarity;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -95,54 +95,91 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         return Integer.BYTES + globalMean.length() * Float.BYTES;
     }
 
-    private NodeSimilarity.Reranker dotProductRerankerFrom(VectorFloat<?> query, LVQView view) {
+    private ScoreFunction.ExactScoreFunction dotProductScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
         var querySum = VectorUtil.sum(query);
         var queryGlobalBias = VectorUtil.dotProduct(query, globalMean);
-        return (nodes, scores) -> {
-            var nodeCount = nodes.length;
-            for (int i = 0; i < nodeCount; i++) {
-                var node = nodes[i];
-                var vector = view.getPackedVector(node);
+        return new ScoreFunction.ExactScoreFunction() {
+            @Override
+            public VectorFloat<?> similarityTo(int[] nodes) {
+                var results = vts.createFloatVector(nodes.length);
+                var nodeCount = nodes.length;
+                for (int i = 0; i < nodeCount; i++) {
+                    var node = nodes[i];
+                    var vector = view.getPackedVector(node);
+                    var lvqDot = VectorUtil.lvqDotProduct(query, vector, querySum);
+                    lvqDot = lvqDot + queryGlobalBias;
+                    results.set(i, (1 + lvqDot) / 2);
+                }
+                return results;
+            }
+
+            @Override
+            public float similarityTo(int node2) {
+                var vector = view.getPackedVector(node2);
                 var lvqDot = VectorUtil.lvqDotProduct(query, vector, querySum);
                 lvqDot = lvqDot + queryGlobalBias;
-                scores.set(i, (1 + lvqDot) / 2);
+                return (1 + lvqDot) / 2;
             }
         };
     }
 
-    private NodeSimilarity.Reranker euclideanRerankerFrom(VectorFloat<?> query, LVQView view) {
+    private ScoreFunction.ExactScoreFunction euclideanScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
         var shiftedQuery = VectorUtil.sub(query, globalMean);
-        return (nodes, scores) -> {
-            var nodeCount = nodes.length;
-            for (int i = 0; i < nodeCount; i++) {
-                var node = nodes[i];
-                var vector = view.getPackedVector(node);
+        return new ScoreFunction.ExactScoreFunction() {
+            @Override
+            public VectorFloat<?> similarityTo(int[] nodes) {
+                var results = vts.createFloatVector(nodes.length);
+                var nodeCount = nodes.length;
+                for (int i = 0; i < nodeCount; i++) {
+                    var node = nodes[i];
+                    var vector = view.getPackedVector(node);
+                    var lvqDist = VectorUtil.lvqSquareL2Distance(shiftedQuery, vector);
+                    results.set(i, 1 / (1 + lvqDist));
+                }
+                return results;
+            }
+
+            @Override
+            public float similarityTo(int node2) {
+                var vector = view.getPackedVector(node2);
                 var lvqDist = VectorUtil.lvqSquareL2Distance(shiftedQuery, vector);
-                scores.set(i, 1 / (1 + lvqDist));
+                return 1 / (1 + lvqDist);
             }
         };
     }
 
-    private NodeSimilarity.Reranker cosineRerankerFrom(VectorFloat<?> query, LVQView view) {
-        return (nodes, scores) -> {
-            var nodeCount = nodes.length;
-            for (int i = 0; i < nodeCount; i++) {
-                var node = nodes[i];
-                var vector = view.getPackedVector(node);
+    private ScoreFunction.ExactScoreFunction cosineScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
+        return new ScoreFunction.ExactScoreFunction() {
+            @Override
+            public VectorFloat<?> similarityTo(int[] nodes) {
+                var results = vts.createFloatVector(nodes.length);
+                var nodeCount = nodes.length;
+                for (int i = 0; i < nodeCount; i++) {
+                    var node = nodes[i];
+                    var vector = view.getPackedVector(node);
+                    var lvqCosine = VectorUtil.lvqCosine(query, vector, globalMean);
+                    results.set(i, (1 + lvqCosine) / 2);
+                }
+                return results;
+            }
+
+            @Override
+            public float similarityTo(int node2) {
+                var vector = view.getPackedVector(node2);
                 var lvqCosine = VectorUtil.lvqCosine(query, vector, globalMean);
-                scores.set(i, (1 + lvqCosine) / 2);
+                return (1 + lvqCosine) / 2;
             }
         };
     }
 
-    public NodeSimilarity.Reranker rerankerFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQView view) {
+    public ScoreFunction.ExactScoreFunction scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQView view) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
-                return dotProductRerankerFrom(query, view);
+                return dotProductScoreFunctionFrom(query, view);
             case EUCLIDEAN:
-                return euclideanRerankerFrom(query, view);
+                return euclideanScoreFunctionFrom(query, view);
             case COSINE:
-                return cosineRerankerFrom(query, view);
+                return cosineScoreFunctionFrom(query, view);
             default:
                 throw new IllegalArgumentException("Unsupported similarity function: " + similarityFunction);
         }

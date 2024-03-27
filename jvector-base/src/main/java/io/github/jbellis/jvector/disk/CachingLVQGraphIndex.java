@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.disk;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.LVQView;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
@@ -119,8 +120,23 @@ public class CachingLVQGraphIndex implements GraphIndex, AutoCloseable, Accounta
         }
 
         @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public int size() {
             return view.size();
+        }
+
+        @Override
+        public int dimension() {
+            return view.dimension();
         }
 
         @Override
