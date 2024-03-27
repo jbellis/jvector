@@ -42,14 +42,19 @@ public class Bench {
 
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(1, 2);
+        var efSearchGrid = List.of(1, 2, 3, 4);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
                 __ -> CompressorParameters.NONE
                 // ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
-                        __ -> CompressorParameters.NONE,
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
+                __ -> CompressorParameters.NONE,
+                ds -> new PQParameters(ds.getDimension() / 1, 256, false, UNWEIGHTED),
+                ds -> new PQParameters(ds.getDimension() / 2, 256, false, UNWEIGHTED),
+                ds -> new PQParameters(ds.getDimension() / 4, 256, false, UNWEIGHTED),
+                ds -> new PQParameters(ds.getDimension() / 8, 256, false, UNWEIGHTED),
+                ds -> new PQParameters(ds.getDimension() / 16, 256, false, UNWEIGHTED),
+                ds -> new CompressorParameters.BQParameters()
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.
@@ -74,33 +79,6 @@ public class Bench {
                 "e5-base-v2-100k",
                 "e5-large-v2-100k");
         executeNw(extraFiles, pattern, buildCompression, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
-
-        // smaller vectors from ann-benchmarks
-        var hdf5Files = List.of(
-                // large files not yet supported
-                // "hdf5/deep-image-96-angular.hdf5",
-                // "hdf5/gist-960-euclidean.hdf5",
-                "glove-25-angular.hdf5",
-                "glove-50-angular.hdf5",
-                "lastfm-64-dot.hdf5",
-                "glove-100-angular.hdf5",
-                "glove-200-angular.hdf5",
-                "nytimes-256-angular.hdf5",
-                "sift-128-euclidean.hdf5");
-        for (var f : hdf5Files) {
-            if (pattern.matcher(f).find()) {
-                DownloadHelper.maybeDownloadHdf5(f);
-                Grid.runAll(Hdf5Loader.load(f), mGrid, efConstructionGrid, buildCompression, searchCompression, efSearchGrid);
-            }
-        }
-
-        // 2D grid, built and calculated at runtime
-        if (pattern.matcher("2dgrid").find()) {
-            searchCompression = Arrays.asList(__ -> CompressorParameters.NONE,
-                                              ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
-            var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
-            Grid.runAll(grid2d, mGrid, efConstructionGrid, buildCompression, searchCompression, efSearchGrid);
-        }
     }
 
     private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, CompressorParameters>> buildCompression, List<Function<DataSet, CompressorParameters>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
