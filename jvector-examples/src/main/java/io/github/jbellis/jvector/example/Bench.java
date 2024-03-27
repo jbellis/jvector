@@ -62,7 +62,7 @@ public class Bench {
         var coreFiles = List.of(
                 "ada002-100k",
                 "openai-v3-small-100k",
-                "nemo-100k",
+                "nv-qa-v4-100k",
                 "colbert-1M",
                 "e5-small-v2-100k",
                 "gecko-100k");
