@@ -284,7 +284,7 @@ public class Grid {
             if (index instanceof CachingADCGraphIndex) {
                 asf =  ((CachingADCGraphIndex.CachedView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
-                asf = cv.scoreFunctionFor(queryVector, ds.similarityFunction);
+                asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
             var ravv = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
             var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, ravv);
