@@ -4,9 +4,10 @@
 - Experimental support for native code acceleration has been added. This currently only supports Linux x86-64 
   with certain AVX-512 extensions. This is opt-in and requires the use of MemorySegment `VectorFloat`/`ByteSequence`
   representations.
-- Experimental support for fused graph indexes has been added. These work in best concert with native code acceleration.
+- Experimental support for fused graph indexes has been added. These work best in concert with native code acceleration.
   This explores a design space allowing for packed representations of vectors fused into the graph in shapes optimal
-  for approximate score calculation. This is a new type of graph index and is opt-in.
+  for approximate score calculation. This is a new type of graph index and is opt-in.  JVector 3 remains
+  compatible with the on-disk formats of JVector 1 and 2.
 
 ## Primary API changes
 - `VectorFloat` and `ByteSequence` are introduced as abstractions over float vectors and byte sequences.
@@ -21,16 +22,22 @@
   it easy to make apples-to-apples comparisons with Lucene HNSW graphs.)  So,
   if you were building a graph of M=16 with JVector2, you should build it with M=32
   with JVector3.
-- `NodeSimilarity.ReRanker` renamed to `Reranker`
-- `NodeSimilarity.Reranker` api has changed.  The interface is no longer parameterized, the `similarityTo` method no longer takes a Map parameter (provided by `search` with
-  the full vectors associated with the nodes returned), and a single call will be made with an array of ids to rerank 
-  rather than call-per-id.  The map change is because we discovered that (in contrast with the original DiskANN design) it is more
-  performant to read vectors lazily from disk at reranking time, since this will only have to fetch vectors for the topK 
-  nodes instead of all nodes visited. The id change is to allow native implementations to perform more work per FFM call.
+- `NodeSimilarity` has been removed.  `ScoreFunction` is now a top-level interface; grouping of functions
+  for build and for search are now done by `BuildScoreProvider` and `SearchScoreProvider`.
+  - BuildScoreProvider allows the creation of larger-than-memory indexes by using compressed vectors
+    during graph construction.
+  - Reranking is done using `ExactScoreFunction::similarityTo(int[])` rather than with a Map parameter.
+    The map change is because we discovered that (in contrast with the original DiskANN design) it is more
+    performant to read vectors lazily from disk at reranking time, since this will only have to fetch vectors for the topK 
+    nodes instead of all nodes visited.
+  - `example/Grid.java` shows how to use these.
+- `RandomAccessVectorValues::vectorValue` is deprecated, replaced by `getVector` (which has the same semantics
+  as `vectorValue`) and `getVectorInto`.  The latter allows JVector to avoid an unnecessary copy when there
+  is a specific destination already created that needs the data.
 
 ## Other changes to public classes
 
-- `OnHeapGraphIndex::ramBytesUsedOneNode` no longer takes an `int nodeLevel` parameter
+- Several methods no longer take a leftover-from-hnsw `int nodeLevel` parameter
 
 # Upgrading from 1.0.x to 2.0.x
 
