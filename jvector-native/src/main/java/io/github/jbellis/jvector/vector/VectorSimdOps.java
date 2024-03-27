@@ -738,4 +738,115 @@ final class VectorSimdOps {
             return lvqSquareL2Distance256(query, vector);
         }
     }
+
+    private static float lvqCosine256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, MemorySegmentVectorFloat centroid) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b and c only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
+        IntVector b = null;
+        IntVector c = null;
+        Vector<Float> d;
+        var vsum = FloatVector.zero(FloatVector.SPECIES_256);
+        var vQueryMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        var vBMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector queryVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector centroidVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, centroid.get(), centroid.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                b = byteVector.reinterpretAsInts();
+                byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
+                c = byteVector.reinterpretAsInts();
+                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+                c = c.lanewise(VectorOperators.LSHR, 8);
+                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                d = c.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            d = d.mul(FloatVector.broadcast(FloatVector.SPECIES_256, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_256, vector.bias));
+            d = d.add(centroidVector);
+            var e = (FloatVector) d;
+            vsum = queryVector.fma(e, vsum);
+            vQueryMagnitude = queryVector.fma(queryVector, vQueryMagnitude);
+            vBMagnitude = e.fma(e, vBMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float queryMagnitude = vQueryMagnitude.reduceLanes(VectorOperators.ADD);
+        float bMagnitude = vBMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var val = vector.getDequantized(i) + centroid.get(i);
+            var queryVal = query.get(i);
+            sum += queryVal * val;
+            queryMagnitude += queryVal * queryVal;
+            bMagnitude += val * val;
+        }
+
+        return (float) (sum / Math.sqrt(queryMagnitude * bMagnitude));
+    }
+
+    private static float lvqCosine512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, MemorySegmentVectorFloat centroid) {
+        var length = query.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+
+        int i = 0;
+        // Process the vectorized part
+        // b and c only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
+        IntVector b = null;
+        var vsum = FloatVector.zero(FloatVector.SPECIES_512);
+        var vQueryMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        var vBMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector queryVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector centroidVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, centroid.get(), centroid.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_512, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                b = byteVector.reinterpretAsInts();
+            } else {
+                b = b.lanewise(VectorOperators.LSHR, 8);
+            }
+            var c = (FloatVector) b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            c = c.mul(FloatVector.broadcast(FloatVector.SPECIES_512, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_512, vector.bias));
+            c = c.add(centroidVector);
+            vsum = queryVector.fma(c, vsum);
+            vQueryMagnitude = queryVector.fma(queryVector, vQueryMagnitude);
+            vBMagnitude = c.fma(c, vBMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float queryMagnitude = vQueryMagnitude.reduceLanes(VectorOperators.ADD);
+        float bMagnitude = vBMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var val = vector.getDequantized(i) + centroid.get(i);
+            var queryVal = query.get(i);
+            sum += queryVal * val;
+            queryMagnitude += queryVal * queryVal;
+            bMagnitude += val * val;
+        }
+
+        return (float) (sum / Math.sqrt(queryMagnitude * bMagnitude));
+    }
+
+    public static float lvqCosine(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, MemorySegmentVectorFloat centroid) {
+        if (HAS_AVX512) {
+            return lvqCosine512(query, vector, centroid);
+        } else {
+            return lvqCosine256(query, vector, centroid);
+        }
+    }
 }

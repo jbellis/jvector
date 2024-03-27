@@ -359,4 +359,20 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     }
     return sum;
   }
+
+  @Override
+  public float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+    float sum = 0.0f;
+    float norm1 = 0.0f;
+    float norm2 = 0.0f;
+    for (int i = 0; i < query.length(); i++) {
+      float elem1 = query.get(i);
+      float elem2 = vector.getDequantized(i) + centroid.get(i);
+      sum += elem1 * elem2;
+      norm1 += elem1 * elem1;
+      norm2 += elem2 * elem2;
+    }
+
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+  }
 }

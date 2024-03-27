@@ -153,4 +153,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     public float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
         return VectorSimdOps.lvqSquareL2Distance((MemorySegmentVectorFloat) query, vector);
     }
+
+    @Override
+    public float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+        return VectorSimdOps.lvqCosine((MemorySegmentVectorFloat) query, vector, (MemorySegmentVectorFloat) centroid);
+    }
+
+
 }
