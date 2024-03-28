@@ -54,6 +54,10 @@ public class MultiFileDatasource {
     }
 
     public static Map<String, MultiFileDatasource> byName = new HashMap<>() {{
+        put("cohere-english-v3-100k", new MultiFileDatasource("cohere-english-v3-100k",
+                                                              "wikipedia_squad/100k/cohere_embed-english-v3.0_1024_base_vectors_100000.fvec",
+                                                              "wikipedia_squad/100k/cohere_embed-english-v3.0_1024_query_vectors_10000.fvec",
+                                                              "wikipedia_squad/100k/cohere_embed-english-v3.0_1024_indices_b100000_q10000_k100.ivec"));
         put("colbert-10M", new MultiFileDatasource("colbert-10M",
                                                    "wikipedia_squad/10M/colbertv2.0_128_base_vectors_10000000.fvec",
                                                    "wikipedia_squad/10M/colbertv2.0_128_query_vectors_100000.fvec",

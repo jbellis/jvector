@@ -48,7 +48,7 @@ public class Bench {
                 // ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
-                        __ -> CompressorParameters.NONE,
+                __ -> CompressorParameters.NONE,
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
 
@@ -61,16 +61,17 @@ public class Bench {
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var coreFiles = List.of(
                 "ada002-100k",
+                "cohere-english-v3-100k",
                 "openai-v3-small-100k",
                 "nv-qa-v4-100k",
                 "colbert-1M",
-                "e5-small-v2-100k",
                 "gecko-100k");
         executeNw(coreFiles, pattern, buildCompression, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
 
         var extraFiles = List.of(
                 "openai-v3-large-3072-100k",
                 "openai-v3-large-1536-100k",
+                "e5-small-v2-100k",
                 "e5-base-v2-100k",
                 "e5-large-v2-100k");
         executeNw(extraFiles, pattern, buildCompression, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
