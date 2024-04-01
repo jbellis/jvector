@@ -22,7 +22,6 @@ import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
-import jdk.incubator.vector.Vector;
 import jdk.incubator.vector.VectorOperators;
 
 import java.nio.ByteOrder;
@@ -565,158 +564,122 @@ final class VectorSimdOps {
         return min;
     }
 
-    public static float lvqDotProduct(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
-        if (HAS_AVX512) {
-            return lvqDotProduct512(query, vector, querySum);
-        } else {
-            return lvqDotProduct256(query, vector, querySum);
-        }
-    }
-
-    private static float lvqDotProduct256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
-        var length = query.length();
+    private static float lvqDotProduct256(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+        var length = vector.length();
         final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
-        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+        var sequenceBacking = (MemorySegmentByteSequence) packedVector.bytes;
 
         int i = 0;
         // Process the vectorized part
-        // b and c only needs to be refreshed once every four iterations
+        // packedFragmentA and packedFragmentB only needs to be refreshed once every four iterations
         // otherwise, we can right shift 8 bits and mask off the lower 8 bits
-        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
-        IntVector b = null;
-        IntVector c = null;
-        Vector<Float> d;
+        // use packedFragmentA, packedFragmentB, packedFragmentA >>> 8 & 0xff, packedFragmentB >>> 8 & 0xff
+        IntVector packedFragmentA = null;
+        IntVector packedFragmentB = null;
+        FloatVector lvqFloats;
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector fullFloats = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             if (i % 64 == 0) {
-                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
-                b = byteVector.reinterpretAsInts();
-                byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
-                c = byteVector.reinterpretAsInts();
-                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+                var tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                packedFragmentA = tempBytes.reinterpretAsInts();
+                tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
+                packedFragmentB = tempBytes.reinterpretAsInts();
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
             } else if (i % 16 == 0) {
-                b = b.lanewise(VectorOperators.LSHR, 8);
-                c = c.lanewise(VectorOperators.LSHR, 8);
-                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+                packedFragmentA = packedFragmentA.lanewise(VectorOperators.LSHR, 8);
+                packedFragmentB = packedFragmentB.lanewise(VectorOperators.LSHR, 8);
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
             } else {
-                d = c.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+                lvqFloats = (FloatVector) packedFragmentB.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
             }
-            sum = a.fma(d, sum);
+            sum = fullFloats.fma(lvqFloats, sum);
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
         for (; i < length; ++i)
-            res += query.get(i) * vector.getQuantized(i);
+            res += vector.get(i) * packedVector.getQuantized(i);
 
-        res = res * vector.scale + querySum * vector.bias;
-
-        return res;
-    }
-
-    private static float lvqDotProduct512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
-        var length = query.length();
-        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
-
-        int i = 0;
-        // Process the vectorized part
-        // b only needs to be refreshed once every four iterations
-        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
-        IntVector b = null;
-        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
-            if (i % 64 == 0) {
-                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
-                b = byteVector.reinterpretAsInts();
-            } else {
-                b = b.lanewise(VectorOperators.LSHR, 8);
-            }
-            var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            sum = a.fma(c, sum);
-        }
-
-        float res = sum.reduceLanes(VectorOperators.ADD);
-
-        // Process the tail
-        for (; i < length; ++i)
-            res += query.get(i) * vector.getQuantized(i);
-
-        res = res * vector.scale + querySum * vector.bias;
+        res = res * packedVector.scale + vectorSum * packedVector.bias;
 
         return res;
     }
 
-    private static float lvqSquareL2Distance256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
-        var length = query.length();
+    private static float lvqDotProduct512(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+        var length = vector.length();
         final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
-        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+        var sequenceBacking = (MemorySegmentByteSequence) packedVector.bytes;
 
         int i = 0;
         // Process the vectorized part
-        // b and c only needs to be refreshed once every four iterations
+        // packedFragment only needs to be refreshed once every four iterations
         // otherwise, we can right shift 8 bits and mask off the lower 8 bits
-        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
-        IntVector b = null;
-        IntVector c = null;
-        Vector<Float> d;
-        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
-            if (i % 64 == 0) {
-                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
-                b = byteVector.reinterpretAsInts();
-                byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
-                c = byteVector.reinterpretAsInts();
-                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            } else if (i % 16 == 0) {
-                b = b.lanewise(VectorOperators.LSHR, 8);
-                c = c.lanewise(VectorOperators.LSHR, 8);
-                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            } else {
-                d = c.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            }
-            d = d.mul(FloatVector.broadcast(FloatVector.SPECIES_256, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_256, vector.bias));
-            var diff = a.sub(d);
-            sum = diff.fma(diff, sum);
-        }
-
-        float res = sum.reduceLanes(VectorOperators.ADD);
-
-        // Process the tail
-        for (; i < length; ++i) {
-            var diff = query.get(i) - vector.getDequantized(i);
-            res += diff * diff;
-        }
-
-        return res;
-    }
-
-    private static float lvqSquareL2Distance512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
-        var length = query.length();
-        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
-        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
-
-        int i = 0;
-        // Process the vectorized part
-        // b only needs to be refreshed once every four iterations
-        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
-        IntVector b = null;
+        IntVector packedFragment = null;
         for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
-            FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector fullFloats = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             if (i % 64 == 0) {
                 var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_512, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
-                b = byteVector.reinterpretAsInts();
+                packedFragment = byteVector.reinterpretAsInts();
             } else {
-                b = b.lanewise(VectorOperators.LSHR, 8);
+                packedFragment = packedFragment.lanewise(VectorOperators.LSHR, 8);
             }
-            var c = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0).reinterpretAsFloats();
-            c = c.mul(FloatVector.broadcast(FloatVector.SPECIES_512, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_512, vector.bias));
-            var diff = a.sub(c);
+            FloatVector lvqFloats = (FloatVector) packedFragment.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            sum = fullFloats.fma(lvqFloats, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i)
+            res += vector.get(i) * packedVector.getQuantized(i);
+
+        res = res * packedVector.scale + vectorSum * packedVector.bias;
+
+        return res;
+    }
+
+    public static float lvqDotProduct(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+        if (HAS_AVX512) {
+            return lvqDotProduct512(vector, packedVector, vectorSum);
+        } else {
+            return lvqDotProduct256(vector, packedVector, vectorSum);
+        }
+    }
+
+    private static float lvqSquareL2Distance256(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        var sequenceBacking = (MemorySegmentByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragmentA and packedFragmentB only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use packedFragmentA, packedFragmentB, packedFragmentA >>> 8 & 0xff, packedFragmentB >>> 8 & 0xff
+        IntVector packedFragmentA = null;
+        IntVector packedFragmentB = null;
+        FloatVector lvqFloats;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            FloatVector fullFloats = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                packedFragmentA = tempBytes.reinterpretAsInts();
+                tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
+                packedFragmentB = tempBytes.reinterpretAsInts();
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else if (i % 16 == 0) {
+                packedFragmentA = packedFragmentA.lanewise(VectorOperators.LSHR, 8);
+                packedFragmentB = packedFragmentB.lanewise(VectorOperators.LSHR, 8);
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            } else {
+                lvqFloats = (FloatVector) packedFragmentB.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            }
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            var diff = fullFloats.sub(lvqFloats);
             sum = diff.fma(diff, sum);
         }
 
@@ -724,129 +687,163 @@ final class VectorSimdOps {
 
         // Process the tail
         for (; i < length; ++i) {
-            var diff = query.get(i) - vector.getDequantized(i);
+            var diff = vector.get(i) - packedVector.getDequantized(i);
             res += diff * diff;
         }
 
         return res;
     }
 
-    public static float lvqSquareL2Distance(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
-        if (HAS_AVX512) {
-            return lvqSquareL2Distance512(query, vector);
-        } else {
-            return lvqSquareL2Distance256(query, vector);
-        }
-    }
-
-    private static float lvqCosine256(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, MemorySegmentVectorFloat centroid) {
-        var length = query.length();
-        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
-        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+    private static float lvqSquareL2Distance512(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
+        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        var sequenceBacking = (MemorySegmentByteSequence) packedVector.bytes;
 
         int i = 0;
         // Process the vectorized part
-        // b and c only needs to be refreshed once every four iterations
+        // packedFragment only needs to be refreshed once every four iterations
         // otherwise, we can right shift 8 bits and mask off the lower 8 bits
-        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
-        IntVector b = null;
-        IntVector c = null;
-        Vector<Float> d;
+        IntVector packedFragment = null;
+        for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector fullFloats = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            if (i % 64 == 0) {
+                var tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_512, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                packedFragment = tempBytes.reinterpretAsInts();
+            } else {
+                packedFragment = packedFragment.lanewise(VectorOperators.LSHR, 8);
+            }
+            FloatVector lvqFloats = (FloatVector) packedFragment.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            var diff = fullFloats.sub(lvqFloats);
+            sum = diff.fma(diff, sum);
+        }
+
+        float res = sum.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (; i < length; ++i) {
+            var diff = vector.get(i) - packedVector.getDequantized(i);
+            res += diff * diff;
+        }
+
+        return res;
+    }
+
+    public static float lvqSquareL2Distance(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+        if (HAS_AVX512) {
+            return lvqSquareL2Distance512(vector, packedVector);
+        } else {
+            return lvqSquareL2Distance256(vector, packedVector);
+        }
+    }
+
+    private static float lvqCosine256(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, MemorySegmentVectorFloat centroid) {
+        var length = vector.length();
+        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+        var sequenceBacking = (MemorySegmentByteSequence) packedVector.bytes;
+
+        int i = 0;
+        // Process the vectorized part
+        // packedFragmentA and packedFragmentB only needs to be refreshed once every four iterations
+        // otherwise, we can right shift 8 bits and mask off the lower 8 bits
+        // use packedFragmentA, packedFragmentB, packedFragmentA >>> 8 & 0xff, packedFragmentB >>> 8 & 0xff
+        IntVector packedFragmentA = null;
+        IntVector packedFragmentB = null;
+        FloatVector lvqFloats;
         var vsum = FloatVector.zero(FloatVector.SPECIES_256);
-        var vQueryMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
-        var vBMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        var vFullMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        var vLvqMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            FloatVector queryVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector fullVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             FloatVector centroidVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, centroid.get(), centroid.offset(i), ByteOrder.LITTLE_ENDIAN);
             if (i % 64 == 0) {
-                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
-                b = byteVector.reinterpretAsInts();
-                byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
-                c = byteVector.reinterpretAsInts();
-                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+                var tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                packedFragmentA = tempBytes.reinterpretAsInts();
+                tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_256, sequenceBacking.get(), i + 32, ByteOrder.LITTLE_ENDIAN);
+                packedFragmentB = tempBytes.reinterpretAsInts();
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
             } else if (i % 16 == 0) {
-                b = b.lanewise(VectorOperators.LSHR, 8);
-                c = c.lanewise(VectorOperators.LSHR, 8);
-                d = b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+                packedFragmentA = packedFragmentA.lanewise(VectorOperators.LSHR, 8);
+                packedFragmentB = packedFragmentB.lanewise(VectorOperators.LSHR, 8);
+                lvqFloats = (FloatVector) packedFragmentA.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
             } else {
-                d = c.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+                lvqFloats = (FloatVector) packedFragmentB.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
             }
-            d = d.mul(FloatVector.broadcast(FloatVector.SPECIES_256, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_256, vector.bias));
-            d = d.add(centroidVector);
-            var e = (FloatVector) d;
-            vsum = queryVector.fma(e, vsum);
-            vQueryMagnitude = queryVector.fma(queryVector, vQueryMagnitude);
-            vBMagnitude = e.fma(e, vBMagnitude);
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            lvqFloats = lvqFloats.add(centroidVector);
+            vsum = fullVector.fma(lvqFloats, vsum);
+            vFullMagnitude = fullVector.fma(fullVector, vFullMagnitude);
+            vLvqMagnitude = lvqFloats.fma(lvqFloats, vLvqMagnitude);
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
-        float queryMagnitude = vQueryMagnitude.reduceLanes(VectorOperators.ADD);
-        float bMagnitude = vBMagnitude.reduceLanes(VectorOperators.ADD);
+        float fullMagnitude = vFullMagnitude.reduceLanes(VectorOperators.ADD);
+        float lvqMagnitude = vLvqMagnitude.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
         for (; i < length; ++i) {
-            var val = vector.getDequantized(i) + centroid.get(i);
-            var queryVal = query.get(i);
-            sum += queryVal * val;
-            queryMagnitude += queryVal * queryVal;
-            bMagnitude += val * val;
+            var lvqVal = packedVector.getDequantized(i) + centroid.get(i);
+            var fullVal = vector.get(i);
+            sum += fullVal * lvqVal;
+            fullMagnitude += fullVal * fullVal;
+            lvqMagnitude += lvqVal * lvqVal;
         }
 
-        return (float) (sum / Math.sqrt(queryMagnitude * bMagnitude));
+        return (float) (sum / Math.sqrt(fullMagnitude * lvqMagnitude));
     }
 
-    private static float lvqCosine512(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, MemorySegmentVectorFloat centroid) {
-        var length = query.length();
+    private static float lvqCosine512(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, MemorySegmentVectorFloat centroid) {
+        var length = vector.length();
         final int vectorizedLength = FloatVector.SPECIES_512.loopBound(length);
-        var sequenceBacking = (MemorySegmentByteSequence) vector.packedVector;
+        var sequenceBacking = (MemorySegmentByteSequence) packedVector.bytes;
 
         int i = 0;
         // Process the vectorized part
-        // b and c only needs to be refreshed once every four iterations
+        // packedFragment only needs to be refreshed once every four iterations
         // otherwise, we can right shift 8 bits and mask off the lower 8 bits
-        // use b, c, b >>> 8 & 0xff, c >>> 8 & 0xff
-        IntVector b = null;
+        IntVector packedFragment = null;
         var vsum = FloatVector.zero(FloatVector.SPECIES_512);
-        var vQueryMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
-        var vBMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        var vFullMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        var vLvqMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
         for (; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
-            FloatVector queryVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, query.get(), query.offset(i), ByteOrder.LITTLE_ENDIAN);
+            FloatVector fullVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
             FloatVector centroidVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, centroid.get(), centroid.offset(i), ByteOrder.LITTLE_ENDIAN);
             if (i % 64 == 0) {
-                var byteVector = ByteVector.fromMemorySegment(ByteVector.SPECIES_512, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
-                b = byteVector.reinterpretAsInts();
+                var tempBytes = ByteVector.fromMemorySegment(ByteVector.SPECIES_512, sequenceBacking.get(), i, ByteOrder.LITTLE_ENDIAN);
+                packedFragment = tempBytes.reinterpretAsInts();
             } else {
-                b = b.lanewise(VectorOperators.LSHR, 8);
+                packedFragment = packedFragment.lanewise(VectorOperators.LSHR, 8);
             }
-            var c = (FloatVector) b.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
-            c = c.mul(FloatVector.broadcast(FloatVector.SPECIES_512, vector.scale)).add(FloatVector.broadcast(FloatVector.SPECIES_512, vector.bias));
-            c = c.add(centroidVector);
-            vsum = queryVector.fma(c, vsum);
-            vQueryMagnitude = queryVector.fma(queryVector, vQueryMagnitude);
-            vBMagnitude = c.fma(c, vBMagnitude);
+            var lvqFloats = (FloatVector) packedFragment.lanewise(VectorOperators.AND, 0xff).convert(VectorOperators.I2F, 0);
+            lvqFloats = lvqFloats.fma(packedVector.scale, packedVector.bias);
+            lvqFloats = lvqFloats.add(centroidVector);
+            vsum = fullVector.fma(lvqFloats, vsum);
+            vFullMagnitude = fullVector.fma(fullVector, vFullMagnitude);
+            vLvqMagnitude = lvqFloats.fma(lvqFloats, vLvqMagnitude);
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
-        float queryMagnitude = vQueryMagnitude.reduceLanes(VectorOperators.ADD);
-        float bMagnitude = vBMagnitude.reduceLanes(VectorOperators.ADD);
+        float fullMagnitude = vFullMagnitude.reduceLanes(VectorOperators.ADD);
+        float lvqMagnitude = vLvqMagnitude.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
         for (; i < length; ++i) {
-            var val = vector.getDequantized(i) + centroid.get(i);
-            var queryVal = query.get(i);
-            sum += queryVal * val;
-            queryMagnitude += queryVal * queryVal;
-            bMagnitude += val * val;
+            var lvqVal = packedVector.getDequantized(i) + centroid.get(i);
+            var fullVal = vector.get(i);
+            sum += fullVal * lvqVal;
+            fullMagnitude += fullVal * fullVal;
+            lvqMagnitude += lvqVal * lvqVal;
         }
 
-        return (float) (sum / Math.sqrt(queryMagnitude * bMagnitude));
+        return (float) (sum / Math.sqrt(fullMagnitude * lvqMagnitude));
     }
 
-    public static float lvqCosine(MemorySegmentVectorFloat query, LocallyAdaptiveVectorQuantization.PackedVector vector, MemorySegmentVectorFloat centroid) {
+    public static float lvqCosine(MemorySegmentVectorFloat vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, MemorySegmentVectorFloat centroid) {
         if (HAS_AVX512) {
-            return lvqCosine512(query, vector, centroid);
+            return lvqCosine512(vector, packedVector, centroid);
         } else {
-            return lvqCosine256(query, vector, centroid);
+            return lvqCosine256(vector, packedVector, centroid);
         }
     }
 }

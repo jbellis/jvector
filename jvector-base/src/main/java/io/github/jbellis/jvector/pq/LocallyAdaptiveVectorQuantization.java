@@ -33,6 +33,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 
+/**
+ * Implements Locally-Adaptive Vector Quantization (LVQ) as described in
+ * "Similarity search in the blink of an eye with compressed indices" (https://arxiv.org/abs/2304.04759).
+ * In particular, single-level LVQ-8 is used. To encode, a vector is first de-meaned by subtracting the global mean.
+ * Then, each component is quantized using a byte, where 0 = min and 255 = max. The bias and scale are stored for each
+ * component to allow for dequantization. Vectors are packed using Turbo LVQ as described in
+ * "Locally-Adaptive Quantization for Streaming Vector Search" (https://arxiv.org/pdf/2402.02044.pdf).
+ */
 public class LocallyAdaptiveVectorQuantization implements VectorCompressor<LocallyAdaptiveVectorQuantization.QuantizedVector>{
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
@@ -62,8 +70,6 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         var vCentered = VectorUtil.sub(v, globalMean);
         var u = VectorUtil.max(vCentered);
         var l = VectorUtil.min(vCentered);
-        // scalar quantization of each component of v centered using a byte, where 0 = l and 255 = u
-        var range = u - l;
         var quantized = vectorTypeSupport.createByteSequence(vCentered.length());
         for (int i = 0; i < vCentered.length(); i++) {
             quantized.set(i, quantizeFloatToByte(vCentered.get(i), l, u));
@@ -71,6 +77,10 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         return new QuantizedVector(quantized, l, (u - l) / 255);
     }
 
+    /**
+     * Quantize a float value to an unsigned byte value using the given min and max values.
+     * The returned value is a signed byte, so it is in the range -128 to 127. This requires correction before use.
+     */
     private static byte quantizeFloatToByte(float value, float minFloat, float maxFloat) {
         // Calculate the quantization step delta
         float delta = (maxFloat - minFloat) / 255;
@@ -81,7 +91,6 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         // Ensure the quantized value is within the 0 to 255 range
         if (quantizedValue < 0) quantizedValue = 0;
         if (quantizedValue > 255) quantizedValue = 255;
-
         return (byte) quantizedValue;
     }
 
@@ -96,6 +105,13 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
     }
 
     private ScoreFunction.ExactScoreFunction dotProductScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
+        /* The query vector (full resolution) will be compared to LVQ quantized vectors that were first de-meaned
+         * by subtracting the global mean. The dot product is calculated between the query and the quantized vector.
+         * This is <query, quantized + globalMean> = <query, quantized> + <query, globalMean> = <query, quantized> + globalBias.
+         * Global bias can be precomputed. For <query, quantized>, we can break this down to <query, byteSequence * vector.scale + broadcast(vector.bias)>.
+        * This can be further broken down to vector.scale * <query, byteSequence> + <query, broadcast(vector.bias)>.
+        * Since vector.bias is scalar, <query, broadcast(vector.bias)> = vector.bias * <query, broadcast(1)> = vector.bias * querySum.
+         */
         var querySum = VectorUtil.sum(query);
         var queryGlobalBias = VectorUtil.dotProduct(query, globalMean);
         return new ScoreFunction.ExactScoreFunction() {
@@ -124,6 +140,11 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
     }
 
     private ScoreFunction.ExactScoreFunction euclideanScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
+        /*
+         * The query vector (full resolution) will be compared to LVQ quantized vectors that were first de-meaned.
+         * Rather than re-adding the global mean to all quantized vectors, we can shift the query vector the same amount.
+         * This will result in the same squared L2 distances with less work.
+         */
         var shiftedQuery = VectorUtil.sub(query, globalMean);
         return new ScoreFunction.ExactScoreFunction() {
             @Override
@@ -205,15 +226,28 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         return globalMean.equals(that.globalMean);
     }
 
+    /**
+     * A LVQ-quantized vector. This has not been packed for storage, but it can be written in a packed format.
+     * Packed vectors are necessary to use VectorUtil LVQ similarity functions.
+     */
     public static class QuantizedVector {
-        private final ByteSequence<?> encodedVector;
+        private final ByteSequence<?> bytes;
         private final float bias;
         private final float scale;
 
-        public QuantizedVector(ByteSequence<?> encodedVector, float bias, float scale) {
-            this.encodedVector = encodedVector;
+        public QuantizedVector(ByteSequence<?> bytes, float bias, float scale) {
+            this.bytes = bytes;
             this.bias = bias;
             this.scale = scale;
+        }
+
+        // safely write a byte from the encodedVector or 0 if out of bounds
+        private void writeByteSafely(DataOutput out, ByteSequence<?> encodedVector, int index) throws IOException {
+            if (index < encodedVector.length()) {
+                out.writeByte(encodedVector.get(index));
+            } else {
+                out.writeByte(0);
+            }
         }
 
         public void writePacked(DataOutput out) throws IOException {
@@ -221,65 +255,68 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
             // write the encoded vector
             out.writeFloat(bias);
             out.writeFloat(scale);
-            int i = 0;
-            int mainBlockCount = (encodedVector.length() - (encodedVector.length() % 64)) / 64;
+            int mainBlockCount = bytes.length() / 64;
+            int i;
             for (i = 0; i < mainBlockCount; i++) {
                 var startIndex = i * 64;
                 for (int j = startIndex; j < startIndex + 16; j++) {
-                    out.writeByte(encodedVector.get(j));
-                    out.writeByte(encodedVector.get(j + 16));
-                    out.writeByte(encodedVector.get(j + 32));
-                    out.writeByte(encodedVector.get(j + 48));
+                    out.writeByte(bytes.get(j));
+                    out.writeByte(bytes.get(j + 16));
+                    out.writeByte(bytes.get(j + 32));
+                    out.writeByte(bytes.get(j + 48));
                 }
             }
             var startIndex = i * 64;
-            if (startIndex < encodedVector.length()) {
-                for (int j = startIndex; j < startIndex + 16; j++) {
-                    if (j < encodedVector.length()) {
-                        out.writeByte(encodedVector.get(j));
-                    } else {
-                        out.writeByte(0);
-                    }
-                    if (j + 16 < encodedVector.length()) {
-                        out.writeByte(encodedVector.get(j + 16));
-                    } else {
-                        out.writeByte(0);
-                    }
-                    if (j + 32 < encodedVector.length()) {
-                        out.writeByte(encodedVector.get(j + 32));
-                    } else {
-                        out.writeByte(0);
-                    }
-                    if (j + 48 < encodedVector.length()) {
-                        out.writeByte(encodedVector.get(j + 48));
-                    } else {
-                        out.writeByte(0);
-                    }
+            if (startIndex < bytes.length()) {
+                var endIndex = Math.min(startIndex + 16, bytes.length());
+                int j = startIndex;
+                for (; j < endIndex; j++) {
+                    writeByteSafely(out, bytes, j);
+                }
+                for (; j < startIndex + 16; j++) {
+                    out.writeByte(0);
                 }
             }
         }
     }
 
+    /**
+     * A Turbo LVQ vector that has been packed into a byte sequence.
+     * 64 bytes are packed into a block using LVQ-8, optimizing for AVX-512.
+     * Helper methods are provided to get the quantized and dequantized values.
+     */
     public static class PackedVector {
-        public final ByteSequence<?> packedVector;
+        public final ByteSequence<?> bytes;
         public final float bias;
         public final float scale;
 
-        public PackedVector(ByteSequence<?> packedVector, float bias, float scale) {
-            this.packedVector = packedVector;
+        public PackedVector(ByteSequence<?> bytes, float bias, float scale) {
+            this.bytes = bytes;
             this.bias = bias;
             this.scale = scale;
         }
 
+        /**
+         * Get the quantized value at the given index. This is the raw unsigned byte value. Note that the index reflects
+         * the original index of the vector before it was packed.
+         * @param index the index to get the quantized value for
+         * @return the quantized value
+         */
         public int getQuantized(int index) {
             var blockId = index / 64; // 64 bytes per block
             var inBlockId = index % 64; // switch to an in-block index
             var laneId = inBlockId % 16; // 4 bytes per lane
             var laneOffset = inBlockId / 16; // 16 lanes per block
             var packedIndex = blockId * 64 + laneId * 4 + laneOffset;
-            return Byte.toUnsignedInt(packedVector.get(packedIndex));
+            return Byte.toUnsignedInt(bytes.get(packedIndex));
         }
 
+        /**
+         * Get the dequantized value at the given index. Note that the index reflects the original index of the vector
+         * before it was packed.
+         * @param index the index to get the dequantized value for
+         * @return the dequantized value
+         */
         public float getDequantized(int index) {
             return (getQuantized(index) * scale) + bias;
         }

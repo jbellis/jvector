@@ -340,34 +340,34 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+  public float lvqDotProduct(VectorFloat<?> vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
     float sum = 0;
-    for (int i = 0; i < query.length(); i++) {
-      sum += query.get(i) * vector.getQuantized(i);
+    for (int i = 0; i < vector.length(); i++) {
+      sum += vector.get(i) * packedVector.getQuantized(i);
     }
-    sum *= vector.scale;
-    sum += vector.bias * querySum;
+    sum *= packedVector.scale;
+    sum += packedVector.bias * vectorSum;
     return sum;
   }
 
   @Override
-  public float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+  public float lvqSquareL2Distance(VectorFloat<?> vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
     float sum = 0;
-    for (int i = 0; i < query.length(); i++) {
-      var diff = query.get(i) - vector.getDequantized(i);
+    for (int i = 0; i < vector.length(); i++) {
+      var diff = vector.get(i) - packedVector.getDequantized(i);
       sum += diff * diff;
     }
     return sum;
   }
 
   @Override
-  public float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+  public float lvqCosine(VectorFloat<?> vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, VectorFloat<?> centroid) {
     float sum = 0.0f;
     float norm1 = 0.0f;
     float norm2 = 0.0f;
-    for (int i = 0; i < query.length(); i++) {
-      float elem1 = query.get(i);
-      float elem2 = vector.getDequantized(i) + centroid.get(i);
+    for (int i = 0; i < vector.length(); i++) {
+      float elem1 = vector.get(i);
+      float elem2 = packedVector.getDequantized(i) + centroid.get(i);
       sum += elem1 * elem2;
       norm1 += elem1 * elem1;
       norm2 += elem2 * elem2;

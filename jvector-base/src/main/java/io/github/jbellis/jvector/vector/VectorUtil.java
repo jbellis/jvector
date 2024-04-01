@@ -204,15 +204,35 @@ public final class VectorUtil {
     return impl.min(v);
   }
 
-  public static float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
-    return impl.lvqDotProduct(query, vector, querySum);
+  /**
+   * Calculates the dot product between the vector v and the LVQ-compressed vector quantizedVector.
+   * @param v the uncompressed vector
+   * @param quantizedVector the LVQ-compressed vector
+   * @param querySum the horizontal sum of v
+   * @return the dot product
+   */
+  public static float lvqDotProduct(VectorFloat<?> v, LocallyAdaptiveVectorQuantization.PackedVector quantizedVector, float querySum) {
+    return impl.lvqDotProduct(v, quantizedVector, querySum);
   }
 
-  public static float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
-    return impl.lvqSquareL2Distance(query, vector);
+  /**
+   * Calculates the square of the L2 distance between the centered vector centeredVector and the LVQ-compressed vector quantizedVector.
+   * @param centeredV the de-meaned vector (using the same centroid as used to quantize quantizedVector)
+   * @param quantizedVector the LVQ-compressed vector (using the same centroid as used to de-mean centeredV)
+   * @return the square of the L2 distance
+   */
+  public static float lvqSquareL2Distance(VectorFloat<?> centeredV, LocallyAdaptiveVectorQuantization.PackedVector quantizedVector) {
+    return impl.lvqSquareL2Distance(centeredV, quantizedVector);
   }
 
-  public static float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
-    return impl.lvqCosine(query, vector, centroid);
+  /**
+   * Calculates the cosine similarity between the vector v and LVQ-compressed vector quantizedVector.
+   * @param v the uncompressed vector
+   * @param quantizedVector the LVQ-compressed vector
+   * @param centroid the centroid used to de-mean quantizedVector
+   * @return the cosine similarity
+   */
+  public static float lvqCosine(VectorFloat<?> v, LocallyAdaptiveVectorQuantization.PackedVector quantizedVector, VectorFloat<?> centroid) {
+    return impl.lvqCosine(v, quantizedVector, centroid);
   }
 }
