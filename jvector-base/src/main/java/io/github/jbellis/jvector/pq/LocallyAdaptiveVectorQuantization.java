@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.LVQView;
+import io.github.jbellis.jvector.graph.disk.LVQView;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -319,6 +319,10 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
          */
         public float getDequantized(int index) {
             return (getQuantized(index) * scale) + bias;
+        }
+
+        public PackedVector copy() {
+            return new PackedVector(bytes.copy(), bias, scale);
         }
     }
 }

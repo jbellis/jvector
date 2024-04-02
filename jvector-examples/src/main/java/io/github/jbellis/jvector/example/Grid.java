@@ -16,19 +16,17 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.disk.CachingADCGraphIndex;
-import io.github.jbellis.jvector.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.disk.CachingLVQGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskADCGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskLVQGraphIndex;
+import io.github.jbellis.jvector.graph.disk.ADCView;
+import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
+import io.github.jbellis.jvector.graph.disk.LVQGraphIndex;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
-import io.github.jbellis.jvector.graph.LVQView;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
@@ -130,12 +128,12 @@ public class Grid {
         var lvqGraphPath = testDirectory.resolve("lvqgraph" + M + efConstruction + ds.name);
         try {
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                OnDiskGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+                DiskAnnGraphIndex.write(onHeapGraph, floatVectors, outputStream);
             }
 
             var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(lvqGraphPath)))) {
-                OnDiskLVQGraphIndex.write(onHeapGraph, floatVectors, lvq, outputStream);
+                LVQGraphIndex.write(onHeapGraph, floatVectors, lvq, outputStream);
             }
 
             for (var cpSupplier : compressionGrid) {
@@ -152,14 +150,14 @@ public class Grid {
 
                     if (fusedCompatible) {
                         try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(fusedGraphPath)))) {
-                            OnDiskADCGraphIndex.write(onHeapGraph, floatVectors, (PQVectors) cv, outputStream);
+                            ADCGraphIndex.write(onHeapGraph, floatVectors, (PQVectors) cv, outputStream);
                         }
                     }
                 }
 
-                try (var onDiskGraph = new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
-                     var onDiskLVQGraph = compressor == null ? null : new CachingLVQGraphIndex(OnDiskLVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? new CachingADCGraphIndex(OnDiskADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
+                try (var onDiskGraph = new CachingGraphIndex(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+                     var onDiskLVQGraph = compressor == null ? null : new CachingGraphIndex(LVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
+                     var onDiskFusedGraph = fusedCompatible ? new CachingGraphIndex(ADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
                     List<GraphIndex> graphs = new ArrayList<>();
                     graphs.add(onDiskGraph);
                     if (onDiskFusedGraph != null) {
@@ -296,19 +294,13 @@ public class Grid {
 
         public SearchScoreProvider rerankingScoreProviderFor(VectorFloat<?> queryVector, GraphIndex.RerankingView view) {
             ScoreFunction.ApproximateScoreFunction asf;
-            if (index instanceof CachingADCGraphIndex) {
-                asf =  ((CachingADCGraphIndex.CachedView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+            if (view instanceof ADCView) {
+                asf =  ((ADCView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
 
-            ScoreFunction.ExactScoreFunction rr;
-            if (index instanceof CachingLVQGraphIndex) {
-                rr = ((CachingLVQGraphIndex) index).graph.lvq.scoreFunctionFrom(queryVector, ds.similarityFunction, (LVQView) view);
-            } else {
-                rr = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, view);
-            }
-
+            ScoreFunction.ExactScoreFunction rr = view.rerankerFor(queryVector, ds.similarityFunction);
             return new SearchScoreProvider(asf, rr);
         }
     }

@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.graph.disk;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import io.github.jbellis.jvector.TestUtil;
+import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.GraphCache;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,7 +60,7 @@ public class TestGraphCache extends RandomizedTest {
     @Test
     public void testGraphCacheLoading() throws Exception {
         try (var marr = new SimpleMappedReader(onDiskGraphIndexPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0))
+             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0))
         {
             var none = GraphCache.load(onDiskGraph, -1);
             assertEquals(0, none.ramBytesUsed());
@@ -68,7 +72,7 @@ public class TestGraphCache extends RandomizedTest {
             // move from caching entry node to entry node + all its neighbors (5)
             assertEquals(one.ramBytesUsed(), zero.ramBytesUsed() * (onDiskGraph.size()));
             for (int i = 0; i < 6; i++) {
-                assertEquals(one.getNode(i).vector, vectors.getVector(i));
+                assertEquals(((DiskAnnGraphIndex.CachedNode) one.getNode(i)).vector, vectors.getVector(i));
                 // fully connected,
                 assertEquals(one.getNode(i).neighbors.length, onDiskGraph.maxDegree());
             }

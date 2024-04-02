@@ -14,37 +14,30 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.graph.disk;
 
-import io.github.jbellis.jvector.graph.ADCView;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
-import io.github.jbellis.jvector.vector.types.ByteSequence;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
 
-/**
- * Specialized cache for OnDiskADCGraphIndex.
- * TODO: Refactor to make existing GraphCache pluggable for different CachedNode types.
- */
-public abstract class ADCGraphCache implements Accountable
+public abstract class GraphCache implements Accountable
 {
-    public static final class CachedNode {
-        public final VectorFloat<?> vector;
+    public static class CachedNode implements Accountable {
         public final int[] neighbors;
-        public final ByteSequence<?> packedNeighbors;
 
-        public CachedNode(VectorFloat<?> vector, int[] neighbors, ByteSequence<?> packedNeighbors) {
-            this.vector = vector;
+        public CachedNode( int[] neighbors) {
             this.neighbors = neighbors;
-            this.packedNeighbors = packedNeighbors;
+        }
+
+        public long ramBytesUsed() {
+            return RamUsageEstimator.NUM_BYTES_OBJECT_REF + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER + (long) neighbors.length * Integer.BYTES;
         }
     }
 
     /** return the cached node if present, or null if not */
     public abstract CachedNode getNode(int ordinal);
 
-    public static ADCGraphCache load(OnDiskADCGraphIndex graph, int distance)
+    public static GraphCache load(OnDiskGraphIndex graph, int distance)
     {
         if (distance < 0)
             return new EmptyGraphCache();
@@ -53,7 +46,7 @@ public abstract class ADCGraphCache implements Accountable
 
     public abstract long ramBytesUsed();
 
-    private static final class EmptyGraphCache extends ADCGraphCache
+    private static final class EmptyGraphCache extends GraphCache
     {
         @Override
         public CachedNode getNode(int ordinal) {
@@ -67,12 +60,13 @@ public abstract class ADCGraphCache implements Accountable
         }
     }
 
-    private static final class HMGraphCache extends ADCGraphCache
+    private static final class HMGraphCache extends GraphCache
     {
+        // Map is created on construction and never modified
         private final Int2ObjectHashMap<CachedNode> cache;
         private long ramBytesUsed = 0;
 
-        public HMGraphCache(OnDiskADCGraphIndex graph, int distance) {
+        public HMGraphCache(OnDiskGraphIndex graph, int distance) {
             try (var view = graph.getView()) {
                 var tmpCache = new Int2ObjectHashMap<CachedNode>();
                 cacheNeighborsOf(tmpCache, view, view.entryNode(), distance);
@@ -83,18 +77,18 @@ public abstract class ADCGraphCache implements Accountable
             }
         }
 
-        private void cacheNeighborsOf(Int2ObjectHashMap<CachedNode> tmpCache, ADCView view, int ordinal, int distance) {
+        private void cacheNeighborsOf(Int2ObjectHashMap<CachedNode> tmpCache, OnDiskView view, int ordinal, int distance) {
             // cache this node
             var it = view.getNeighborsIterator(ordinal);
             int[] neighbors = new int[it.size()];
             int i = 0;
             while (it.hasNext()) {
-                neighbors[i++] = it.next();
+                neighbors[i++] = it.nextInt();
             }
-            var node = new CachedNode(view.getVector(ordinal), neighbors, view.getPackedNeighbors(ordinal).copy());
+            var node = view.loadCachedNode(ordinal, neighbors);
             tmpCache.put(ordinal, node);
-            ramBytesUsed += 4 + RamUsageEstimator.NUM_BYTES_OBJECT_REF + RamUsageEstimator.sizeOf(node.vector) + RamUsageEstimator.sizeOf(node.neighbors)
-                            + RamUsageEstimator.sizeOf(node.packedNeighbors);
+            // ignores internal Map overhead but that should be negligible compared to the node contents
+            ramBytesUsed += Integer.BYTES + RamUsageEstimator.NUM_BYTES_OBJECT_REF + node.ramBytesUsed();
 
             // call recursively on neighbors
             if (distance > 0) {

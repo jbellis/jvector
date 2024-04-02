@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.graph.disk;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
@@ -67,7 +67,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
             TestUtil.writeGraph(graph, ravv, outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-                 var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0))
+                 var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0))
             {
                 TestUtil.assertGraphEquals(graph, onDiskGraph);
                 try (var onDiskView = onDiskGraph.getView()) {
@@ -108,12 +108,12 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
+            DiskAnnGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
             indexOutputWriter.flush();
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
+             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             // 0 -> 1
@@ -142,12 +142,12 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
+            DiskAnnGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
             indexOutputWriter.flush();
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
+             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
@@ -158,7 +158,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
-    private static void validateVectors(GraphIndex.RerankingView view, RandomAccessVectorValues ravv) {
+    private static void validateVectors(DiskAnnGraphIndex.View view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
             assertEquals(view.getVector(i), ravv.getVector(i));
         }
@@ -173,7 +173,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         TestUtil.writeGraph(graph, ravv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
+             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
              var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
