@@ -28,10 +28,10 @@ public interface CompressedVectors extends Accountable {
     /** write the compressed vectors to the given DataOutput */
     void write(DataOutput out) throws IOException;
 
-    /** @return the original size of the vectors, in bytes, before compression */
+    /** @return the original size of each vector, in bytes, before compression */
     int getOriginalSize();
 
-    /** @return the compressed size of the vectors, in bytes */
+    /** @return the compressed size of each vector, in bytes */
     int getCompressedSize();
 
     /** @return the compressor used by this instance */
