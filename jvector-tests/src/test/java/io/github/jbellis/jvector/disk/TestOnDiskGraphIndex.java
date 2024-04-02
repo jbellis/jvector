@@ -67,7 +67,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
             TestUtil.writeGraph(graph, ravv, outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-                 var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0))
+                 var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0))
             {
                 TestUtil.assertGraphEquals(graph, onDiskGraph);
                 try (var onDiskView = onDiskGraph.getView()) {
@@ -113,13 +113,15 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             // 0 -> 1
             assertTrue(getNeighborNodes(onDiskView, 0).contains(1));
             // 1 -> 0
             assertTrue(getNeighborNodes(onDiskView, 1).contains(0));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -145,12 +147,14 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
             assertEquals(onDiskView.getVector(1), ravv.getVector(1));
             assertEquals(onDiskView.getVector(2), ravv.getVector(0));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -169,7 +173,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         TestUtil.writeGraph(graph, ravv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = new OnDiskGraphIndex(marr::duplicate, 0);
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
              var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);

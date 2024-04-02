@@ -33,30 +33,63 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 
 public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    private final ReaderSupplier readerSupplier;
-    private final long neighborsOffset;
-    private final int size;
-    private final int entryNode;
-    private final int maxDegree;
-    final int dimension;
+    protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    protected final ReaderSupplier readerSupplier;
+    protected final long neighborsOffset;
+    protected final int size;
+    protected final int entryNode;
+    protected final int maxDegree;
+    protected final int dimension;
 
-    public OnDiskGraphIndex(ReaderSupplier readerSupplier, long offset)
+    protected OnDiskGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset)
     {
         this.readerSupplier = readerSupplier;
-        this.neighborsOffset = offset + 4 * Integer.BYTES;
+        this.neighborsOffset = neighborsOffset;
+        this.size = info.size;
+        this.entryNode = info.entryNode;
+        this.maxDegree = info.maxDegree;
+        this.dimension = info.dimension;
+    }
+
+    public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
-            reader.seek(offset);
-            size = reader.readInt();
-            dimension = reader.readInt();
-            entryNode = reader.readInt();
-            maxDegree = reader.readInt();
+            var info = CommonHeader.load(reader, offset);
+            return new OnDiskGraphIndex(readerSupplier, info, offset + 4 * Integer.BYTES);
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
+        }
+    }
+
+    /**
+     * Header information common to all on-disk graphs
+     */
+    protected static class CommonHeader {
+        public static final long SIZE = 4 * Integer.BYTES;
+
+        public final int size;
+        public final int dimension;
+        public final int entryNode;
+        public final int maxDegree;
+
+        public CommonHeader(int size, int dimension, int entryNode, int maxDegree) {
+            this.size = size;
+            this.dimension = dimension;
+            this.entryNode = entryNode;
+            this.maxDegree = maxDegree;
+        }
+
+        public static CommonHeader load(RandomAccessReader reader, long offset) throws IOException {
+            reader.seek(offset);
+            int size = reader.readInt();
+            int dimension = reader.readInt();
+            int entryNode = reader.readInt();
+            int maxDegree = reader.readInt();
+            return new CommonHeader(size, dimension, entryNode, maxDegree);
         }
     }
 
@@ -91,7 +124,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     /** return a Graph that can be safely queried concurrently */
-    public OnDiskGraphIndex.OnDiskView getView()
+    public ViewWithVectors getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
@@ -206,37 +239,60 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     /**
-     * @param graph the graph to write
+     * @param out              the output to write to
+     * @param graph            the graph to write
      * @param vectors the vectors associated with each node
-     * @param out the output to write to
      *
-     * If any nodes have been deleted, you must use the overload specifying `oldToNewOrdinals` instead.
+     * Writes the graph using the default sequential renumbering.
      */
-    public static void write(GraphIndex graph, RandomAccessVectorValues vectors, DataOutput out)
-            throws IOException
-    {
-        try (var view = graph.getView()) {
-            if (view.getIdUpperBound() > graph.size()) {
-                throw new IllegalArgumentException("Graph contains deletes, must specify oldToNewOrdinals map");
-            }
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
+    public static void write(GraphIndex graph, RandomAccessVectorValues vectors, DataOutput out) throws IOException {
         write(graph, vectors, getSequentialRenumbering(graph), out);
     }
 
     /**
-     * @param graph the graph to write
+     * @param out              the output to write to
+     * @param graph            the graph to write
      * @param vectors the vectors associated with each node
      * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
      *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
      *                         any deleted nodes.
-     * @param out the output to write to
      */
-    public static void write(GraphIndex graph,
-                                 RandomAccessVectorValues vectors,
-                                 Map<Integer, Integer> oldToNewOrdinals,
-                                 DataOutput out)
+    public static void write(GraphIndex graph, RandomAccessVectorValues vectors, Map<Integer, Integer> oldToNewOrdinals, DataOutput out)
+            throws IOException
+    {
+        var ivw = new InlineVectorsWriter() {
+            @Override
+            public int dimension() {
+                return vectors.dimension();
+            }
+
+            @Override
+            public void write(DataOutput out, View view, int node) throws IOException {
+                vectorTypeSupport.writeFloatVector(out, vectors.getVector(node));
+            }
+        };
+
+        write(out, graph, __ -> {}, ivw, oldToNewOrdinals);
+    }
+
+    public interface InlineVectorsWriter {
+        int dimension();
+
+        void write(DataOutput out, View view, int node) throws IOException;
+    }
+
+    /**
+     * @param out              the output to write to
+     * @param graph            the graph to write
+     * @param vectorsWriter    knows how to write the vectors associated with each node in the graph
+     * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
+     *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
+     *                         any deleted nodes.
+     */
+    protected static void write(DataOutput out, GraphIndex graph,
+                                Consumer<DataOutput> headerWriter,
+                                InlineVectorsWriter vectorsWriter,
+                                Map<Integer, Integer> oldToNewOrdinals)
             throws IOException
     {
         if (graph instanceof OnHeapGraphIndex) {
@@ -260,9 +316,10 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         try (var view = graph.getView()) {
             // graph-level properties
             out.writeInt(graph.size());
-            out.writeInt(vectors.dimension());
+            out.writeInt(vectorsWriter.dimension());
             out.writeInt(view.entryNode());
             out.writeInt(graph.maxDegree());
+            headerWriter.accept(out);
 
             // for each graph node, write the associated vector and its neighbors
             for (int i = 0; i < oldToNewOrdinals.size(); i++) {
@@ -274,7 +331,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 }
 
                 out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                vectorTypeSupport.writeFloatVector(out, vectors.getVector(originalOrdinal));
+                vectorsWriter.write(out, view, originalOrdinal);
 
                 var neighbors = view.getNeighborsIterator(originalOrdinal);
                 out.writeInt(neighbors.size());

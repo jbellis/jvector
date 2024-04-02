@@ -66,10 +66,7 @@ public class PQVectors implements CompressedVectors {
         }
     }
 
-    public static PQVectors load(RandomAccessReader in, long offset) throws IOException
-    {
-        in.seek(offset);
-
+    public static PQVectors load(RandomAccessReader in) throws IOException {
         // pq codebooks
         var pq = ProductQuantization.load(in);
 
@@ -92,6 +89,11 @@ public class PQVectors implements CompressedVectors {
         }
 
         return new PQVectors(pq, compressedVectors);
+    }
+
+    public static PQVectors load(RandomAccessReader in, long offset) throws IOException {
+        in.seek(offset);
+        return load(in);
     }
 
     @Override
