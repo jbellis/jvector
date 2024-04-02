@@ -22,13 +22,9 @@ import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
-import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import org.agrona.collections.Int2IntHashMap;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -36,64 +32,28 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.stream.IntStream;
+import java.util.function.Consumer;
 
-public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountable
+public class OnDiskLVQGraphIndex extends OnDiskGraphIndex
 {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    private final ReaderSupplier readerSupplier;
-    private final long neighborsOffset;
-    private final int size;
-    private final int entryNode;
-    private final int maxDegree;
-    private final int dimension;
     public final LocallyAdaptiveVectorQuantization lvq;
 
-    public OnDiskLVQGraphIndex(ReaderSupplier readerSupplier, long offset)
+    protected OnDiskLVQGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighorsOffset, LocallyAdaptiveVectorQuantization lvq)
     {
-        this.readerSupplier = readerSupplier;
-        try (var reader = readerSupplier.get()) {
-            reader.seek(offset);
-            size = reader.readInt();
-            dimension = reader.readInt();
-            entryNode = reader.readInt();
-            maxDegree = reader.readInt();
-            lvq = LocallyAdaptiveVectorQuantization.load(reader);
+        super(readerSupplier, info, neighorsOffset);
+        this.lvq = lvq;
+    }
 
+    public static OnDiskLVQGraphIndex load(ReaderSupplier readerSupplier, long offset)
+    {
+        try (var reader = readerSupplier.get()) {
+            var info = CommonHeader.load(reader, offset);
+            var lvq = LocallyAdaptiveVectorQuantization.load(reader);
+            long neighborsOffset = offset + CommonHeader.SIZE + lvq.serializedSize();
+            return new OnDiskLVQGraphIndex(readerSupplier, info, neighborsOffset, lvq);
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
-        this.neighborsOffset = offset + 4 * Integer.BYTES + lvq.serializedSize();
-    }
-
-    /**
-     * @return a Map of old to new graph ordinals where the new ordinals are sequential starting at 0,
-     * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
-     * if i &lt; j in `graph` then map[i] &lt; map[j] in the returned map.
-     */
-    public static Map<Integer, Integer> getSequentialRenumbering(GraphIndex graph) {
-        try (var view = graph.getView()) {
-            Int2IntHashMap oldToNewMap = new Int2IntHashMap(-1);
-            int nextOrdinal = 0;
-            for (int i = 0; i < view.getIdUpperBound(); i++) {
-                if (graph.containsNode(i)) {
-                    oldToNewMap.put(i, nextOrdinal++);
-                }
-            }
-            return oldToNewMap;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public int size() {
-        return size;
-    }
-
-    @Override
-    public int maxDegree() {
-        return maxDegree;
     }
 
     /** return a Graph that can be safely queried concurrently */
@@ -115,7 +75,7 @@ public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountab
     {
         private final RandomAccessReader reader;
         private final int[] neighbors;
-        private ByteSequence<?> packedVector;
+        private final ByteSequence<?> packedVector;
 
         public OnDiskView(RandomAccessReader reader)
         {
@@ -200,19 +160,9 @@ public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountab
         }
     }
 
-    @Override
-    public NodesIterator getNodes()
-    {
-        return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
-    }
-
-    @Override // FIX
+    @Override // FIXME
     public long ramBytesUsed() {
         return Long.BYTES + 4 * Integer.BYTES;
-    }
-
-    public void close() throws IOException {
-        readerSupplier.close();
     }
 
     @Override
@@ -232,91 +182,30 @@ public class OnDiskLVQGraphIndex implements GraphIndex, AutoCloseable, Accountab
     public static void write(GraphIndex graph, RandomAccessVectorValues vectors, LocallyAdaptiveVectorQuantization lvq, DataOutput out)
             throws IOException
     {
-        try (var view = graph.getView()) {
-            if (view.getIdUpperBound() > graph.size()) {
-                throw new IllegalArgumentException("Graph contains deletes, must specify oldToNewOrdinals map");
+        Consumer<DataOutput> headerWriter = out_ -> {
+            try {
+                lvq.write(out_);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
-        write(graph, vectors, lvq, getSequentialRenumbering(graph), out);
-    }
-
-    /**
-     * @param graph the graph to write
-     * @param vectors the vectors associated with each node (to be quantized by `lvq`)
-     * @param lvq the LocallyAdaptiveVectorQuantization to use
-     * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
-     *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
-     *                         any deleted nodes.
-     * @param out the output to write to
-     */
-    public static void write(GraphIndex graph,
-                                 RandomAccessVectorValues vectors,
-                                 LocallyAdaptiveVectorQuantization lvq,
-                                 Map<Integer, Integer> oldToNewOrdinals,
-                                 DataOutput out)
-            throws IOException
-    {
-        if (graph instanceof OnHeapGraphIndex) {
-            var ohgi = (OnHeapGraphIndex) graph;
-            if (ohgi.getDeletedNodes().cardinality() > 0) {
-                throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
-            }
-        }
-        if (oldToNewOrdinals.size() != graph.size()) {
-            throw new IllegalArgumentException(String.format("ordinalMapper size %d does not match graph size %d",
-                                                             oldToNewOrdinals.size(), graph.size()));
-        }
-
-        var entriesByNewOrdinal = new ArrayList<>(oldToNewOrdinals.entrySet());
-        entriesByNewOrdinal.sort(Comparator.comparingInt(Map.Entry::getValue));
-        // the last new ordinal should be size-1
-        if (graph.size() > 0 && entriesByNewOrdinal.get(entriesByNewOrdinal.size() - 1).getValue() != graph.size() - 1) {
-            throw new IllegalArgumentException("oldToNewOrdinals produced out-of-range entries");
-        }
+        };
 
         var vectorList = new ArrayList<VectorFloat<?>>(vectors.size());
         for (int i = 0; i < vectors.size(); i++) {
-            vectorList.add(vectors.vectorValue(i));
+            vectorList.add(vectors.getVector(i));
         }
         var quantizedVectors = lvq.encodeAll(vectorList);
-
-        try (var view = graph.getView()) {
-            // graph-level properties
-            out.writeInt(graph.size());
-            out.writeInt(vectors.dimension());
-            out.writeInt(view.entryNode());
-            out.writeInt(graph.maxDegree());
-            lvq.write(out);
-
-            // for each graph node, write the associated vector and its neighbors
-            for (int i = 0; i < oldToNewOrdinals.size(); i++) {
-                var entry = entriesByNewOrdinal.get(i);
-                int originalOrdinal = entry.getKey();
-                int newOrdinal = entry.getValue();
-                if (!graph.containsNode(originalOrdinal)) {
-                    continue;
-                }
-
-                out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                quantizedVectors[originalOrdinal].writePacked(out);
-
-                var neighbors = view.getNeighborsIterator(originalOrdinal);
-                out.writeInt(neighbors.size());
-                int n = 0;
-                for (; n < neighbors.size(); n++) {
-                    out.writeInt(oldToNewOrdinals.get(neighbors.nextInt()));
-                }
-                assert !neighbors.hasNext();
-
-                // pad out to maxEdgesPerNode
-                for (; n < graph.maxDegree(); n++) {
-                    out.writeInt(-1);
-                }
+        var vectorsWriter = new InlineVectorsWriter() {
+            @Override
+            public int dimension() {
+                return vectors.dimension();
             }
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
+
+            @Override
+            public void write(DataOutput out, View view, int node) throws IOException {
+                quantizedVectors[node].writePacked(out);
+            }
+        };
+        write(out, graph, headerWriter, vectorsWriter, getSequentialRenumbering(graph));
     }
 }

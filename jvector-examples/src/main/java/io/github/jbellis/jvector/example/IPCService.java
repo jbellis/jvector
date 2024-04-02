@@ -207,7 +207,7 @@ public class IPCService
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
                 OnDiskGraphIndex.write(onHeapIndex, ravv, outputStream);
             }
-            return new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0));
+            return new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
         } catch (IOException e) {
             throw new IOError(e);
         }

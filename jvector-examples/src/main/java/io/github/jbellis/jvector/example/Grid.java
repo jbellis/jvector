@@ -157,9 +157,9 @@ public class Grid {
                     }
                 }
 
-                try (var onDiskGraph = new CachingGraphIndex(new OnDiskGraphIndex(ReaderSupplierFactory.open(graphPath), 0));
-                     var onDiskLVQGraph = compressor == null ? null : new CachingLVQGraphIndex(new OnDiskLVQGraphIndex(ReaderSupplierFactory.open(lvqGraphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? new CachingADCGraphIndex(new OnDiskADCGraphIndex(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
+                try (var onDiskGraph = new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+                     var onDiskLVQGraph = compressor == null ? null : new CachingLVQGraphIndex(OnDiskLVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
+                     var onDiskFusedGraph = fusedCompatible ? new CachingADCGraphIndex(OnDiskADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
                     List<GraphIndex> graphs = new ArrayList<>();
                     graphs.add(onDiskGraph);
                     if (onDiskFusedGraph != null) {

@@ -36,6 +36,11 @@ public class MMapReader implements RandomAccessReader {
         position = offset;
     }
 
+    @Override
+    public long getPosition() {
+        return position;
+    }
+
     public int readInt() {
         try {
             return buffer.memory().getInt(position);

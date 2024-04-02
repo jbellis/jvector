@@ -26,6 +26,8 @@ import java.nio.ByteBuffer;
 public interface RandomAccessReader extends AutoCloseable {
     void seek(long offset) throws IOException;
 
+    long getPosition() throws IOException;
+
     int readInt() throws IOException;
 
     float readFloat() throws IOException;

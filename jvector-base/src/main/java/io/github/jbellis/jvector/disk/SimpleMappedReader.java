@@ -73,6 +73,11 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     @Override
+    public long getPosition() {
+        return mbb.position();
+    }
+
+    @Override
     public void readFully(float[] buffer) {
         for (int i = 0; i < buffer.length; i++) {
             buffer[i] = mbb.getFloat();
