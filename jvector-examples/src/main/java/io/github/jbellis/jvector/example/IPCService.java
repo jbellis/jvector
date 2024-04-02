@@ -273,7 +273,7 @@ public class IPCService
             if (ctx.cv != null) {
                 ScoreFunction.ApproximateScoreFunction sf = ctx.cv.precomputedScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
-                    var vp = view instanceof GraphIndex.ViewWithVectors ? (GraphIndex.ViewWithVectors) view : ctx.ravv;
+                    var vp = view instanceof GraphIndex.RerankingView ? (GraphIndex.RerankingView) view : ctx.ravv;
                     var rr = ScoreFunction.ExactScoreFunction.from(queryVector, ctx.similarityFunction, vp);
                     var ssp = new SearchScoreProvider(sf, rr);
                     r = new GraphSearcher.Builder(ctx.index.getView()).build().search(ssp, searchEf, Bits.ALL);

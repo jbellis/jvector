@@ -20,7 +20,7 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-public interface ADCView extends GraphIndex.ViewWithVectors {
+public interface ADCView extends GraphIndex.RerankingView {
     ByteSequence<?> getPackedNeighbors(int node);
     VectorFloat<?> reusableResults();
     PQVectors getPQVectors();

@@ -264,7 +264,7 @@ public class Grid {
                 SearchResult sr;
                 if (cs.cv != null) {
                     try (var view = cs.index.getView()) {
-                        var sf = cs.rerankingScoreProviderFor(queryVector, (GraphIndex.ViewWithVectors) view);
+                        var sf = cs.rerankingScoreProviderFor(queryVector, (GraphIndex.RerankingView) view);
                         var searcher = new GraphSearcher.Builder(view).build();
                         sr = searcher.search(sf, efSearch, Bits.ALL);
                     } catch (Exception e) {
@@ -294,7 +294,7 @@ public class Grid {
             this.cv = cv;
         }
 
-        public SearchScoreProvider rerankingScoreProviderFor(VectorFloat<?> queryVector, GraphIndex.ViewWithVectors view) {
+        public SearchScoreProvider rerankingScoreProviderFor(VectorFloat<?> queryVector, GraphIndex.RerankingView view) {
             ScoreFunction.ApproximateScoreFunction asf;
             if (index instanceof CachingADCGraphIndex) {
                 asf =  ((CachingADCGraphIndex.CachedView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);

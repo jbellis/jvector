@@ -78,10 +78,10 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return String.format("CachingGraphIndex(graph=%s)", graph);
     }
 
-    private class CachedView implements ViewWithVectors {
-        private final ViewWithVectors view;
+    private class CachedView implements RerankingView {
+        private final RerankingView view;
 
-        public CachedView(ViewWithVectors view) {
+        public CachedView(RerankingView view) {
             this.view = view;
         }
 

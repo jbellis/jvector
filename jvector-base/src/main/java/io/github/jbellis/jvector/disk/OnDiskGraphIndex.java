@@ -124,12 +124,12 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     /** return a Graph that can be safely queried concurrently */
-    public ViewWithVectors getView()
+    public RerankingView getView()
     {
         return new OnDiskView(readerSupplier.get());
     }
 
-    public class OnDiskView implements GraphIndex.ViewWithVectors, AutoCloseable
+    public class OnDiskView implements RerankingView, AutoCloseable
     {
         private final RandomAccessReader reader;
         private final int[] neighbors;

@@ -18,6 +18,6 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 
-public interface LVQView extends GraphIndex.ViewWithVectors {
+public interface LVQView extends GraphIndex.RerankingView {
     LocallyAdaptiveVectorQuantization.PackedVector getPackedVector(int ordinal);
 }

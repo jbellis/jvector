@@ -69,7 +69,7 @@ public abstract class GraphCache implements Accountable
         public HMGraphCache(GraphIndex graph, int distance) {
             try (var view = graph.getView()) {
                 var tmpCache = new Int2ObjectHashMap<CachedNode>();
-                cacheNeighborsOf(tmpCache, (GraphIndex.ViewWithVectors) view, view.entryNode(), distance);
+                cacheNeighborsOf(tmpCache, (GraphIndex.RerankingView) view, view.entryNode(), distance);
                 // Assigning to a final value ensure it is safely published
                 cache = tmpCache;
             } catch (Exception e) {
@@ -77,7 +77,7 @@ public abstract class GraphCache implements Accountable
             }
         }
 
-        private void cacheNeighborsOf(Int2ObjectHashMap<CachedNode> tmpCache, GraphIndex.ViewWithVectors view, int ordinal, int distance) {
+        private void cacheNeighborsOf(Int2ObjectHashMap<CachedNode> tmpCache, GraphIndex.RerankingView view, int ordinal, int distance) {
             // cache this node
             var it = view.getNeighborsIterator(ordinal);
             int[] neighbors = new int[it.size()];

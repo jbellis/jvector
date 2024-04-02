@@ -103,7 +103,7 @@ public class SiftSmall {
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                var rr = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, (GraphIndex.ViewWithVectors) view);
+                var rr = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, (GraphIndex.RerankingView) view);
                 ssp = new SearchScoreProvider(sf, rr);
             }
             var nn = searcher.search(ssp, 100, Bits.ALL).getNodes();
