@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 
-public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
+public class CachingGraphIndex implements GraphIndex, Accountable
 {
     private static final int CACHE_DISTANCE = 3;
 
-    private final GraphCache cache;
+    private final GraphCache cache_;
     private final OnDiskGraphIndex graph;
 
     public CachingGraphIndex(OnDiskGraphIndex graph)
@@ -40,7 +38,7 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
     public CachingGraphIndex(OnDiskGraphIndex graph, int cacheDistance)
     {
         this.graph = graph;
-        this.cache = GraphCache.load(graph, cacheDistance);
+        this.cache_ = GraphCache.load(graph, cacheDistance);
     }
 
     @Override
@@ -54,8 +52,8 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     @Override
-    public View getView() {
-        return new CachedView(graph.getView());
+    public RerankingView getView() {
+        return graph.getView().cachedWith(cache_);
     }
 
     @Override
@@ -65,7 +63,7 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     @Override
     public long ramBytesUsed() {
-        return graph.ramBytesUsed() + cache.ramBytesUsed();
+        return graph.ramBytesUsed() + cache_.ramBytesUsed();
     }
 
     @Override
@@ -78,56 +76,26 @@ public class CachingGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return String.format("CachingGraphIndex(graph=%s)", graph);
     }
 
-    private class CachedView implements ViewWithVectors {
-        private final ViewWithVectors view;
+    public static abstract class View implements RerankingView {
+        private final GraphCache cache;
+        protected final RerankingView view;
 
-        public CachedView(ViewWithVectors view) {
+        public View(GraphCache cache, RerankingView view) {
+            this.cache = cache;
             this.view = view;
         }
 
         @Override
-        public NodesIterator getNeighborsIterator(int node) {
-            var cached = cache.getNode(node);
-            if (cached != null) {
-                return new NodesIterator.ArrayNodesIterator(cached.neighbors, cached.neighbors.length);
+        public NodesIterator getNeighborsIterator(int ordinal) {
+            var node = getCachedNode(ordinal);
+            if (node != null) {
+                return new NodesIterator.ArrayNodesIterator(node.neighbors, node.neighbors.length);
             }
-            return view.getNeighborsIterator(node);
+            return view.getNeighborsIterator(ordinal);
         }
 
-        @Override
-        public int dimension() {
-            return graph.dimension;
-        }
-
-        @Override
-        public boolean isValueShared() {
-            return false;
-        }
-
-        @Override
-        public RandomAccessVectorValues copy() {
-            // we would need to be able to copy the View to do this correctly, but it's simple to just
-            // avoid calling copy() for non-shared RAVV instances like this
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public VectorFloat<?> getVector(int node) {
-            var cached = cache.getNode(node);
-            if (cached != null) {
-                return cached.vector;
-            }
-            return view.getVector(node);
-        }
-
-        @Override
-        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
-            var cached = cache.getNode(node);
-            if (cached != null) {
-                vector.copyFrom(cached.vector, 0, offset, cached.vector.length());
-                return;
-            }
-            view.getVectorInto(node, vector, offset);
+        protected GraphCache.CachedNode getCachedNode(int ordinal) {
+            return cache.getNode(ordinal);
         }
 
         @Override

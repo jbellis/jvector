@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.annotations.Experimental;
-import io.github.jbellis.jvector.graph.ADCView;
+import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
-import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
@@ -47,25 +47,25 @@ import java.util.function.Consumer;
  * TODO: Permit 256 PQ clusters by quantizing floats to one byte.
  */
 @Experimental
-public class OnDiskADCGraphIndex extends OnDiskGraphIndex
+public class ADCGraphIndex extends OnDiskGraphIndex
 {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final PQVectors pqv;
     final ThreadLocal<VectorFloat<?>> results;
 
-    protected OnDiskADCGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset, PQVectors pqv)
+    protected ADCGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset, PQVectors pqv)
     {
         super(readerSupplier, info, neighborsOffset);
         this.pqv = pqv;
         this.results = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(maxDegree));
     }
 
-    public static OnDiskADCGraphIndex load(ReaderSupplier readerSupplier, long offset) {
+    public static ADCGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
             var info = CommonHeader.load(reader, offset);
             var pqv = PQVectors.load(reader);
             long neighborsOffset = reader.getPosition();
-            return new OnDiskADCGraphIndex(readerSupplier, info, neighborsOffset, pqv);
+            return new ADCGraphIndex(readerSupplier, info, neighborsOffset, pqv);
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
@@ -73,22 +73,18 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
 
     /** return a View that can be safely queried concurrently */
     @Override
-    public OnDiskView getView()
+    public View getView()
     {
-        return new OnDiskView(readerSupplier.get());
+        return new View(readerSupplier.get());
     }
 
-    public class OnDiskView implements ADCView, AutoCloseable
+    public class View extends OnDiskView implements ADCView, RandomAccessVectorValues
     {
-        private final RandomAccessReader reader;
-        private final int[] neighbors;
         private final ByteSequence<?> packedNeighbors;
 
-        public OnDiskView(RandomAccessReader reader)
+        public View(RandomAccessReader reader)
         {
-            super();
-            this.reader = reader;
-            this.neighbors = new int[maxDegree];
+            super(reader, ADCGraphIndex.this);
             this.packedNeighbors = vectorTypeSupport.createByteSequence(maxDegree * pqv.getCompressedSize());
         }
 
@@ -104,7 +100,7 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
 
         @Override
         public RandomAccessVectorValues copy() {
-            return this;
+            throw new UnsupportedOperationException(); // need to copy reader
         }
 
         public VectorFloat<?> getVector(int node) {
@@ -133,19 +129,11 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
             }
         }
 
-        public NodesIterator getNeighborsIterator(int node) {
-            try {
-                reader.seek(neighborsOffset +
-                        (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES + pqv.getCompressedSize() * maxDegree) +
-                        (node * (long) Integer.BYTES * (maxDegree + 1)));
-                int neighborCount = reader.readInt();
-                assert neighborCount <= maxDegree : String.format("neighborCount %d > M %d", neighborCount, maxDegree);
-                reader.read(neighbors, 0, neighborCount);
-                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
-            }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        @Override
+        protected long neighborsOffsetFor(int node) {
+            return neighborsOffset +
+                    (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES + pqv.getCompressedSize() * maxDegree) +
+                    (node * (long) Integer.BYTES * (maxDegree + 1));
         }
 
         public ByteSequence<?> getPackedNeighbors(int node) {
@@ -161,10 +149,6 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
             }
         }
 
-        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
-            return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
-        }
-
         public VectorFloat<?> reusableResults() {
             return results.get();
         }
@@ -175,12 +159,12 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
 
         @Override
         public int size() {
-            return OnDiskADCGraphIndex.this.size();
+            return ADCGraphIndex.this.size();
         }
 
         @Override
         public int entryNode() {
-            return OnDiskADCGraphIndex.this.entryNode;
+            return ADCGraphIndex.this.entryNode;
         }
 
         @Override
@@ -191,6 +175,96 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
         @Override
         public void close() throws IOException {
             reader.close();
+        }
+
+        @Override
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
+            return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
+        }
+
+        @Override
+        public GraphCache.CachedNode loadCachedNode(int node, int[] neighbors) {
+            return new CachedNode(neighbors, getVector(node), getPackedNeighbors(node).copy());
+        }
+
+        @Override
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return ScoreFunction.ExactScoreFunction.from(queryVector, vsf, this);
+        }
+
+        @Override
+        public RerankingView cachedWith(GraphCache cache) {
+            return new CachedView(cache, this);
+        }
+    }
+
+    private static class CachedNode extends GraphCache.CachedNode {
+        final VectorFloat<?> vector;
+        final ByteSequence<?> packedNeighbors;
+
+        public CachedNode(int[] neighbors, VectorFloat<?> vector, ByteSequence<?> packedNeighbors) {
+            super(neighbors);
+            this.vector = vector;
+            this.packedNeighbors = packedNeighbors;
+        }
+    }
+
+    class CachedView extends CachingGraphIndex.View implements ADCView, RandomAccessVectorValues {
+        public CachedView(GraphCache cache, View view) {
+            super(cache, view);
+        }
+
+        @Override
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return ScoreFunction.ExactScoreFunction.from(queryVector, vsf, this);
+        }
+
+        @Override
+        public int dimension() {
+            return ((View) view).dimension();
+        }
+
+        @Override
+        public VectorFloat<?> getVector(int nodeId) {
+            var node = (CachedNode) getCachedNode(nodeId);
+            if (node != null) {
+                return node.vector;
+            }
+            return ((DiskAnnGraphIndex.View) view).getVector(nodeId);
+        }
+
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ByteSequence<?> getPackedNeighbors(int nodeId) {
+            var node = (CachedNode) getCachedNode(nodeId);
+            if (node != null) {
+                return node.packedNeighbors;
+            }
+            return ((View) view).getPackedNeighbors(nodeId);
+        }
+
+        @Override
+        public VectorFloat<?> reusableResults() {
+            return ((View) view).reusableResults();
+        }
+
+        @Override
+        public PQVectors getPQVectors() {
+            return ((View) view).getPQVectors();
+        }
+
+        @Override
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
+            return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
         }
     }
 
@@ -233,15 +307,16 @@ public class OnDiskADCGraphIndex extends OnDiskGraphIndex
             }
 
             @Override
-            public void write(DataOutput out, View view, int node) throws IOException {
+            public void write(DataOutput out, GraphIndex.View view, int node) throws IOException {
                 vectorTypeSupport.writeFloatVector(out, vectors.getVector(node));
+
                 var neighbors = view.getNeighborsIterator(node);
                 int n = 0;
                 var neighborSize = neighbors.size();
 
                 compressedNeighbors.zero(); // TODO: make more efficient
                 for (; n < neighborSize; n++) {
-                    var compressed = pqVectors.get(neighbors.next());
+                    var compressed = pqVectors.get(neighbors.nextInt());
                     for (int j = 0; j < pqVectors.getCompressedSize(); j++) {
                         compressedNeighbors.set(j * graph.maxDegree() + n, compressed.get(j));
                     }

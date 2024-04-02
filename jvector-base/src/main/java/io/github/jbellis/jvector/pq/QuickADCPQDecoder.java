@@ -16,7 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.ADCView;
+import io.github.jbellis.jvector.graph.disk.ADCView;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;

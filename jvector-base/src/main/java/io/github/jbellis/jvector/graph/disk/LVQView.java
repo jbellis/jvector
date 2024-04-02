@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph;
+package io.github.jbellis.jvector.graph.disk;
 
-import io.github.jbellis.jvector.pq.PQVectors;
-import io.github.jbellis.jvector.vector.types.ByteSequence;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 
-public interface ADCView extends GraphIndex.ViewWithVectors {
-    ByteSequence<?> getPackedNeighbors(int node);
-    VectorFloat<?> reusableResults();
-    PQVectors getPQVectors();
+public interface LVQView extends GraphIndex.RerankingView {
+    LocallyAdaptiveVectorQuantization.PackedVector getPackedVector(int ordinal);
 }

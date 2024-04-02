@@ -24,7 +24,9 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
@@ -117,7 +119,8 @@ public interface GraphIndex extends AutoCloseable {
         }
     }
 
-    interface ViewWithVectors extends View, RandomAccessVectorValues {
+    interface RerankingView extends View {
+        ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf);
     }
 
     static String prettyPrint(GraphIndex graph) {

@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.disk;
+package io.github.jbellis.jvector.graph.disk;
 
+import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
-import io.github.jbellis.jvector.graph.LVQView;
-import io.github.jbellis.jvector.graph.NodesIterator;
-import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
-import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -30,36 +30,34 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Map;
 import java.util.function.Consumer;
 
-public class OnDiskLVQGraphIndex extends OnDiskGraphIndex
+public class LVQGraphIndex extends OnDiskGraphIndex
 {
     public final LocallyAdaptiveVectorQuantization lvq;
 
-    protected OnDiskLVQGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighorsOffset, LocallyAdaptiveVectorQuantization lvq)
+    protected LVQGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighorsOffset, LocallyAdaptiveVectorQuantization lvq)
     {
         super(readerSupplier, info, neighorsOffset);
         this.lvq = lvq;
     }
 
-    public static OnDiskLVQGraphIndex load(ReaderSupplier readerSupplier, long offset)
+    public static LVQGraphIndex load(ReaderSupplier readerSupplier, long offset)
     {
         try (var reader = readerSupplier.get()) {
             var info = CommonHeader.load(reader, offset);
             var lvq = LocallyAdaptiveVectorQuantization.load(reader);
             long neighborsOffset = offset + CommonHeader.SIZE + lvq.serializedSize();
-            return new OnDiskLVQGraphIndex(readerSupplier, info, neighborsOffset, lvq);
+            return new LVQGraphIndex(readerSupplier, info, neighborsOffset, lvq);
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
     }
 
     /** return a Graph that can be safely queried concurrently */
-    public OnDiskLVQGraphIndex.OnDiskView getView()
+    public View getView()
     {
-        return new OnDiskView(readerSupplier.get());
+        return new View(readerSupplier.get());
     }
 
     private long encodedVectorSize() {
@@ -71,17 +69,13 @@ public class OnDiskLVQGraphIndex extends OnDiskGraphIndex
         }
     }
 
-    public class OnDiskView implements LVQView, AutoCloseable
+    public class View extends OnDiskView implements LVQView
     {
-        private final RandomAccessReader reader;
-        private final int[] neighbors;
         private final ByteSequence<?> packedVector;
 
-        public OnDiskView(RandomAccessReader reader)
+        public View(RandomAccessReader reader)
         {
-            super();
-            this.reader = reader;
-            this.neighbors = new int[maxDegree];
+            super(reader, LVQGraphIndex.this);
             this.packedVector = vectorTypeSupport.createByteSequence(new byte[dimension]);
         }
 
@@ -101,66 +95,58 @@ public class OnDiskLVQGraphIndex extends OnDiskGraphIndex
             }
         }
 
-        public VectorFloat<?> getVector(int node) {
-            return null; // TODO HACK
-        }
-
-        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
-            // TODO HACK
+        @Override
+        protected long neighborsOffsetFor(int node) {
+            return neighborsOffset +
+                    (node + 1) * (Integer.BYTES + encodedVectorSize()) +
+                    (node * (long) Integer.BYTES * (maxDegree + 1));
         }
 
         @Override
-        public boolean isValueShared() {
-            return false;
+        public GraphCache.CachedNode loadCachedNode(int node, int[] neighbors) {
+            return new CachedNode(neighbors, getPackedVector(node).copy());
         }
 
         @Override
-        public RandomAccessVectorValues copy() {
-            throw new UnsupportedOperationException();
-        }
-
-        public NodesIterator getNeighborsIterator(int node) {
-            try {
-                reader.seek(neighborsOffset +
-                        (node + 1) * (Integer.BYTES + encodedVectorSize()) +
-                        (node * (long) Integer.BYTES * (maxDegree + 1)));
-                int neighborCount = reader.readInt();
-                assert neighborCount <= maxDegree : String.format("neighborCount %d > M %d", neighborCount, maxDegree);
-                reader.read(neighbors, 0, neighborCount);
-                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
-            }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return lvq.scoreFunctionFrom(queryVector, vsf, this);
         }
 
         @Override
-        public int size() {
-            return OnDiskLVQGraphIndex.this.size();
-        }
-
-        @Override
-        public int dimension() {
-            return OnDiskLVQGraphIndex.this.dimension;
-        }
-
-        @Override
-        public int entryNode() {
-            return OnDiskLVQGraphIndex.this.entryNode;
-        }
-
-        @Override
-        public Bits liveNodes() {
-            return Bits.ALL;
-        }
-
-        @Override
-        public void close() throws IOException {
-            reader.close();
+        public RerankingView cachedWith(GraphCache cache) {
+            return new CachedView(cache, this);
         }
     }
 
-    @Override // FIXME
+    private static class CachedNode extends GraphCache.CachedNode {
+        final LocallyAdaptiveVectorQuantization.PackedVector packedVector;
+
+        public CachedNode(int[] neighbors, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+            super(neighbors);
+            this.packedVector = packedVector;
+        }
+    }
+
+    class CachedView extends CachingGraphIndex.View implements LVQView {
+        public CachedView(GraphCache cache, View view) {
+            super(cache, view);
+        }
+
+        @Override
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return lvq.scoreFunctionFrom(queryVector, vsf, this);
+        }
+
+        @Override
+        public LocallyAdaptiveVectorQuantization.PackedVector getPackedVector(int ordinal) {
+            var node = getCachedNode(ordinal);
+            if (node != null) {
+                return ((CachedNode) node).packedVector;
+            }
+            return ((View) view).getPackedVector(ordinal);
+        }
+    }
+
     public long ramBytesUsed() {
         return Long.BYTES + 4 * Integer.BYTES;
     }
@@ -202,7 +188,7 @@ public class OnDiskLVQGraphIndex extends OnDiskGraphIndex
             }
 
             @Override
-            public void write(DataOutput out, View view, int node) throws IOException {
+            public void write(DataOutput out, GraphIndex.View view, int node) throws IOException {
                 quantizedVectors[node].writePacked(out);
             }
         };

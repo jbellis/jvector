@@ -16,13 +16,13 @@
 
 package io.github.jbellis.jvector;
 
-import io.github.jbellis.jvector.disk.OnDiskADCGraphIndex;
-import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -126,7 +126,7 @@ public class TestUtil {
     public static void writeGraph(GraphIndex graph, RandomAccessVectorValues vectors, Path outputPath) throws IOException {
         try (var out = openFileForWriting(outputPath))
         {
-            OnDiskGraphIndex.write(graph, vectors, out);
+            DiskAnnGraphIndex.write(graph, vectors, out);
             out.flush();
         }
     }
@@ -134,7 +134,7 @@ public class TestUtil {
     public static void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues vectors, PQVectors pq, Path outputPath) throws IOException {
         try (var out = openFileForWriting(outputPath))
         {
-            OnDiskADCGraphIndex.write(graph, vectors, pq, out);
+            ADCGraphIndex.write(graph, vectors, pq, out);
             out.flush();
         }
     }
