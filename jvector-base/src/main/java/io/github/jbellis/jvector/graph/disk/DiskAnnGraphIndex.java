@@ -45,6 +45,7 @@ public class DiskAnnGraphIndex extends OnDiskGraphIndex<DiskAnnGraphIndex.View, 
             return dimension;
         }
 
+        // getVector isn't called on the hot path, only getVectorInto, so we don't bother using a shared value
         @Override
         public boolean isValueShared() {
             return false;
@@ -130,6 +131,16 @@ public class DiskAnnGraphIndex extends OnDiskGraphIndex<DiskAnnGraphIndex.View, 
                 return node.vector;
             }
             return view.getVector(nodeId);
+        }
+
+        @Override
+        public void getVectorInto(int nodeId, VectorFloat<?> destinationVector, int offset) {
+            var node = (CachedNode) getCachedNode(nodeId);
+            if (node != null) {
+                destinationVector.copyFrom(node.vector, 0, offset, node.vector.length());
+                return;
+            }
+            ((View) view).getVectorInto(nodeId, destinationVector, offset);
         }
 
         @Override

@@ -24,7 +24,6 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.QuickADCPQDecoder;
-import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -103,6 +102,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
             throw new UnsupportedOperationException(); // need to copy reader
         }
 
+        // getVector isn't called on the hot path, only getVectorInto, so we don't bother using a shared value
         public VectorFloat<?> getVector(int node) {
             try {
                 long offset = neighborsOffset +
@@ -168,16 +168,6 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
         }
 
         @Override
-        public Bits liveNodes() {
-            return Bits.ALL;
-        }
-
-        @Override
-        public void close() throws IOException {
-            reader.close();
-        }
-
-        @Override
         public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
             return QuickADCPQDecoder.newDecoder(this, query, similarityFunction);
         }
@@ -231,6 +221,16 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
                 return node.vector;
             }
             return view.getVector(nodeId);
+        }
+
+        @Override
+        public void getVectorInto(int nodeId, VectorFloat<?> destinationVector, int offset) {
+            var node = (CachedNode) getCachedNode(nodeId);
+            if (node != null) {
+                destinationVector.copyFrom(node.vector, 0, offset, node.vector.length());
+                return;
+            }
+            view.getVectorInto(nodeId, destinationVector, offset);
         }
 
         @Override
