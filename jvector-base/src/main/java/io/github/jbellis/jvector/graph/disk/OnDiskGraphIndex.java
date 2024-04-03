@@ -143,7 +143,7 @@ public abstract class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Acc
         return String.format("OnDiskGraphIndex(size=%d, entryPoint=%d)", size, entryNode);
     }
 
-    public interface InlineVectorsWriter {
+    protected interface InlineWriter {
         int dimension();
 
         void write(DataOutput out, GraphIndex.View view, int node) throws IOException;
@@ -152,14 +152,14 @@ public abstract class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Acc
     /**
      * @param out              the output to write to
      * @param graph            the graph to write
-     * @param vectorsWriter    knows how to write the vectors associated with each node in the graph
+     * @param inlineWriter     knows how to write the data associated with each node in the graph
      * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
      *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
      *                         any deleted nodes.
      */
     protected static void write(DataOutput out, GraphIndex graph,
                                 Consumer<DataOutput> headerWriter,
-                                InlineVectorsWriter vectorsWriter,
+                                InlineWriter inlineWriter,
                                 Map<Integer, Integer> oldToNewOrdinals)
             throws IOException
     {
@@ -184,7 +184,7 @@ public abstract class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Acc
         try (var view = graph.getView()) {
             // graph-level properties
             out.writeInt(graph.size());
-            out.writeInt(vectorsWriter.dimension());
+            out.writeInt(inlineWriter.dimension());
             out.writeInt(view.entryNode());
             out.writeInt(graph.maxDegree());
             headerWriter.accept(out);
@@ -199,7 +199,7 @@ public abstract class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Acc
                 }
 
                 out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                vectorsWriter.write(out, view, originalOrdinal);
+                inlineWriter.write(out, view, originalOrdinal);
 
                 var neighbors = view.getNeighborsIterator(originalOrdinal);
                 out.writeInt(neighbors.size());
