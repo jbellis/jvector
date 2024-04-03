@@ -36,15 +36,11 @@ public class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ProductQuantization pq;
     private final ByteSequence<?>[] compressedVectors;
-    private final ThreadLocal<VectorFloat<?>> partialSums; // for dot product, euclidean, and cosine
-    private final AtomicReference<VectorFloat<?>> partialMagnitudes; // for cosine
 
     public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
-        this.partialSums = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(pq.getSubspaceCount() * pq.getClusterCount()));
-        this.partialMagnitudes = new AtomicReference<>(null);
     }
 
     @Override
@@ -190,11 +186,11 @@ public class PQVectors implements CompressedVectors {
     }
 
     VectorFloat<?> reusablePartialSums() {
-        return partialSums.get();
+        return pq.reusablePartialSums();
     }
 
     AtomicReference<VectorFloat<?>> partialMagnitudes() {
-        return partialMagnitudes;
+        return pq.partialMagnitudes();
     }
 
     @Override
@@ -204,7 +200,7 @@ public class PQVectors implements CompressedVectors {
 
     @Override
     public int getCompressedSize() {
-        return pq.codebooks.length;
+        return pq.getCompressedSize();
     }
 
     @Override

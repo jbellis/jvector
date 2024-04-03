@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
+import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.QuickADCPQDecoder;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -40,8 +41,6 @@ import java.util.function.Consumer;
  * A GraphIndex that is stored on disk.  This is a read-only index. This index fuses information about the encoded
  * neighboring vectors along with each ordinal, permitting accelerated ADC computation.
  * <p>
- * TODO: Use a limited PQVectors that doesn't load all encoded vectors into memory. These are only used at graph
- * entry points and it's fine to go to disk.
  * TODO: Permit maxDegree != 32.
  * TODO: Permit 256 PQ clusters by quantizing floats to one byte.
  */
@@ -49,22 +48,22 @@ import java.util.function.Consumer;
 public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraphIndex.CachedNode>
 {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    final PQVectors pqv;
-    final ThreadLocal<VectorFloat<?>> results;
+    private final ProductQuantization pq;
+    private final ThreadLocal<VectorFloat<?>> results;
 
-    protected ADCGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset, PQVectors pqv)
+    protected ADCGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset, ProductQuantization pq)
     {
         super(readerSupplier, info, neighborsOffset);
-        this.pqv = pqv;
+        this.pq = pq;
         this.results = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(maxDegree));
     }
 
     public static ADCGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
             var info = CommonHeader.load(reader, offset);
-            var pqv = PQVectors.load(reader);
+            var pq = ProductQuantization.load(reader);
             long neighborsOffset = reader.getPosition();
-            return new ADCGraphIndex(readerSupplier, info, neighborsOffset, pqv);
+            return new ADCGraphIndex(readerSupplier, info, neighborsOffset, pq);
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
@@ -77,14 +76,14 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
         return new View(readerSupplier.get());
     }
 
-    public class View extends OnDiskView<CachedNode> implements ADCView, RandomAccessVectorValues
+    public class View extends OnDiskView<CachedNode> implements ADCView
     {
         private final ByteSequence<?> packedNeighbors;
 
         public View(RandomAccessReader reader)
         {
             super(reader, ADCGraphIndex.this);
-            this.packedNeighbors = vectorTypeSupport.createByteSequence(maxDegree * pqv.getCompressedSize());
+            this.packedNeighbors = vectorTypeSupport.createByteSequence(maxDegree * pq.getCompressedSize());
         }
 
         @Override
@@ -103,10 +102,11 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
         }
 
         // getVector isn't called on the hot path, only getVectorInto, so we don't bother using a shared value
+        @Override
         public VectorFloat<?> getVector(int node) {
             try {
                 long offset = neighborsOffset +
-                        node * (Integer.BYTES + (long) dimension * Float.BYTES + pqv.getCompressedSize() * maxDegree + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
+                        node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) pq.getCompressedSize() * maxDegree + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
                         + Integer.BYTES; // skip the ID
                 reader.seek(offset);
                 return vectorTypeSupport.readFloatVector(reader, dimension);
@@ -116,10 +116,11 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
             }
         }
 
+        @Override
         public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
             try {
                 long diskOffset = neighborsOffset +
-                        node * (Integer.BYTES + (long) dimension * Float.BYTES + pqv.getCompressedSize() * maxDegree + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
+                        node * (Integer.BYTES + (long) dimension * Float.BYTES + (long) pq.getCompressedSize() * maxDegree + (long) Integer.BYTES * (maxDegree + 1)) // earlier entries
                         + Integer.BYTES; // skip the ID
                 reader.seek(diskOffset);
                 vectorTypeSupport.readFloatVector(reader, dimension, vector, offset);
@@ -132,7 +133,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
         @Override
         protected long neighborsOffsetFor(int node) {
             return neighborsOffset +
-                    (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES + pqv.getCompressedSize() * maxDegree) +
+                    (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES + (long) pq.getCompressedSize() * maxDegree) +
                     (node * (long) Integer.BYTES * (maxDegree + 1));
         }
 
@@ -140,7 +141,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
             try {
                 reader.seek(neighborsOffset +
                         (node + 1) * (Integer.BYTES + (long) dimension * Float.BYTES)
-                        + ((node) * (pqv.getCompressedSize() * (long) maxDegree + Integer.BYTES * (long) (maxDegree + 1))));
+                        + ((node) * (pq.getCompressedSize() * (long) maxDegree + Integer.BYTES * (long) (maxDegree + 1))));
                 vectorTypeSupport.readByteSequence(reader, packedNeighbors);
                 return packedNeighbors;
             }
@@ -153,8 +154,8 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
             return results.get();
         }
 
-        public PQVectors getPQVectors() {
-            return pqv;
+        public ProductQuantization getProductQuantization() {
+            return pq;
         }
 
         @Override
@@ -258,8 +259,8 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
         }
 
         @Override
-        public PQVectors getPQVectors() {
-            return view.getPQVectors();
+        public ProductQuantization getProductQuantization() {
+            return view.getProductQuantization();
         }
 
         @Override
@@ -293,7 +294,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraph
 
         Consumer<DataOutput> headerWriter = out_ -> {
             try {
-                pqVectors.write(out);
+                pqVectors.getProductQuantization().write(out);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

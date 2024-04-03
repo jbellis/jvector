@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -64,6 +65,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     final int[][] subvectorSizesAndOffsets;
     final float anisotropicThreshold; // parallel cost multiplier
     private final float[][] centroidNormsSquared; // precomputed norms of the centroids, for encoding
+    private final ThreadLocal<VectorFloat<?>> partialSums; // for dot product, euclidean, and cosine partials
+    private final AtomicReference<VectorFloat<?>> partialMagnitudes; // for cosine partials
 
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
@@ -193,6 +196,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             throw new IllegalArgumentException(msg);
         }
         this.anisotropicThreshold = anisotropicThreshold;
+        this.partialSums = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(getSubspaceCount() * getClusterCount()));
+        this.partialMagnitudes = new AtomicReference<>(null);
 
         centroidNormsSquared = new float[M][clusterCount];
         for (int i = 0; i < M; i++) {
@@ -495,6 +500,14 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return sizes;
     }
 
+    VectorFloat<?> reusablePartialSums() {
+        return partialSums.get();
+    }
+
+    AtomicReference<VectorFloat<?>> partialMagnitudes() {
+        return partialMagnitudes;
+    }
+
     public void write(DataOutput out) throws IOException
     {
         out.writeInt(MAGIC);
@@ -620,6 +633,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         }
         VectorUtil.scale(centroid, 1.0f / M);
         return centroid;
+    }
+
+    public int getCompressedSize() {
+        return codebooks.length;
     }
 
     public long memorySize() {

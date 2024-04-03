@@ -17,13 +17,14 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
-import io.github.jbellis.jvector.pq.PQVectors;
+import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-public interface ADCView extends GraphIndex.RerankingView {
+public interface ADCView extends GraphIndex.RerankingView, RandomAccessVectorValues {
     /**
      * @return the quantized, transposed, and packed vectors of the given node's neighbors.
      * Only one ByteSequence is allocated by the View, so if you need to keep multiple
@@ -36,7 +37,7 @@ public interface ADCView extends GraphIndex.RerankingView {
      */
     VectorFloat<?> reusableResults();
 
-    PQVectors getPQVectors();
+    ProductQuantization getProductQuantization();
 
     ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction);
 }

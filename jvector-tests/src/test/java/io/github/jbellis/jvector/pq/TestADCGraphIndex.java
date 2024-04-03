@@ -42,9 +42,6 @@ public class TestADCGraphIndex extends RandomizedTest {
 
     private Path testDirectory;
 
-    private TestUtil.FullyConnectedGraphIndex fullyConnectedGraph;
-    private TestUtil.RandomlyConnectedGraphIndex randomlyConnectedGraph;
-
     @Before
     public void setup() throws IOException {
         testDirectory = Files.createTempDirectory(this.getClass().getSimpleName());
