@@ -32,13 +32,13 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 
-public class LVQGraphIndex extends OnDiskGraphIndex
+public class LVQGraphIndex extends OnDiskGraphIndex<LVQGraphIndex.View, LVQGraphIndex.CachedNode>
 {
     public final LocallyAdaptiveVectorQuantization lvq;
 
-    protected LVQGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighorsOffset, LocallyAdaptiveVectorQuantization lvq)
+    protected LVQGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset, LocallyAdaptiveVectorQuantization lvq)
     {
-        super(readerSupplier, info, neighorsOffset);
+        super(readerSupplier, info, neighborsOffset);
         this.lvq = lvq;
     }
 
@@ -69,7 +69,7 @@ public class LVQGraphIndex extends OnDiskGraphIndex
         }
     }
 
-    public class View extends OnDiskView implements LVQView
+    public class View extends OnDiskView<CachedNode> implements LVQView
     {
         private final ByteSequence<?> packedVector;
 
@@ -103,7 +103,7 @@ public class LVQGraphIndex extends OnDiskGraphIndex
         }
 
         @Override
-        public GraphCache.CachedNode loadCachedNode(int node, int[] neighbors) {
+        CachedNode loadCachedNode(int node, int[] neighbors) {
             return new CachedNode(neighbors, getPackedVector(node).copy());
         }
 
@@ -113,12 +113,12 @@ public class LVQGraphIndex extends OnDiskGraphIndex
         }
 
         @Override
-        public RerankingView cachedWith(GraphCache cache) {
+        RerankingView cachedWith(GraphCache<CachedNode> cache) {
             return new CachedView(cache, this);
         }
     }
 
-    private static class CachedNode extends GraphCache.CachedNode {
+    static class CachedNode extends GraphCache.CachedNode {
         final LocallyAdaptiveVectorQuantization.PackedVector packedVector;
 
         public CachedNode(int[] neighbors, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
@@ -127,8 +127,8 @@ public class LVQGraphIndex extends OnDiskGraphIndex
         }
     }
 
-    class CachedView extends CachingGraphIndex.View implements LVQView {
-        public CachedView(GraphCache cache, View view) {
+    class CachedView extends CachingGraphIndex.View<View, CachedNode> implements LVQView {
+        public CachedView(GraphCache<CachedNode> cache, View view) {
             super(cache, view);
         }
 
@@ -141,9 +141,9 @@ public class LVQGraphIndex extends OnDiskGraphIndex
         public LocallyAdaptiveVectorQuantization.PackedVector getPackedVector(int ordinal) {
             var node = getCachedNode(ordinal);
             if (node != null) {
-                return ((CachedNode) node).packedVector;
+                return node.packedVector;
             }
-            return ((View) view).getPackedVector(ordinal);
+            return view.getPackedVector(ordinal);
         }
     }
 

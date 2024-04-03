@@ -21,9 +21,9 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
 import io.github.jbellis.jvector.graph.disk.ADCView;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;
@@ -70,7 +70,7 @@ public class TestADCGraphIndex extends RandomizedTest {
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = ADCGraphIndex.load(marr::duplicate, 0);
-             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
+             var cachedOnDiskGraph = CachingGraphIndex.from(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
             TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);

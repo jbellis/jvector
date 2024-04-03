@@ -16,11 +16,6 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.graph.disk.ADCView;
-import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
-import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
-import io.github.jbellis.jvector.graph.disk.LVQGraphIndex;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
@@ -29,6 +24,11 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
+import io.github.jbellis.jvector.graph.disk.ADCView;
+import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.LVQGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -155,9 +155,9 @@ public class Grid {
                     }
                 }
 
-                try (var onDiskGraph = new CachingGraphIndex(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
-                     var onDiskLVQGraph = compressor == null ? null : new CachingGraphIndex(LVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? new CachingGraphIndex(ADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
+                try (var onDiskGraph = CachingGraphIndex.from((DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+                     var onDiskLVQGraph = compressor == null ? null : CachingGraphIndex.from(LVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
+                     var onDiskFusedGraph = fusedCompatible ? CachingGraphIndex.from(ADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
                     List<GraphIndex> graphs = new ArrayList<>();
                     graphs.add(onDiskGraph);
                     if (onDiskFusedGraph != null) {

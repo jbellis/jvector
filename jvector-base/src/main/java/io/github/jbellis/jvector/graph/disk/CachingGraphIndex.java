@@ -23,22 +23,28 @@ import io.github.jbellis.jvector.util.Bits;
 
 import java.io.IOException;
 
-public class CachingGraphIndex implements GraphIndex, Accountable
+public class CachingGraphIndex<U extends OnDiskView<T>, T extends GraphCache.CachedNode> implements GraphIndex, Accountable
 {
     private static final int CACHE_DISTANCE = 3;
 
-    private final GraphCache cache_;
-    private final OnDiskGraphIndex graph;
+    private final GraphCache<T> cache_;
+    private final OnDiskGraphIndex<U, T> graph;
 
-    public CachingGraphIndex(OnDiskGraphIndex graph)
-    {
-        this(graph, CACHE_DISTANCE);
-    }
-
-    public CachingGraphIndex(OnDiskGraphIndex graph, int cacheDistance)
+    private CachingGraphIndex(OnDiskGraphIndex<U,T> graph, int cacheDistance)
     {
         this.graph = graph;
         this.cache_ = GraphCache.load(graph, cacheDistance);
+    }
+
+    public static <U extends OnDiskView<T>, T extends GraphCache.CachedNode> CachingGraphIndex<U, T> from(OnDiskGraphIndex<U, T> graph)
+    {
+        return new CachingGraphIndex<>(graph, CACHE_DISTANCE);
+    }
+
+
+    public static <U extends OnDiskView<T>, T extends GraphCache.CachedNode> CachingGraphIndex<U, T> from(OnDiskGraphIndex<U, T> graph, int cacheDistance)
+    {
+        return new CachingGraphIndex<>(graph, cacheDistance);
     }
 
     @Override
@@ -76,11 +82,11 @@ public class CachingGraphIndex implements GraphIndex, Accountable
         return String.format("CachingGraphIndex(graph=%s)", graph);
     }
 
-    public static abstract class View implements RerankingView {
-        private final GraphCache cache;
-        protected final RerankingView view;
+    public static abstract class View<U extends OnDiskView<T>, T extends GraphCache.CachedNode> implements RerankingView {
+        private final GraphCache<T> cache;
+        protected final U view;
 
-        public View(GraphCache cache, RerankingView view) {
+        public View(GraphCache<T> cache, U view) {
             this.cache = cache;
             this.view = view;
         }
@@ -94,7 +100,7 @@ public class CachingGraphIndex implements GraphIndex, Accountable
             return view.getNeighborsIterator(ordinal);
         }
 
-        protected GraphCache.CachedNode getCachedNode(int ordinal) {
+        protected T getCachedNode(int ordinal) {
             return cache.getNode(ordinal);
         }
 

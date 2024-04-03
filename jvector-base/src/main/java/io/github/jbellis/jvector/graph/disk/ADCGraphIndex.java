@@ -47,7 +47,7 @@ import java.util.function.Consumer;
  * TODO: Permit 256 PQ clusters by quantizing floats to one byte.
  */
 @Experimental
-public class ADCGraphIndex extends OnDiskGraphIndex
+public class ADCGraphIndex extends OnDiskGraphIndex<ADCGraphIndex.View, ADCGraphIndex.CachedNode>
 {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final PQVectors pqv;
@@ -78,7 +78,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex
         return new View(readerSupplier.get());
     }
 
-    public class View extends OnDiskView implements ADCView, RandomAccessVectorValues
+    public class View extends OnDiskView<CachedNode> implements ADCView, RandomAccessVectorValues
     {
         private final ByteSequence<?> packedNeighbors;
 
@@ -183,7 +183,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex
         }
 
         @Override
-        public GraphCache.CachedNode loadCachedNode(int node, int[] neighbors) {
+        CachedNode loadCachedNode(int node, int[] neighbors) {
             return new CachedNode(neighbors, getVector(node), getPackedNeighbors(node).copy());
         }
 
@@ -193,12 +193,12 @@ public class ADCGraphIndex extends OnDiskGraphIndex
         }
 
         @Override
-        public RerankingView cachedWith(GraphCache cache) {
+        RerankingView cachedWith(GraphCache<CachedNode> cache) {
             return new CachedView(cache, this);
         }
     }
 
-    private static class CachedNode extends GraphCache.CachedNode {
+    static class CachedNode extends GraphCache.CachedNode {
         final VectorFloat<?> vector;
         final ByteSequence<?> packedNeighbors;
 
@@ -209,8 +209,8 @@ public class ADCGraphIndex extends OnDiskGraphIndex
         }
     }
 
-    class CachedView extends CachingGraphIndex.View implements ADCView, RandomAccessVectorValues {
-        public CachedView(GraphCache cache, View view) {
+    class CachedView extends CachingGraphIndex.View<View, CachedNode> implements ADCView, RandomAccessVectorValues {
+        public CachedView(GraphCache<CachedNode> cache, View view) {
             super(cache, view);
         }
 
@@ -221,16 +221,16 @@ public class ADCGraphIndex extends OnDiskGraphIndex
 
         @Override
         public int dimension() {
-            return ((View) view).dimension();
+            return view.dimension();
         }
 
         @Override
         public VectorFloat<?> getVector(int nodeId) {
-            var node = (CachedNode) getCachedNode(nodeId);
+            var node = getCachedNode(nodeId);
             if (node != null) {
                 return node.vector;
             }
-            return ((DiskAnnGraphIndex.View) view).getVector(nodeId);
+            return view.getVector(nodeId);
         }
 
         @Override
@@ -249,17 +249,17 @@ public class ADCGraphIndex extends OnDiskGraphIndex
             if (node != null) {
                 return node.packedNeighbors;
             }
-            return ((View) view).getPackedNeighbors(nodeId);
+            return view.getPackedNeighbors(nodeId);
         }
 
         @Override
         public VectorFloat<?> reusableResults() {
-            return ((View) view).reusableResults();
+            return view.reusableResults();
         }
 
         @Override
         public PQVectors getPQVectors() {
-            return ((View) view).getPQVectors();
+            return view.getPQVectors();
         }
 
         @Override

@@ -174,7 +174,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
-             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
+             var cachedOnDiskGraph = CachingGraphIndex.from(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
             TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);

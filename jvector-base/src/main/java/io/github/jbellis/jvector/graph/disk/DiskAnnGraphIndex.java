@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * Vanilla DiskANN index.  Includes full-precision vectors with edge lists.
  */
-public class DiskAnnGraphIndex extends OnDiskGraphIndex {
+public class DiskAnnGraphIndex extends OnDiskGraphIndex<DiskAnnGraphIndex.View, DiskAnnGraphIndex.CachedNode> {
     protected DiskAnnGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset) {
         super(readerSupplier, info, neighborsOffset);
     }
@@ -35,7 +35,7 @@ public class DiskAnnGraphIndex extends OnDiskGraphIndex {
         return new View(readerSupplier.get());
     }
 
-    public class View extends OnDiskView implements RandomAccessVectorValues {
+    public class View extends OnDiskView<DiskAnnGraphIndex.CachedNode> implements RandomAccessVectorValues {
         public View(RandomAccessReader reader) {
             super(reader, DiskAnnGraphIndex.this);
         }
@@ -94,12 +94,12 @@ public class DiskAnnGraphIndex extends OnDiskGraphIndex {
         }
 
         @Override
-        public GraphCache.CachedNode loadCachedNode(int node, int[] neighbors) {
+        CachedNode loadCachedNode(int node, int[] neighbors) {
             return new CachedNode(neighbors, getVector(node));
         }
 
         @Override
-        public RerankingView cachedWith(GraphCache cache) {
+        RerankingView cachedWith(GraphCache<CachedNode> cache) {
             return new CachedView(cache, this);
         }
     }
@@ -113,23 +113,23 @@ public class DiskAnnGraphIndex extends OnDiskGraphIndex {
         }
     }
 
-    class CachedView extends CachingGraphIndex.View implements RandomAccessVectorValues {
-        public CachedView(GraphCache cache, View view) {
+    class CachedView extends CachingGraphIndex.View<View, CachedNode> implements RandomAccessVectorValues {
+        public CachedView(GraphCache<CachedNode> cache, View view) {
             super(cache, view);
         }
 
         @Override
         public int dimension() {
-            return ((View) view).dimension();
+            return view.dimension();
         }
 
         @Override
         public VectorFloat<?> getVector(int nodeId) {
-            var node = (CachedNode) getCachedNode(nodeId);
+            var node = getCachedNode(nodeId);
             if (node != null) {
                 return node.vector;
             }
-            return ((View) view).getVector(nodeId);
+            return view.getVector(nodeId);
         }
 
         @Override

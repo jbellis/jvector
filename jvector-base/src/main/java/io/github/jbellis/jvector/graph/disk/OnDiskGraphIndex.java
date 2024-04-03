@@ -45,7 +45,7 @@ import java.util.stream.IntStream;
  * implies a subclass of CachedNode and a cached View.  By convention, these are implemented
  * in the same file as the subclass of OnDiskGraphIndex.  See DiskAnnGraphIndex for an example.
  */
-public abstract class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
+public abstract class OnDiskGraphIndex<T extends OnDiskView<U>, U extends GraphCache.CachedNode> implements GraphIndex, AutoCloseable, Accountable
 {
     protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     protected final ReaderSupplier readerSupplier;
@@ -221,5 +221,5 @@ public abstract class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Acc
 
     // re-declared to specify type
     @Override
-    public abstract OnDiskView getView();
+    public abstract T getView();
 }
