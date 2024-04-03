@@ -300,7 +300,7 @@ public class ADCGraphIndex extends OnDiskGraphIndex
         };
 
         ByteSequence<?> compressedNeighbors = vectorTypeSupport.createByteSequence(pqVectors.getCompressedSize() * graph.maxDegree());
-        var ivw = new InlineVectorsWriter() {
+        var ivw = new InlineWriter() {
             @Override
             public int dimension() {
                 return vectors.dimension();

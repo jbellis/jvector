@@ -170,7 +170,7 @@ public class DiskAnnGraphIndex extends OnDiskGraphIndex {
     public static void write(GraphIndex graph, RandomAccessVectorValues vectors, Map<Integer, Integer> oldToNewOrdinals, DataOutput out)
             throws IOException
     {
-        var ivw = new InlineVectorsWriter() {
+        var ivw = new InlineWriter() {
             @Override
             public int dimension() {
                 return vectors.dimension();

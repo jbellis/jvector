@@ -181,7 +181,7 @@ public class LVQGraphIndex extends OnDiskGraphIndex
             vectorList.add(vectors.getVector(i));
         }
         var quantizedVectors = lvq.encodeAll(vectorList);
-        var vectorsWriter = new InlineVectorsWriter() {
+        var vectorsWriter = new InlineWriter() {
             @Override
             public int dimension() {
                 return vectors.dimension();
