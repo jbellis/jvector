@@ -29,7 +29,6 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
 import java.util.Set;
@@ -263,7 +262,7 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
         }
     }
 
-    class ConcurrentGraphIndexView implements GraphIndex.View {
+    public class ConcurrentGraphIndexView implements GraphIndex.View {
         final long stamp;
 
         public ConcurrentGraphIndexView() {

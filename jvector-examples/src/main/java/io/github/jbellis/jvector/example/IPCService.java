@@ -16,9 +16,6 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.example.util.MMapRandomAccessVectorValues;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.UpdatableRandomAccessVectorValues;
@@ -28,6 +25,8 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -208,7 +207,7 @@ public class IPCService
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
                 DiskAnnGraphIndex.write(onHeapIndex, ravv, outputStream);
             }
-            return new CachingGraphIndex(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+            return CachingGraphIndex.from(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
         } catch (IOException e) {
             throw new IOError(e);
         }

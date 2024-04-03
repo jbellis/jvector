@@ -11,7 +11,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-public abstract class OnDiskView implements GraphIndex.RerankingView {
+public abstract class OnDiskView<T extends GraphCache.CachedNode> implements GraphIndex.RerankingView {
     private final OnDiskGraphIndex index;
     protected final RandomAccessReader reader;
     private final int[] neighbors;
@@ -56,9 +56,9 @@ public abstract class OnDiskView implements GraphIndex.RerankingView {
         reader.close();
     }
 
-    public abstract GraphCache.CachedNode loadCachedNode(int node, int[] neighbors);
+    abstract T loadCachedNode(int node, int[] neighbors);
 
     public abstract ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction similarity);
 
-    public abstract GraphIndex.RerankingView cachedWith(GraphCache cache);
+    abstract GraphIndex.RerankingView cachedWith(GraphCache<T> cache);
 }

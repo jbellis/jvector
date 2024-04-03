@@ -21,9 +21,6 @@ import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
-import io.github.jbellis.jvector.graph.disk.GraphCache;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -72,7 +69,7 @@ public class TestGraphCache extends RandomizedTest {
             // move from caching entry node to entry node + all its neighbors (5)
             assertEquals(one.ramBytesUsed(), zero.ramBytesUsed() * (onDiskGraph.size()));
             for (int i = 0; i < 6; i++) {
-                assertEquals(((DiskAnnGraphIndex.CachedNode) one.getNode(i)).vector, vectors.getVector(i));
+                assertEquals((one.getNode(i)).vector, vectors.getVector(i));
                 // fully connected,
                 assertEquals(one.getNode(i).neighbors.length, onDiskGraph.maxDegree());
             }
