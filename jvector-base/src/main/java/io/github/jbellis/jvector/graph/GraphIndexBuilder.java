@@ -208,7 +208,7 @@ public class GraphIndexBuilder {
         // It's possible that reconnecting one node will result in disconnecting another, since we are maintaining
         // the maxConnections invariant.  In an extreme case, reconnecting node X disconnects Y, and reconnecting
         // Y disconnects X again.  So we do a best effort of 3 loops.
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 5; i++) {
             // find all nodes reachable from the entry node
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
