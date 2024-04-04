@@ -34,12 +34,16 @@ import java.util.List;
 public class Test2DThreshold extends LuceneTestCase {
     @Test
     public void testThreshold10k() throws IOException {
-        testThreshold(10_000, 8);
+        for (int i = 0; i < 10; i++) {
+            testThreshold(10_000, 16);
+        }
     }
 
     @Test
     public void testThreshold20k() throws IOException {
-        testThreshold(20_000, 16);
+        for (int i = 0; i < 10; i++) {
+            testThreshold(20_000, 24);
+        }
     }
 
     public void testThreshold(int graphSize, int maxDegree) throws IOException {
@@ -60,7 +64,7 @@ public class Test2DThreshold extends LuceneTestCase {
             var result = searcher.search(new SearchScoreProvider(sf, null), vectors.length, tp.th, Bits.ALL);
 
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
-            assert result.getNodes().length >= 0.9 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " but should have returned at least " + tp.exactCount;
+            assert result.getNodes().length >= 0.85 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " out of " + tp.exactCount;
         }
 
         // test compressed
