@@ -17,8 +17,8 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.disk.LVQView;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.LVQView;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -252,9 +252,10 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
 
         public void writePacked(DataOutput out) throws IOException {
             // write the min and max
-            // write the encoded vector
             out.writeFloat(bias);
             out.writeFloat(scale);
+
+            // write the main part of the encoded vector that is evenly divisible into 64-byte blocks
             int mainBlockCount = bytes.length() / 64;
             int i;
             for (i = 0; i < mainBlockCount; i++) {
@@ -266,15 +267,20 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
                     out.writeByte(bytes.get(j + 48));
                 }
             }
+
+            // write the "tail" bytes from the last partial block
             var startIndex = i * 64;
             if (startIndex < bytes.length()) {
                 var endIndex = Math.min(startIndex + 16, bytes.length());
                 int j = startIndex;
                 for (; j < endIndex; j++) {
                     writeByteSafely(out, bytes, j);
+                    writeByteSafely(out, bytes, j + 16);
+                    writeByteSafely(out, bytes,  j + 32);
+                    writeByteSafely(out, bytes, j + 48);
                 }
                 for (; j < startIndex + 16; j++) {
-                    out.writeByte(0);
+                    out.writeInt(0);
                 }
             }
         }
