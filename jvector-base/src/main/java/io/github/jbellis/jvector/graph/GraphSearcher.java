@@ -45,7 +45,6 @@ import static java.lang.Math.min;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements AutoCloseable {
-
     private final GraphIndex.View view;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
@@ -68,6 +67,10 @@ public class GraphSearcher implements AutoCloseable {
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.visited = new IntHashSet();
+    }
+
+    public GraphIndex.View getView() {
+        return view;
     }
 
     /**
