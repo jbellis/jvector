@@ -26,7 +26,8 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -205,9 +206,11 @@ public class IPCService
             var graphPath = testDirectory.resolve("graph.bin");
 
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                DiskAnnGraphIndex.write(onHeapIndex, ravv, outputStream);
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapIndex)
+                        .withInlineVectors(ravv).build();
+                writer.write(outputStream);
             }
-            return CachingGraphIndex.from(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+            return new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
         } catch (IOException e) {
             throw new IOError(e);
         }
@@ -273,8 +276,8 @@ public class IPCService
             if (ctx.cv != null) {
                 ScoreFunction.ApproximateScoreFunction sf = ctx.cv.precomputedScoreFunctionFor(queryVector, ctx.similarityFunction);
                 try (var view = ctx.index.getView()) {
-                    var rr = view instanceof GraphIndex.RerankingView
-                            ? ((GraphIndex.RerankingView) view).rerankerFor(queryVector, ctx.similarityFunction)
+                    var rr = view instanceof GraphIndex.ScoringView
+                            ? ((GraphIndex.ScoringView) view).rerankerFor(queryVector, ctx.similarityFunction)
                             : ScoreFunction.ExactScoreFunction.from(queryVector, ctx.similarityFunction, ctx.ravv);
                     var ssp = new SearchScoreProvider(sf, rr);
                     r = new GraphSearcher(ctx.index.getView()).search(ssp, searchEf, Bits.ALL);

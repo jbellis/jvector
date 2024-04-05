@@ -24,7 +24,8 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -72,9 +73,11 @@ public class SiftSmall {
         var graphPath = testDirectory.resolve("graph_test");
         CachingGraphIndex onDiskGraph = null;
         try (DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()))){
+            var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                    .withInlineVectors(ravv).build();
 
-            DiskAnnGraphIndex.write(onHeapGraph, ravv, outputFile);
-            onDiskGraph = CachingGraphIndex.from(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+            writer.write(outputFile);
+            onDiskGraph = new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
             testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
@@ -103,7 +106,7 @@ public class SiftSmall {
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                var rr = ((GraphIndex.RerankingView) view).rerankerFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                var rr = ((GraphIndex.ScoringView) view).rerankerFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 ssp = new SearchScoreProvider(sf, rr);
             }
             var nn = searcher.search(ssp, 100, Bits.ALL).getNodes();

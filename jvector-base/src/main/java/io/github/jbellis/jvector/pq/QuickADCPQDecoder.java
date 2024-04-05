@@ -16,7 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.disk.ADCView;
+import io.github.jbellis.jvector.graph.disk.FusedADCNeighbors;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -29,16 +29,18 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScoreFunction {
     protected final ProductQuantization pq;
     protected final VectorFloat<?> query;
+    protected final ExactScoreFunction esf;
 
-    protected QuickADCPQDecoder(ProductQuantization pq, VectorFloat<?> query) {
+    protected QuickADCPQDecoder(ProductQuantization pq, VectorFloat<?> query, ExactScoreFunction esf) {
         this.pq = pq;
         this.query = query;
+        this.esf = esf;
     }
 
     protected static abstract class CachingDecoder extends QuickADCPQDecoder {
         protected final VectorFloat<?> partialSums;
-        protected CachingDecoder(ProductQuantization pq, VectorFloat<?> query, VectorSimilarityFunction vsf) {
-            super(pq, query);
+        protected CachingDecoder(ProductQuantization pq, VectorFloat<?> query, VectorSimilarityFunction vsf, ExactScoreFunction esf) {
+            super(pq, query, esf);
             partialSums = pq.reusablePartialSums();
 
             VectorFloat<?> center = pq.globalCentroid;
@@ -55,22 +57,22 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
 
      static class DotProductDecoder extends CachingDecoder {
         private final VectorFloat<?> results;
-        private final ADCView view;
+        private final FusedADCNeighbors neighbors;
 
-        public DotProductDecoder(ADCView view, VectorFloat<?> query) {
-            super(view.getProductQuantization(), query, VectorSimilarityFunction.DOT_PRODUCT);
-            this.view = view;
-            this.results = view.reusableResults();
+        public DotProductDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
+            super(pq, query, VectorSimilarityFunction.DOT_PRODUCT, esf);
+            this.neighbors = neighbors;
+            this.results = results;
         }
 
         @Override
         public float similarityTo(int node2) {
-            return VectorSimilarityFunction.DOT_PRODUCT.compare(query, view.getVector(node2));
+            return esf.similarityTo(node2);
         }
 
         @Override
         public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
-            var permutedNodes = view.getPackedNeighbors(origin);
+            var permutedNodes = neighbors.getPackedNeighbors(origin);
             results.zero();
             VectorUtil.bulkShuffleSimilarity(permutedNodes, pq.getCompressedSize(), partialSums, results, VectorSimilarityFunction.DOT_PRODUCT);
             return results;
@@ -83,23 +85,23 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     }
 
     static class EuclideanDecoder extends CachingDecoder {
-        private final ADCView view;
+        private final FusedADCNeighbors neighbors;
         private final VectorFloat<?> results;
 
-        public EuclideanDecoder(ADCView view, VectorFloat<?> query) {
-            super(view.getProductQuantization(), query, VectorSimilarityFunction.EUCLIDEAN);
-            this.view = view;
-            this.results = view.reusableResults();
+        public EuclideanDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
+            super(pq, query, VectorSimilarityFunction.EUCLIDEAN, esf);
+            this.neighbors = neighbors;
+            this.results = results;
         }
 
         @Override
         public float similarityTo(int node2) {
-            return VectorSimilarityFunction.EUCLIDEAN.compare(query, view.getVector(node2));
+            return esf.similarityTo(node2);
         }
 
         @Override
         public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
-            var permutedNodes = view.getPackedNeighbors(origin);
+            var permutedNodes = neighbors.getPackedNeighbors(origin);
             results.zero();
             VectorUtil.bulkShuffleSimilarity(permutedNodes, pq.getCompressedSize(), partialSums, results, VectorSimilarityFunction.EUCLIDEAN);
             return results;
@@ -111,12 +113,13 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
     }
 
-    public static QuickADCPQDecoder newDecoder(ADCView view, VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
+    public static QuickADCPQDecoder newDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query,
+                                               VectorFloat<?> results, VectorSimilarityFunction similarityFunction, ExactScoreFunction esf) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
-                return new DotProductDecoder(view, query);
+                return new DotProductDecoder(neighbors, pq, query, results, esf);
             case EUCLIDEAN:
-                return new EuclideanDecoder(view, query);
+                return new EuclideanDecoder(neighbors, pq, query, results, esf);
             default:
                 throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
         }

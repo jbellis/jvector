@@ -20,7 +20,7 @@ import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.agrona.collections.Int2ObjectHashMap;
 
-public abstract class GraphCache<T extends GraphCache.CachedNode> implements Accountable
+public abstract class GraphCache implements Accountable
 {
     public static class CachedNode implements Accountable {
         public final int[] neighbors;
@@ -35,21 +35,21 @@ public abstract class GraphCache<T extends GraphCache.CachedNode> implements Acc
     }
 
     /** return the cached node if present, or null if not */
-    public abstract T getNode(int ordinal);
+    public abstract CachedNode getNode(int ordinal);
 
-    public static <U extends OnDiskView<V>, V extends CachedNode> GraphCache<V> load(OnDiskGraphIndex<U, V> graph, int distance)
+    public static GraphCache load(OnDiskGraphIndex graph, int distance)
     {
         if (distance < 0)
-            return new EmptyGraphCache<>();
-        return new HMGraphCache<>(graph, distance);
+            return new EmptyGraphCache();
+        return new HMGraphCache(graph, distance);
     }
 
     public abstract long ramBytesUsed();
 
-    private static final class EmptyGraphCache<U extends CachedNode> extends GraphCache<U>
+    private static final class EmptyGraphCache extends GraphCache
     {
         @Override
-        public U getNode(int ordinal) {
+        public CachedNode getNode(int ordinal) {
             return null;
         }
 
@@ -60,15 +60,15 @@ public abstract class GraphCache<T extends GraphCache.CachedNode> implements Acc
         }
     }
 
-    private static final class HMGraphCache<T extends OnDiskView<U>, U extends CachedNode> extends GraphCache<U>
+    private static final class HMGraphCache extends GraphCache
     {
         // Map is created on construction and never modified
-        private final Int2ObjectHashMap<U> cache;
+        private final Int2ObjectHashMap<CachedNode> cache;
         private long ramBytesUsed = 0;
 
-        public HMGraphCache(OnDiskGraphIndex<T, U> graph, int distance) {
+        public HMGraphCache(OnDiskGraphIndex graph, int distance) {
             try (var view = graph.getView()) {
-                var tmpCache = new Int2ObjectHashMap<U>();
+                var tmpCache = new Int2ObjectHashMap<CachedNode>();
                 cacheNeighborsOf(tmpCache, view, view.entryNode(), distance);
                 // Assigning to a final value ensure it is safely published
                 cache = tmpCache;
@@ -77,7 +77,7 @@ public abstract class GraphCache<T extends GraphCache.CachedNode> implements Acc
             }
         }
 
-        private void cacheNeighborsOf(Int2ObjectHashMap<U> tmpCache, OnDiskView<U> view, int ordinal, int distance) {
+        private void cacheNeighborsOf(Int2ObjectHashMap<CachedNode> tmpCache, OnDiskGraphIndex.View view, int ordinal, int distance) {
             // cache this node
             var it = view.getNeighborsIterator(ordinal);
             int[] neighbors = new int[it.size()];
@@ -85,7 +85,7 @@ public abstract class GraphCache<T extends GraphCache.CachedNode> implements Acc
             while (it.hasNext()) {
                 neighbors[i++] = it.nextInt();
             }
-            var node = view.loadCachedNode(ordinal, neighbors);
+            var node = new CachedNode(neighbors);
             tmpCache.put(ordinal, node);
             // ignores internal Map overhead but that should be negligible compared to the node contents
             ramBytesUsed += Integer.BYTES + RamUsageEstimator.NUM_BYTES_OBJECT_REF + node.ramBytesUsed();
@@ -102,7 +102,7 @@ public abstract class GraphCache<T extends GraphCache.CachedNode> implements Acc
 
 
         @Override
-        public U getNode(int ordinal) {
+        public CachedNode getNode(int ordinal) {
             return cache.get(ordinal);
         }
 

@@ -20,96 +20,71 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
-import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
+import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import org.agrona.collections.Int2IntHashMap;
 
-import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.function.Consumer;
+import java.io.UncheckedIOException;
+import java.util.EnumMap;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * An abstract class representing a graph index stored on disk.
- * <p>
- * Extension points for subclasses calling write() include
- *   - A function to write any extra data in the header
- *   - A function to write per-node data inline with the neighbors
- * <p>
- * Subclasses must implement getView() returning an instance of OnDiskView.  This in turn
- * implies a subclass of CachedNode and a cached View.  By convention, these are implemented
- * in the same file as the subclass of OnDiskGraphIndex.  See DiskAnnGraphIndex for an example.
- */
-public abstract class OnDiskGraphIndex<T extends OnDiskView<U>, U extends GraphCache.CachedNode> implements GraphIndex, AutoCloseable, Accountable
-{
-    protected static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    protected final ReaderSupplier readerSupplier;
-    protected final long neighborsOffset;
-    protected final int size;
-    protected final int entryNode;
-    protected final int maxDegree;
-    protected final int dimension;
+ * A class representing a graph index stored on disk. The base graph contains only graph structure.
+ * <p> * The base graph
 
-    protected OnDiskGraphIndex(ReaderSupplier readerSupplier, CommonHeader info, long neighborsOffset)
+ * This graph may be extended with additional features, which are stored inline in the graph and in headers.
+ * At runtime, this class may choose the best way to use these features.
+ */
+public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
+{
+    public static final int CURRENT_VERSION = 1;
+    static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
+    static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    final ReaderSupplier readerSupplier;
+    final int version;
+    final int size;
+    final int maxDegree;
+    final int dimension;
+    final int entryNode;
+    final int inlineBlockSize; // total size of all inline elements contributed by features
+    final EnumMap<FeatureId, ? extends Feature> features;
+    final EnumMap<FeatureId, Integer> inlineOffsets;
+    private final long neighborsOffset;
+
+    OnDiskGraphIndex(ReaderSupplier readerSupplier, Header header, long neighborsOffset)
     {
         this.readerSupplier = readerSupplier;
+        this.version = header.common.version;
+        this.size = header.common.size;
+        this.dimension = header.common.dimension;
+        this.entryNode = header.common.entryNode;
+        this.maxDegree = header.common.maxDegree;
+        this.features = header.features;
         this.neighborsOffset = neighborsOffset;
-        this.size = info.size;
-        this.entryNode = info.entryNode;
-        this.maxDegree = info.maxDegree;
-        this.dimension = info.dimension;
+        var inlineBlockSize = 0;
+        inlineOffsets = new EnumMap<>(FeatureId.class);
+        for (var entry : features.entrySet()) {
+            inlineOffsets.put(entry.getKey(), inlineBlockSize);
+            inlineBlockSize += entry.getValue().inlineSize();
+        }
+        this.inlineBlockSize = inlineBlockSize;
     }
 
-    /**
-     * Header information common to all on-disk graphs
-     */
-    protected static class CommonHeader {
-        public static final long SIZE = 4 * Integer.BYTES;
-
-        public final int size;
-        public final int dimension;
-        public final int entryNode;
-        public final int maxDegree;
-
-        public CommonHeader(int size, int dimension, int entryNode, int maxDegree) {
-            this.size = size;
-            this.dimension = dimension;
-            this.entryNode = entryNode;
-            this.maxDegree = maxDegree;
-        }
-
-        public static CommonHeader load(RandomAccessReader reader, long offset) throws IOException {
-            reader.seek(offset);
-            int size = reader.readInt();
-            int dimension = reader.readInt();
-            int entryNode = reader.readInt();
-            int maxDegree = reader.readInt();
-            return new CommonHeader(size, dimension, entryNode, maxDegree);
-        }
-    }
-
-    /**
-     * @return a Map of old to new graph ordinals where the new ordinals are sequential starting at 0,
-     * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
-     * if i &lt; j in `graph` then map[i] &lt; map[j] in the returned map.
-     */
-    public static Map<Integer, Integer> getSequentialRenumbering(GraphIndex graph) {
-        try (var view = graph.getView()) {
-            Int2IntHashMap oldToNewMap = new Int2IntHashMap(-1);
-            int nextOrdinal = 0;
-            for (int i = 0; i < view.getIdUpperBound(); i++) {
-                if (graph.containsNode(i)) {
-                    oldToNewMap.put(i, nextOrdinal++);
-                }
-            }
-            return oldToNewMap;
+    public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset) {
+        try (var reader = readerSupplier.get()) {
+            var info = Header.load(reader, offset);
+            return new OnDiskGraphIndex(readerSupplier, info, reader.getPosition());
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
     }
 
@@ -131,7 +106,8 @@ public abstract class OnDiskGraphIndex<T extends OnDiskView<U>, U extends GraphC
 
     @Override
     public long ramBytesUsed() {
-        return Long.BYTES + 4 * Integer.BYTES;
+        return Long.BYTES + 6 * Integer.BYTES + RamUsageEstimator.NUM_BYTES_OBJECT_REF
+                + (long) 2 * RamUsageEstimator.NUM_BYTES_OBJECT_REF * FeatureId.values().length;
     }
 
     public void close() throws IOException {
@@ -140,86 +116,154 @@ public abstract class OnDiskGraphIndex<T extends OnDiskView<U>, U extends GraphC
 
     @Override
     public String toString() {
-        return String.format("OnDiskGraphIndex(size=%d, entryPoint=%d)", size, entryNode);
-    }
-
-    protected interface InlineWriter {
-        int dimension();
-
-        void write(DataOutput out, GraphIndex.View view, int node) throws IOException;
-    }
-
-    /**
-     * @param out              the output to write to
-     * @param graph            the graph to write
-     * @param inlineWriter     knows how to write the data associated with each node in the graph
-     * @param oldToNewOrdinals A map from old to new ordinals. If ordinal numbering does not matter,
-     *                         you can use `getSequentialRenumbering`, which will "fill in" holes left by
-     *                         any deleted nodes.
-     */
-    protected static void write(DataOutput out, GraphIndex graph,
-                                Consumer<DataOutput> headerWriter,
-                                InlineWriter inlineWriter,
-                                Map<Integer, Integer> oldToNewOrdinals)
-            throws IOException
-    {
-        if (graph instanceof OnHeapGraphIndex) {
-            var ohgi = (OnHeapGraphIndex) graph;
-            if (ohgi.getDeletedNodes().cardinality() > 0) {
-                throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
-            }
-        }
-        if (oldToNewOrdinals.size() != graph.size()) {
-            throw new IllegalArgumentException(String.format("ordinalMapper size %d does not match graph size %d",
-                                                             oldToNewOrdinals.size(), graph.size()));
-        }
-
-        var entriesByNewOrdinal = new ArrayList<>(oldToNewOrdinals.entrySet());
-        entriesByNewOrdinal.sort(Comparator.comparingInt(Map.Entry::getValue));
-        // the last new ordinal should be size-1
-        if (graph.size() > 0 && entriesByNewOrdinal.get(entriesByNewOrdinal.size() - 1).getValue() != graph.size() - 1) {
-            throw new IllegalArgumentException("oldToNewOrdinals produced out-of-range entries");
-        }
-
-        try (var view = graph.getView()) {
-            // graph-level properties
-            out.writeInt(graph.size());
-            out.writeInt(inlineWriter.dimension());
-            out.writeInt(view.entryNode());
-            out.writeInt(graph.maxDegree());
-            headerWriter.accept(out);
-
-            // for each graph node, write the associated vector and its neighbors
-            for (int i = 0; i < oldToNewOrdinals.size(); i++) {
-                var entry = entriesByNewOrdinal.get(i);
-                int originalOrdinal = entry.getKey();
-                int newOrdinal = entry.getValue();
-                if (!graph.containsNode(originalOrdinal)) {
-                    continue;
-                }
-
-                out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
-                inlineWriter.write(out, view, originalOrdinal);
-
-                var neighbors = view.getNeighborsIterator(originalOrdinal);
-                out.writeInt(neighbors.size());
-                int n = 0;
-                for (; n < neighbors.size(); n++) {
-                    out.writeInt(oldToNewOrdinals.get(neighbors.nextInt()));
-                }
-                assert !neighbors.hasNext();
-
-                // pad out to maxEdgesPerNode
-                for (; n < graph.maxDegree(); n++) {
-                    out.writeInt(-1);
-                }
-            }
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
+        return String.format("OnDiskGraphIndex(size=%d, entryPoint=%d, features=%s)", size, entryNode,
+                features.keySet().stream().map(Enum::name).collect(Collectors.joining(",")));
     }
 
     // re-declared to specify type
     @Override
-    public abstract T getView();
+    public View getView() {
+        return new View(readerSupplier.get());
+    }
+
+    public class View implements GraphIndex.View, ScoringView, RandomAccessVectorValues {
+        protected final RandomAccessReader reader;
+        private final int[] neighbors;
+
+        public View(RandomAccessReader reader) {
+            this.reader = reader;
+            this.neighbors = new int[maxDegree];
+        }
+
+        @Override
+        public int dimension() {
+            return dimension;
+        }
+
+        // getVector isn't called on the hot path, only getVectorInto, so we don't bother using a shared value
+        @Override
+        public boolean isValueShared() {
+            return false;
+        }
+
+        @Override
+        public RandomAccessVectorValues copy() {
+            throw new UnsupportedOperationException(); // need to copy reader
+        }
+
+        protected long inlineOffsetFor(int node, FeatureId featureId) {
+            return neighborsOffset +
+                    (node * ((long) Integer.BYTES // ids
+                            + inlineBlockSize // inline elements
+                            + (Integer.BYTES * (long) (maxDegree + 1)) // neighbor count + neighbors)
+                    )) + Integer.BYTES + // id
+                    inlineOffsets.get(featureId);
+        }
+
+        long neighborsOffsetFor(int node) {
+            return neighborsOffset +
+                    (node + 1) * (Integer.BYTES + (long) inlineBlockSize) +
+                    (node * (long) Integer.BYTES * (maxDegree + 1));
+        }
+
+        RandomAccessReader inlineReaderForNode(int node, FeatureId featureId) {
+            try {
+                long offset = inlineOffsetFor(node, featureId);
+                reader.seek(offset);
+                return reader;
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public VectorFloat<?> getVector(int node) {
+            if (!features.containsKey(FeatureId.INLINE_VECTORS)) {
+                throw new UnsupportedOperationException("No inline vectors in this graph");
+            }
+
+            try {
+                long offset = inlineOffsetFor(node, FeatureId.INLINE_VECTORS);
+                reader.seek(offset);
+                return vectorTypeSupport.readFloatVector(reader, dimension);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
+            if (!features.containsKey(FeatureId.INLINE_VECTORS)) {
+                throw new UnsupportedOperationException("No inline vectors in this graph");
+            }
+
+            try {
+                long diskOffset = inlineOffsetFor(node, FeatureId.INLINE_VECTORS);
+                reader.seek(diskOffset);
+                vectorTypeSupport.readFloatVector(reader, dimension, vector, offset);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public NodesIterator getNeighborsIterator(int node) {
+            try {
+                reader.seek(neighborsOffsetFor(node));
+                int neighborCount = reader.readInt();
+                assert neighborCount <= maxDegree : String.format("Node %d neighborCount %d > M %d", node, neighborCount, maxDegree);
+                reader.read(neighbors, 0, neighborCount);
+                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+
+        @Override
+        public int entryNode() {
+            return entryNode;
+        }
+
+        @Override
+        public Bits liveNodes() {
+            return Bits.ALL;
+        }
+
+        @Override
+        public void close() throws IOException {
+            reader.close();
+        }
+
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
+            if (permissibleFeatures.contains(FeatureId.LVQ) && features.containsKey(FeatureId.LVQ)) {
+                return ((LVQ) features.get(FeatureId.LVQ)).rerankerFor(queryVector, vsf, this);
+            } else if (permissibleFeatures.contains(FeatureId.INLINE_VECTORS) && features.containsKey(FeatureId.INLINE_VECTORS)) {
+                return ScoreFunction.ExactScoreFunction.from(queryVector, vsf, this);
+            } else {
+                throw new UnsupportedOperationException("No reranker available for this graph");
+            }
+        }
+
+        @Override
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return rerankerFor(queryVector, vsf, FeatureId.ALL);
+        }
+
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
+            if (permissibleFeatures.contains(FeatureId.FUSED_ADC) && features.containsKey(FeatureId.FUSED_ADC)) {
+                return ((FusedADC) features.get(FeatureId.FUSED_ADC)).approximateScoreFunctionFor(queryVector, vsf, this, rerankerFor(queryVector, vsf));
+            } else {
+                throw new UnsupportedOperationException("No approximate score function available for this graph");
+            }
+        }
+
+        @Override
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return approximateScoreFunctionFor(queryVector, vsf, FeatureId.ALL);
+        }
+    }
 }

@@ -24,11 +24,9 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
-import io.github.jbellis.jvector.graph.disk.ADCView;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
-import io.github.jbellis.jvector.graph.disk.LVQGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -129,12 +127,16 @@ public class Grid {
         var lvqGraphPath = testDirectory.resolve("lvqgraph" + M + efConstruction + ds.name);
         try {
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                DiskAnnGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                        .withInlineVectors(floatVectors).build();
+                writer.write(outputStream);
             }
 
             var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
             try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(lvqGraphPath)))) {
-                LVQGraphIndex.write(onHeapGraph, floatVectors, lvq, outputStream);
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                        .withLVQVectors(lvq, lvq.encodeAll(ds.baseVectors)).build();
+                writer.write(outputStream);
             }
 
             for (var cpSupplier : compressionGrid) {
@@ -151,14 +153,17 @@ public class Grid {
 
                     if (fusedCompatible) {
                         try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(fusedGraphPath)))) {
-                            ADCGraphIndex.write(onHeapGraph, floatVectors, (PQVectors) cv, outputStream);
+                            var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                                    .withFusedADC((PQVectors) cv).withLVQVectors(lvq, lvq.encodeAll(ds.baseVectors)).build();
+                            writer.write(outputStream);
                         }
                     }
                 }
 
-                try (var onDiskGraph = CachingGraphIndex.from((DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
-                     var onDiskLVQGraph = compressor == null ? null : CachingGraphIndex.from(LVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? CachingGraphIndex.from(ADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
+                try (var onDiskGraph = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+                     var onDiskLVQGraph = compressor == null ? null : new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
+                     var onDiskFusedGraph = fusedCompatible ? new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null)
+                {
                     List<GraphIndex> graphs = new ArrayList<>();
                     graphs.add(onDiskGraph);
                     if (onDiskFusedGraph != null) {
@@ -265,7 +270,6 @@ public class Grid {
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
                 sr = searcher.search(sf, efSearch, Bits.ALL);
-
                 var gt = cs.ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
@@ -297,16 +301,14 @@ public class Grid {
                 return new SearchScoreProvider(sf, null);
             }
 
-            // use ADC or PQ depending on the View type
-            var rrView = (GraphIndex.RerankingView) view;
+            var scoringView = (GraphIndex.ScoringView) view;
             ScoreFunction.ApproximateScoreFunction asf;
-            if (rrView instanceof ADCView) {
-                asf =  ((ADCView) rrView).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-            } else {
+            try {
+                asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+            } catch (UnsupportedOperationException e) {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
-
-            ScoreFunction.ExactScoreFunction rr = rrView.rerankerFor(queryVector, ds.similarityFunction);
+            ScoreFunction.ExactScoreFunction rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
             return new SearchScoreProvider(asf, rr);
         }
 
