@@ -33,7 +33,7 @@ import java.util.function.Supplier;
  * <p>
  * Because ExplicitThreadLocal doesn't hook into Thread internals, any referenced values
  * can be GC'd as expected as soon as the ETL instance itself is no longer referenced.
- * ExplicitThreadLocal also provides a `closeAll` method to cleanup non-GC'd resources.
+ * ExplicitThreadLocal also implements AutoCloseable to cleanup non-GC'd resources.
  * <p>
  * ExplicitThreadLocal is a drop-in replacement for ThreadLocal, and is used in the same way.
  */

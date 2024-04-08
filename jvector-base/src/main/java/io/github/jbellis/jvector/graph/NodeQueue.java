@@ -169,6 +169,9 @@ public class NodeQueue {
         heap.clear();
     }
 
+    /**
+     * Set the max size of the underlying heap.  Only valid when NodeQueue was created with BoundedLongHeap.
+     */
     public void setMaxSize(int maxSize) {
         ((BoundedLongHeap) heap).setMaxSize(maxSize);
     }
