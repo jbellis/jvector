@@ -27,14 +27,13 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
-import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
-import io.github.jbellis.jvector.util.GrowableBitSet;
 import io.github.jbellis.jvector.util.GrowableLongHeap;
-import io.github.jbellis.jvector.util.SparseFixedBitSet;
+import io.github.jbellis.jvector.util.SparseBitSet;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.IntHashSet;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -53,7 +52,7 @@ public class GraphSearcher implements AutoCloseable {
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
     // to allocate, so they're cleared and reused across calls.
     private final NodeQueue candidates;
-    private final BitSet visited;
+    private final IntHashSet visited;
     // we don't actually need this ordered, but NQ is our only structure that doesn't need to allocate extra containers
     private final NodeQueue evictedResults;
 
@@ -64,13 +63,12 @@ public class GraphSearcher implements AutoCloseable {
     /**
      * Creates a new graph searcher.
      *
-     * @param visited bit set that will track nodes that have already been visited
      */
-    GraphSearcher(GraphIndex.View view, BitSet visited) {
+    GraphSearcher(GraphIndex.View view) {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
-        this.visited = visited;
+        this.visited = new IntHashSet();
     }
 
     /**
@@ -79,7 +77,7 @@ public class GraphSearcher implements AutoCloseable {
      */
     public static SearchResult search(VectorFloat<?> queryVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
-            var searcher = new GraphSearcher.Builder(view).withConcurrentUpdates().build();
+            var searcher = new Builder(view).build();
             var sf = ScoreFunction.ExactScoreFunction.from(queryVector, similarityFunction, vectors);
             var ssp = new SearchScoreProvider(sf, null);
             return searcher.search(ssp, topK, acceptOrds);
@@ -91,24 +89,19 @@ public class GraphSearcher implements AutoCloseable {
     /** Builder */
     public static class Builder {
         private final GraphIndex.View view;
-        private boolean concurrent;
 
         public Builder(GraphIndex.View view) {
             this.view = view;
         }
 
         public Builder withConcurrentUpdates() {
-            this.concurrent = true;
             return this;
         }
 
         public GraphSearcher build() {
-            int size = view.getIdUpperBound();
-            BitSet bits = concurrent ? new GrowableBitSet(size) : new SparseFixedBitSet(size);
-            return new GraphSearcher(view, bits);
+            return new GraphSearcher(view);
         }
     }
-
 
     /**
      * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
@@ -196,35 +189,23 @@ public class GraphSearcher implements AutoCloseable {
         this.acceptOrds = Bits.intersectionOf(rawAcceptOrds, view.liveNodes());
 
         // reset the scratch data structures
-        int capacity = view.size();
         evictedResults.clear();
         candidates.clear();
-        if (visited.length() < capacity) {
-            // this happens during graph construction; otherwise the size of the vector values should
-            // be constant, and it will be a SparseFixedBitSet instead of FixedBitSet
-            if (!(visited instanceof GrowableBitSet)) {
-                throw new IllegalArgumentException(
-                        String.format("Unexpected visited type: %s. Encountering this means that the graph changed " +
-                                              "while being searched, and the Searcher was not built withConcurrentUpdates()",
-                                      visited.getClass().getName()));
-            }
-            // else GrowableBitSet knows how to grow itself safely
-        }
         visited.clear();
 
         // no entry point -> empty results
         if (ep < 0) {
-            return new SearchResult(new SearchResult.NodeScore[0], visited, 0);
+            return new SearchResult(new SearchResult.NodeScore[0], 0);
         }
 
         // kick off the actual search at the entry point
         float score = scoreProvider.scoreFunction().similarityTo(ep);
-        visited.set(ep);
+        visited.add(ep);
         candidates.push(ep, score);
         var sr = resume(topK, threshold, rerankFloor);
 
         // include the entry node in visitedCount
-        return new SearchResult(sr.getNodes(), sr.getVisited(), sr.getVisitedCount() + 1);
+        return new SearchResult(sr.getNodes(), sr.getVisitedCount() + 1);
     }
 
     /**
@@ -251,12 +232,12 @@ public class GraphSearcher implements AutoCloseable {
         VectorFloat<?> similarities = null;
 
         // add evicted results from the last call back to the candidates
-        var previouslyEvicted = evictedResults.size() > 0 ? new GrowableBitSet(view.size()) : Bits.NONE;
+        var previouslyEvicted = evictedResults.size() > 0 ? new SparseBitSet(view.size()) : Bits.NONE;
         while (evictedResults.size() > 0) {
             float score = evictedResults.topScore();
             int node = evictedResults.pop();
             candidates.push(node, score);
-            ((GrowableBitSet) previouslyEvicted).set(node);
+            ((SparseBitSet) previouslyEvicted).set(node);
         }
         evictedResults.clear();
 
@@ -310,7 +291,7 @@ public class GraphSearcher implements AutoCloseable {
             var it = view.getNeighborsIterator(topCandidateNode);
             for (int i = 0; i < it.size(); i++) {
                 var friendOrd = it.nextInt();
-                if (visited.getAndSet(friendOrd)) {
+                if (!visited.add(friendOrd)) {
                     continue;
                 }
                 numVisited++;
@@ -325,7 +306,7 @@ public class GraphSearcher implements AutoCloseable {
 
         assert resultsQueue.size() <= additionalK;
         SearchResult.NodeScore[] nodes = extractScores(scoreProvider, resultsQueue, rerankFloor);
-        return new SearchResult(nodes, visited, numVisited);
+        return new SearchResult(nodes, numVisited);
     }
 
     /**
