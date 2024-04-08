@@ -26,6 +26,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AbstractLongHeap;
+import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -166,6 +167,10 @@ public class NodeQueue {
 
     public void clear() {
         heap.clear();
+    }
+
+    public void setMaxSize(int maxSize) {
+        ((BoundedLongHeap) heap).setMaxSize(maxSize);
     }
 
     @Override

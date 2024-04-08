@@ -50,6 +50,7 @@ public class GraphSearcher implements AutoCloseable {
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
     // to allocate, so they're cleared and reused across calls.
     private final NodeQueue candidates;
+    private final NodeQueue resultsQueue;
     private final IntHashSet visited;
     // we don't actually need this ordered, but NQ is our only structure that doesn't need to allocate extra containers
     private final NodeQueue evictedResults;
@@ -66,6 +67,7 @@ public class GraphSearcher implements AutoCloseable {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
+        this.resultsQueue = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
     }
 
@@ -221,9 +223,8 @@ public class GraphSearcher implements AutoCloseable {
      */
     @Experimental
     public SearchResult resume(int additionalK, float threshold, float rerankFloor) {
-        // Threshold callers (and perhaps others) will be tempted to pass in a huge topK.
-        // Let's not allocate a ridiculously large heap up front in that scenario.
-        var resultsQueue = new NodeQueue(new BoundedLongHeap(min(1024, additionalK), additionalK), NodeQueue.Order.MIN_HEAP);
+        assert resultsQueue.size() == 0; // should be cleared out by extractScores
+        resultsQueue.setMaxSize(additionalK);
 
         int numVisited = 0;
         // A bound that holds the minimum similarity to the query vector that a candidate vector must

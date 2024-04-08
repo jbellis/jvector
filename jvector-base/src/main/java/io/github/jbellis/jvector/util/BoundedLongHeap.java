@@ -27,11 +27,11 @@ package io.github.jbellis.jvector.util;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 
 /**
- * An AbstractLongHeap with a fixed maximum size, allocated at construction time.
+ * An AbstractLongHeap with an adjustable maximum size.
  */
 public class BoundedLongHeap extends AbstractLongHeap {
 
-    private final int maxSize;
+    private int maxSize;
 
     /**
      * Create an empty Heap of the configured initial size.
@@ -44,6 +44,13 @@ public class BoundedLongHeap extends AbstractLongHeap {
 
     public BoundedLongHeap(int initialSize, int maxSize) {
         super(initialSize);
+        this.maxSize = maxSize;
+    }
+
+    public void setMaxSize(int maxSize) {
+        if (size > maxSize) {
+            throw new IllegalArgumentException("Cannot set maxSize smaller than current size");
+        }
         this.maxSize = maxSize;
     }
 
