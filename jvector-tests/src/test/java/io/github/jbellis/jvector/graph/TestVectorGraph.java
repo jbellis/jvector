@@ -138,7 +138,7 @@ public class TestVectorGraph extends LuceneTestCase {
         int initialTopK = 10;
         int resumeTopK = 15;
         var query = randomVector(dim);
-        var searcher = new GraphSearcher.Builder(graph.getView()).build();
+        var searcher = new GraphSearcher(graph.getView());
 
         var ssp = new SearchScoreProvider(ScoreFunction.ExactScoreFunction.from(query, similarityFunction, vectors), null);
         var initial = searcher.search(ssp, initialTopK, acceptOrds);

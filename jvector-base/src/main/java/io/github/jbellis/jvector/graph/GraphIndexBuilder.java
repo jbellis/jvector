@@ -597,7 +597,7 @@ public class GraphIndexBuilder {
     }
 
     private GraphSearcher createSearcher() {
-        return new GraphSearcher.Builder(graph.getView()).withConcurrentUpdates().build();
+        return new GraphSearcher(graph.getView());
     }
 
     private void updateNeighbors(ConcurrentNeighborSet neighbors, NodeArray natural, NodeArray concurrent) {
