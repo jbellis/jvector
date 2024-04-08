@@ -30,7 +30,6 @@ import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.GrowableLongHeap;
-import io.github.jbellis.jvector.util.SparseBitSet;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.IntHashSet;
@@ -232,12 +231,12 @@ public class GraphSearcher implements AutoCloseable {
         VectorFloat<?> similarities = null;
 
         // add evicted results from the last call back to the candidates
-        var previouslyEvicted = evictedResults.size() > 0 ? new SparseBitSet(view.size()) : Bits.NONE;
+        var previouslyEvicted = new IntHashSet(evictedResults.size());
         while (evictedResults.size() > 0) {
             float score = evictedResults.topScore();
             int node = evictedResults.pop();
             candidates.push(node, score);
-            ((SparseBitSet) previouslyEvicted).set(node);
+            previouslyEvicted.add(node);
         }
         evictedResults.clear();
 
@@ -278,7 +277,7 @@ public class GraphSearcher implements AutoCloseable {
             }
 
             // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
-            if (previouslyEvicted.get(topCandidateNode)) {
+            if (previouslyEvicted.contains(topCandidateNode)) {
                 continue;
             }
 
