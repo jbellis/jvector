@@ -56,7 +56,7 @@ public class Test2DThreshold extends LuceneTestCase {
         var onHeapGraph = builder.build(ravv);
 
         // test raw vectors
-        var searcher = new GraphSearcher.Builder(onHeapGraph.getView()).build();
+        var searcher = new GraphSearcher(onHeapGraph.getView());
         for (int i = 0; i < 10; i++) {
             TestParams tp = createTestParams(vectors);
 
@@ -80,7 +80,7 @@ public class Test2DThreshold extends LuceneTestCase {
 //        {
 //            for (int i = 0; i < 10; i++) {
 //                TestParams tp = createTestParams(vectors);
-//                searcher = new GraphSearcher.Builder(onDiskGraph.getView()).build();
+//                searcher = new GraphSearcher(onDiskGraph.getView());
 //                var reranker = Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, view);
 //                var asf = cv.precomputedScoreFunctionFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
 //                var ssp = new SearchScoreProvider(asf, reranker);
