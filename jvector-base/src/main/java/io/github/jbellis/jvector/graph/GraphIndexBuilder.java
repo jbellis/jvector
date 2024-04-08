@@ -53,7 +53,7 @@ import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
  * Under most conditions this is not something you need to worry about, but it does mean
  * that spawning a new Thread per call is not advisable.  This includes virtual threads.
  */
-public class GraphIndexBuilder {
+public class GraphIndexBuilder implements AutoCloseable {
     private final int beamWidth;
     private final ExplicitThreadLocal<NodeArray> naturalScratch;
     private final ExplicitThreadLocal<NodeArray> concurrentScratch;
@@ -70,6 +70,8 @@ public class GraphIndexBuilder {
 
     private final ForkJoinPool simdExecutor;
     private final ForkJoinPool parallelExecutor;
+
+    private final ExplicitThreadLocal<GraphSearcher> searchers;
 
     private final AtomicInteger updateEntryNodeIn = new AtomicInteger(10_000);
 
@@ -144,6 +146,7 @@ public class GraphIndexBuilder {
         this.parallelExecutor = parallelExecutor;
 
         this.graph = new OnHeapGraphIndex(M, (node, m) -> new ConcurrentNeighborSet(node, m, this.scoreProvider, alpha));
+        this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph.getView()));
 
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
@@ -234,7 +237,7 @@ public class GraphIndexBuilder {
                 neighbors = searchPathNeighbors.get(node);
                 if (neighbors == null) {
                     SearchResult result;
-                    try (var gs = createSearcher()) {
+                    try (var gs = searchers.get()) {
                         var notSelfBits = createNotSelfBits(node);
                         var ssp = scoreProvider.searchProviderFor(node);
                         int ep = graph.entry();
@@ -325,7 +328,7 @@ public class GraphIndexBuilder {
 
         insertionsInProgress.add(node);
         ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
-        try (var gs = createSearcher()) {
+        try (var gs = searchers.get()) {
             var naturalScratchPooled = naturalScratch.get();
             var concurrentScratchPooled = concurrentScratch.get();
             // find ANN of the new node by searching the graph
@@ -405,7 +408,7 @@ public class GraphIndexBuilder {
     public void improveConnections(int node) {
         NodeArray naturalScratchPooled;
         SearchResult result;
-        try (var gs = createSearcher()) {
+        try (var gs = searchers.get()) {
             naturalScratchPooled = naturalScratch.get();
             int ep = graph.entry();
             var bits = new ExcludingBits(node);
@@ -584,7 +587,7 @@ public class GraphIndexBuilder {
 
         int ep = graph.entry();
         var ssp = scoreProvider.searchProviderFor(centroid);
-        try (var gs = createSearcher()) {
+        try (var gs = searchers.get()) {
             var result = gs.searchInternal(ssp, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
             if (result.getNodes().length == 0) {
                 // graph contains only deleted nodes
@@ -594,10 +597,6 @@ public class GraphIndexBuilder {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private GraphSearcher createSearcher() {
-        return new GraphSearcher(graph.getView());
     }
 
     private void updateNeighbors(ConcurrentNeighborSet neighbors, NodeArray natural, NodeArray concurrent) {
@@ -636,6 +635,11 @@ public class GraphIndexBuilder {
             scratch.insertSorted(n, scoreFunction.similarityTo(n));
         }
         return scratch;
+    }
+
+    @Override
+    public void close() throws Exception {
+        searchers.close();
     }
 
     @VisibleForTesting

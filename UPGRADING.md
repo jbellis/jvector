@@ -66,9 +66,9 @@ If you only read one thing, read this!
   similarities will be calculated.
 - `VectorUtil.divInPlace` is replaced by its inverse, `VectorUtil.scale`
 - `PoolingSupport` is removed in favor of direct usage of `ExplicitThreadLocal`
+- `ExplicitThreadLocal` and `GraphIndexBuilder` implement AutoCloseable to make it easier to clean up pooled Views
 
 ## Other changes to public classes
-
 - `FixedBitSet.nextSetBit` behaves as expected
 - Removed vestigal references to node level in several places that were left over from old HNSW code
 

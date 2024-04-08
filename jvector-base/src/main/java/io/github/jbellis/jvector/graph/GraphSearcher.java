@@ -37,8 +37,6 @@ import org.agrona.collections.IntHashSet;
 import java.util.Arrays;
 import java.util.Comparator;
 
-import static java.lang.Math.min;
-
 
 /**
  * Searches a graph to find nearest neighbors to a query vector. For more background on the
