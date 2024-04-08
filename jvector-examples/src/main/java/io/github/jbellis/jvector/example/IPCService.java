@@ -175,7 +175,7 @@ public class IPCService
 
         //Finished with raw data we can close/cleanup
         ravv.close();
-        ctx.searcher = new GraphSearcher.Builder(ctx.index.getView()).build();
+        ctx.searcher = new GraphSearcher(ctx.index.getView());
     }
 
     private CompressedVectors pqIndex(RandomAccessVectorValues ravv, SessionContext ctx) {
@@ -277,7 +277,7 @@ public class IPCService
                             ? ((GraphIndex.RerankingView) view).rerankerFor(queryVector, ctx.similarityFunction)
                             : ScoreFunction.ExactScoreFunction.from(queryVector, ctx.similarityFunction, ctx.ravv);
                     var ssp = new SearchScoreProvider(sf, rr);
-                    r = new GraphSearcher.Builder(ctx.index.getView()).build().search(ssp, searchEf, Bits.ALL);
+                    r = new GraphSearcher(ctx.index.getView()).search(ssp, searchEf, Bits.ALL);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

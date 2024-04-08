@@ -263,7 +263,7 @@ public class Grid {
                 if (cs.cv != null) {
                     try (var view = cs.index.getView()) {
                         var sf = cs.rerankingScoreProviderFor(queryVector, (GraphIndex.RerankingView) view);
-                        var searcher = new GraphSearcher.Builder(view).build();
+                        var searcher = new GraphSearcher(view);
                         sr = searcher.search(sf, efSearch, Bits.ALL);
                     } catch (Exception e) {
                         throw new RuntimeException(e);

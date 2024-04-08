@@ -95,7 +95,7 @@ public class SiftSmall {
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
             var view = graph.getView();
-            var searcher = new GraphSearcher.Builder(view).build();
+            var searcher = new GraphSearcher(view);
             SearchScoreProvider ssp;
             if (compressedVectors == null) {
                 var sf = ScoreFunction.ExactScoreFunction.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, ravv);
