@@ -38,6 +38,7 @@ import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -170,8 +171,9 @@ public class Grid {
                         graphs.add(onHeapGraph); // if we have no cv, compare on-heap/on-disk with exact searches
                     }
                     for (var g : graphs) {
-                        var cs = new ConfiguredSystem(ds, g, cv);
-                        testConfiguration(cs, efSearchOptions);
+                        try (var cs = new ConfiguredSystem(ds, g, cv)) {
+                            testConfiguration(cs, efSearchOptions);
+                        }
                     }
                 }
             }
@@ -260,17 +262,9 @@ public class Grid {
             IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = cs.ds.queryVectors.get(i);
                 SearchResult sr;
-                if (cs.cv != null) {
-                    try (var view = cs.index.getView()) {
-                        var sf = cs.rerankingScoreProviderFor(queryVector, (GraphIndex.RerankingView) view);
-                        var searcher = new GraphSearcher(view);
-                        sr = searcher.search(sf, efSearch, Bits.ALL);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                } else {
-                    sr = GraphSearcher.search(queryVector, efSearch, cs.ds.getBaseRavv(), cs.ds.similarityFunction, cs.index, Bits.ALL);
-                }
+                var searcher = cs.getSearcher();
+                var sf = cs.scoreProviderFor(queryVector, searcher.getView());
+                sr = searcher.search(sf, efSearch, Bits.ALL);
 
                 var gt = cs.ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
@@ -281,10 +275,14 @@ public class Grid {
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
 
-    static class ConfiguredSystem {
+    static class ConfiguredSystem implements AutoCloseable {
         DataSet ds;
         GraphIndex index;
         CompressedVectors cv;
+
+        private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
+            return new GraphSearcher(index.getView());
+        });
 
         ConfiguredSystem(DataSet ds, GraphIndex index, CompressedVectors cv) {
             this.ds = ds;
@@ -292,16 +290,33 @@ public class Grid {
             this.cv = cv;
         }
 
-        public SearchScoreProvider rerankingScoreProviderFor(VectorFloat<?> queryVector, GraphIndex.RerankingView view) {
+        public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
+            // if we're not compressing then just use the exact score function
+            if (cv == null) {
+                var sf = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, ds.getBaseRavv());
+                return new SearchScoreProvider(sf, null);
+            }
+
+            // use ADC or PQ depending on the View type
+            var rrView = (GraphIndex.RerankingView) view;
             ScoreFunction.ApproximateScoreFunction asf;
-            if (view instanceof ADCView) {
-                asf =  ((ADCView) view).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+            if (rrView instanceof ADCView) {
+                asf =  ((ADCView) rrView).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
 
-            ScoreFunction.ExactScoreFunction rr = view.rerankerFor(queryVector, ds.similarityFunction);
+            ScoreFunction.ExactScoreFunction rr = rrView.rerankerFor(queryVector, ds.similarityFunction);
             return new SearchScoreProvider(asf, rr);
+        }
+
+        public GraphSearcher getSearcher() {
+            return searchers.get();
+        }
+
+        @Override
+        public void close() {
+            searchers.close();
         }
     }
 

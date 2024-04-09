@@ -33,10 +33,11 @@ import java.util.function.Supplier;
  * <p>
  * Because ExplicitThreadLocal doesn't hook into Thread internals, any referenced values
  * can be GC'd as expected as soon as the ETL instance itself is no longer referenced.
+ * ExplicitThreadLocal also implements AutoCloseable to cleanup non-GC'd resources.
  * <p>
  * ExplicitThreadLocal is a drop-in replacement for ThreadLocal, and is used in the same way.
  */
-public abstract class ExplicitThreadLocal<U> {
+public abstract class ExplicitThreadLocal<U> implements AutoCloseable {
     // thread id -> instance
     private final ConcurrentHashMap<Long, U> map = new ConcurrentHashMap<>();
 
@@ -50,6 +51,25 @@ public abstract class ExplicitThreadLocal<U> {
     }
 
     protected abstract U initialValue();
+
+    /**
+     * Invoke the close() method on all AutoCloseable values in the map, and then clear the map.
+     * <p>
+     * Not threadsafe.
+     */
+    @Override
+    public void close() {
+        for (U value : map.values()) {
+            if (value instanceof AutoCloseable) {
+                try {
+                    ((AutoCloseable) value).close();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        map.clear();
+    }
 
     public static <U> ExplicitThreadLocal<U> withInitial(Supplier<U> initialValue) {
         return new ExplicitThreadLocal<>() {
