@@ -32,10 +32,10 @@ If you only read one thing, read this!
   insertions to and searches of the graph.
 
 ## API changes supporting new features
-- `GraphIndexBuilder` and `GraphSearcher` scoring are encapsulated by BuildScoreProvider and SearchScoreProvider,
-  respectively.  Notably, GraphIndexBuilder includes a `setScoreProvider` method, allowing switching from
-  in-memory construction using full-resolution vectors to larger-than-memory construction using quantized
-  vectors once enough vectors have been accumulated to construct an accurate PQ.
+- `GraphIndexBuilder` and `GraphSearcher` scoring are encapsulated by `BuildScoreProvider` and `SearchScoreProvider`,
+  respectively.  `BuildScoreProvider.randomAccessScoreProvider()` and `BuildScoreProvider.pqBuildScoreProvider()`
+  offer convenient ways to construct a BSP from full-resolution vectors in memory or with PQ-compressed vectors
+  with reranking, respectively.
 - `addGraphNode(int node, VectorFloat<?> vector)` is now the preferred way to construct a graph incrementally.
 - `GraphIndexSearcher::resume` is added to allow resuming a previous search from where it left off.
 - `ProductQuantization::refine` allows fine-tuning a new PQ object with additional vectors, starting with an existing PQ
