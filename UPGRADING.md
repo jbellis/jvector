@@ -28,8 +28,7 @@ If you only read one thing, read this!
 - Support for Anisotropic Product Quantization as described in "Accelerating Large-Scale Inference with Anisotropic Vector Quantization"
   (https://arxiv.org/abs/1908.10396)
 - `GraphIndexBuilder.markNodeDeleted` is now threadsafe
-- `GraphIndexBuilder::removeDeletedNodes` is parallelized, significantly faster, and can now be called concurrently with
-  insertions to and searches of the graph.
+- `GraphIndexBuilder::removeDeletedNodes` is parallelized and significantly faster.
 
 ## API changes supporting new features
 - `GraphIndexBuilder` and `GraphSearcher` scoring are encapsulated by `BuildScoreProvider` and `SearchScoreProvider`,

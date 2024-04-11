@@ -31,10 +31,7 @@ import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
 
 import java.io.DataOutput;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.stream.IntStream;
 
@@ -248,31 +245,10 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
                 .orElse(Double.NaN);
     }
 
-    // These allow GraphIndexBuilder to tell when it is safe to remove nodes from the graph.
-    AtomicLong viewStamp = new AtomicLong(0);
-    Set<Long> activeViews = ConcurrentHashMap.newKeySet();
-    @SuppressWarnings("BusyWait")
-    public void waitForViewsBefore(long stamp) {
-        while (activeViews.stream().anyMatch(v -> v < stamp)) {
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
     public class ConcurrentGraphIndexView implements GraphIndex.View {
-        final long stamp;
-
-        public ConcurrentGraphIndexView() {
-            stamp = viewStamp.incrementAndGet();
-            activeViews.add(stamp);
-        }
-
         public NodesIterator getNeighborsIterator(int node) {
             var neighbors = getNeighbors(node);
-            assert neighbors != null : "Node " + node + " not found @" + stamp;
+            assert neighbors != null : "Node " + node + " not found";
             return neighbors.iterator();
         }
 
@@ -305,7 +281,6 @@ public class OnHeapGraphIndex implements GraphIndex, Accountable {
 
         @Override
         public void close() {
-            activeViews.remove(stamp);
         }
     }
 
