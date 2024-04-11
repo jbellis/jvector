@@ -430,7 +430,7 @@ public class GraphIndexBuilder implements AutoCloseable {
 
     /**
      * Remove nodes marked for deletion from the graph, and update neighbor lists
-     * to maintain connectivity.  Threadsafe with respect to inserts.
+     * to maintain connectivity.
      *
      * @return approximate size of memory no longer used
      */
@@ -448,11 +448,6 @@ public class GraphIndexBuilder implements AutoCloseable {
                 liveNodes.add(i);
             }
         }
-
-        // wait for any in-progress insertions to complete -- after this, we are guaranteed
-        // that any new insertions will see all the nodes in toDelete as deleted (and will
-        // not add connections to them)
-        busyWaitForInProgressInserts();
 
         // Compute new edges to insert.  If node j is deleted, we add edges (i, k)
         // whenever (i, j) and (j, k) are directed edges in the current graph.  This
@@ -526,12 +521,6 @@ public class GraphIndexBuilder implements AutoCloseable {
             updateEntryPoint();
         }
 
-        // wait for in-progress searches (including for concurrent inserts) to complete
-        // before removing the deleted nodes, so that we don't invalidate their candidate queues
-        var view = graph.getView();
-        view.close();
-        graph.waitForViewsBefore(view.stamp);
-
         // Remove the deleted nodes from the graph
         assert toDelete.cardinality() == nRemoved : "cardinality changed";
         for (int i = toDelete.nextSetBit(0); i != NO_MORE_DOCS; i = toDelete.nextSetBit(i + 1)) {
@@ -539,19 +528,6 @@ public class GraphIndexBuilder implements AutoCloseable {
         }
 
         return nRemoved * graph.ramBytesUsedOneNode();
-    }
-
-    @SuppressWarnings("BusyWait")
-    private void busyWaitForInProgressInserts() {
-        var inProgress = insertionsInProgress.clone();
-        while (!inProgress.isEmpty()) {
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            inProgress.retainAll(insertionsInProgress);
-        }
     }
 
     private static Bits createNotSelfBits(int node) {
