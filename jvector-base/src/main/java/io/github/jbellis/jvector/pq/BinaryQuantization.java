@@ -25,9 +25,9 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
 
 /**
  * Binary Quantization of float vectors: each float is compressed to a single bit,
@@ -57,8 +57,12 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     }
 
     @Override
-    public long[][] encodeAll(List<VectorFloat<?>> vectors, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> vectors.stream().parallel().map(this::encode).toArray(long[][]::new)).join();
+    public long[][] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        return simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+                .parallel()
+                .mapToObj(i -> encode(ravv.getVector(i)))
+                .toArray(long[][]::new))
+                .join();
     }
 
     /**

@@ -34,7 +34,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -88,7 +87,8 @@ public class TestLocallyAdaptiveVectorQuantization extends RandomizedTest {
         private final int encodedVectorSize;
 
         MockLVQPackedVectors(LocallyAdaptiveVectorQuantization lvq, List<VectorFloat<?>> vectors, Path testDirectory) throws IOException {
-            var encodedVectors = lvq.encodeAll(vectors);
+            var ravv = new ListRandomAccessVectorValues(vectors, lvq.globalMean.length());
+            var encodedVectors = lvq.encodeAll(ravv);
             var lvqPath = testDirectory.resolve("lvq" + System.nanoTime());
             try (var out = TestUtil.openDataOutputStream(lvqPath)) {
                 for (var encodedVector : encodedVectors) {

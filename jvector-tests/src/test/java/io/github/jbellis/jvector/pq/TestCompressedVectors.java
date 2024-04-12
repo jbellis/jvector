@@ -40,10 +40,11 @@ public class TestCompressedVectors extends RandomizedTest {
     public void testSaveLoadPQ() throws Exception {
         // Generate a PQ for random 2D vectors
         var vectors = createRandomVectors(512, 2);
-        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, 2), 1, 256, false);
+        var ravv = new ListRandomAccessVectorValues(vectors, 2);
+        var pq = ProductQuantization.compute(ravv, 1, 256, false);
 
         // Compress the vectors
-        var compressed = pq.encodeAll(vectors);
+        var compressed = pq.encodeAll(ravv);
         var cv = new PQVectors(pq, compressed);
         assertEquals(2 * Float.BYTES, cv.getOriginalSize());
         assertEquals(1, cv.getCompressedSize());
@@ -64,10 +65,11 @@ public class TestCompressedVectors extends RandomizedTest {
     public void testSaveLoadBQ() throws Exception {
         // Generate a PQ for random vectors
         var vectors = createRandomVectors(512, 64);
-        var bq = BinaryQuantization.compute(new ListRandomAccessVectorValues(vectors, 2));
+        var ravv = new ListRandomAccessVectorValues(vectors, 2);
+        var bq = BinaryQuantization.compute(ravv);
 
         // Compress the vectors
-        var compressed = bq.encodeAll(vectors);
+        var compressed = bq.encodeAll(ravv);
         var cv = new BQVectors(bq, compressed);
         assertEquals(64 * Float.BYTES, cv.getOriginalSize());
         assertEquals(8, cv.getCompressedSize());
@@ -87,10 +89,11 @@ public class TestCompressedVectors extends RandomizedTest {
     private void testEncodings(int dimension, int codebooks) {
         // Generate a PQ for random 2D vectors
         var vectors = createRandomVectors(512, dimension);
-        var pq = ProductQuantization.compute(new ListRandomAccessVectorValues(vectors, dimension), codebooks, 256, false);
+        var ravv = new ListRandomAccessVectorValues(vectors, dimension);
+        var pq = ProductQuantization.compute(ravv, codebooks, 256, false);
 
         // Compress the vectors
-        var compressed = pq.encodeAll(vectors);
+        var compressed = pq.encodeAll(ravv);
         var cv = new PQVectors(pq, compressed);
 
         // compare the encoded similarities to the raw

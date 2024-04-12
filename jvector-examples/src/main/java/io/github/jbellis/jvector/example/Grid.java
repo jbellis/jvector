@@ -108,14 +108,13 @@ public class Grid {
                             Path testDirectory) throws IOException
     {
         var floatVectors = ds.getBaseRavv();
-        var dimension = ds.getDimension();
         GraphIndexBuilder builder;
         if (buildCompressor == null) {
             var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
             builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f,
                                             PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
         } else {
-            var quantized = buildCompressor.encodeAll(ds.baseVectors);
+            var quantized = buildCompressor.encodeAll(ds.getBaseRavv());
             var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
             var ravv = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
             var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ravv, pq);
@@ -163,7 +162,7 @@ public class Grid {
                     System.out.format("Uncompressed vectors%n");
                 } else {
                     start = System.nanoTime();
-                    var quantizedVectors = compressor.encodeAll(ds.baseVectors);
+                    var quantizedVectors = compressor.encodeAll(ds.getBaseRavv());
                     cv = compressor.createCompressedVectors(quantizedVectors);
                     System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
 

@@ -30,8 +30,8 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
 
 /**
  * Implements Locally-Adaptive Vector Quantization (LVQ) as described in
@@ -60,8 +60,12 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         return new LocallyAdaptiveVectorQuantization(KMeansPlusPlusClusterer.centroidOf(list));
     }
     @Override
-    public QuantizedVector[] encodeAll(List<VectorFloat<?>> vectors, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> vectors.stream().parallel().map(this::encode).toArray(QuantizedVector[]::new)).join();
+    public QuantizedVector[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        return simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+                        .parallel()
+                        .mapToObj(i -> encode(ravv.getVector(i)))
+                        .toArray(QuantizedVector[]::new))
+                .join();
     }
 
     @Override

@@ -69,7 +69,7 @@ public class TestProductQuantization extends RandomizedTest {
     private static void assertPerfectQuantization(List<VectorFloat<?>> vectors) {
         var ravv = new ListRandomAccessVectorValues(vectors, 3);
         var pq = ProductQuantization.compute(ravv, 2, DEFAULT_CLUSTERS, false);
-        var encoded = pq.encodeAll(vectors);
+        var encoded = pq.encodeAll(ravv);
         var decodedScratch = vectorTypeSupport.createFloatVector(3);
         for (int i = 0; i < vectors.size(); i++) {
             pq.decode(encoded[i], decodedScratch);
@@ -163,8 +163,8 @@ public class TestProductQuantization extends RandomizedTest {
                                          getSubvectorSizesAndOffsets(vectors[0].length(), 1),
                                          null,
                                          UNWEIGHTED);
-
-        var encoded = pq.encodeAll(List.of(vectors));
+        var ravv = new ListRandomAccessVectorValues(List.of(vectors), vectors[0].length());
+        var encoded = pq.encodeAll(ravv);
         var loss = 0.0;
         var decodedScratch = vectorTypeSupport.createFloatVector(vectors[0].length());
         for (int i = 0; i < vectors.length; i++) {

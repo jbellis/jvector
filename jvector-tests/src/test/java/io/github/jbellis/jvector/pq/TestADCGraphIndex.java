@@ -59,7 +59,7 @@ public class TestADCGraphIndex extends RandomizedTest {
         var vectors = createRandomVectors(50000, 64);
         var ravv = new ListRandomAccessVectorValues(vectors, 64);
         var pq = ProductQuantization.compute(ravv, 16, 32, false);
-        var compressed = pq.encodeAll(vectors);
+        var compressed = pq.encodeAll(ravv);
         var pqv = new PQVectors(pq, compressed);
 
         TestUtil.writeFusedGraph(graph, ravv, pqv, outputPath);

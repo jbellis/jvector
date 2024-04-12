@@ -229,7 +229,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
         var incrementalOutputPath = testDirectory.resolve("incremental_graph");
         var pq = ProductQuantization.compute(ravv, 64, 256, false);
-        var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(vectors));
+        var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(ravv));
         try (var out = TestUtil.openBufferedWriter(incrementalOutputPath)) {
             var writer = new OnDiskGraphIndexWriter.Builder(graph)
                     .with(new InlineVectors(ravv.dimension()))

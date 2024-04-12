@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -30,13 +32,17 @@ import java.util.concurrent.ForkJoinPool;
  */
 public interface VectorCompressor<T> {
 
-    // TODO probably this should take RAVV instead of List -- it's easy to wrap RAVV in ListRAVV but to go the
-    // other way we have to manually copy each reference
-    default T[] encodeAll(List<VectorFloat<?>> vectors) {
-        return encodeAll(vectors, PhysicalCoreExecutor.pool());
+    default T[] encodeAll(RandomAccessVectorValues ravv) {
+        return encodeAll(ravv, PhysicalCoreExecutor.pool());
     }
 
-    T[] encodeAll(List<VectorFloat<?>> vectors, ForkJoinPool simdExecutor);
+    @Deprecated
+    default T[] encodeAll(List<VectorFloat<?>> vectors) {
+        return encodeAll(new ListRandomAccessVectorValues(vectors, vectors.get(0).length()),
+                         PhysicalCoreExecutor.pool());
+    }
+
+    T[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor);
 
     T encode(VectorFloat<?> v);
 

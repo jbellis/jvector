@@ -57,7 +57,7 @@ public class SiftSmall {
         System.out.format("  PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();
-        var quantizedVectors = pq.encodeAll(baseVectors);
+        var quantizedVectors = pq.encodeAll(ravv);
         System.out.format("  PQ encode %.2fs,%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         var compressedVectors = new PQVectors(pq, quantizedVectors);
