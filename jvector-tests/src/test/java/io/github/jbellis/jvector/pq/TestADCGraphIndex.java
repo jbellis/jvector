@@ -21,9 +21,8 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
-import io.github.jbellis.jvector.graph.disk.ADCView;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;
@@ -66,12 +65,12 @@ public class TestADCGraphIndex extends RandomizedTest {
         TestUtil.writeFusedGraph(graph, ravv, pqv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = ADCGraphIndex.load(marr::duplicate, 0);
-             var cachedOnDiskGraph = CachingGraphIndex.from(onDiskGraph))
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
+             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph, 1000))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
             TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);
-            try (var cachedOnDiskView = (ADCView) cachedOnDiskGraph.getView())
+            try (var cachedOnDiskView = cachedOnDiskGraph.getView())
             {
                 var queryVector = TestUtil.randomVector(getRandom(), 64);
 

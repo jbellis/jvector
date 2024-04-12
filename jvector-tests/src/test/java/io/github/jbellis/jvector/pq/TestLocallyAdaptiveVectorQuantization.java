@@ -22,10 +22,7 @@ import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.NodesIterator;
-import io.github.jbellis.jvector.graph.disk.LVQView;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
-import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.graph.disk.LVQPackedVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -37,6 +34,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -70,7 +68,7 @@ public class TestLocallyAdaptiveVectorQuantization extends RandomizedTest {
         var ravv = new ListRandomAccessVectorValues(randomVectors, dimension);
         var lvq = LocallyAdaptiveVectorQuantization.compute(ravv);
         var query = TestUtil.randomVector(getRandom(), dimension);
-        var lvqView = new MockLVQView(lvq, randomVectors, testDirectory);
+        var lvqView = new MockLVQPackedVectors(lvq, randomVectors, testDirectory);
         float maxDelta = 0;
 
         for (VectorSimilarityFunction vsf : VectorSimilarityFunction.values()) {
@@ -84,47 +82,23 @@ public class TestLocallyAdaptiveVectorQuantization extends RandomizedTest {
         }
     }
 
-    private static class MockLVQView implements LVQView {
-        private final LocallyAdaptiveVectorQuantization lvq;
+    private static class MockLVQPackedVectors implements LVQPackedVectors, AutoCloseable {
         private final RandomAccessReader reader;
-        private final int encodedVectorSize;
-        private final int dimension;
         private final ByteSequence<?> packedVector;
+        private final int encodedVectorSize;
 
-        MockLVQView(LocallyAdaptiveVectorQuantization lvq, List<VectorFloat<?>> vectors, Path testDirectory) throws IOException {
-            this.lvq = lvq;
+        MockLVQPackedVectors(LocallyAdaptiveVectorQuantization lvq, List<VectorFloat<?>> vectors, Path testDirectory) throws IOException {
             var encodedVectors = lvq.encodeAll(vectors);
             var lvqPath = testDirectory.resolve("lvq" + System.nanoTime());
-            try (var out = TestUtil.openFileForWriting(lvqPath)) {
+            try (var out = TestUtil.openDataOutputStream(lvqPath)) {
                 for (var encodedVector : encodedVectors) {
                     encodedVector.writePacked(out);
                 }
-                out.flush();
             }
-            this.dimension = vectors.get(0).length();
+            var dimension = lvq.globalMean.length();
             this.reader = new SimpleMappedReader(lvqPath);
             this.encodedVectorSize = 2 * Float.BYTES + ((dimension % 64 == 0) ? dimension : ((dimension / 64 + 1) * 64));
             this.packedVector = vectorTypeSupport.createByteSequence(encodedVectorSize - 2 * Float.BYTES);
-        }
-
-        @Override
-        public NodesIterator getNeighborsIterator(int node) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int size() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int entryNode() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Bits liveNodes() {
-            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -143,11 +117,6 @@ public class TestLocallyAdaptiveVectorQuantization extends RandomizedTest {
         @Override
         public void close() throws Exception {
             reader.close();
-        }
-
-        @Override
-        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
-            return null;
         }
     }
 }

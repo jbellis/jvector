@@ -548,15 +548,14 @@ public class TestVectorGraph extends LuceneTestCase {
     }
 
     public static VectorFloat<?>[] createRandomFloatVectors(int size, int dimension, Random R) {
-        return IntStream.range(0, size).mapToObj(i -> {
-            return TestUtil.randomVector(R, dimension);
-        }).toArray(sz -> new VectorFloat<?>[sz]);
+        return IntStream.range(0, size).mapToObj(i -> TestUtil.randomVector(R, dimension))
+                .toArray(sz -> new VectorFloat<?>[sz]);
     }
 
     public static VectorFloat<?>[] createRandomFloatVectorsParallel(int size, int dimension) {
-        return IntStream.range(0, size).parallel().mapToObj(i -> {
-            return TestUtil.randomVector(ThreadLocalRandom.current(), dimension);
-        }).toArray(sz -> new VectorFloat<?>[sz]);
+        return IntStream.range(0, size).parallel()
+                .mapToObj(i -> TestUtil.randomVector(ThreadLocalRandom.current(), dimension))
+                .toArray(sz -> new VectorFloat<?>[sz]);
     }
 
     /**

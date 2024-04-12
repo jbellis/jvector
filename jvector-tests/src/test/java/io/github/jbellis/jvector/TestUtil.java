@@ -16,13 +16,18 @@
 
 package io.github.jbellis.jvector;
 
+import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
-import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
+import io.github.jbellis.jvector.graph.disk.Feature;
+import io.github.jbellis.jvector.graph.disk.FeatureId;
+import io.github.jbellis.jvector.graph.disk.FusedADC;
+import io.github.jbellis.jvector.graph.disk.InlineVectors;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -40,12 +45,14 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -61,7 +68,11 @@ public class TestUtil {
         return min + random.nextInt(1 + max - min);
     }
 
-    public static DataOutputStream openFileForWriting(Path outputPath) throws IOException {
+    public static BufferedRandomAccessWriter openBufferedWriter(Path outputPath) throws IOException {
+        return new BufferedRandomAccessWriter(outputPath);
+    }
+
+    public static DataOutputStream openDataOutputStream(Path outputPath) throws IOException {
         return new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(outputPath)));
     }
 
@@ -123,19 +134,23 @@ public class TestUtil {
         return IntStream.range(0, count).mapToObj(i -> TestUtil.randomVector(getRandom(), dimension)).collect(Collectors.toList());
     }
 
-    public static void writeGraph(GraphIndex graph, RandomAccessVectorValues vectors, Path outputPath) throws IOException {
-        try (var out = openFileForWriting(outputPath))
+    public static void writeGraph(GraphIndex graph, RandomAccessVectorValues ravv, Path outputPath) throws IOException {
+        try (var out = openBufferedWriter(outputPath))
         {
-            DiskAnnGraphIndex.write(graph, vectors, out);
-            out.flush();
+            OnDiskGraphIndex.write(graph, ravv, out);
         }
     }
 
-    public static void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues vectors, PQVectors pq, Path outputPath) throws IOException {
-        try (var out = openFileForWriting(outputPath))
+    public static void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues ravv, PQVectors pqv, Path outputPath) throws IOException {
+        try (var out = openBufferedWriter(outputPath))
         {
-            ADCGraphIndex.write(graph, vectors, pq, out);
-            out.flush();
+            var writer = new OnDiskGraphIndexWriter.Builder(graph)
+                    .with(new InlineVectors(ravv.dimension()))
+                    .with(new FusedADC(graph.maxDegree(), pqv.getProductQuantization())).build();
+            var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
+            suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(ravv.getVector(ordinal)));
+            suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(graph.getView(), pqv, ordinal));
+            writer.write(out, suppliers);
         }
     }
 

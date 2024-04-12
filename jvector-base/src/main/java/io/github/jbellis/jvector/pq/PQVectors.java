@@ -200,7 +200,7 @@ public class PQVectors implements CompressedVectors {
 
     @Override
     public int getCompressedSize() {
-        return pq.getCompressedSize();
+        return pq.compressedVectorSize();
     }
 
     @Override

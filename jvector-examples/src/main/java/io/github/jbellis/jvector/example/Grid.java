@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.example;
 
+import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
@@ -24,11 +25,14 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.ADCGraphIndex;
-import io.github.jbellis.jvector.graph.disk.ADCView;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
-import io.github.jbellis.jvector.graph.disk.LVQGraphIndex;
+import io.github.jbellis.jvector.graph.disk.Feature;
+import io.github.jbellis.jvector.graph.disk.FeatureId;
+import io.github.jbellis.jvector.graph.disk.FusedADC;
+import io.github.jbellis.jvector.graph.disk.InlineVectors;
+import io.github.jbellis.jvector.graph.disk.LVQ;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -45,12 +49,14 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +64,7 @@ import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -101,6 +108,7 @@ public class Grid {
                             Path testDirectory) throws IOException
     {
         var floatVectors = ds.getBaseRavv();
+        var dimension = ds.getDimension();
         GraphIndexBuilder builder;
         if (buildCompressor == null) {
             var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
@@ -128,13 +136,23 @@ public class Grid {
         var fusedGraphPath = testDirectory.resolve("fusedgraph" + M + efConstruction + ds.name);
         var lvqGraphPath = testDirectory.resolve("lvqgraph" + M + efConstruction + ds.name);
         try {
-            try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(graphPath)))) {
-                DiskAnnGraphIndex.write(onHeapGraph, floatVectors, outputStream);
+            // vanilla index
+            try (var out = new BufferedRandomAccessWriter(graphPath)) {
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                        .with(new InlineVectors(floatVectors.dimension())).build();
+                var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
+                suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
+                writer.write(out, suppliers);
             }
 
+            // lvq index
             var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
-            try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(lvqGraphPath)))) {
-                LVQGraphIndex.write(onHeapGraph, floatVectors, lvq, outputStream);
+            try (var out = new BufferedRandomAccessWriter(lvqGraphPath)) {
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                        .with(new LVQ(lvq)).build();
+                var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
+                suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
+                writer.write(out, suppliers);
             }
 
             for (var cpSupplier : compressionGrid) {
@@ -150,15 +168,25 @@ public class Grid {
                     System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
 
                     if (fusedCompatible) {
-                        try (var outputStream = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(fusedGraphPath)))) {
-                            ADCGraphIndex.write(onHeapGraph, floatVectors, (PQVectors) cv, outputStream);
+                        // fused index
+                        try (var out = new BufferedRandomAccessWriter(fusedGraphPath)) {
+                            var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                                    .with(new LVQ(lvq))
+                                    .with(new FusedADC(onHeapGraph.maxDegree(), ((PQVectors) cv).getProductQuantization()))
+                                    .build();
+                            var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
+                            suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
+                            var pqVectors = (PQVectors) cv;
+                            suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(onHeapGraph.getView(), pqVectors, ordinal));
+                            writer.write(out, suppliers);
                         }
                     }
                 }
 
-                try (var onDiskGraph = CachingGraphIndex.from((DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
-                     var onDiskLVQGraph = compressor == null ? null : CachingGraphIndex.from(LVQGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? CachingGraphIndex.from(ADCGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null) {
+                try (var onDiskGraph = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+                     var onDiskLVQGraph = compressor == null ? null : new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
+                     var onDiskFusedGraph = fusedCompatible ? new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null)
+                {
                     List<GraphIndex> graphs = new ArrayList<>();
                     graphs.add(onDiskGraph);
                     if (onDiskFusedGraph != null) {
@@ -266,6 +294,7 @@ public class Grid {
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
                 sr = searcher.search(sf, efSearch, Bits.ALL);
 
+                // process search result
                 var gt = cs.ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
@@ -297,16 +326,14 @@ public class Grid {
                 return new SearchScoreProvider(sf, null);
             }
 
-            // use ADC or PQ depending on the View type
-            var rrView = (GraphIndex.RerankingView) view;
+            var scoringView = (GraphIndex.ScoringView) view;
             ScoreFunction.ApproximateScoreFunction asf;
-            if (rrView instanceof ADCView) {
-                asf =  ((ADCView) rrView).approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-            } else {
+            try {
+                asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+            } catch (UnsupportedOperationException e) {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
-
-            ScoreFunction.ExactScoreFunction rr = rrView.rerankerFor(queryVector, ds.similarityFunction);
+            ScoreFunction.ExactScoreFunction rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
             return new SearchScoreProvider(asf, rr);
         }
 

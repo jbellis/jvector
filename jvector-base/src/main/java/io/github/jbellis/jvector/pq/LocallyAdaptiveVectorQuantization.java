@@ -18,7 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.LVQView;
+import io.github.jbellis.jvector.graph.disk.LVQPackedVectors;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -100,11 +100,18 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         vectorTypeSupport.writeFloatVector(out, globalMean);
     }
 
-    public int serializedSize() {
-        return Integer.BYTES + globalMean.length() * Float.BYTES;
+    @Override
+    public int compressedVectorSize() {
+        int lvqDimension = globalMean.length() % 64 == 0 ? globalMean.length() : (globalMean.length() / 64 + 1) * 64;
+        return lvqDimension + 2 * Float.BYTES;
     }
 
-    private ScoreFunction.ExactScoreFunction dotProductScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
+    @Override
+    public int compressorSize() {
+        return Integer.BYTES + Float.BYTES * globalMean.length();
+    }
+
+    private ScoreFunction.ExactScoreFunction dotProductScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
         /* The query vector (full resolution) will be compared to LVQ quantized vectors that were first de-meaned
          * by subtracting the global mean. The dot product is calculated between the query and the quantized vector.
          * This is <query, quantized + globalMean> = <query, quantized> + <query, globalMean> = <query, quantized> + globalBias.
@@ -121,7 +128,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
                 var nodeCount = nodes.length;
                 for (int i = 0; i < nodeCount; i++) {
                     var node = nodes[i];
-                    var vector = view.getPackedVector(node);
+                    var vector = packedVectors.getPackedVector(node);
                     var lvqDot = VectorUtil.lvqDotProduct(query, vector, querySum);
                     lvqDot = lvqDot + queryGlobalBias;
                     results.set(i, (1 + lvqDot) / 2);
@@ -131,7 +138,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
 
             @Override
             public float similarityTo(int node2) {
-                var vector = view.getPackedVector(node2);
+                var vector = packedVectors.getPackedVector(node2);
                 var lvqDot = VectorUtil.lvqDotProduct(query, vector, querySum);
                 lvqDot = lvqDot + queryGlobalBias;
                 return (1 + lvqDot) / 2;
@@ -139,7 +146,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         };
     }
 
-    private ScoreFunction.ExactScoreFunction euclideanScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
+    private ScoreFunction.ExactScoreFunction euclideanScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
         /*
          * The query vector (full resolution) will be compared to LVQ quantized vectors that were first de-meaned.
          * Rather than re-adding the global mean to all quantized vectors, we can shift the query vector the same amount.
@@ -153,7 +160,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
                 var nodeCount = nodes.length;
                 for (int i = 0; i < nodeCount; i++) {
                     var node = nodes[i];
-                    var vector = view.getPackedVector(node);
+                    var vector = packedVectors.getPackedVector(node);
                     var lvqDist = VectorUtil.lvqSquareL2Distance(shiftedQuery, vector);
                     results.set(i, 1 / (1 + lvqDist));
                 }
@@ -162,14 +169,14 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
 
             @Override
             public float similarityTo(int node2) {
-                var vector = view.getPackedVector(node2);
+                var vector = packedVectors.getPackedVector(node2);
                 var lvqDist = VectorUtil.lvqSquareL2Distance(shiftedQuery, vector);
                 return 1 / (1 + lvqDist);
             }
         };
     }
 
-    private ScoreFunction.ExactScoreFunction cosineScoreFunctionFrom(VectorFloat<?> query, LVQView view) {
+    private ScoreFunction.ExactScoreFunction cosineScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
         return new ScoreFunction.ExactScoreFunction() {
             @Override
             public VectorFloat<?> similarityTo(int[] nodes) {
@@ -177,7 +184,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
                 var nodeCount = nodes.length;
                 for (int i = 0; i < nodeCount; i++) {
                     var node = nodes[i];
-                    var vector = view.getPackedVector(node);
+                    var vector = packedVectors.getPackedVector(node);
                     var lvqCosine = VectorUtil.lvqCosine(query, vector, globalMean);
                     results.set(i, (1 + lvqCosine) / 2);
                 }
@@ -186,21 +193,21 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
 
             @Override
             public float similarityTo(int node2) {
-                var vector = view.getPackedVector(node2);
+                var vector = packedVectors.getPackedVector(node2);
                 var lvqCosine = VectorUtil.lvqCosine(query, vector, globalMean);
                 return (1 + lvqCosine) / 2;
             }
         };
     }
 
-    public ScoreFunction.ExactScoreFunction scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQView view) {
+    public ScoreFunction.ExactScoreFunction scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQPackedVectors packedVectors) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
-                return dotProductScoreFunctionFrom(query, view);
+                return dotProductScoreFunctionFrom(query, packedVectors);
             case EUCLIDEAN:
-                return euclideanScoreFunctionFrom(query, view);
+                return euclideanScoreFunctionFrom(query, packedVectors);
             case COSINE:
-                return cosineScoreFunctionFrom(query, view);
+                return cosineScoreFunctionFrom(query, packedVectors);
             default:
                 throw new IllegalArgumentException("Unsupported similarity function: " + similarityFunction);
         }
@@ -208,7 +215,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
 
     @Override
     public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
-        return null; // TODO
+        throw new UnsupportedOperationException("LVQ does not produce a compressed vectors implementation");
     }
 
     public static LocallyAdaptiveVectorQuantization load(RandomAccessReader in) throws IOException {

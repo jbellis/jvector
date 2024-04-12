@@ -48,4 +48,10 @@ public interface VectorCompressor<T> {
      *                          without committing to a specific type T.
      */
     CompressedVectors createCompressedVectors(Object[] compressedVectors);
+
+    /** the size of the serialized compressor itself (NOT the size of compressed vectors) */
+    int compressorSize();
+
+    /** the size of a compressed vector */
+    int compressedVectorSize();
 }

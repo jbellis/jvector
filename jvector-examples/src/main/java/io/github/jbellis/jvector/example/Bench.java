@@ -49,7 +49,9 @@ public class Bench {
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
                 __ -> CompressorParameters.NONE,
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
+                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
+                ds -> new PQParameters(ds.getDimension() / 4, 32, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
+
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.
