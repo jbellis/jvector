@@ -18,34 +18,29 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-import java.util.List;
+import java.util.Map;
 
 /**
- * A List-backed implementation of the {@link RandomAccessVectorValues} interface.
+ * RandomAccessValues backed by a Map.  This can be more useful than `ListRandomAccessVectorValues`
+ * for handling concurrent inserts.
  * <p>
  * It is acceptable to provide this class to a GraphBuilder, and then continue
- * to add vectors to the backing List as you add to the graph.
+ * to add vectors to the backing Map as you add to the graph.
  * <p>
- * This will be as threadsafe as the provided List.
+ * This will be as threadsafe as the provided Map.
  */
-public class ListRandomAccessVectorValues implements RandomAccessVectorValues {
-    private final List<VectorFloat<?>> vectors;
+public class MapRandomAccessVectorValues implements RandomAccessVectorValues {
+    private final Map<Integer, VectorFloat<?>> map;
     private final int dimension;
 
-    /**
-     * Construct a new instance of {@link ListRandomAccessVectorValues}.
-     *
-     * @param vectors   a (potentially mutable) list of float vectors.
-     * @param dimension the dimension of the vectors.
-     */
-    public ListRandomAccessVectorValues(List<VectorFloat<?>> vectors, int dimension) {
-        this.vectors = vectors;
+    public MapRandomAccessVectorValues(Map<Integer, VectorFloat<?>> map, int dimension) {
+        this.map = map;
         this.dimension = dimension;
     }
 
     @Override
     public int size() {
-        return vectors.size();
+        return map.size();
     }
 
     @Override
@@ -54,8 +49,8 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues {
     }
 
     @Override
-    public VectorFloat<?> getVector(int targetOrd) {
-        return vectors.get(targetOrd);
+    public VectorFloat<?> getVector(int nodeId) {
+        return map.get(nodeId);
     }
 
     @Override
@@ -64,7 +59,7 @@ public class ListRandomAccessVectorValues implements RandomAccessVectorValues {
     }
 
     @Override
-    public ListRandomAccessVectorValues copy() {
+    public RandomAccessVectorValues copy() {
         return this;
     }
 }

@@ -101,7 +101,10 @@ public interface BuildScoreProvider {
                 var vv = vectors.get();
                 var centroid = vectorTypeSupport.createFloatVector(vv.dimension());
                 for (int i = 0; i < vv.size(); i++) {
-                    VectorUtil.addInPlace(centroid, vv.getVector(i));
+                    var v = vv.getVector(i);
+                    if (v != null) { // MapRandomAccessVectorValues is not necessarily dense
+                        VectorUtil.addInPlace(centroid, v);
+                    }
                 }
                 VectorUtil.scale(centroid, 1.0f / vv.size());
                 return centroid;
