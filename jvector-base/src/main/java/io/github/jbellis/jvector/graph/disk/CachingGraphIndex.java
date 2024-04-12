@@ -18,33 +18,30 @@ package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 
-public class CachingGraphIndex<U extends OnDiskView<T>, T extends GraphCache.CachedNode> implements GraphIndex, Accountable
+public class CachingGraphIndex implements GraphIndex, Accountable
 {
     private static final int CACHE_DISTANCE = 3;
 
-    private final GraphCache<T> cache_;
-    private final OnDiskGraphIndex<U, T> graph;
+    private final GraphCache cache_;
+    private final OnDiskGraphIndex graph;
 
-    private CachingGraphIndex(OnDiskGraphIndex<U,T> graph, int cacheDistance)
+    public CachingGraphIndex(OnDiskGraphIndex graph)
+    {
+        this(graph, CACHE_DISTANCE);
+    }
+
+    public CachingGraphIndex(OnDiskGraphIndex graph, int cacheDistance)
     {
         this.graph = graph;
         this.cache_ = GraphCache.load(graph, cacheDistance);
-    }
-
-    public static <U extends OnDiskView<T>, T extends GraphCache.CachedNode> CachingGraphIndex<U, T> from(OnDiskGraphIndex<U, T> graph)
-    {
-        return new CachingGraphIndex<>(graph, CACHE_DISTANCE);
-    }
-
-
-    public static <U extends OnDiskView<T>, T extends GraphCache.CachedNode> CachingGraphIndex<U, T> from(OnDiskGraphIndex<U, T> graph, int cacheDistance)
-    {
-        return new CachingGraphIndex<>(graph, cacheDistance);
     }
 
     @Override
@@ -58,8 +55,8 @@ public class CachingGraphIndex<U extends OnDiskView<T>, T extends GraphCache.Cac
     }
 
     @Override
-    public RerankingView getView() {
-        return graph.getView().cachedWith(cache_);
+    public ScoringView getView() {
+        return new View(cache_, graph.getView());
     }
 
     @Override
@@ -82,26 +79,22 @@ public class CachingGraphIndex<U extends OnDiskView<T>, T extends GraphCache.Cac
         return String.format("CachingGraphIndex(graph=%s)", graph);
     }
 
-    public static abstract class View<U extends OnDiskView<T>, T extends GraphCache.CachedNode> implements RerankingView {
-        private final GraphCache<T> cache;
-        protected final U view;
+    public static class View implements ScoringView {
+        private final GraphCache cache;
+        protected final OnDiskGraphIndex.View view;
 
-        public View(GraphCache<T> cache, U view) {
+        public View(GraphCache cache, OnDiskGraphIndex.View view) {
             this.cache = cache;
             this.view = view;
         }
 
         @Override
         public NodesIterator getNeighborsIterator(int ordinal) {
-            var node = getCachedNode(ordinal);
+            var node = cache.getNode(ordinal);
             if (node != null) {
                 return new NodesIterator.ArrayNodesIterator(node.neighbors, node.neighbors.length);
             }
             return view.getNeighborsIterator(ordinal);
-        }
-
-        protected T getCachedNode(int ordinal) {
-            return cache.getNode(ordinal);
         }
 
         @Override
@@ -122,6 +115,16 @@ public class CachingGraphIndex<U extends OnDiskView<T>, T extends GraphCache.Cac
         @Override
         public void close() throws Exception {
             view.close();
+        }
+
+        @Override
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return view.rerankerFor(queryVector, vsf);
+        }
+
+        @Override
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            return view.approximateScoreFunctionFor(queryVector, vsf);
         }
     }
 }

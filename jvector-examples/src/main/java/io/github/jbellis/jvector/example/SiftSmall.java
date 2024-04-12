@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.example;
 
+import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.GraphIndex;
@@ -24,7 +25,7 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.DiskAnnGraphIndex;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -34,14 +35,11 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-import java.io.DataOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -71,10 +69,9 @@ public class SiftSmall {
 
         var graphPath = testDirectory.resolve("graph_test");
         CachingGraphIndex onDiskGraph = null;
-        try (DataOutputStream outputFile = new DataOutputStream(new FileOutputStream(graphPath.toFile()))){
-
-            DiskAnnGraphIndex.write(onHeapGraph, ravv, outputFile);
-            onDiskGraph = CachingGraphIndex.from(DiskAnnGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+        try (var out = new BufferedRandomAccessWriter(graphPath)) {
+            OnDiskGraphIndex.write(onHeapGraph, ravv, out);
+            onDiskGraph = new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
             testRecallInternal(onDiskGraph, null, queryVectors, groundTruth, compressedVectors);
@@ -103,7 +100,7 @@ public class SiftSmall {
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                var rr = ((GraphIndex.RerankingView) view).rerankerFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                var rr = ((GraphIndex.ScoringView) view).rerankerFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 ssp = new SearchScoreProvider(sf, rr);
             }
             var nn = searcher.search(ssp, 100, Bits.ALL).getNodes();
@@ -116,7 +113,7 @@ public class SiftSmall {
         System.out.printf("(%s) Recall: %.4f%n", graphType, (double) topKfound.get() / (queryVectors.size() * topK));
     }
 
-    public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
+    public static void main(String[] args) throws IOException {
         var siftPath = "siftsmall";
         var baseVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_base.fvecs", siftPath));
         var queryVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_query.fvecs", siftPath));

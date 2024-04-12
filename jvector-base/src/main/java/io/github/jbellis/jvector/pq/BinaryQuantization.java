@@ -89,6 +89,17 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     }
 
     @Override
+    public int compressorSize() {
+        return Integer.BYTES + globalCentroid.length() * Float.BYTES;
+    }
+
+    @Override
+    public int compressedVectorSize() {
+        int M = (int) Math.ceil(globalCentroid.length() / 64.0);
+        return Long.BYTES * M;
+    }
+
+    @Override
     public void write(DataOutput out) throws IOException {
         out.writeInt(globalCentroid.length());
         vectorTypeSupport.writeFloatVector(out, globalCentroid);

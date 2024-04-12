@@ -27,6 +27,7 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Semaphore;
@@ -37,7 +38,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.TestUtil.assertGraphEquals;
-import static io.github.jbellis.jvector.TestUtil.openFileForWriting;
 import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectors;
 import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectorsParallel;
 import static org.junit.Assert.assertEquals;
@@ -109,9 +109,8 @@ public class TestDeletions extends LuceneTestCase {
         // check that we can save and load the graph with "holes" from the deletion
         var testDirectory = Files.createTempDirectory(this.getClass().getSimpleName());
         var outputPath = testDirectory.resolve("on_heap_graph");
-        try (var out = openFileForWriting(outputPath)) {
+        try (var out = TestUtil.openDataOutputStream(outputPath)) {
             graph.save(out);
-            out.flush();
         }
         var b2 = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString())) {

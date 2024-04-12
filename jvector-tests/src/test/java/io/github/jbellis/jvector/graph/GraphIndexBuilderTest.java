@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.function.Supplier;
@@ -60,9 +61,9 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
         var builder = newBuilder.get();
 
         try (var graph = TestUtil.buildSequentially(builder, ravv);
-             var out = TestUtil.openFileForWriting(indexDataPath)) {
+             var out = TestUtil.openDataOutputStream(indexDataPath))
+        {
             graph.save(out);
-            out.flush();
         }
 
         builder = newBuilder.get();

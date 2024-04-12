@@ -21,19 +21,27 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
+import io.github.jbellis.jvector.pq.PQVectors;
+import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.IntFunction;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
 import static org.junit.Assert.assertEquals;
@@ -67,7 +75,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
             TestUtil.writeGraph(graph, ravv, outputPath);
             try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-                 var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0))
+                 var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0))
             {
                 TestUtil.assertGraphEquals(graph, onDiskGraph);
                 try (var onDiskView = onDiskGraph.getView()) {
@@ -99,21 +107,20 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         assertTrue(getNeighborNodes(originalView, 2).contains(1));
 
         // create renumbering map
-        Map<Integer, Integer> oldToNewMap = OnDiskGraphIndex.getSequentialRenumbering(original);
+        Map<Integer, Integer> oldToNewMap = OnDiskGraphIndexWriter.getSequentialRenumbering(original);
         assertEquals(2, oldToNewMap.size());
         assertEquals(0, (int) oldToNewMap.get(1));
         assertEquals(1, (int) oldToNewMap.get(2));
 
         // write the graph
         var outputPath = testDirectory.resolve("renumbered_graph");
-        try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
+        try (var out = TestUtil.openBufferedWriter(outputPath))
         {
-            DiskAnnGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
-            indexOutputWriter.flush();
+            OnDiskGraphIndex.write(original, ravv, oldToNewMap, out);
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             // 0 -> 1
@@ -140,14 +147,12 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
         // write the graph
         var outputPath = testDirectory.resolve("renumbered_graph");
-        try (var indexOutputWriter = TestUtil.openFileForWriting(outputPath))
-        {
-            DiskAnnGraphIndex.write(original, ravv, oldToNewMap, indexOutputWriter);
-            indexOutputWriter.flush();
+        try (var out = TestUtil.openBufferedWriter(outputPath)) {
+            OnDiskGraphIndex.write(original, ravv, oldToNewMap, out);
         }
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
@@ -158,9 +163,9 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
-    private static void validateVectors(DiskAnnGraphIndex.View view, RandomAccessVectorValues ravv) {
+    private static void validateVectors(OnDiskGraphIndex.View view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
-            assertEquals(view.getVector(i), ravv.getVector(i));
+            assertEquals("Incorrect vector at " + i, view.getVector(i), ravv.getVector(i));
         }
     }
 
@@ -173,8 +178,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         TestUtil.writeGraph(graph, ravv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = DiskAnnGraphIndex.load(marr::duplicate, 0);
-             var cachedOnDiskGraph = CachingGraphIndex.from(onDiskGraph))
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
+             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
             TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);
@@ -184,6 +189,75 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
                 validateVectors(onDiskView, ravv);
                 validateVectors(cachedOnDiskView, ravv);
             }
+        }
+    }
+
+    @Test
+    public void testV0Compatibility() throws Exception {
+        // using a random graph from testLargeGraph generated on old version
+        var file = new File("resources/version0.odgi");
+        try (var smr = new SimpleMappedReader(file.getAbsolutePath());
+             var onDiskGraph = OnDiskGraphIndex.load(smr::duplicate, 0);
+             var onDiskView = onDiskGraph.getView())
+        {
+            assertEquals(32, onDiskGraph.maxDegree);
+            assertEquals(0, onDiskGraph.version);
+            assertEquals(100_000, onDiskGraph.size);
+            assertEquals(2, onDiskGraph.dimension);
+            assertEquals(99779, onDiskGraph.entryNode);
+            assertEquals(EnumSet.of(FeatureId.INLINE_VECTORS), onDiskGraph.features.keySet());
+            var actualNeighbors = getNeighborNodes(onDiskView, 12345);
+            var expectedNeighbors = Set.of(67461, 9540, 85444, 13638, 89415, 21255, 73737, 46985, 71373, 47436, 94863, 91343, 27215, 59730, 69911, 91867, 89373, 6621, 59106, 98922, 69679, 47728, 60722, 56052, 28854, 38902, 21561, 20665, 41722, 57917, 34495, 5183);
+            assertEquals(expectedNeighbors, actualNeighbors);
+        }
+    }
+
+    @Test
+    public void testIncrementalWrites() {
+        // generate 1000 node random graph
+        var graph = new TestUtil.RandomlyConnectedGraphIndex(1000, 32, getRandom());
+        var vectors = TestUtil.createRandomVectors(1000, 256);
+        var ravv = new ListRandomAccessVectorValues(vectors, 256);
+
+        // write out graph all at once
+        var outputPath = testDirectory.resolve("bulk_graph");
+        try (var out = TestUtil.openBufferedWriter(outputPath)) {
+            OnDiskGraphIndex.write(graph, ravv, out);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        var incrementalOutputPath = testDirectory.resolve("incremental_graph");
+        var pq = ProductQuantization.compute(ravv, 64, 256, false);
+        var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(vectors));
+        try (var out = TestUtil.openBufferedWriter(incrementalOutputPath)) {
+            var writer = new OnDiskGraphIndexWriter.Builder(graph)
+                    .with(new InlineVectors(ravv.dimension()))
+                    .with(new FusedADC(graph.maxDegree(), pq)).build();
+            EnumMap<FeatureId, Feature.State> enumMap = new EnumMap<>(FeatureId.class);
+            for (int i = 0; i < 1000; i++) {
+                enumMap.put(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i))); // write inline vectors incrementally
+                writer.writeInline(out, i, enumMap);
+            }
+            var suppliers_ = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
+            suppliers_.put(FeatureId.INLINE_VECTORS, null);
+            suppliers_.put(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i));
+            out.seek(0);
+            writer.write(out, suppliers_); // write graph structure, fused ADC
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try (var bulkMarr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+             var bulkGraph = OnDiskGraphIndex.load(bulkMarr::duplicate, 0);
+             var incrementalMarr = new SimpleMappedReader(incrementalOutputPath.toAbsolutePath().toString());
+             var incrementalGraph = OnDiskGraphIndex.load(incrementalMarr::duplicate, 0);
+             var incrementalView = incrementalGraph.getView())
+        {
+            TestUtil.assertGraphEquals(incrementalGraph, bulkGraph); // incremental and bulk graph should have same structure
+            validateVectors(incrementalView, ravv); // inline vectors should be the same
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }

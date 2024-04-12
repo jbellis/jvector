@@ -538,6 +538,25 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         }
     }
 
+    @Override
+    public int compressorSize() {
+        int size = 0;
+        size += Integer.BYTES; // MAGIC
+        size += Integer.BYTES; // STORAGE_VERSION
+        size += Integer.BYTES; // globalCentroidLength
+        if (globalCentroid != null) {
+            size += Float.BYTES * globalCentroid.length();
+        }
+        size += Integer.BYTES; // M
+        size += Integer.BYTES * M; // subvectorSizesAndOffsets (only the sizes are written)
+        size += Float.BYTES; // anisotropicThreshold
+        size += Integer.BYTES; // clusterCount
+        for (int i = 0; i < M; i++) {
+            size += Float.BYTES * codebooks[i].length();
+        }
+        return size;
+    }
+
     public static ProductQuantization load(RandomAccessReader in) throws IOException {
         int maybeMagic = in.readInt();
         int version;
@@ -635,7 +654,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return centroid;
     }
 
-    public int getCompressedSize() {
+    @Override
+    public int compressedVectorSize() {
         return codebooks.length;
     }
 
