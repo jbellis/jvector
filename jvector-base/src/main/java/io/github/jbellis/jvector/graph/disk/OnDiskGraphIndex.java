@@ -283,15 +283,13 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                              BufferedRandomAccessWriter out)
             throws IOException
     {
-        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, oldToNewOrdinals)
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, out, oldToNewOrdinals)
                 .with(new InlineVectors(vectors.dimension()))
                 .build())
         {
             Map<FeatureId, IntFunction<Feature.State>> suppliers_
                     = Collections.singletonMap(FeatureId.INLINE_VECTORS, nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
-            writer.write(out, new EnumMap<>(suppliers_));
-        } catch (Exception e) {
-            throw new IOException(e);
+            writer.write(new EnumMap<>(suppliers_));
         }
     }
 }

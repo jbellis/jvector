@@ -29,6 +29,7 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -88,7 +89,7 @@ public interface GraphIndex extends AutoCloseable {
     @Override
     void close() throws IOException;
 
-    interface View extends AutoCloseable {
+    interface View extends Closeable {
         /**
          * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
          * is guaranteed to be valid.

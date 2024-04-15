@@ -113,7 +113,7 @@ public class CachingGraphIndex implements GraphIndex, Accountable
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() throws IOException {
             view.close();
         }
 

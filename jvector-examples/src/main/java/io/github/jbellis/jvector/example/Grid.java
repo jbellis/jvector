@@ -49,7 +49,6 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -137,21 +136,21 @@ public class Grid {
         try {
             // vanilla index
             try (var out = new BufferedRandomAccessWriter(graphPath)) {
-                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
                         .with(new InlineVectors(floatVectors.dimension())).build();
                 var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
                 suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
-                writer.write(out, suppliers);
+                writer.write(suppliers);
             }
 
             // lvq index
             var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
             try (var out = new BufferedRandomAccessWriter(lvqGraphPath)) {
-                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
                         .with(new LVQ(lvq)).build();
                 var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
                 suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
-                writer.write(out, suppliers);
+                writer.write(suppliers);
             }
 
             for (var cpSupplier : compressionGrid) {
@@ -169,7 +168,7 @@ public class Grid {
                     if (fusedCompatible) {
                         // fused index
                         try (var out = new BufferedRandomAccessWriter(fusedGraphPath)) {
-                            var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph)
+                            var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
                                     .with(new LVQ(lvq))
                                     .with(new FusedADC(onHeapGraph.maxDegree(), ((PQVectors) cv).getProductQuantization()))
                                     .build();
@@ -177,7 +176,7 @@ public class Grid {
                             suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
                             var pqVectors = (PQVectors) cv;
                             suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(onHeapGraph.getView(), pqVectors, ordinal));
-                            writer.write(out, suppliers);
+                            writer.write(suppliers);
                         }
                     }
                 }

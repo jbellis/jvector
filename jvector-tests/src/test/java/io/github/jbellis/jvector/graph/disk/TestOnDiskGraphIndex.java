@@ -230,10 +230,11 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var incrementalOutputPath = testDirectory.resolve("incremental_graph");
         var pq = ProductQuantization.compute(ravv, 64, 256, false);
         var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(ravv));
-        try (var out = TestUtil.openBufferedWriter(incrementalOutputPath)) {
-            var writer = new OnDiskGraphIndexWriter.Builder(graph)
-                    .with(new InlineVectors(ravv.dimension()))
-                    .with(new FusedADC(graph.maxDegree(), pq)).build();
+        try (var out = TestUtil.openBufferedWriter(incrementalOutputPath);
+             var writer = new OnDiskGraphIndexWriter.Builder(graph, out)
+                     .with(new InlineVectors(ravv.dimension()))
+                     .with(new FusedADC(graph.maxDegree(), pq)).build();
+        ) {
             EnumMap<FeatureId, Feature.State> enumMap = new EnumMap<>(FeatureId.class);
             for (int i = 0; i < 1000; i++) {
                 enumMap.put(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i))); // write inline vectors incrementally
@@ -243,7 +244,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             suppliers_.put(FeatureId.INLINE_VECTORS, null);
             suppliers_.put(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i));
             out.seek(0);
-            writer.write(out, suppliers_); // write graph structure, fused ADC
+            writer.write(suppliers_); // write graph structure, fused ADC
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
