@@ -82,9 +82,9 @@ public class LVQ implements Feature {
         }
     }
 
-    ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector,
-                                                 VectorSimilarityFunction vsf,
-                                                 OnDiskGraphIndex.View view)
+    ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector,
+                                       VectorSimilarityFunction vsf,
+                                       OnDiskGraphIndex.View view)
     {
         return lvq.scoreFunctionFrom(queryVector, vsf, new PackedVectors(view));
     }

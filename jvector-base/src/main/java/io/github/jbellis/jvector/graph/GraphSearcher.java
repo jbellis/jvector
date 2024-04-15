@@ -80,7 +80,7 @@ public class GraphSearcher implements AutoCloseable {
     public static SearchResult search(VectorFloat<?> queryVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
         try (var view = graph.getView()) {
             var searcher = new GraphSearcher(view);
-            var sf = ScoreFunction.ExactScoreFunction.from(queryVector, similarityFunction, vectors);
+            var sf = ScoreFunction.Reranker.from(queryVector, similarityFunction, vectors);
             var ssp = new SearchScoreProvider(sf, null);
             return searcher.search(ssp, topK, acceptOrds);
         } catch (Exception e) {

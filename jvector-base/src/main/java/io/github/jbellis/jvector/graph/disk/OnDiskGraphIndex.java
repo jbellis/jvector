@@ -242,18 +242,18 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             reader.close();
         }
 
-        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
+        public ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
             if (permissibleFeatures.contains(FeatureId.LVQ) && features.containsKey(FeatureId.LVQ)) {
                 return ((LVQ) features.get(FeatureId.LVQ)).rerankerFor(queryVector, vsf, this);
             } else if (permissibleFeatures.contains(FeatureId.INLINE_VECTORS) && features.containsKey(FeatureId.INLINE_VECTORS)) {
-                return ScoreFunction.ExactScoreFunction.from(queryVector, vsf, this);
+                return ScoreFunction.Reranker.from(queryVector, vsf, this);
             } else {
                 throw new UnsupportedOperationException("No reranker available for this graph");
             }
         }
 
         @Override
-        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+        public ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
             return rerankerFor(queryVector, vsf, FeatureId.ALL);
         }
 

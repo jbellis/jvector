@@ -19,9 +19,16 @@ package io.github.jbellis.jvector.graph.similarity;
 /** Encapsulates comparing node distances to a specific vector for GraphSearcher. */
 public final class SearchScoreProvider {
     private final ScoreFunction scoreFunction;
-    private final ScoreFunction.ExactScoreFunction reranker;
+    private final ScoreFunction.Reranker reranker;
 
-    public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.ExactScoreFunction reranker) {
+    /**
+     * @param scoreFunction the primary, fast scoring function
+     * @param reranker optional reranking function
+     * Generally, reranker will be null iff scoreFunction is an ExactScoreFunction.  However,
+     * it is allowed, and sometimes useful, to only perform approximate scoring without reranking.
+     */
+    public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.Reranker reranker) {
+        assert scoreFunction != null;
         this.scoreFunction = scoreFunction;
         this.reranker = reranker;
     }
@@ -30,7 +37,7 @@ public final class SearchScoreProvider {
         return scoreFunction;
     }
 
-    public ScoreFunction.ExactScoreFunction reranker() {
+    public ScoreFunction.Reranker reranker() {
         return reranker;
     }
 

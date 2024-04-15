@@ -320,7 +320,7 @@ public class Grid {
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
             // if we're not compressing then just use the exact score function
             if (cv == null) {
-                var sf = ScoreFunction.ExactScoreFunction.from(queryVector, ds.similarityFunction, ds.getBaseRavv());
+                var sf = ScoreFunction.Reranker.from(queryVector, ds.similarityFunction, ds.getBaseRavv());
                 return new SearchScoreProvider(sf, null);
             }
 
@@ -331,7 +331,7 @@ public class Grid {
             } catch (UnsupportedOperationException e) {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
-            ScoreFunction.ExactScoreFunction rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
+            var rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
             return new SearchScoreProvider(asf, rr);
         }
 
