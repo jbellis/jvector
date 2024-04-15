@@ -183,6 +183,12 @@ public class OnDiskGraphIndexWriter implements Closeable {
         }
     }
 
+    /** CRC32 checksum of bytes written since the starting offset */
+    public long checksum() throws IOException {
+        long endOffset = out.getFilePointer();
+        return out.checksum(startOffset, endOffset);
+    }
+
     /**
      * Builder for OnDiskGraphIndexWriter, with optional features.
      */
