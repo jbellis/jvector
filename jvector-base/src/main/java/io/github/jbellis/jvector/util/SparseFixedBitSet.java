@@ -38,7 +38,9 @@ import java.util.Arrays;
  *       right of the <code>i-th</code> bit.
  * </ul>
  *
- * You should probably use SparseBits instead.
+ * You should probably use SparseBits instead for search-related use cases; for all but
+ * tiny graphs, the overhead of packing bits in longs doesn't make sense because you
+ * end up with one long per set bit.
  */
 @Deprecated
 public class SparseFixedBitSet extends BitSet {
