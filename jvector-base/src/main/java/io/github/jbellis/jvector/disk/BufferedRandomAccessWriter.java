@@ -16,45 +16,62 @@
 
 package io.github.jbellis.jvector.disk;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Path;
 import java.util.zip.CRC32;
 
-public class BufferedRandomAccessWriter implements Closeable {
-    private final RandomAccessFile raf;
+/**
+ * A buffered DataOutput that adds seek() and checksum() methods
+ */
+public class BufferedRandomAccessWriter implements DataOutput, Closeable {
+    private static class RandomAccessOutputStream extends OutputStream {
+        private final RandomAccessFile raf;
 
-    // buffer structures
-    private final TransparentByteArrayOutputStream scratchBytes = new TransparentByteArrayOutputStream(4096);
-    private final DataOutputStream scratch = new DataOutputStream(scratchBytes);
+        public RandomAccessOutputStream(RandomAccessFile raf) {
+            this.raf = raf;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            raf.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            raf.write(b, off, len);
+        }
+
+        @Override
+        public void close() throws IOException {
+            raf.close();
+        }
+    }
+
+    private final RandomAccessFile raf;
+    private final DataOutputStream stream;
 
     public BufferedRandomAccessWriter(Path path) throws FileNotFoundException {
         raf = new RandomAccessFile(path.toFile(), "rw");
+        stream = new DataOutputStream(new BufferedOutputStream(new RandomAccessOutputStream(raf)));
     }
 
     public void seek(long position) throws IOException {
+        stream.flush();
         raf.seek(position);
-    }
-
-    public void writeBuffered(ChunkWriter writer) throws IOException {
-        assert scratchBytes.size() == 0;
-        writer.write(scratch);
-        raf.write(scratchBytes.getArray(), 0, scratchBytes.size());
-        scratchBytes.reset();
     }
 
     @Override
     public void close() throws IOException {
+        stream.close();
         raf.close();
-    }
-
-    public void writeInt(int i) throws IOException {
-        raf.writeInt(i);
     }
 
     public long getFilePointer() throws IOException {
@@ -64,11 +81,14 @@ public class BufferedRandomAccessWriter implements Closeable {
     /**
      * return the CRC32 checksum for the range [startOffset .. endOffset)
      * <p>
-     * the file pointer will be left at endOffset
+     * the file pointer will be left at endOffset.
+     * <p>
      */
     public long checksum(long startOffset, long endOffset) throws IOException {
+        stream.flush();
+
         var crc = new CRC32();
-        var a = scratchBytes.getArray();
+        var a = new byte[4096];
         seek(startOffset);
         for (long p = startOffset; p < endOffset; ) {
             int toRead = (int) Math.min(a.length, endOffset - p);
@@ -82,20 +102,77 @@ public class BufferedRandomAccessWriter implements Closeable {
         return crc.getValue();
     }
 
-    // because there is still no ThrowingRunnable in the JDK
-    @FunctionalInterface
-    public interface ChunkWriter {
-        void write(DataOutput out) throws IOException;
+    //
+    // DataOutput methods
+    //
+
+    @Override
+    public void write(int b) throws IOException {
+        stream.write(b);
     }
 
-    // silly that we need to do this but at least the JDK made `buf` available to subclasses
-    private static class TransparentByteArrayOutputStream extends ByteArrayOutputStream {
-        public TransparentByteArrayOutputStream(int size) {
-            super(size);
-        }
+    @Override
+    public void write(byte[] b) throws IOException {
+        stream.write(b);
+    }
 
-        public byte[] getArray() {
-            return buf;
-        }
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+        stream.write(b, off, len);
+    }
+
+    @Override
+    public void writeBoolean(boolean v) throws IOException {
+        stream.writeBoolean(v);
+    }
+
+    @Override
+    public void writeByte(int v) throws IOException {
+        stream.writeByte(v);
+    }
+
+    @Override
+    public void writeShort(int v) throws IOException {
+        stream.writeShort(v);
+    }
+
+    @Override
+    public void writeChar(int v) throws IOException {
+        stream.writeChar(v);
+    }
+
+    @Override
+    public void writeInt(int v) throws IOException {
+        stream.writeInt(v);
+    }
+
+    @Override
+    public void writeLong(long v) throws IOException {
+        stream.writeLong(v);
+    }
+
+    @Override
+    public void writeFloat(float v) throws IOException {
+        stream.writeFloat(v);
+    }
+
+    @Override
+    public void writeDouble(double v) throws IOException {
+        stream.writeDouble(v);
+    }
+
+    @Override
+    public void writeBytes(String s) throws IOException {
+        stream.writeBytes(s);
+    }
+
+    @Override
+    public void writeChars(String s) throws IOException {
+        stream.writeChars(s);
+    }
+
+    @Override
+    public void writeUTF(String s) throws IOException {
+        stream.writeUTF(s);
     }
 }

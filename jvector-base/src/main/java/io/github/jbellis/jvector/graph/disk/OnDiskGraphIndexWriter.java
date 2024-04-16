@@ -89,7 +89,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             if (state == null) {
                 raf.seek(raf.getFilePointer() + writer.inlineSize());
             } else {
-                raf.writeBuffered((out) -> writer.writeInline(out, state));
+                writer.writeInline(out, state);
             }
         }
     }
@@ -123,7 +123,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.seek(startOffset);
         var commonHeader = new CommonHeader(OnDiskGraphIndex.CURRENT_VERSION, graph.size(), dimension, view.entryNode(), graph.maxDegree());
         var header = new Header(commonHeader, featureMap);
-        out.writeBuffered(header::write);
+        header.write(out);
 
         // for each graph node, write the associated vector and its neighbors
         for (int i = 0; i < oldToNewOrdinals.size(); i++) {
@@ -141,27 +141,23 @@ public class OnDiskGraphIndexWriter implements Closeable {
                     out.seek(out.getFilePointer() + feature.inlineSize());
                 }
                 else {
-                    out.writeBuffered((out) -> {
-                        feature.writeInline(out, supplier.apply(originalOrdinal));
-                    });
+                    feature.writeInline(out, supplier.apply(originalOrdinal));
                 }
             }
 
             var neighbors = view.getNeighborsIterator(originalOrdinal);
             // pad out to maxEdgesPerNode
-            out.writeBuffered((out) -> {
-                out.writeInt(neighbors.size());
-                int n = 0;
-                for (; n < neighbors.size(); n++) {
-                    out.writeInt(oldToNewOrdinals.get(neighbors.nextInt()));
-                }
-                assert !neighbors.hasNext();
+            out.writeInt(neighbors.size());
+            int n = 0;
+            for (; n < neighbors.size(); n++) {
+                out.writeInt(oldToNewOrdinals.get(neighbors.nextInt()));
+            }
+            assert !neighbors.hasNext();
 
-                // pad out to maxEdgesPerNode
-                for (; n < graph.maxDegree(); n++) {
-                    out.writeInt(-1);
-                }
-            });
+            // pad out to maxEdgesPerNode
+            for (; n < graph.maxDegree(); n++) {
+                out.writeInt(-1);
+            }
         }
     }
 
