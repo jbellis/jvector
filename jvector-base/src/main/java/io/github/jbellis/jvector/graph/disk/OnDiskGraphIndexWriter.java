@@ -301,10 +301,6 @@ public class OnDiskGraphIndexWriter implements Closeable {
         }
 
         public OnDiskGraphIndexWriter build() throws IOException {
-            if (features.containsKey(FeatureId.FUSED_ADC) && !(features.containsKey(FeatureId.LVQ) || features.containsKey(FeatureId.INLINE_VECTORS))) {
-                throw new IllegalArgumentException("Fused ADC requires an exact score source.");
-            }
-
             int dimension;
             if (features.containsKey(FeatureId.INLINE_VECTORS)) {
                 dimension = ((InlineVectors) features.get(FeatureId.INLINE_VECTORS)).dimension();

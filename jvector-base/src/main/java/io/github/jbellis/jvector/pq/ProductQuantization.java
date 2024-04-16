@@ -67,6 +67,9 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     private final float[][] centroidNormsSquared; // precomputed norms of the centroids, for encoding
     private final ThreadLocal<VectorFloat<?>> partialSums; // for dot product, euclidean, and cosine partials
     private final AtomicReference<VectorFloat<?>> partialMagnitudes; // for cosine partials
+    private final ThreadLocal<VectorFloat<?>> partialBestDistances; // for partial best distances during fused ADC
+    private final ThreadLocal<ByteSequence<?>> partialQuantizedSums; // for quantized sums during fused ADC
+
 
     /**
      * Initializes the codebooks by clustering the input data using Product Quantization.
@@ -197,7 +200,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         }
         this.anisotropicThreshold = anisotropicThreshold;
         this.partialSums = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(getSubspaceCount() * getClusterCount()));
+        this.partialQuantizedSums = ThreadLocal.withInitial(() -> vectorTypeSupport.createByteSequence(getSubspaceCount() * getClusterCount() * 2));
         this.partialMagnitudes = new AtomicReference<>(null);
+        this.partialBestDistances = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(getSubspaceCount()));
+
 
         centroidNormsSquared = new float[M][clusterCount];
         for (int i = 0; i < M; i++) {
@@ -506,6 +512,14 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
 
     VectorFloat<?> reusablePartialSums() {
         return partialSums.get();
+    }
+
+    ByteSequence<?> reusablePartialQuantizedSums() {
+        return partialQuantizedSums.get();
+    }
+
+    VectorFloat<?> reusablePartialBestDistances() {
+        return partialBestDistances.get();
     }
 
     AtomicReference<VectorFloat<?>> partialMagnitudes() {

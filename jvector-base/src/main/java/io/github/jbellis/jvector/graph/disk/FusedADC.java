@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.QuickADCPQDecoder;
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -40,12 +41,20 @@ public class FusedADC implements Feature {
     private final ProductQuantization pq;
     private final int maxDegree;
     private final ThreadLocal<VectorFloat<?>> reusableResults;
+    private final ExplicitThreadLocal<ByteSequence<?>> reusableNeighbors;
     private ByteSequence<?> compressedNeighbors = null;
 
     public FusedADC(int maxDegree, ProductQuantization pq) {
+        if (maxDegree != 32) {
+            throw new IllegalArgumentException("maxDegree must be 32 for FusedADC. This limitation may be removed in future releases");
+        }
+        if (pq.getClusterCount() != 256) {
+            throw new IllegalArgumentException("FusedADC requires a 256-cluster PQ. This limitation may be removed in future releases");
+        }
         this.maxDegree = maxDegree;
         this.pq = pq;
         this.reusableResults = ThreadLocal.withInitial(() -> OnDiskGraphIndex.vectorTypeSupport.createFloatVector(maxDegree));
+        this.reusableNeighbors = ExplicitThreadLocal.withInitial(() -> vectorTypeSupport.createByteSequence(pq.compressedVectorSize() * maxDegree));
     }
 
     @Override
@@ -94,7 +103,7 @@ public class FusedADC implements Feature {
         var neighbors = state.view.getNeighborsIterator(state.nodeId);
         int n = 0;
         var neighborSize = neighbors.size();
-        compressedNeighbors.zero(); // TODO: make more efficient
+        compressedNeighbors.zero();
         for (; n < neighborSize; n++) {
             var compressed = pqv.get(neighbors.nextInt());
             for (int j = 0; j < pqv.getCompressedSize(); j++) {
@@ -119,22 +128,26 @@ public class FusedADC implements Feature {
 
     private class PackedNeighborsFused implements FusedADCNeighbors {
         private final OnDiskGraphIndex.View view;
-        private final ByteSequence<?> neighbors;
 
         public PackedNeighborsFused(OnDiskGraphIndex.View view) {
             this.view = view;
-            this.neighbors = OnDiskGraphIndex.vectorTypeSupport.createByteSequence(pq.compressedVectorSize() * maxDegree);
         }
 
         @Override
         public ByteSequence<?> getPackedNeighbors(int node) {
             try {
                 var reader = view.inlineReaderForNode(node, FeatureId.FUSED_ADC);
-                OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, neighbors);
-                return neighbors;
+                var tlNeighbors = reusableNeighbors.get();
+                OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, tlNeighbors);
+                return tlNeighbors;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        @Override
+        public int maxDegree() {
+            return maxDegree;
         }
     }
 }

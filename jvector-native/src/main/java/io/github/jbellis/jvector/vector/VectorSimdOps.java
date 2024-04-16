@@ -22,6 +22,7 @@ import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
+import jdk.incubator.vector.ShortVector;
 import jdk.incubator.vector.VectorOperators;
 
 import java.nio.ByteOrder;
@@ -844,6 +845,30 @@ final class VectorSimdOps {
             return lvqCosine512(vector, packedVector, centroid);
         } else {
             return lvqCosine256(vector, packedVector, centroid);
+        }
+    }
+
+    public static void quantizePartialSums(float delta, MemorySegmentVectorFloat partialSums, MemorySegmentVectorFloat partialBestDistances, MemorySegmentByteSequence partialQuantizedSums) {
+        var codebookSize = partialSums.length() / partialBestDistances.length();
+        var codebookCount = partialBestDistances.length();
+
+        for (int i = 0; i < codebookCount; i++) {
+            var vectorizedLength = FloatVector.SPECIES_512.loopBound(codebookSize);
+            var codebookBest = partialBestDistances.get(i);
+            var codebookBestVector = FloatVector.broadcast(FloatVector.SPECIES_512, codebookBest);
+            int j = 0;
+            for (; j < vectorizedLength; j += FloatVector.SPECIES_512.length()) {
+                var partialSumVector = FloatVector.fromMemorySegment(FloatVector.SPECIES_512, partialSums.get(), partialSums.offset(i * codebookSize + j), ByteOrder.LITTLE_ENDIAN);
+                var quantized = (partialSumVector.sub(codebookBestVector)).div(delta);
+                quantized = quantized.max(FloatVector.zero(FloatVector.SPECIES_512)).min(FloatVector.broadcast(FloatVector.SPECIES_512, 65535));
+                var quantizedBytes = (ShortVector) quantized.convertShape(VectorOperators.F2S, ShortVector.SPECIES_256, 0);
+                quantizedBytes.intoMemorySegment(partialQuantizedSums.get(), 2 * (i * codebookSize + j), ByteOrder.LITTLE_ENDIAN);
+            }
+            for (; j < codebookSize; j++) {
+                var val = partialSums.get(i * codebookSize + j);
+                var quantized = (short) Math.min((val - codebookBest) / delta, 65535);
+                partialQuantizedSums.setLittleEndianShort(2 * (i * codebookSize + j), quantized);
+            }
         }
     }
 }

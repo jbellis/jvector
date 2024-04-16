@@ -25,4 +25,10 @@ public interface FusedADCNeighbors {
      * @return the quantized, transposed, and packed vectors of the given node's neighbors.
      */
     ByteSequence<?> getPackedNeighbors(int node);
+
+    /**
+     * Get the maximum degree of the graph for which this FusedADCNeighbors instance is used.
+     * @return the maximum degree of the graph.
+     */
+    int maxDegree();
 }

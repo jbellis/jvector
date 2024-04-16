@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.Buffer;
 
 /**
@@ -57,13 +56,15 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     @Override
     public float get(int n)
     {
-        return segment.getAtIndex(ValueLayout.JAVA_FLOAT, n);
+        // this is (unfortunately) meaningfully better performing than getting at an offset in the memory segment
+        return ((float[])segment.heapBase().get())[n];
     }
 
     @Override
     public void set(int n, float value)
     {
-        segment.setAtIndex(ValueLayout.JAVA_FLOAT, n, value);
+        // this is (unfortunately) meaningfully better performing than setting at an offset in the memory segment
+        ((float[])segment.heapBase().get())[n] = value;
     }
 
     @Override

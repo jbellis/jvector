@@ -19,28 +19,20 @@
 
 bool check_compatibility(void) {
     unsigned int eax, ebx, ecx, edx;
-    bool avx512f_supported = 0, avx512cd_supported = 0, avx512bw_supported = 0, avx512dq_supported = 0, avx512vl_supported = 0;
+    bool avx512f_supported = false, avx512cd_supported = false,
+         avx512bw_supported = false, avx512dq_supported = false,
+         avx512vl_supported = false, avx512vbmi_supported = false;
 
-    // Check for AVX-512 Foundation (AVX-512F) support:
-    // It is indicated by bit 16 of EBX from leaf 7, sub-leaf 0.
+    // Check for AVX-512 Foundation (AVX-512F) and other AVX-512 features:
+    // These are indicated by various bits of EBX from leaf 7, sub-leaf 0.
     if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
-        avx512f_supported = ebx & (1 << 16);
+        avx512f_supported = ebx & (1 << 16);     // AVX-512F
+        avx512cd_supported = ebx & (1 << 28);    // AVX-512CD
+        avx512bw_supported = ebx & (1 << 30);    // AVX-512BW
+        avx512dq_supported = ebx & (1 << 17);    // AVX-512DQ
+        avx512vl_supported = ebx & (1 << 31);    // AVX-512VL
+        avx512vbmi_supported = ecx & (1 << 1);         // VBMI
     }
 
-    // Check for AVX-512 Conflict Detection (AVX-512CD) support:
-    // It is indicated by bit 28 of EBX from leaf 7, sub-leaf 0.
-    avx512cd_supported = ebx & (1 << 28);
-
-    // Check for AVX-512 Byte and Word Instructions (AVX-512BW) and
-    // AVX-512 Doubleword and Quadword Instructions (AVX-512DQ) support:
-    // Both are indicated by bits in EBX from leaf 7, sub-leaf 0:
-    // AVX-512BW by bit 30 and AVX-512DQ by bit 17.
-    avx512bw_supported = ebx & (1 << 30);
-    avx512dq_supported = ebx & (1 << 17);
-
-    // Check for AVX-512 Vector Length Extensions (AVX-512VL) support:
-    // It is indicated by bit 31 of EBX from leaf 7, sub-leaf 0.
-    avx512vl_supported = ebx & (1 << 31);
-
-    return avx512f_supported && avx512cd_supported && avx512bw_supported && avx512dq_supported && avx512vl_supported;
+    return avx512f_supported && avx512cd_supported && avx512bw_supported && avx512dq_supported && avx512vl_supported && avx512vbmi_supported;
 }
