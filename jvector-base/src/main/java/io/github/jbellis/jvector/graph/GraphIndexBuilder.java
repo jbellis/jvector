@@ -536,12 +536,6 @@ public class GraphIndexBuilder implements AutoCloseable {
             public boolean get(int index) {
                 return index != node;
             }
-
-            @Override
-            public int length() {
-                // length is max node id, which could be larger than size after deletes
-                throw new UnsupportedOperationException();
-            }
         };
     }
 
@@ -673,11 +667,6 @@ public class GraphIndexBuilder implements AutoCloseable {
         @Override
         public boolean get(int index) {
             return index != excluded;
-        }
-
-        @Override
-        public int length() {
-            throw new UnsupportedOperationException();
         }
     }
 

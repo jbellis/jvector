@@ -144,13 +144,13 @@ public class TestUtil {
     public static void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues ravv, PQVectors pqv, Path outputPath) throws IOException {
         try (var out = openBufferedWriter(outputPath))
         {
-            var writer = new OnDiskGraphIndexWriter.Builder(graph)
+            var writer = new OnDiskGraphIndexWriter.Builder(graph, out)
                     .with(new InlineVectors(ravv.dimension()))
                     .with(new FusedADC(graph.maxDegree(), pqv.getProductQuantization())).build();
             var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
             suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(ravv.getVector(ordinal)));
             suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(graph.getView(), pqv, ordinal));
-            writer.write(out, suppliers);
+            writer.write(suppliers);
         }
     }
 

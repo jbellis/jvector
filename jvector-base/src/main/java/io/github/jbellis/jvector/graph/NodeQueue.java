@@ -139,7 +139,7 @@ public class NodeQueue {
         return nodes;
     }
 
-    public SearchResult.NodeScore[] nodesCopy(ScoreFunction.ExactScoreFunction reranker, float rerankFloor) {
+    public SearchResult.NodeScore[] nodesCopy(ScoreFunction.Reranker reranker, float rerankFloor) {
         var ids = IntStream.range(0, size())
                                     .mapToLong(i -> heap.get(i + 1))
                                     .filter(m -> decodeScore(m) >= rerankFloor)

@@ -113,12 +113,12 @@ public class CachingGraphIndex implements GraphIndex, Accountable
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() throws IOException {
             view.close();
         }
 
         @Override
-        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+        public ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
             return view.rerankerFor(queryVector, vsf);
         }
 

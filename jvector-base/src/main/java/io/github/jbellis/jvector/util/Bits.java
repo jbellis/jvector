@@ -24,8 +24,6 @@
 
 package io.github.jbellis.jvector.util;
 
-import static java.lang.Math.max;
-
 /**
  * Interface for Bitset-like structures.
  */
@@ -36,14 +34,11 @@ public interface Bits {
     /**
      * Returns the value of the bit with the specified <code>index</code>.
      *
-     * @param index index, should be non-negative and &lt; {@link #length()}. The result of passing
+     * @param index index, should be non-negative. The result of passing
      *     negative or out of bounds values is undefined by this interface, <b>just don't do it!</b>
      * @return <code>true</code> if the bit is set, <code>false</code> otherwise.
      */
     boolean get(int index);
-
-    /** Returns the number of bits in this set */
-    int length();
 
     /**
      * Returns a Bits that is true when `bits` is false, and false when `bits` is true
@@ -53,11 +48,6 @@ public interface Bits {
             @Override
             public boolean get(int index) {
                 return !bits.get(index);
-            }
-
-            @Override
-            public int length() {
-                return bits.length();
             }
         };
     }
@@ -85,63 +75,22 @@ public interface Bits {
             public boolean get(int index) {
                 return a.get(index) && b.get(index);
             }
-
-            @Override
-            public int length() {
-                return max(a.length(), b.length());
-            }
         };
     }
 
     /** Bits with all bits set. */
     class MatchAllBits implements Bits {
-        final int len;
-
-        public MatchAllBits() {
-            this(-1);
-        }
-
-        public MatchAllBits(int len) {
-            this.len = len;
-        }
-
         @Override
         public boolean get(int index) {
             return true;
-        }
-
-        @Override
-        public int length() {
-            if (len == -1) {
-                throw new UnsupportedOperationException("Unspecified length");
-            }
-            return len;
         }
     }
 
     /** Bits with no bits set. */
     class MatchNoBits implements Bits {
-        final int len;
-
-        public MatchNoBits() {
-            this(-1);
-        }
-
-        public MatchNoBits(int len) {
-            this.len = len;
-        }
-
         @Override
         public boolean get(int index) {
             return false;
-        }
-
-        @Override
-        public int length() {
-            if (len == -1) {
-                throw new UnsupportedOperationException("Unspecified length");
-            }
-            return len;
         }
     }
 }

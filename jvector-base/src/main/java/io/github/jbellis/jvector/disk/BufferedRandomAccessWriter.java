@@ -24,6 +24,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Path;
+import java.util.zip.CRC32;
 
 public class BufferedRandomAccessWriter implements Closeable {
     private final RandomAccessFile raf;
@@ -58,6 +59,27 @@ public class BufferedRandomAccessWriter implements Closeable {
 
     public long getFilePointer() throws IOException {
         return raf.getFilePointer();
+    }
+
+    /**
+     * return the CRC32 checksum for the range [startOffset .. endOffset)
+     * <p>
+     * the file pointer will be left at endOffset
+     */
+    public long checksum(long startOffset, long endOffset) throws IOException {
+        var crc = new CRC32();
+        var a = scratchBytes.getArray();
+        seek(startOffset);
+        for (long p = startOffset; p < endOffset; ) {
+            int toRead = (int) Math.min(a.length, endOffset - p);
+            int read = raf.read(a, 0, toRead);
+            if (read < 0) {
+                throw new IOException("EOF reached before endOffset");
+            }
+            crc.update(a, 0, read);
+            p += read;
+        }
+        return crc.getValue();
     }
 
     // because there is still no ThrowingRunnable in the JDK

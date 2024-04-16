@@ -16,12 +16,26 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
 /** Encapsulates comparing node distances to a specific vector for GraphSearcher. */
 public final class SearchScoreProvider {
     private final ScoreFunction scoreFunction;
-    private final ScoreFunction.ExactScoreFunction reranker;
+    private final ScoreFunction.Reranker reranker;
 
-    public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.ExactScoreFunction reranker) {
+    /**
+     * @param scoreFunction the primary, fast scoring function
+     * @param reranker optional reranking function
+     * Generally, reranker will be null iff scoreFunction is an ExactScoreFunction.  However,
+     * it is allowed, and sometimes useful, to only perform approximate scoring without reranking.
+     * <p>
+     * Most often it will be convenient to get the Reranker either using `Reranker.from`
+     * or `ScoringView.rerankerFor`.
+     */
+    public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.Reranker reranker) {
+        assert scoreFunction != null;
         this.scoreFunction = scoreFunction;
         this.reranker = reranker;
     }
@@ -30,7 +44,7 @@ public final class SearchScoreProvider {
         return scoreFunction;
     }
 
-    public ScoreFunction.ExactScoreFunction reranker() {
+    public ScoreFunction.Reranker reranker() {
         return reranker;
     }
 
@@ -38,6 +52,16 @@ public final class SearchScoreProvider {
         return scoreFunction.isExact()
                 ? (ScoreFunction.ExactScoreFunction) scoreFunction
                 : reranker;
+    }
+
+    /**
+     * A SearchScoreProvider for a single-pass search based on exact similarity.
+     * Generally only suitable when your RandomAccessVectorValues is entirely in-memory,
+     * e.g. during construction.
+     */
+    public static SearchScoreProvider exact(VectorFloat<?> v, VectorSimilarityFunction vsf, RandomAccessVectorValues ravv) {
+        var sf = ScoreFunction.Reranker.from(v, vsf, ravv);
+        return new SearchScoreProvider(sf, null);
     }
 
     /**

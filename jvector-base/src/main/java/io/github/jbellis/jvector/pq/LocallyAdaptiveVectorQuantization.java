@@ -115,7 +115,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         return Integer.BYTES + Float.BYTES * globalMean.length();
     }
 
-    private ScoreFunction.ExactScoreFunction dotProductScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
+    private ScoreFunction.Reranker dotProductScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
         /* The query vector (full resolution) will be compared to LVQ quantized vectors that were first de-meaned
          * by subtracting the global mean. The dot product is calculated between the query and the quantized vector.
          * This is <query, quantized + globalMean> = <query, quantized> + <query, globalMean> = <query, quantized> + globalBias.
@@ -125,7 +125,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
          */
         var querySum = VectorUtil.sum(query);
         var queryGlobalBias = VectorUtil.dotProduct(query, globalMean);
-        return new ScoreFunction.ExactScoreFunction() {
+        return new ScoreFunction.Reranker() {
             @Override
             public VectorFloat<?> similarityTo(int[] nodes) {
                 var results = vts.createFloatVector(nodes.length);
@@ -150,14 +150,14 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         };
     }
 
-    private ScoreFunction.ExactScoreFunction euclideanScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
+    private ScoreFunction.Reranker euclideanScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
         /*
          * The query vector (full resolution) will be compared to LVQ quantized vectors that were first de-meaned.
          * Rather than re-adding the global mean to all quantized vectors, we can shift the query vector the same amount.
          * This will result in the same squared L2 distances with less work.
          */
         var shiftedQuery = VectorUtil.sub(query, globalMean);
-        return new ScoreFunction.ExactScoreFunction() {
+        return new ScoreFunction.Reranker() {
             @Override
             public VectorFloat<?> similarityTo(int[] nodes) {
                 var results = vts.createFloatVector(nodes.length);
@@ -180,8 +180,8 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         };
     }
 
-    private ScoreFunction.ExactScoreFunction cosineScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
-        return new ScoreFunction.ExactScoreFunction() {
+    private ScoreFunction.Reranker cosineScoreFunctionFrom(VectorFloat<?> query, LVQPackedVectors packedVectors) {
+        return new ScoreFunction.Reranker() {
             @Override
             public VectorFloat<?> similarityTo(int[] nodes) {
                 var results = vts.createFloatVector(nodes.length);
@@ -204,7 +204,7 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
         };
     }
 
-    public ScoreFunction.ExactScoreFunction scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQPackedVectors packedVectors) {
+    public ScoreFunction.Reranker scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, LVQPackedVectors packedVectors) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
                 return dotProductScoreFunctionFrom(query, packedVectors);

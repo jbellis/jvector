@@ -274,7 +274,7 @@ public class IPCService
                 try (var view = ctx.index.getView()) {
                     var rr = view instanceof GraphIndex.ScoringView
                             ? ((GraphIndex.ScoringView) view).rerankerFor(queryVector, ctx.similarityFunction)
-                            : ScoreFunction.ExactScoreFunction.from(queryVector, ctx.similarityFunction, ctx.ravv);
+                            : ScoreFunction.Reranker.from(queryVector, ctx.similarityFunction, ctx.ravv);
                     var ssp = new SearchScoreProvider(sf, rr);
                     r = new GraphSearcher(ctx.index.getView()).search(ssp, searchEf, Bits.ALL);
                 } catch (Exception e) {

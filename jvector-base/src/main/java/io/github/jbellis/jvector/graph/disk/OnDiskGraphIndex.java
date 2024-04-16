@@ -242,18 +242,18 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             reader.close();
         }
 
-        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
+        public ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
             if (permissibleFeatures.contains(FeatureId.LVQ) && features.containsKey(FeatureId.LVQ)) {
                 return ((LVQ) features.get(FeatureId.LVQ)).rerankerFor(queryVector, vsf, this);
             } else if (permissibleFeatures.contains(FeatureId.INLINE_VECTORS) && features.containsKey(FeatureId.INLINE_VECTORS)) {
-                return ScoreFunction.ExactScoreFunction.from(queryVector, vsf, this);
+                return ScoreFunction.Reranker.from(queryVector, vsf, this);
             } else {
                 throw new UnsupportedOperationException("No reranker available for this graph");
             }
         }
 
         @Override
-        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+        public ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
             return rerankerFor(queryVector, vsf, FeatureId.ALL);
         }
 
@@ -273,7 +273,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     /** Convenience function for writing a vanilla DiskANN-style index with no extra Features. */
     public static void write(GraphIndex graph, RandomAccessVectorValues vectors, BufferedRandomAccessWriter out) throws IOException {
-        write(graph, vectors, OnDiskGraphIndexWriter.getSequentialRenumbering(graph), out);
+        write(graph, vectors, OnDiskGraphIndexWriter.sequentialRenumbering(graph), out);
     }
 
     /** Convenience function for writing a vanilla DiskANN-style index with no extra Features. */
@@ -283,15 +283,13 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                              BufferedRandomAccessWriter out)
             throws IOException
     {
-        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, oldToNewOrdinals)
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, out, oldToNewOrdinals)
                 .with(new InlineVectors(vectors.dimension()))
                 .build())
         {
             Map<FeatureId, IntFunction<Feature.State>> suppliers_
                     = Collections.singletonMap(FeatureId.INLINE_VECTORS, nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
-            writer.write(out, new EnumMap<>(suppliers_));
-        } catch (Exception e) {
-            throw new IOException(e);
+            writer.write(new EnumMap<>(suppliers_));
         }
     }
 }
