@@ -101,11 +101,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results) {
-        SimdOps.bulkShuffleSimilarity((ArrayByteSequence) shuffles, codebookCount, (ArrayVectorFloat) partials, (ArrayVectorFloat) results, vsf);
-    }
-
-    @Override
     public int hammingDistance(long[] v1, long[] v2) {
         return SimdOps.hammingDistance(v1, v2);
     }
@@ -135,9 +130,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         return SimdOps.lvqCosine((ArrayVectorFloat) query, vector, (ArrayVectorFloat) centroid);
     }
 
-
     @Override
-    public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+    public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+        int codebookBase = codebookIndex * clusterCount;
         for (int i = 0; i < clusterCount; i++) {
             switch (vsf) {
                 case DOT_PRODUCT:
@@ -150,6 +145,35 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
             }
         }
+    }
+
+    @Override
+    public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBest) {
+        float best = vsf == VectorSimilarityFunction.EUCLIDEAN ? Float.MAX_VALUE : Float.MIN_VALUE;
+        float val;
+        int codebookBase = codebookIndex * clusterCount;
+        for (int i = 0; i < clusterCount; i++) {
+            switch (vsf) {
+                case DOT_PRODUCT:
+                    val = dotProduct(codebook, i * size, query, queryOffset, size);
+                    partialSums.set(codebookBase + i, val);
+                    best = Math.max(best, val);
+                    break;
+                case EUCLIDEAN:
+                    val = squareDistance(codebook, i * size, query, queryOffset, size);
+                    partialSums.set(codebookBase + i, val);
+                    best = Math.min(best, val);
+                    break;
+                default:
+                    throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+            }
+        }
+        partialBest.set(codebookIndex, best);
+    }
+
+    @Override
+    public void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances, ByteSequence<?> partialQuantizedSums) {
+        SimdOps.quantizePartialSums(delta, (ArrayVectorFloat) partialSums, (ArrayVectorFloat) partialBestDistances, (ArrayByteSequence) partialQuantizedSums);
     }
 }
 

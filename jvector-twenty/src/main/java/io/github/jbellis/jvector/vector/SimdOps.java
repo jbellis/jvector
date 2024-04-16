@@ -22,6 +22,7 @@ import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
+import jdk.incubator.vector.ShortVector;
 import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
@@ -607,27 +608,6 @@ final class SimdOps {
         return res;
     }
 
-    public static void bulkShuffleSimilarity(ArrayByteSequence shuffles, int codebookCount, ArrayVectorFloat partials, ArrayVectorFloat results, VectorSimilarityFunction vsf) {
-        for (int i = 0; i < codebookCount; i++) {
-            for (int j = 0; j < 32; j++) {
-                results.set(j, results.get(j) + partials.get(i * 32 + shuffles.get(i * 32 + j)));
-            }
-        }
-
-        for (int i = 0; i < results.length(); i++) {
-            switch (vsf) {
-                case EUCLIDEAN:
-                    results.set(i, 1 / (1 + results.get(i)));
-                    break;
-                case DOT_PRODUCT:
-                    results.set(i, (results.get(i) + 1) / 2);
-                    break;
-                default:
-                    throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
-            }
-        }
-    }
-
     public static float max(ArrayVectorFloat v) {
         var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MIN_VALUE);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
@@ -936,6 +916,30 @@ final class SimdOps {
             return lvqCosine512(vector, packedVector, centroid);
         } else {
             return lvqCosine256(vector, packedVector, centroid);
+        }
+    }
+
+    public static void quantizePartialSums(float delta, ArrayVectorFloat partialSums, ArrayVectorFloat partialBestDistances, ArrayByteSequence partialQuantizedSums) {
+        var codebookSize = partialSums.length() / partialBestDistances.length();
+        var codebookCount = partialBestDistances.length();
+
+        for (int i = 0; i < codebookCount; i++) {
+            var vectorizedLength = FloatVector.SPECIES_512.loopBound(codebookSize);
+            var codebookBest = partialBestDistances.get(i);
+            var codebookBestVector = FloatVector.broadcast(FloatVector.SPECIES_512, codebookBest);
+            int j = 0;
+            for (; j < vectorizedLength; j += FloatVector.SPECIES_512.length()) {
+                var partialSumVector = FloatVector.fromArray(FloatVector.SPECIES_512, partialSums.get(), i * codebookSize + j);
+                var quantized = (partialSumVector.sub(codebookBestVector)).div(delta);
+                quantized = quantized.max(FloatVector.zero(FloatVector.SPECIES_512)).min(FloatVector.broadcast(FloatVector.SPECIES_512, 65535));
+                var quantizedBytes = (ShortVector) quantized.convertShape(VectorOperators.F2S, ShortVector.SPECIES_256, 0);
+                quantizedBytes.reinterpretAsBytes().intoArray(partialQuantizedSums.get(), 2 * (i * codebookSize + j));
+            }
+            for (; j < codebookSize; j++) {
+                var val = partialSums.get(i * codebookSize + j);
+                var quantized = (short) Math.min((val - codebookBest) / delta, 65535);
+                partialQuantizedSums.setLittleEndianShort(2 * (i * codebookSize + j), quantized);
+            }
         }
     }
 }

@@ -21,6 +21,8 @@
 
 __m512i initialIndexRegister;
 __m512i indexIncrement;
+__m512i maskSeventhBit;
+__m512i maskEighthBit;
 
 __attribute__((constructor))
 void initialize_constants() {
@@ -28,6 +30,8 @@ void initialize_constants() {
         initialIndexRegister = _mm512_setr_epi32(-16, -15, -14, -13, -12, -11, -10, -9,
                                              -8, -7, -6, -5, -4, -3, -2, -1);
         indexIncrement = _mm512_set1_epi32(16);
+        maskSeventhBit = _mm512_set1_epi16(0x0040);
+        maskEighthBit = _mm512_set1_epi16(0x0080);
     }
 }
 
@@ -285,69 +289,6 @@ float euclidean_f32(int preferred_size, const float* a, int aoffset, const float
            : euclidean_f32_256(a, aoffset, b, boffset, length);
 }
 
-void bulk_shuffle_dot_f32_512(const unsigned char* shuffles, int codebookCount, const float* partials, float* results) {
-    __m128i shuffleLeftRaw;
-    __m128i shuffleRightRaw;
-    __m512i shuffleLeft;
-    __m512i shuffleRight;
-    __m512 tmpLeft = _mm512_setzero_ps();
-    __m512 tmpRight = _mm512_setzero_ps();
-
-    for (int i = 0; i < codebookCount; i++) {
-        shuffleLeftRaw = _mm_loadu_si128((__m128i *)(shuffles + i * 32));
-        shuffleRightRaw = _mm_loadu_si128((__m128i *)(shuffles + i * 32 + 16));
-        shuffleLeft = _mm512_cvtepu8_epi32(shuffleLeftRaw);
-        shuffleRight = _mm512_cvtepu8_epi32(shuffleRightRaw);
-        __m512 partialsVecA = _mm512_loadu_ps(partials + i * 32);
-        __m512 partialsVecB = _mm512_loadu_ps(partials + i * 32 + 16);
-        // use permutex2var_ps
-        __m512 partialsVec = _mm512_permutex2var_ps(partialsVecA, shuffleLeft, partialsVecB);
-        tmpLeft = _mm512_add_ps(tmpLeft, partialsVec);
-        partialsVec = _mm512_permutex2var_ps(partialsVecA, shuffleRight, partialsVecB);
-        tmpRight = _mm512_add_ps(tmpRight, partialsVec);
-    }
-
-    tmpLeft = _mm512_add_ps(tmpLeft, _mm512_set1_ps(1.0));
-    tmpRight = _mm512_add_ps(tmpRight, _mm512_set1_ps(1.0));
-    tmpLeft = _mm512_div_ps(tmpLeft, _mm512_set1_ps(2.0));
-    tmpRight = _mm512_div_ps(tmpRight, _mm512_set1_ps(2.0));
-
-    _mm512_storeu_ps(results, tmpLeft);
-    _mm512_storeu_ps(results + 16, tmpRight);
-}
-
-void bulk_shuffle_euclidean_f32_512(const unsigned char* shuffles, int codebookCount, const float* partials, float* results) {
-    __m128i shuffleLeftRaw;
-    __m128i shuffleRightRaw;
-    __m512i shuffleLeft;
-    __m512i shuffleRight;
-    __m512 tmpLeft = _mm512_setzero_ps();
-    __m512 tmpRight = _mm512_setzero_ps();
-
-    for (int i = 0; i < codebookCount; i++) {
-        shuffleLeftRaw = _mm_loadu_si128((__m128i *)(shuffles + i * 32));
-        shuffleRightRaw = _mm_loadu_si128((__m128i *)(shuffles + i * 32 + 16));
-        shuffleLeft = _mm512_cvtepu8_epi32(shuffleLeftRaw);
-        shuffleRight = _mm512_cvtepu8_epi32(shuffleRightRaw);
-        __m512 partialsVecA = _mm512_loadu_ps(partials + i * 32);
-        __m512 partialsVecB = _mm512_loadu_ps(partials + i * 32 + 16);
-        __m512 partialsVec = _mm512_permutex2var_ps(partialsVecA, shuffleLeft, partialsVecB);
-        tmpLeft = _mm512_add_ps(tmpLeft, partialsVec);
-        partialsVec = _mm512_permutex2var_ps(partialsVecA, shuffleRight, partialsVecB);
-        tmpRight = _mm512_add_ps(tmpRight, partialsVec);
-    }
-
-    // add 1 to tmpLeft/tmpRight
-    __m512 ones = _mm512_set1_ps(1.0);
-    tmpLeft = _mm512_add_ps(tmpLeft, ones);
-    tmpRight = _mm512_add_ps(tmpRight, ones);
-    // reciprocal of tmpLeft/tmpRight
-    tmpLeft = _mm512_rcp14_ps(tmpLeft);
-    tmpRight = _mm512_rcp14_ps(tmpRight);
-    _mm512_storeu_ps(results, tmpLeft);
-    _mm512_storeu_ps(results + 16, tmpRight);
-}
-
 float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned char* baseOffsets, int baseOffsetsLength) {
     __m512 sum = _mm512_setzero_ps();
     int i = 0;
@@ -378,13 +319,15 @@ float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned c
     return res;
 }
 
-void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
+void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
+    int codebookBase = codebookIndex * clusterCount;
     for (int i = 0; i < clusterCount; i++) {
       partialSums[codebookBase + i] = dot_product_f32(512, codebook, i * size, query, queryOffset, size);
     }
 }
 
-void calculate_partial_sums_euclidean_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
+void calculate_partial_sums_euclidean_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
+    int codebookBase = codebookIndex * clusterCount;
     for (int i = 0; i < clusterCount; i++) {
       partialSums[codebookBase + i] = euclidean_f32(512, codebook, i * size, query, queryOffset, size);
     }
@@ -472,4 +415,142 @@ void square_distance_multi_f32_512(const float* v1, const float* packedv2, int v
     for (int k = 0; k < resultsLength; ++k) {
         results[k] = 1.0f / (1 + results[k]);
     }
+}
+
+/* Bulk shuffles for Fused ADC
+ * These shuffles take an array of transposed PQ neighbors (in shuffles) and an of quantized partial distances to shuffle.
+ * Partial distance quantization depends on the best distance and delta used to quantize.
+ * The shuffles for each codebook will be loaded as bytes (supporting up to 256 cluster PQ) and zero-padded to align
+ * with 16-bit quantized partial distances. These partial distances will be loaded into SIMD registers, supporting 32 partials
+ * per register. Each permutation will take 2 registers, so we need four total permutations to look up against all
+ * 256 partial distances. These four permutations will be blended based on the top two bits of each shuffle, allowing 256
+ * entry codebook lookup. Quantized partials are quantized based on bounds provided during the search that suggest total
+ * distances above the maximum value of an unsigned 16-bit integer will be irrelevant. This allows us to use saturating
+ * arithmetic, eliminating the need to widen lanes during accumulation. The total quantized distance is then de-quantized
+ * and transformed into the appropriate similarity score.
+ */
+
+void bulk_quantized_shuffle_euclidean_f32_512(const unsigned char* shuffles, int codebookCount, const char* quantizedPartials, float delta, float minDistance, float* results) {
+    __m512i sum = _mm512_setzero_epi32();
+
+    for (int i = 0; i < codebookCount; i++) {
+        __m256i smallShuffle = _mm256_loadu_epi8((shuffles + i * 32));
+        __m512i shuffle = _mm512_cvtepu8_epi16(smallShuffle);
+        __m512i partialsVecA = _mm512_loadu_epi16(quantizedPartials + i * 512);
+        __m512i partialsVecB = _mm512_loadu_epi16(quantizedPartials + i * 512 + 64);
+        __m512i partialsVecC = _mm512_loadu_epi16(quantizedPartials + i * 512 + 128);
+        __m512i partialsVecD = _mm512_loadu_epi16(quantizedPartials + i * 512 + 192);
+        __m512i partialsVecE = _mm512_loadu_epi16(quantizedPartials + i * 512 + 256);
+        __m512i partialsVecF = _mm512_loadu_epi16(quantizedPartials + i * 512 + 320);
+        __m512i partialsVecG = _mm512_loadu_epi16(quantizedPartials + i * 512 + 384);
+        __m512i partialsVecH = _mm512_loadu_epi16(quantizedPartials + i * 512 + 448);
+
+        __m512i partialsVecAB = _mm512_permutex2var_epi16(partialsVecA, shuffle, partialsVecB);
+        __m512i partialsVecCD = _mm512_permutex2var_epi16(partialsVecC, shuffle, partialsVecD);
+        __m512i partialsVecEF = _mm512_permutex2var_epi16(partialsVecE, shuffle, partialsVecF);
+        __m512i partialsVecGH = _mm512_permutex2var_epi16(partialsVecG, shuffle, partialsVecH);
+
+        __mmask32 maskSeven = _mm512_test_epi16_mask(shuffle, maskSeventhBit);
+        __mmask32 maskEight = _mm512_test_epi16_mask(shuffle, maskEighthBit);
+        __m512i partialsVecABCD = _mm512_mask_blend_epi16(maskSeven, partialsVecAB, partialsVecCD);
+        __m512i partialsVecEFGH = _mm512_mask_blend_epi16(maskSeven, partialsVecEF, partialsVecGH);
+        __m512i partialsVec = _mm512_mask_blend_epi16(maskEight, partialsVecABCD, partialsVecEFGH);
+
+        sum = _mm512_adds_epu16(sum, partialsVec);
+    }
+
+    __m256i quantizedResultsLeftRaw = _mm512_extracti32x8_epi32(sum, 0);
+    __m256i quantizedResultsRightRaw = _mm512_extracti32x8_epi32(sum, 1);
+    __m512i quantizedResultsLeft = _mm512_cvtepu16_epi32(quantizedResultsLeftRaw);
+    __m512i quantizedResultsRight = _mm512_cvtepu16_epi32(quantizedResultsRightRaw);
+    __m512 resultsLeft = _mm512_cvtepi32_ps(quantizedResultsLeft);
+    __m512 resultsRight = _mm512_cvtepi32_ps(quantizedResultsRight);
+    __m512 deltaVec = _mm512_set1_ps(delta);
+    __m512 minDistanceVec = _mm512_set1_ps(minDistance);
+    resultsLeft = _mm512_fmadd_ps(resultsLeft, deltaVec, minDistanceVec);
+    resultsRight = _mm512_fmadd_ps(resultsRight, deltaVec, minDistanceVec);
+
+    __m512 ones = _mm512_set1_ps(1.0);
+    resultsLeft = _mm512_add_ps(resultsLeft, ones);
+    resultsRight = _mm512_add_ps(resultsRight, ones);
+    resultsLeft = _mm512_rcp14_ps(resultsLeft);
+    resultsRight = _mm512_rcp14_ps(resultsRight);
+    _mm512_storeu_ps(results, resultsLeft);
+    _mm512_storeu_ps(results + 16, resultsRight);
+}
+
+void bulk_quantized_shuffle_dot_f32_512(const unsigned char* shuffles, int codebookCount, const char* quantizedPartials, float delta, float best, float* results) {
+    __m512i sum = _mm512_setzero_epi32();
+
+    for (int i = 0; i < codebookCount; i++) {
+        __m256i smallShuffle = _mm256_loadu_epi8((shuffles + i * 32));
+        __m512i shuffle = _mm512_cvtepu8_epi16(smallShuffle);
+        __m512i partialsVecA = _mm512_loadu_epi16(quantizedPartials + i * 512);
+        __m512i partialsVecB = _mm512_loadu_epi16(quantizedPartials + i * 512 + 64);
+        __m512i partialsVecC = _mm512_loadu_epi16(quantizedPartials + i * 512 + 128);
+        __m512i partialsVecD = _mm512_loadu_epi16(quantizedPartials + i * 512 + 192);
+        __m512i partialsVecE = _mm512_loadu_epi16(quantizedPartials + i * 512 + 256);
+        __m512i partialsVecF = _mm512_loadu_epi16(quantizedPartials + i * 512 + 320);
+        __m512i partialsVecG = _mm512_loadu_epi16(quantizedPartials + i * 512 + 384);
+        __m512i partialsVecH = _mm512_loadu_epi16(quantizedPartials + i * 512 + 448);
+
+        __m512i partialsVecAB = _mm512_permutex2var_epi16(partialsVecA, shuffle, partialsVecB);
+        __m512i partialsVecCD = _mm512_permutex2var_epi16(partialsVecC, shuffle, partialsVecD);
+        __m512i partialsVecEF = _mm512_permutex2var_epi16(partialsVecE, shuffle, partialsVecF);
+        __m512i partialsVecGH = _mm512_permutex2var_epi16(partialsVecG, shuffle, partialsVecH);
+
+        __mmask32 maskSeven = _mm512_test_epi16_mask(shuffle, maskSeventhBit);
+        __mmask32 maskEight = _mm512_test_epi16_mask(shuffle, maskEighthBit);
+        __m512i partialsVecABCD = _mm512_mask_blend_epi16(maskSeven, partialsVecAB, partialsVecCD);
+        __m512i partialsVecEFGH = _mm512_mask_blend_epi16(maskSeven, partialsVecEF, partialsVecGH);
+        __m512i partialsVec = _mm512_mask_blend_epi16(maskEight, partialsVecABCD, partialsVecEFGH);
+
+        sum = _mm512_adds_epu16(sum, partialsVec);
+    }
+
+    __m256i quantizedResultsLeftRaw = _mm512_extracti32x8_epi32(sum, 0);
+    __m256i quantizedResultsRightRaw = _mm512_extracti32x8_epi32(sum, 1);
+    __m512i quantizedResultsLeft = _mm512_cvtepu16_epi32(quantizedResultsLeftRaw);
+    __m512i quantizedResultsRight = _mm512_cvtepu16_epi32(quantizedResultsRightRaw);
+    __m512 resultsLeft = _mm512_cvtepi32_ps(quantizedResultsLeft);
+    __m512 resultsRight = _mm512_cvtepi32_ps(quantizedResultsRight);
+    __m512 deltaVec = _mm512_set1_ps(delta);
+    __m512 bestVec = _mm512_set1_ps(best);
+    resultsLeft = _mm512_fmadd_ps(resultsLeft, deltaVec, bestVec);
+    resultsRight = _mm512_fmadd_ps(resultsRight, deltaVec, bestVec);
+
+    __m512 ones = _mm512_set1_ps(1.0);
+    resultsLeft = _mm512_add_ps(resultsLeft, ones);
+    resultsRight = _mm512_add_ps(resultsRight, ones);
+    resultsLeft = _mm512_div_ps(resultsLeft, _mm512_set1_ps(2.0));
+    resultsRight = _mm512_div_ps(resultsRight, _mm512_set1_ps(2.0));
+    _mm512_storeu_ps(results, resultsLeft);
+    _mm512_storeu_ps(results + 16, resultsRight);
+}
+
+// Partial sum calculations that also record best distances, as this is necessary for Fused ADC quantization
+void calculate_partial_sums_best_dot_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums, float* partialBestDistances) {
+    float best = -INFINITY;
+    int codebookBase = codebookIndex * clusterCount;
+    for (int i = 0; i < clusterCount; i++) {
+      float val = dot_product_f32(512, codebook, i * size, query, queryOffset, size);
+      partialSums[codebookBase + i] = val;
+      if (val > best) {
+        best = val;
+      }
+    }
+    partialBestDistances[codebookIndex] = best;
+}
+
+void calculate_partial_sums_best_euclidean_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums, float* partialBestDistances) {
+    float best = INFINITY;
+    int codebookBase = codebookIndex * clusterCount;
+    for (int i = 0; i < clusterCount; i++) {
+      float val = euclidean_f32(512, codebook, i * size, query, queryOffset, size);
+      partialSums[codebookBase + i] = val;
+      if (val < best) {
+        best = val;
+      }
+    }
+    partialBestDistances[codebookIndex] = best;
 }

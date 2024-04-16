@@ -26,9 +26,9 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.graph.disk.InlineVectorValues;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
+import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.graph.disk.LvqVectorValues;
@@ -169,7 +169,7 @@ public class Grid {
         int n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors);
+            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors, pq.getProductQuantization());
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
@@ -206,9 +206,20 @@ public class Grid {
         }).join();
         builder.cleanup();
         // write the edge lists and close the writers
-        writers.values().stream().parallel().forEach(writer -> {
+        // if our feature set contains Fused ADC, we need a Fused ADC write-time supplier (as we don't have neighbor information during writeInline)
+        writers.entrySet().stream().parallel().forEach(entry -> {
+            var writer = entry.getValue();
+            var features = entry.getKey();
+            Map<FeatureId, IntFunction<Feature.State>> writeSuppliers;
+            if (features.contains(FeatureId.FUSED_ADC)) {
+                writeSuppliers = new EnumMap<>(FeatureId.class);
+                var view = builder.getGraph().getView();
+                writeSuppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(view, pq, ordinal));
+            } else {
+                writeSuppliers = Map.of();
+            }
             try {
-                writer.write(Map.of());
+                writer.write(writeSuppliers);
                 writer.close();
                 ivv.close();
             } catch (IOException e) {
@@ -228,7 +239,7 @@ public class Grid {
         return indexes;
     }
 
-    private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features, OnHeapGraphIndex onHeapGraph, Path outPath, RandomAccessVectorValues floatVectors) {
+    private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features, OnHeapGraphIndex onHeapGraph, Path outPath, RandomAccessVectorValues floatVectors, ProductQuantization pq) {
         var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(new OnDiskGraphIndexWriter.IdentityMapper());
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         for (var featureId : features) {
@@ -243,11 +254,13 @@ public class Grid {
                     suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
                     break;
                 case FUSED_ADC:
-                    // ???
-                    // var pq = (PQVectors) buildCompressor;
-                    // builder.with(new FusedADC(onHeapGraph.maxDegree(), pq.getProductQuantization()));
-                    // suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(onHeapGraph.getView(), pq, ordinal));
-                    throw new UnsupportedOperationException("Unsupported feature " + featureId);
+                    if (pq == null) {
+                        System.out.println("Skipping Fused ADC feature due to null ProductQuantization");
+                        continue;
+                    }
+                    // no supplier as these will be used for writeInline, when we don't have enough information to fuse neighbors
+                    builder.with(new FusedADC(onHeapGraph.maxDegree(), pq));
+                    break;
             }
         }
         return new BuilderWithSuppliers(builder, suppliers);
@@ -286,8 +299,12 @@ public class Grid {
                           onHeapGraph.getAverageShortEdges());
         int n = 0;
         for (var features : featureSets) {
+            if (features.contains(FeatureId.FUSED_ADC)) {
+                System.out.println("Skipping Fused ADC feature when building in memory");
+                continue;
+            }
             var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors);
+            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors, null);
             try (var writer = bws.builder.build()) {
                 start = System.nanoTime();
                 writer.write(bws.suppliers);

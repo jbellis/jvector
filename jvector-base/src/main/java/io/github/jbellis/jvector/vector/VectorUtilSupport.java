@@ -91,21 +91,51 @@ public interface VectorUtilSupport {
 
   int hammingDistance(long[] v1, long[] v2);
 
+
+  // default implementation used here because Panama SIMD can't express necessary SIMD operations and degrades to scalar
   /**
    * Calculates the similarity score of multiple product quantization-encoded vectors against a single query vector,
-   * using precomputed similarity score fragments derived from codebook contents.
+   * using quantized precomputed similarity score fragments derived from codebook contents and evaluations during a search.
    * @param shuffles a sequence of shuffles to be used against partial pre-computed fragments. These are transposed PQ-encoded
    *                 vectors using the same codebooks as the partials. Due to the transposition, rather than this being
    *                 contiguous encoded vectors, the first component of all vectors is stored contiguously, then the second, and so on.
    * @param codebookCount The number of codebooks used in the PQ encoding.
-   * @param partials The precomputed score fragments for each codebook entry. These are stored as a contiguous vector of all
-   *                 the fragments for one codebook, followed by all the fragments for the next codebook, and so on.
+   * @param quantizedPartials The quantized precomputed score fragments for each codebook entry. These are stored as a contiguous vector of all
+   *                          the fragments for one codebook, followed by all the fragments for the next codebook, and so on. These have been
+   *                          quantized by quantizePartialSums.
    * @param vsf      The similarity function to use.
    * @param results  The output vector to store the similarity scores. This should be pre-allocated to the same size as the number of shuffles.
    */
-  void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results);
+  default void bulkShuffleQuantizedSimilarity(ByteSequence<?> shuffles, int codebookCount, ByteSequence<?> quantizedPartials, float delta, float minDistance, VectorSimilarityFunction vsf, VectorFloat<?> results) {
+    for (int i = 0; i < codebookCount; i++) {
+      for (int j = 0; j < results.length(); j++) {
+        var shuffle = Byte.toUnsignedInt(shuffles.get(i * results.length() + j)) * 2;
+        var lowByte = quantizedPartials.get(i * 512 + shuffle);
+        var highByte = quantizedPartials.get(i * 512 + shuffle + 1);
+        var val = ((Byte.toUnsignedInt(highByte) << 8) | Byte.toUnsignedInt(lowByte));
+        results.set(j, results.get(j) + val);
+      }
+    }
 
-  void calculatePartialSums(VectorFloat<?> codebook, int baseOffset, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums);
+    for (int i = 0; i < results.length(); i++) {
+      switch (vsf) {
+        case EUCLIDEAN:
+          results.set(i, 1 / (1 + (delta * results.get(i)) + minDistance));
+          break;
+        case DOT_PRODUCT:
+            results.set(i, (1 + (delta * results.get(i)) + minDistance) / 2);
+            break;
+        default:
+          throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+      }
+    }
+  }
+
+  void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums);
+
+  void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialMins);
+
+  void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBest, ByteSequence<?> partialQuantizedSums);
 
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);

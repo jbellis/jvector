@@ -48,9 +48,8 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
             for (var i = 0; i < pq.getSubspaceCount(); i++) {
                 int offset = pq.subvectorSizesAndOffsets[i][1];
                 int size = pq.subvectorSizesAndOffsets[i][0];
-                int baseOffset = i * pq.getClusterCount();
                 var codebook = pq.codebooks[i];
-                VectorUtil.calculatePartialSums(codebook, baseOffset, size, pq.getClusterCount(), centeredQuery, offset, vsf, partialSums);
+                VectorUtil.calculatePartialSums(codebook, i, size, pq.getClusterCount(), centeredQuery, offset, vsf, partialSums);
             }
         }
 
