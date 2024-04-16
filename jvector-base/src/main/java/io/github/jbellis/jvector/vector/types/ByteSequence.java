@@ -31,6 +31,12 @@ public interface ByteSequence<T> extends Accountable
 
     void set(int i, byte value);
 
+    /**
+     * @param byteIndex byte index inside the sequence to start setting short value
+     * @param value short value to set
+     */
+    void setLittleEndianShort(int byteIndex, short value);
+
     void zero();
 
     void copyFrom(ByteSequence<?> src, int srcOffset, int destOffset, int length);

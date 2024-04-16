@@ -54,11 +54,11 @@ public class TestADCGraphIndex extends RandomizedTest {
     @Test
     public void testFusedGraph() throws Exception {
         // generate random graph, M=32, 256-dimension vectors
-        var graph = new TestUtil.RandomlyConnectedGraphIndex(50_000, 32, getRandom());
+        var graph = new TestUtil.RandomlyConnectedGraphIndex(1000, 32, getRandom());
         var outputPath = testDirectory.resolve("large_graph");
-        var vectors = createRandomVectors(50000, 64);
-        var ravv = new ListRandomAccessVectorValues(vectors, 64);
-        var pq = ProductQuantization.compute(ravv, 16, 32, false);
+        var vectors = createRandomVectors(1000,  512);
+        var ravv = new ListRandomAccessVectorValues(vectors, 512);
+        var pq = ProductQuantization.compute(ravv, 8, 256, false);
         var compressed = pq.encodeAll(ravv);
         var pqv = new PQVectors(pq, compressed);
 
@@ -66,24 +66,31 @@ public class TestADCGraphIndex extends RandomizedTest {
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
-             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph, 1000))
+             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph, 5))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
             TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);
             try (var cachedOnDiskView = cachedOnDiskGraph.getView())
             {
-                var queryVector = TestUtil.randomVector(getRandom(), 64);
+                var queryVector = TestUtil.randomVector(getRandom(), 512);
 
-                for (var similarity : List.of(VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.EUCLIDEAN)) {
-                    var fusedScoreFunction = cachedOnDiskView.approximateScoreFunctionFor(queryVector, similarity);
-                    var scoreFunction = pqv.precomputedScoreFunctionFor(queryVector, similarity);
-                    for (int i = 0; i < 100; i++) {
+                for (var similarityFunction : List.of(VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.EUCLIDEAN)) {
+                    var pqScoreFunction = pqv.precomputedScoreFunctionFor(queryVector, similarityFunction);
+                    var reranker = cachedOnDiskView.rerankerFor(queryVector, similarityFunction);
+                    for (int i = 0; i < 50; i++) {
+                        var fusedScoreFunction = cachedOnDiskView.approximateScoreFunctionFor(queryVector, similarityFunction);
                         var ordinal = getRandom().nextInt(graph.size());
-                        var bulkSimilarities = fusedScoreFunction.edgeLoadingSimilarityTo(ordinal);
                         var neighbors = cachedOnDiskView.getNeighborsIterator(ordinal);
+                        for (; neighbors.hasNext();) {
+                            var neighbor = neighbors.next();
+                            var similarity = fusedScoreFunction.similarityTo(neighbor);
+                            assertEquals(reranker.similarityTo(neighbor), similarity, 0.01);
+                        }
+                        neighbors = cachedOnDiskView.getNeighborsIterator(ordinal);
+                        var edgeSimilarities = fusedScoreFunction.edgeLoadingSimilarityTo(ordinal);
                         for (int j = 0; neighbors.hasNext(); j++) {
                             var neighbor = neighbors.next();
-                            assertEquals(scoreFunction.similarityTo(neighbor), bulkSimilarities.get(j), 0.0001);
+                            assertEquals(pqScoreFunction.similarityTo(neighbor), edgeSimilarities.get(j), 0.05);
                         }
                     }
                 }

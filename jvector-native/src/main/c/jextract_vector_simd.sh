@@ -21,7 +21,7 @@ mkdir -p ../resources
 # compile jvector_simd_check.c as x86-64
 # compile jvector_simd.c as skylake-avx512
 # produce one shared library
-gcc -fPIC -O3 -march=skylake-avx512 -c jvector_simd.c -o jvector_simd.o
+gcc -fPIC -O3 -march=icelake-server -c jvector_simd.c -o jvector_simd.o
 gcc -fPIC -O3 -march=x86-64 -c jvector_simd_check.c -o jvector_simd_check.o
 gcc -shared -o ../resources/libjvector.so jvector_simd_check.o jvector_simd.o
 

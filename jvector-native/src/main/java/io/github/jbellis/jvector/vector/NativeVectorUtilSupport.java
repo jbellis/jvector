@@ -117,19 +117,19 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results) {
-        switch (vsf) {
-            case DOT_PRODUCT -> NativeSimdOps.bulk_shuffle_dot_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentVectorFloat) partials).get(), ((MemorySegmentVectorFloat) results).get());
-            case EUCLIDEAN -> NativeSimdOps.bulk_shuffle_euclidean_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentVectorFloat) partials).get(), ((MemorySegmentVectorFloat) results).get());
-            case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for bulkShuffleSimilarity");
-        }
-    }
-
-    @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         switch (vsf) {
             case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get());
             case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get());
+            case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
+        }
+    }
+
+    @Override
+    public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances) {
+        switch (vsf) {
+            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_best_dot_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get(), ((MemorySegmentVectorFloat)partialBestDistances).get());
+            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_best_euclidean_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get(), ((MemorySegmentVectorFloat)partialBestDistances).get());
             case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
         }
     }
@@ -159,5 +159,17 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
         return VectorSimdOps.lvqCosine((MemorySegmentVectorFloat) query, vector, (MemorySegmentVectorFloat) centroid);
     }
 
+    @Override
+    public void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances, ByteSequence<?> partialQuantizedSums) {
+        VectorSimdOps.quantizePartialSums(delta, (MemorySegmentVectorFloat) partialSums, (MemorySegmentVectorFloat) partialBestDistances, (MemorySegmentByteSequence) partialQuantizedSums);
+    }
 
+    @Override
+    public void bulkShuffleQuantizedSimilarity(ByteSequence<?> shuffles, int codebookCount, ByteSequence<?> quantizedPartials, float delta, float bestDistance, VectorSimilarityFunction vsf, VectorFloat<?> results) {
+        switch (vsf) {
+            case DOT_PRODUCT -> NativeSimdOps.bulk_quantized_shuffle_dot_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartials).get(), delta, bestDistance, ((MemorySegmentVectorFloat) results).get());
+            case EUCLIDEAN -> NativeSimdOps.bulk_quantized_shuffle_euclidean_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartials).get(), delta, bestDistance, ((MemorySegmentVectorFloat) results).get());
+            case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for bulkShuffleQuantizedSimilarity");
+        }
+    }
 }

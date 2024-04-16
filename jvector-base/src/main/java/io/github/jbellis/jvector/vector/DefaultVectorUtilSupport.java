@@ -284,29 +284,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorSimilarityFunction vsf, VectorFloat<?> results) {
-    for (int i = 0; i < codebookCount; i++) {
-      for (int j = 0; j < 32; j++) {
-        results.set(j, results.get(j) + partials.get(i * 32 + shuffles.get(i * 32 + j)));
-      }
-    }
-
-    for (int i = 0; i < results.length(); i++) {
-      switch (vsf) {
-        case EUCLIDEAN:
-          results.set(i, 1 / (1 + results.get(i)));
-          break;
-        case DOT_PRODUCT:
-          results.set(i, (results.get(i) + 1) / 2);
-          break;
-        default:
-          throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
-      }
-    }
-  }
-
-  @Override
-  public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+  public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+    int codebookBase = codebookIndex * clusterCount;
     for (int i = 0; i < clusterCount; i++) {
       switch (vsf) {
         case DOT_PRODUCT:
@@ -318,6 +297,43 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
         default:
           throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
       }
+    }
+  }
+
+  @Override
+  public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBest) {
+    float best = vsf == VectorSimilarityFunction.EUCLIDEAN ? Float.MAX_VALUE : Float.MIN_VALUE;
+    float val;
+    int codebookBase = codebookIndex * clusterCount;
+    for (int i = 0; i < clusterCount; i++) {
+      switch (vsf) {
+        case DOT_PRODUCT:
+          val = dotProduct(codebook, i * size, query, queryOffset, size);
+          partialSums.set(codebookBase + i, val);
+          best = Math.max(best, val);
+          break;
+        case EUCLIDEAN:
+          val = squareDistance(codebook, i * size, query, queryOffset, size);
+          partialSums.set(codebookBase + i, val);
+          best = Math.min(best, val);
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+      }
+    }
+    partialBest.set(codebookIndex, best);
+  }
+
+  @Override
+  public void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBest, ByteSequence<?> partialQuantizedSums) {
+    var codebookSize = partialSums.length() / partialBest.length();
+    for (int i = 0; i < partialBest.length(); i++) {
+      var localBest = partialBest.get(i);
+        for (int j = 0; j < codebookSize; j++) {
+            var val = partialSums.get(i * codebookSize + j);
+            var quantized = (short) Math.min((val - localBest) / delta, 65535);
+            partialQuantizedSums.setLittleEndianShort(2 * (i * codebookSize + j), quantized);
+        }
     }
   }
 

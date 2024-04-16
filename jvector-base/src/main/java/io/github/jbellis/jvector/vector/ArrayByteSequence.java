@@ -52,6 +52,12 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
     }
 
     @Override
+    public void setLittleEndianShort(int byteIndex, short value) {
+        data[byteIndex] = (byte) (value & 0xFF);
+        data[byteIndex + 1] = (byte) ((value >> 8) & 0xFF);
+    }
+
+    @Override
     public void zero() {
         Arrays.fill(data, (byte) 0);
     }

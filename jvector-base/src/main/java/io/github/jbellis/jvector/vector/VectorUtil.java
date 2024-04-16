@@ -151,16 +151,24 @@ public final class VectorUtil {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }
 
-  public static void bulkShuffleSimilarity(ByteSequence<?> shuffles, int codebookCount, VectorFloat<?> partials, VectorFloat<?> results, VectorSimilarityFunction vsf) {
-    impl.bulkShuffleSimilarity(shuffles, codebookCount, partials, vsf, results);
+  public static void bulkShuffleQuantizedSimilarity(ByteSequence<?> shuffles, int codebookCount, ByteSequence<?> quantizedPartials, float delta, float minDistance, VectorFloat<?> results, VectorSimilarityFunction vsf) {
+    impl.bulkShuffleQuantizedSimilarity(shuffles, codebookCount, quantizedPartials, delta, minDistance, vsf, results);
   }
 
   public static int hammingDistance(long[] v1, long[] v2) {
     return impl.hammingDistance(v1, v2);
   }
 
-  public static void calculatePartialSums(VectorFloat<?> codebook, int baseOffset, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
-    impl.calculatePartialSums(codebook, baseOffset, size, clusterCount, query, offset, vsf, partialSums);
+  public static void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances) {
+    impl.calculatePartialSums(codebook, codebookIndex, size, clusterCount, query, offset, vsf, partialSums, partialBestDistances);
+  }
+
+  public static void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int offset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+    impl.calculatePartialSums(codebook, codebookIndex, size, clusterCount, query, offset, vsf, partialSums);
+  }
+
+  public static void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBest, ByteSequence<?> partialQuantizedSums) {
+    impl.quantizePartialSums(delta, partialSums, partialBest, partialQuantizedSums);
   }
 
   /**

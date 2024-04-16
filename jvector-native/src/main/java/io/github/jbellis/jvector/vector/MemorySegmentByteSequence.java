@@ -22,6 +22,7 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.Buffer;
+import java.nio.ByteOrder;
 
 /**
  * ByteSequence implementation backed by an on-heap MemorySegment.
@@ -29,6 +30,8 @@ import java.nio.Buffer;
 public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     private final MemorySegment segment;
     private final int length;
+
+    private static final ValueLayout.OfShort LITTLEENDIAN_SHORT_LAYOUT_UNALIGNED = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     MemorySegmentByteSequence(int length) {
         this.length = length;
@@ -69,6 +72,11 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     @Override
     public void set(int n, byte value) {
         segment.set(ValueLayout.JAVA_BYTE, n, value);
+    }
+
+    @Override
+    public void setLittleEndianShort(int byteIndex, short value) {
+        segment.set(LITTLEENDIAN_SHORT_LAYOUT_UNALIGNED, byteIndex, value);
     }
 
     @Override

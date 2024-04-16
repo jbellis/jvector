@@ -289,7 +289,8 @@ public class GraphSearcher implements AutoCloseable {
 
             // score the neighbors of the top candidate and add them to the queue
             var scoreFunction = scoreProvider.scoreFunction();
-            if (scoreFunction.supportsEdgeLoadingSimilarity()) {
+            var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
+            if (useEdgeLoading) {
                 similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
             }
 
@@ -301,7 +302,7 @@ public class GraphSearcher implements AutoCloseable {
                 }
                 numVisited++;
 
-                float friendSimilarity = scoreFunction.supportsEdgeLoadingSimilarity()
+                float friendSimilarity = useEdgeLoading
                         ? similarities.get(i)
                         : scoreFunction.similarityTo(friendOrd);
                 scoreTracker.track(friendSimilarity);
