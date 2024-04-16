@@ -58,10 +58,13 @@ public class GraphSearcher implements AutoCloseable {
     private SearchScoreProvider scoreProvider;
 
     /**
-     * Creates a new graph searcher.
-     *
+     * Creates a new graph searcher from the given GraphIndex
      */
-    public GraphSearcher(GraphIndex.View view) {
+    public GraphSearcher(GraphIndex graph) {
+        this(graph.getView());
+    }
+
+    private GraphSearcher(GraphIndex.View view) {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
@@ -78,8 +81,7 @@ public class GraphSearcher implements AutoCloseable {
      * is the unique owner of the vectors instance passed in here.
      */
     public static SearchResult search(VectorFloat<?> queryVector, int topK, RandomAccessVectorValues vectors, VectorSimilarityFunction similarityFunction, GraphIndex graph, Bits acceptOrds) {
-        try (var view = graph.getView()) {
-            var searcher = new GraphSearcher(view);
+        try (var searcher = new GraphSearcher(graph)) {
             var ssp = SearchScoreProvider.exact(queryVector, similarityFunction, vectors);
             return searcher.search(ssp, topK, acceptOrds);
         } catch (Exception e) {
@@ -87,6 +89,9 @@ public class GraphSearcher implements AutoCloseable {
         }
     }
 
+    /**
+     * Call GraphSearcher constructor instead
+     */
     @Deprecated
     public static class Builder {
         private final GraphIndex.View view;

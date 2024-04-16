@@ -146,7 +146,7 @@ public class GraphIndexBuilder implements AutoCloseable {
         this.parallelExecutor = parallelExecutor;
 
         this.graph = new OnHeapGraphIndex(M, (node, m) -> new ConcurrentNeighborSet(node, m, this.scoreProvider, alpha));
-        this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph.getView()));
+        this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph));
 
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));

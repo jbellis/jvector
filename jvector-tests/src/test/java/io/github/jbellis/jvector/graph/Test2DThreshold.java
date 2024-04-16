@@ -56,7 +56,7 @@ public class Test2DThreshold extends LuceneTestCase {
         var onHeapGraph = builder.build(ravv);
 
         // test raw vectors
-        var searcher = new GraphSearcher(onHeapGraph.getView());
+        var searcher = new GraphSearcher(onHeapGraph);
         for (int i = 0; i < 10; i++) {
             TestParams tp = createTestParams(vectors);
 

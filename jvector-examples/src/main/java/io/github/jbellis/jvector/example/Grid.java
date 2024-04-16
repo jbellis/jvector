@@ -308,7 +308,7 @@ public class Grid {
         CompressedVectors cv;
 
         private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
-            return new GraphSearcher(index.getView());
+            return new GraphSearcher(index);
         });
 
         ConfiguredSystem(DataSet ds, GraphIndex index, CompressedVectors cv) {

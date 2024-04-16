@@ -91,15 +91,14 @@ public class SiftSmall {
         var start = System.nanoTime();
         IntStream.range(0, queryVectors.size()).parallel().forEach(i -> {
             var queryVector = queryVectors.get(i);
-            var view = graph.getView();
-            var searcher = new GraphSearcher(view);
+            var searcher = new GraphSearcher(graph);
             SearchScoreProvider ssp;
             if (compressedVectors == null) {
                 ssp = SearchScoreProvider.exact(queryVector, VectorSimilarityFunction.EUCLIDEAN, ravv);
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
-                var rr = ((GraphIndex.ScoringView) view).rerankerFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
+                var rr = ((GraphIndex.ScoringView) searcher.getView()).rerankerFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);
                 ssp = new SearchScoreProvider(sf, rr);
             }
             var nn = searcher.search(ssp, 100, Bits.ALL).getNodes();
