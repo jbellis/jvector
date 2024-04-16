@@ -64,6 +64,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     @Override
     public void close() throws IOException {
         view.close();
+        out.flush();
     }
 
     /**
@@ -110,6 +111,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
         if (oldToNewOrdinals.size() != graph.size()) {
             throw new IllegalArgumentException(String.format("ordinalMapper size %d does not match graph size %d",
                     oldToNewOrdinals.size(), graph.size()));
+        }
+        for (var id : featureStateSuppliers.entrySet()) {
+            if (!featureMap.containsKey(id.getKey())) {
+                throw new IllegalArgumentException("Feature supplier provided for feature not in the graph");
+            }
         }
 
         var entriesByNewOrdinal = new ArrayList<>(oldToNewOrdinals.entrySet());

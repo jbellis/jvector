@@ -64,7 +64,7 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
     }
 
     public void seek(long position) throws IOException {
-        stream.flush();
+        flush();
         raf.seek(position);
     }
 
@@ -75,7 +75,12 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
     }
 
     public long getFilePointer() throws IOException {
+        flush();
         return raf.getFilePointer();
+    }
+
+    public void flush() throws IOException {
+        stream.flush();
     }
 
     /**
@@ -85,7 +90,7 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
      * <p>
      */
     public long checksum(long startOffset, long endOffset) throws IOException {
-        stream.flush();
+        flush();
 
         var crc = new CRC32();
         var a = new byte[4096];
