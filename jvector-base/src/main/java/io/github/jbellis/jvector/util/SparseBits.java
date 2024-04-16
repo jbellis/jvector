@@ -24,9 +24,4 @@ public class SparseBits implements Bits {
     public int cardinality() {
         return set.size();
     }
-
-    @Override
-    public int length() {
-        throw new UnsupportedOperationException();
-    }
 }

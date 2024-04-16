@@ -38,6 +38,9 @@ public abstract class BitSet implements Bits, Accountable {
     clear(0, length());
   }
 
+  /** The number of bits in the set. */
+  public abstract int length();
+
   /** Set the bit at <code>i</code>. */
   public abstract void set(int i);
 
