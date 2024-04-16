@@ -95,8 +95,7 @@ public class SiftSmall {
             var searcher = new GraphSearcher(view);
             SearchScoreProvider ssp;
             if (compressedVectors == null) {
-                var sf = ScoreFunction.Reranker.from(queryVector, VectorSimilarityFunction.EUCLIDEAN, ravv);
-                ssp = new SearchScoreProvider(sf, null);
+                ssp = SearchScoreProvider.exact(queryVector, VectorSimilarityFunction.EUCLIDEAN, ravv);
             }
             else {
                 ScoreFunction.ApproximateScoreFunction sf = compressedVectors.precomputedScoreFunctionFor(queryVector, VectorSimilarityFunction.EUCLIDEAN);

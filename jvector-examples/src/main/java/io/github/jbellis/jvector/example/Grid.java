@@ -320,8 +320,7 @@ public class Grid {
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
             // if we're not compressing then just use the exact score function
             if (cv == null) {
-                var sf = ScoreFunction.Reranker.from(queryVector, ds.similarityFunction, ds.getBaseRavv());
-                return new SearchScoreProvider(sf, null);
+                return SearchScoreProvider.exact(queryVector, ds.similarityFunction, ds.getBaseRavv());
             }
 
             var scoringView = (GraphIndex.ScoringView) view;

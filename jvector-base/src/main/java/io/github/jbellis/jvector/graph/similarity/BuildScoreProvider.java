@@ -113,8 +113,7 @@ public interface BuildScoreProvider {
             @Override
             public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
                 var vc = vectorsCopy.get();
-                var sf = ScoreFunction.Reranker.from(vector, similarityFunction, vc);
-                return new SearchScoreProvider(sf, null);
+                return SearchScoreProvider.exact(vector, similarityFunction, vc);
             }
 
             @Override
@@ -130,8 +129,7 @@ public interface BuildScoreProvider {
                     RandomAccessVectorValues randomAccessVectorValues = vectors.get();
                     var v = randomAccessVectorValues.getVector(node1);
                     var vc = vectorsCopy.get();
-                    var sf = ScoreFunction.Reranker.from(v, similarityFunction, vc);
-                    return new SearchScoreProvider(sf, null);
+                    return SearchScoreProvider.exact(v, similarityFunction, vc);
                 };
             }
         };
@@ -158,7 +156,7 @@ public interface BuildScoreProvider {
                 var cache = new Int2ObjectHashMap<VectorFloat<?>>();
                 return node1 -> {
                     var v1 = cache.computeIfAbsent(node1, vp::getVector);
-                    var sf = cv.scoreFunctionFor(v1, vsf);
+                    var asf = cv.scoreFunctionFor(v1, vsf);
 
                     var cachedVectors = new RandomAccessVectorValues() {
                         @Override
@@ -194,7 +192,7 @@ public interface BuildScoreProvider {
                     };
                     var rr = ScoreFunction.Reranker.from(v1, vsf, cachedVectors);
 
-                    return new SearchScoreProvider(sf, rr);
+                    return new SearchScoreProvider(asf, rr);
                 };
             }
 
