@@ -23,10 +23,12 @@ import org.agrona.collections.Int2IntHashMap;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.IntFunction;
 
 /**
@@ -168,7 +170,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
      * while preserving the original relative ordering in `graph`.  That is, for all node ids i and j,
      * if i &lt; j in `graph` then map[i] &lt; map[j] in the returned map.
      */
-    public static Map<Integer, Integer> getSequentialRenumbering(GraphIndex graph) {
+    public static Map<Integer, Integer> sequentialRenumbering(GraphIndex graph) {
         try (var view = graph.getView()) {
             Int2IntHashMap oldToNewMap = new Int2IntHashMap(-1);
             int nextOrdinal = 0;
@@ -199,7 +201,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         private final BufferedRandomAccessWriter out;
 
         public Builder(GraphIndex graphIndex, BufferedRandomAccessWriter out) {
-            this(graphIndex, out, getSequentialRenumbering(graphIndex));
+            this(graphIndex, out, sequentialRenumbering(graphIndex));
         }
 
         public Builder(GraphIndex graphIndex, BufferedRandomAccessWriter out, Map<Integer, Integer> oldToNewOrdinals) {

@@ -273,7 +273,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     /** Convenience function for writing a vanilla DiskANN-style index with no extra Features. */
     public static void write(GraphIndex graph, RandomAccessVectorValues vectors, BufferedRandomAccessWriter out) throws IOException {
-        write(graph, vectors, OnDiskGraphIndexWriter.getSequentialRenumbering(graph), out);
+        write(graph, vectors, OnDiskGraphIndexWriter.sequentialRenumbering(graph), out);
     }
 
     /** Convenience function for writing a vanilla DiskANN-style index with no extra Features. */
