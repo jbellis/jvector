@@ -89,6 +89,10 @@ public interface GraphIndex extends AutoCloseable {
     @Override
     void close() throws IOException;
 
+    /**
+     * Encapsulates the state of a graph for searching.  Re-usable across search calls,
+     * but each thread needs its own.
+     */
     interface View extends Closeable {
         /**
          * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
@@ -120,6 +124,10 @@ public interface GraphIndex extends AutoCloseable {
         }
     }
 
+    /**
+     * A View that knows how to compute scores against a query vector.  (This is all Views
+     * except for OnHeapGraphIndex.ConcurrentGraphIndexView.)
+     */
     interface ScoringView extends View {
         ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf);
         ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf);
