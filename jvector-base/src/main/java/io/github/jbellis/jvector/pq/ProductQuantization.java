@@ -109,6 +109,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             ForkJoinPool simdExecutor,
             ForkJoinPool parallelExecutor)
     {
+        if (clusterCount > ravv.dimension()) {
+            throw new IllegalArgumentException("clusterCount must be less than or equal to the vector dimension");
+        }
+
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
         var vectors = extractTrainingVectors(ravv, parallelExecutor);
 
