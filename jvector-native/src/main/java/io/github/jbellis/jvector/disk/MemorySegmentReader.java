@@ -40,8 +40,8 @@ public class MemorySegmentReader implements RandomAccessReader {
     private static final OfFloat floatLayout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
     private static final OfLong longLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
 
-    private final Arena arena;
-    private final MemorySegment memory;
+    final Arena arena;
+    final MemorySegment memory;
     private long position = 0;
 
     public MemorySegmentReader(Path path) throws IOException {
@@ -54,7 +54,7 @@ public class MemorySegmentReader implements RandomAccessReader {
         }
     }
 
-    private MemorySegmentReader(Arena arena, MemorySegment memory) {
+    MemorySegmentReader(Arena arena, MemorySegment memory) {
         this.arena = arena;
         this.memory = memory;
     }
@@ -134,6 +134,11 @@ public class MemorySegmentReader implements RandomAccessReader {
         arena.close();
     }
 
+    /**
+     * Creates a shallow copy of the MemorySegmentReader.
+     * Underlying memory-mapped region will be shared between all copies.
+     * When MemorySegmentReader is closed, all copies will become invalid.
+     */
     public MemorySegmentReader duplicate() {
         return new MemorySegmentReader(arena, memory);
     }

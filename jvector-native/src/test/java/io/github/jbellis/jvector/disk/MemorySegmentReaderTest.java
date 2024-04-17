@@ -100,6 +100,32 @@ public class MemorySegmentReaderTest extends RandomizedTest {
         }
     }
 
+    @Test
+    public void testSupplierClose() throws Exception {
+        var s = new MemorySegmentReaderSupplier(tempFile);
+        var r1 = s.get();
+        var r2 = s.get();
+
+        // Close on supplied readers are nop.
+        r1.close();
+        r1.readInt();
+        r2.close();
+        r2.readInt();
+
+        // Backing memory-map will be closed when supplier is closed.
+        s.close();
+        try {
+            r1.readInt();
+            fail("Should have thrown an exception");
+        } catch (IllegalStateException _) {
+        }
+        try {
+            r2.readInt();
+            fail("Should have thrown an exception");
+        } catch (IllegalStateException _) {
+        }
+    }
+
     private void verifyReader(MemorySegmentReader r) {
         r.seek(0);
         var bytes = new byte[7];

@@ -214,7 +214,7 @@
             </build>
         </profile>
         <profile>
-            <id>jdk21</id>
+            <id>jdk22</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>

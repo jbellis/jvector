@@ -16,13 +16,15 @@
 package io.github.jbellis.jvector.disk;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 
 public class MemorySegmentReaderSupplier implements ReaderSupplier {
-    private final MemorySegmentReader reader;
+    private final InternalMemorySegmentReader reader;
 
     public MemorySegmentReaderSupplier(Path path) throws IOException {
-        reader = new MemorySegmentReader(path);
+        reader = new InternalMemorySegmentReader(path);
     }
 
     @Override
@@ -33,5 +35,32 @@ public class MemorySegmentReaderSupplier implements ReaderSupplier {
     @Override
     public void close() {
         reader.close();
+    }
+
+    private static class InternalMemorySegmentReader extends MemorySegmentReader {
+
+        private final boolean shouldClose;
+
+        private InternalMemorySegmentReader(Path path) throws IOException {
+            super(path);
+            shouldClose = true;
+        }
+
+        private InternalMemorySegmentReader(Arena arena, MemorySegment memory) {
+            super(arena, memory);
+            shouldClose = false;
+        }
+
+        @Override
+        public void close() {
+            if (shouldClose) {
+                super.close();
+            }
+        }
+
+        @Override
+        public InternalMemorySegmentReader duplicate() {
+            return new InternalMemorySegmentReader(arena, memory);
+        }
     }
 }
