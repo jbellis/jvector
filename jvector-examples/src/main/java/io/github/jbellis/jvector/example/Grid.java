@@ -138,8 +138,8 @@ public class Grid {
             try (var out = new BufferedRandomAccessWriter(graphPath)) {
                 var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
                         .with(new InlineVectors(floatVectors.dimension())).build();
-                var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
-                suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
+                var suppliers = Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
+                                                   ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
                 writer.write(suppliers);
             }
 
@@ -148,8 +148,8 @@ public class Grid {
             try (var out = new BufferedRandomAccessWriter(lvqGraphPath)) {
                 var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
                         .with(new LVQ(lvq)).build();
-                var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
-                suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
+                var suppliers = Feature.singleStateFactory(FeatureId.LVQ,
+                                                   ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
                 writer.write(suppliers);
             }
 

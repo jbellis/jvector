@@ -235,10 +235,10 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
                      .with(new InlineVectors(ravv.dimension()))
                      .with(new FusedADC(graph.maxDegree(), pq)).build();
         ) {
-            EnumMap<FeatureId, Feature.State> enumMap = new EnumMap<>(FeatureId.class);
+            // write inline vectors incrementally
             for (int i = 0; i < 1000; i++) {
-                enumMap.put(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i))); // write inline vectors incrementally
-                writer.writeInline(out, i, enumMap);
+                var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i)));
+                writer.writeInline(i, state);
             }
             var suppliers_ = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
             suppliers_.put(FeatureId.INLINE_VECTORS, null);

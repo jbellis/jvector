@@ -33,11 +33,9 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -287,9 +285,9 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 .with(new InlineVectors(vectors.dimension()))
                 .build())
         {
-            Map<FeatureId, IntFunction<Feature.State>> suppliers_
-                    = Collections.singletonMap(FeatureId.INLINE_VECTORS, nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
-            writer.write(new EnumMap<>(suppliers_));
+            var suppliers = Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
+                                               nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
+            writer.write(suppliers);
         }
     }
 }

@@ -18,6 +18,8 @@ package io.github.jbellis.jvector.graph.disk;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.EnumMap;
+import java.util.function.IntFunction;
 
 /**
  * A feature of an on-disk graph index. Information to use a feature is stored in the header on-disk.
@@ -35,5 +37,17 @@ public interface Feature {
 
     // Feature implementations should implement a State as well for use with writeInline
     interface State {
+    }
+
+    static EnumMap<FeatureId, IntFunction<State>> singleStateFactory(FeatureId id, IntFunction<State> stateFactory) {
+        EnumMap<FeatureId, IntFunction<State>> map = new EnumMap<>(FeatureId.class);
+        map.put(id, stateFactory);
+        return map;
+    }
+
+    static EnumMap<FeatureId, State> singleState(FeatureId id, State state) {
+        EnumMap<FeatureId, State> map = new EnumMap<>(FeatureId.class);
+        map.put(id, state);
+        return map;
     }
 }
