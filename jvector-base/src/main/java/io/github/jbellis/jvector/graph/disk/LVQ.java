@@ -19,8 +19,12 @@ package io.github.jbellis.jvector.graph.disk;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
+import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -30,10 +34,14 @@ import java.io.UncheckedIOException;
  * Implements the storage of LVQ-quantized vectors in an on-disk graph index. These can be used for reranking.
  */
 public class LVQ implements Feature {
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+
     private final LocallyAdaptiveVectorQuantization lvq;
+    private final ExplicitThreadLocal<ByteSequence<?>> reusableBytes;
 
     public LVQ(LocallyAdaptiveVectorQuantization lvq) {
         this.lvq = lvq;
+        this.reusableBytes = ExplicitThreadLocal.withInitial(() -> vectorTypeSupport.createByteSequence(lvq.compressedVectorSize() - 2 * Float.BYTES));
     }
 
     @Override
@@ -102,9 +110,10 @@ public class LVQ implements Feature {
             try {
                 var bias = reader.readFloat();
                 var scale = reader.readFloat();
+                var tlBytes = reusableBytes.get();
                 // reduce the size by 2 floats read as bias/scale
-                var packed = OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, lvq.compressedVectorSize() - 2 * Float.BYTES);
-                return new LocallyAdaptiveVectorQuantization.PackedVector(packed, bias, scale);
+                OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, tlBytes);
+                return new LocallyAdaptiveVectorQuantization.PackedVector(tlBytes, bias, scale);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
