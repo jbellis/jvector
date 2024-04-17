@@ -238,7 +238,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             EnumMap<FeatureId, Feature.State> enumMap = new EnumMap<>(FeatureId.class);
             for (int i = 0; i < 1000; i++) {
                 enumMap.put(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i))); // write inline vectors incrementally
-                writer.writeInline(out, i, enumMap);
+                writer.writeInline(i, enumMap);
             }
             var suppliers_ = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
             suppliers_.put(FeatureId.INLINE_VECTORS, null);

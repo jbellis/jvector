@@ -67,8 +67,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
      * Write the inline features of the given ordinal to the output at the correct offset.
      * Nothing else is written (no headers, no edges).
      */
-    public void writeInline(BufferedRandomAccessWriter raf,
-                            int ordinal,
+    public void writeInline(int ordinal,
                             EnumMap<FeatureId, Feature.State> stateMap)
             throws IOException
     {
@@ -79,12 +78,12 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 + features.stream().mapToInt(Feature::headerSize).sum();
         int edgeSize = Integer.BYTES * (1 + graph.maxDegree());
         int inlineBytes = ordinal * (Integer.BYTES + features.stream().mapToInt(Feature::inlineSize).sum() + edgeSize);
-        raf.seek(startOffset + headerBytes + inlineBytes + Integer.BYTES);
+        out.seek(startOffset + headerBytes + inlineBytes + Integer.BYTES);
 
         for (var writer : features) {
             var state = stateMap.get(writer.id());
             if (state == null) {
-                raf.seek(raf.getFilePointer() + writer.inlineSize());
+                out.seek(out.getFilePointer() + writer.inlineSize());
             } else {
                 writer.writeInline(out, state);
             }
