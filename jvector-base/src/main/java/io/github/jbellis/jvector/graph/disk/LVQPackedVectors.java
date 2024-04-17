@@ -21,6 +21,7 @@ import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 public interface LVQPackedVectors {
     /**
      * Get the Turbo LVQ 64-byte packed vector for the given ordinal.
+     * All returned vectors are shared and will only be valid until the next call to this method on this object.
      * @param ordinal the ordinal of the vector to get
      * @return the Turbo LVQ 64-byte packed vector
      */
