@@ -21,7 +21,6 @@ import sun.misc.Unsafe;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -32,10 +31,9 @@ import java.util.logging.Logger;
  * It provides a bare minimum to run against disk in reasonable time.
  * Does not handle files above 2 GB.
  */
-public class SimpleMappedReader implements RandomAccessReader {
+public class SimpleMappedReader extends ByteBufferReader {
     private static final Logger LOG = Logger.getLogger(SimpleMappedReader.class.getName());
 
-    private final MappedByteBuffer mbb;
     private static final Unsafe unsafe = getUnsafe();
 
     private static Unsafe getUnsafe() {
@@ -54,87 +52,29 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     public SimpleMappedReader(String name) throws IOException {
+        this(getMappedByteBuffer(name));
+    }
+
+    private SimpleMappedReader(MappedByteBuffer mbb) {
+        super(mbb);
+    }
+
+    private static MappedByteBuffer getMappedByteBuffer(String name) throws IOException {
         var raf = new RandomAccessFile(name, "r");
         if (raf.length() > Integer.MAX_VALUE) {
             throw new RuntimeException("MappedRandomAccessReader doesn't support large files");
         }
-        mbb = raf.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, raf.length());
+        MappedByteBuffer mbb = raf.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, raf.length());
         mbb.load();
         raf.close();
-    }
-
-    private SimpleMappedReader(MappedByteBuffer sourceMbb) {
-        mbb = sourceMbb;
-    }
-
-    @Override
-    public void seek(long offset) {
-        mbb.position(Math.toIntExact(offset));
-    }
-
-    @Override
-    public long getPosition() {
-        return mbb.position();
-    }
-
-    @Override
-    public void readFully(float[] buffer) {
-        for (int i = 0; i < buffer.length; i++) {
-            buffer[i] = mbb.getFloat();
-        }
-    }
-
-    @Override
-    public void readFully(byte[] b) {
-        mbb.get(b);
-    }
-
-    @Override
-    public void readFully(ByteBuffer buffer) {
-        // slice mbb from current position to buffer.remaining()
-        var slice = mbb.slice();
-        var remaining = buffer.remaining();
-        slice.limit(remaining);
-        buffer.put(slice);
-        mbb.position(mbb.position() + remaining);
-    }
-
-    @Override
-    public void readFully(long[] vector) {
-        for (int i = 0; i < vector.length; i++) {
-            vector[i] = mbb.getLong();
-        }
-    }
-
-    @Override
-    public int readInt() {
-        return mbb.getInt();
-    }
-
-    @Override
-    public float readFloat() throws IOException {
-        return mbb.getFloat();
-    }
-
-    @Override
-    public void read(int[] ints, int offset, int count) {
-        for (int i = 0; i < count; i++) {
-            ints[offset + i] = mbb.getInt();
-        }
-    }
-
-    @Override
-    public void read(float[] floats, int offset, int count) {
-        for (int i = 0; i < count; i++) {
-            floats[offset + i] = mbb.getFloat();
-        }
+        return mbb;
     }
 
     @Override
     public void close() {
         if (unsafe != null) {
             try {
-                unsafe.invokeCleaner(mbb);
+                unsafe.invokeCleaner(bb);
             } catch (IllegalArgumentException e) {
                 // empty catch, this was a duplicated/indirect buffer or
                 // otherwise not cleanable
@@ -143,6 +83,6 @@ public class SimpleMappedReader implements RandomAccessReader {
     }
 
     public SimpleMappedReader duplicate() {
-        return new SimpleMappedReader((MappedByteBuffer) mbb.duplicate());
+        return new SimpleMappedReader((MappedByteBuffer) bb.duplicate());
     }
 }
