@@ -338,6 +338,14 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
             return (getQuantized(index) * scale) + bias;
         }
 
+        public VectorFloat<?> decode() {
+            var vf = vectorTypeSupport.createFloatVector(bytes.length());
+            for (int i = 0; i < bytes.length(); i++) {
+                vf.set(i, getDequantized(i));
+            }
+            return vf;
+        }
+
         public PackedVector copy() {
             return new PackedVector(bytes.copy(), bias, scale);
         }

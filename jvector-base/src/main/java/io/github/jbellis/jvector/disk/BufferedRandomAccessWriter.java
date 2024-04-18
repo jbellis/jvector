@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.disk;
 
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
@@ -29,9 +28,10 @@ import java.nio.file.Path;
 import java.util.zip.CRC32;
 
 /**
- * A buffered DataOutput that adds seek() and checksum() methods
+ * A buffered DataOutput that adds seek(), checksum(), and readFully methods
  */
 public class BufferedRandomAccessWriter implements DataOutput, Closeable {
+
     private static class RandomAccessOutputStream extends OutputStream {
         private final RandomAccessFile raf;
 
@@ -68,8 +68,14 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
         raf.seek(position);
     }
 
+    public void readFully(byte[] dest, int destOffset, int size) throws IOException {
+        flush();
+        raf.readFully(dest, destOffset, size);
+    }
+
     @Override
     public void close() throws IOException {
+        flush();
         stream.close();
         raf.close();
     }

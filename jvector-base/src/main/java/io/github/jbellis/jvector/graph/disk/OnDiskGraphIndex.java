@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
-import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
@@ -33,6 +32,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
@@ -128,7 +128,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return new View(readerSupplier.get());
     }
 
-    public class View implements ScoringView, RandomAccessVectorValues {
+    public class View implements FeatureSource, ScoringView, RandomAccessVectorValues {
         protected final RandomAccessReader reader;
         private final int[] neighbors;
 
@@ -168,14 +168,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                     (node * (long) Integer.BYTES * (maxDegree + 1));
         }
 
-        RandomAccessReader inlineReaderForNode(int node, FeatureId featureId) {
-            try {
-                long offset = inlineOffsetFor(node, featureId);
-                reader.seek(offset);
-                return reader;
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        @Override
+        public RandomAccessReader inlineReaderForNode(int node, FeatureId featureId) throws IOException {
+            long offset = inlineOffsetFor(node, featureId);
+            reader.seek(offset);
+            return reader;
         }
 
         @Override
@@ -270,23 +267,23 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     /** Convenience function for writing a vanilla DiskANN-style index with no extra Features. */
-    public static void write(GraphIndex graph, RandomAccessVectorValues vectors, BufferedRandomAccessWriter out) throws IOException {
-        write(graph, vectors, OnDiskGraphIndexWriter.sequentialRenumbering(graph), out);
+    public static void write(GraphIndex graph, RandomAccessVectorValues vectors, Path path) throws IOException {
+        write(graph, vectors, OnDiskGraphIndexWriter.sequentialRenumbering(graph), path);
     }
 
     /** Convenience function for writing a vanilla DiskANN-style index with no extra Features. */
     public static void write(GraphIndex graph,
                              RandomAccessVectorValues vectors,
                              Map<Integer, Integer> oldToNewOrdinals,
-                             BufferedRandomAccessWriter out)
+                             Path path)
             throws IOException
     {
-        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, out, oldToNewOrdinals)
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, path).withMap(oldToNewOrdinals)
                 .with(new InlineVectors(vectors.dimension()))
                 .build())
         {
             var suppliers = Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
-                                               nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
+                                                       nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
             writer.write(suppliers);
         }
     }

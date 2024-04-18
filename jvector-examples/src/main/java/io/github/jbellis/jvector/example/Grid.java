@@ -16,19 +16,19 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
-import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
+import io.github.jbellis.jvector.graph.disk.InlineVectorValues;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
@@ -53,9 +53,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +72,7 @@ import java.util.stream.IntStream;
  * Tests a grid of configurations against a dataset
  */
 public class Grid {
+
     private static final String pqCacheDir = "pq_cache";
 
     private static final String dirPrefix = "BenchGraphDir";
@@ -78,6 +80,7 @@ public class Grid {
     static void runAll(DataSet ds,
                        List<Integer> mGrid,
                        List<Integer> efConstructionGrid,
+                       List<? extends Set<FeatureId>> featureSets,
                        List<Function<DataSet, CompressorParameters>> buildCompressors,
                        List<Function<DataSet, CompressorParameters>> compressionGrid,
                        List<Integer> efSearchFactor) throws IOException
@@ -88,7 +91,7 @@ public class Grid {
                 for (int efC : efConstructionGrid) {
                     for (var bc : buildCompressors) {
                         var compressor = getCompressor(bc, ds);
-                        runOneGraph(M, efC, compressor, compressionGrid, efSearchFactor, ds, testDirectory);
+                        runOneGraph(featureSets, M, efC, compressor, compressionGrid, efSearchFactor, ds, testDirectory);
                     }
                 }
             }
@@ -98,7 +101,8 @@ public class Grid {
         }
     }
 
-    static void runOneGraph(int M,
+    static void runOneGraph(List<? extends Set<FeatureId>> featureSets,
+                            int M,
                             int efConstruction,
                             VectorCompressor<?> buildCompressor,
                             List<Function<DataSet, CompressorParameters>> compressionGrid,
@@ -106,108 +110,192 @@ public class Grid {
                             DataSet ds,
                             Path testDirectory) throws IOException
     {
-        var floatVectors = ds.getBaseRavv();
-        GraphIndexBuilder builder;
+        Map<Set<FeatureId>, GraphIndex> indexes;
         if (buildCompressor == null) {
-            var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
-            builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f,
-                                            PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+            indexes = buildInMemory(featureSets, M, efConstruction, ds, testDirectory);
         } else {
-            var quantized = buildCompressor.encodeAll(ds.getBaseRavv());
-            var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
-            var ravv = new ListRandomAccessVectorValues(ds.baseVectors, ds.baseVectors.get(0).length());
-            var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ravv, pq);
-            builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f,
-                                            PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+            indexes = buildOnDisk(featureSets, M, efConstruction, ds, testDirectory, buildCompressor);
         }
-        var start = System.nanoTime();
+
+        try {
+            for (var cpSupplier : compressionGrid) {
+                var compressor = getCompressor(cpSupplier, ds);
+                CompressedVectors cv;
+                if (compressor == null) {
+                    cv = null;
+                    System.out.format("Uncompressed vectors%n");
+                } else {
+                    long start = System.nanoTime();
+                    var quantizedVectors = compressor.encodeAll(ds.getBaseRavv());
+                    cv = compressor.createCompressedVectors(quantizedVectors);
+                    System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
+                }
+
+                indexes.forEach((features, index) -> {
+                    try (var cs = new ConfiguredSystem(ds, index, cv)) {
+                        testConfiguration(cs, efSearchOptions);
+                    }
+                });
+            }
+        } finally {
+            for (int n = 0; n < featureSets.size(); n++) {
+                Files.deleteIfExists(testDirectory.resolve("graph" + n));
+            }
+        }
+    }
+
+    private static Map<Set<FeatureId>, GraphIndex> buildOnDisk(List<? extends Set<FeatureId>> featureSets,
+                                                               int M,
+                                                               int efConstruction,
+                                                               DataSet ds,
+                                                               Path testDirectory,
+                                                               VectorCompressor<?> buildCompressor)
+            throws IOException
+    {
+        var floatVectors = ds.getBaseRavv();
+
+        var quantized = buildCompressor.encodeAll(floatVectors);
+        var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
+        GraphIndexBuilder builder = new GraphIndexBuilder(null, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f,
+                                                          PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+
+        // use the inline vectors index as the score provider for graph construction
+        Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
+        Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers = new HashMap<>();
+        OnDiskGraphIndexWriter scoringWriter = null;
+        int n = 0;
+        for (var features : featureSets) {
+            var graphPath = testDirectory.resolve("graph" + n++);
+            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors);
+            var writer = bws.builder.build();
+            writers.put(features, writer);
+            suppliers.put(features, bws.suppliers);
+            if (features.equals(EnumSet.of(FeatureId.INLINE_VECTORS))) {
+                scoringWriter = writer;
+            }
+        }
+        if (scoringWriter == null) {
+            throw new IllegalStateException("Incremental compressed builds are only supported when one of the feature sets is {LVQ}");
+        }
+        var finalScoringWriter = scoringWriter;
+        var dvv = new InlineVectorValues(floatVectors.dimension(), scoringWriter);
+        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, dvv, pq);
+        builder.setBuildScoreProvider(bsp);
+
+        // build the graph incrementally
+        long start = System.nanoTime();
+        var vv = floatVectors.threadLocalSupplier();
+        PhysicalCoreExecutor.pool().submit(() -> {
+            IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
+                writers.forEach((features, writer) -> {
+                    try {
+                        var stateMap = new EnumMap<FeatureId, Feature.State>(FeatureId.class);
+                        suppliers.get(features).forEach((featureId, supplier) -> {
+                            stateMap.put(featureId, supplier.apply(node));
+                        });
+                        writer.writeInline(node, stateMap);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+                builder.addGraphNode(node, vv.get().getVector(node));
+            });
+        }).join();
+        builder.cleanup();
+        // write the edge lists and close the writers
+        writers.values().stream().parallel().forEach(writer -> {
+            try {
+                writer.write(Map.of());
+                writer.close();
+                dvv.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+        System.out.format("Build and write %s in %ss%n", featureSets, (System.nanoTime() - start) / 1_000_000_000.0);
+
+        // open indexes
+        Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
+        n = 0;
+        for (var features : featureSets) {
+            var graphPath = testDirectory.resolve("graph" + n++);
+            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+            indexes.put(features, index);
+        }
+        return indexes;
+    }
+
+    private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features, OnHeapGraphIndex onHeapGraph, Path outPath, RandomAccessVectorValues floatVectors) {
+        var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(new OnDiskGraphIndexWriter.IdentityMapper());
+        Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
+        for (var featureId : features) {
+            switch (featureId) {
+                case INLINE_VECTORS:
+                    builder.with(new InlineVectors(floatVectors.dimension()));
+                    suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
+                    break;
+                case LVQ:
+                    var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
+                    builder.with(new LVQ(lvq));
+                    suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
+                    break;
+                case FUSED_ADC:
+                    // ???
+                    // var pq = (PQVectors) buildCompressor;
+                    // builder.with(new FusedADC(onHeapGraph.maxDegree(), pq.getProductQuantization()));
+                    // suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(onHeapGraph.getView(), pq, ordinal));
+                    throw new UnsupportedOperationException("Unsupported feature " + featureId);
+            }
+        }
+        return new BuilderWithSuppliers(builder, suppliers);
+    }
+
+    private static class BuilderWithSuppliers {
+        public final OnDiskGraphIndexWriter.Builder builder;
+        public final Map<FeatureId, IntFunction<Feature.State>> suppliers;
+
+        public BuilderWithSuppliers(OnDiskGraphIndexWriter.Builder builder, Map<FeatureId, IntFunction<Feature.State>> suppliers) {
+            this.builder = builder;
+            this.suppliers = suppliers;
+        }
+    }
+
+    private static Map<Set<FeatureId>, GraphIndex> buildInMemory(List<? extends Set<FeatureId>> featureSets,
+                                                                 int M,
+                                                                 int efConstruction,
+                                                                 DataSet ds,
+                                                                 Path testDirectory)
+            throws IOException
+    {
+        var floatVectors = ds.getBaseRavv();
+        Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
+        long start;
+        var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f,
+                                                          PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
         System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
-                          buildCompressor == null ? "full res" : buildCompressor.toString(),
+                          "full res",
                           M,
                           efConstruction,
                           (System.nanoTime() - start) / 1_000_000_000.0,
                           onHeapGraph.getAverageDegree(),
                           onHeapGraph.getAverageShortEdges());
-
-        var graphPath = testDirectory.resolve("graph" + M + efConstruction + ds.name);
-        var fusedGraphPath = testDirectory.resolve("fusedgraph" + M + efConstruction + ds.name);
-        var lvqGraphPath = testDirectory.resolve("lvqgraph" + M + efConstruction + ds.name);
-        try {
-            // vanilla index
-            try (var out = new BufferedRandomAccessWriter(graphPath)) {
-                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
-                        .with(new InlineVectors(floatVectors.dimension())).build();
-                var suppliers = Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
-                                                   ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
-                writer.write(suppliers);
+        int n = 0;
+        for (var features : featureSets) {
+            var graphPath = testDirectory.resolve("graph" + n++);
+            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors);
+            try (var writer = bws.builder.build()) {
+                start = System.nanoTime();
+                writer.write(bws.suppliers);
+                System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
             }
 
-            // lvq index
-            var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
-            try (var out = new BufferedRandomAccessWriter(lvqGraphPath)) {
-                var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
-                        .with(new LVQ(lvq)).build();
-                var suppliers = Feature.singleStateFactory(FeatureId.LVQ,
-                                                   ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
-                writer.write(suppliers);
-            }
-
-            for (var cpSupplier : compressionGrid) {
-                var compressor = getCompressor(cpSupplier, ds);
-                CompressedVectors cv = null;
-                var fusedCompatible = compressor instanceof ProductQuantization && ((ProductQuantization) compressor).getClusterCount() == 32;
-                if (compressor == null) {
-                    System.out.format("Uncompressed vectors%n");
-                } else {
-                    start = System.nanoTime();
-                    var quantizedVectors = compressor.encodeAll(ds.getBaseRavv());
-                    cv = compressor.createCompressedVectors(quantizedVectors);
-                    System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
-
-                    if (fusedCompatible) {
-                        // fused index
-                        try (var out = new BufferedRandomAccessWriter(fusedGraphPath)) {
-                            var writer = new OnDiskGraphIndexWriter.Builder(onHeapGraph, out)
-                                    .with(new LVQ(lvq))
-                                    .with(new FusedADC(onHeapGraph.maxDegree(), ((PQVectors) cv).getProductQuantization()))
-                                    .build();
-                            var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
-                            suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
-                            var pqVectors = (PQVectors) cv;
-                            suppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(onHeapGraph.getView(), pqVectors, ordinal));
-                            writer.write(suppliers);
-                        }
-                    }
-                }
-
-                try (var onDiskGraph = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
-                     var onDiskLVQGraph = compressor == null ? null : new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(lvqGraphPath), 0));
-                     var onDiskFusedGraph = fusedCompatible ? new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(fusedGraphPath), 0)) : null)
-                {
-                    List<GraphIndex> graphs = new ArrayList<>();
-                    graphs.add(onDiskGraph);
-                    if (onDiskFusedGraph != null) {
-                        graphs.add(onDiskFusedGraph);
-                    }
-                    if (onDiskLVQGraph != null) {
-                        graphs.add(onDiskLVQGraph);
-                    }
-                    if (cv == null) {
-                        graphs.add(onHeapGraph); // if we have no cv, compare on-heap/on-disk with exact searches
-                    }
-                    for (var g : graphs) {
-                        try (var cs = new ConfiguredSystem(ds, g, cv)) {
-                            testConfiguration(cs, efSearchOptions);
-                        }
-                    }
-                }
-            }
-        } finally {
-            Files.deleteIfExists(graphPath);
-            Files.deleteIfExists(fusedGraphPath);
-            Files.deleteIfExists(lvqGraphPath);
+            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+            indexes.put(features, index);
         }
+        return indexes;
     }
 
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)

@@ -92,22 +92,26 @@ public class LVQ implements Feature {
 
     ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector,
                                        VectorSimilarityFunction vsf,
-                                       OnDiskGraphIndex.View view)
+                                       FeatureSource source)
     {
-        return lvq.scoreFunctionFrom(queryVector, vsf, new PackedVectors(view));
+        return lvq.scoreFunctionFrom(queryVector, vsf, createPackedVectors(source));
     }
 
-    private class PackedVectors implements LVQPackedVectors {
-        private final OnDiskGraphIndex.View view;
+    public PackedVectors createPackedVectors(FeatureSource source) {
+        return new PackedVectors(source);
+    }
 
-        public PackedVectors(OnDiskGraphIndex.View view) {
-            this.view = view;
+    public class PackedVectors implements LVQPackedVectors {
+        private final FeatureSource source;
+
+        public PackedVectors(FeatureSource source) {
+            this.source = source;
         }
 
         @Override
         public LocallyAdaptiveVectorQuantization.PackedVector getPackedVector(int ordinal) {
-            var reader = view.inlineReaderForNode(ordinal, FeatureId.LVQ);
             try {
+                var reader = source.inlineReaderForNode(ordinal, FeatureId.LVQ);
                 var bias = reader.readFloat();
                 var scale = reader.readFloat();
                 var tlBytes = reusableBytes.get();
@@ -117,6 +121,10 @@ public class LVQ implements Feature {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        public FeatureSource getSource() {
+            return source;
         }
     }
 }
