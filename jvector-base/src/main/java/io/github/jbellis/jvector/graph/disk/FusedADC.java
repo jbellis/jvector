@@ -128,8 +128,8 @@ public class FusedADC implements Feature {
 
         @Override
         public ByteSequence<?> getPackedNeighbors(int node) {
-            var reader = view.inlineReaderForNode(node, FeatureId.FUSED_ADC);
             try {
+                var reader = view.inlineReaderForNode(node, FeatureId.FUSED_ADC);
                 OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, neighbors);
                 return neighbors;
             } catch (IOException e) {

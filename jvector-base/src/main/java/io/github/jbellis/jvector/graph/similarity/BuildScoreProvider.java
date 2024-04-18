@@ -29,7 +29,7 @@ import org.agrona.collections.Int2ObjectHashMap;
  * Encapsulates comparing node distances for GraphIndexBuilder.
  */
 public interface BuildScoreProvider {
-    VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     /**
      * @return true if the primary score functions used for construction are exact.  This
@@ -99,7 +99,7 @@ public interface BuildScoreProvider {
             @Override
             public VectorFloat<?> approximateCentroid() {
                 var vv = vectors.get();
-                var centroid = vectorTypeSupport.createFloatVector(vv.dimension());
+                var centroid = vts.createFloatVector(vv.dimension());
                 for (int i = 0; i < vv.size(); i++) {
                     var v = vv.getVector(i);
                     if (v != null) { // MapRandomAccessVectorValues is not necessarily dense
@@ -137,10 +137,10 @@ public interface BuildScoreProvider {
 
     /**
      * Returns a BSP that performs approximate score comparisons using the given PQVectors,
-     * with reranking performed using full resolutions vectors read from the reader
+     * with reranking performed using LVQ PackedVectors
      */
     static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf,
-                                                   RandomAccessVectorValues vp,
+                                                   RandomAccessVectorValues ravv,
                                                    PQVectors cv)
     {
         int dimension = cv.getOriginalSize() / Float.BYTES;
@@ -155,7 +155,7 @@ public interface BuildScoreProvider {
             public SearchScoreProvider.Factory diversityProvider() {
                 var cache = new Int2ObjectHashMap<VectorFloat<?>>();
                 return node1 -> {
-                    var v1 = cache.computeIfAbsent(node1, vp::getVector);
+                    var v1 = cache.computeIfAbsent(node1, ravv::getVector);
                     var asf = cv.scoreFunctionFor(v1, vsf);
 
                     var cachedVectors = new RandomAccessVectorValues() {
@@ -187,7 +187,7 @@ public interface BuildScoreProvider {
 
                         @Override
                         public VectorFloat<?> getVector(int nodeId) {
-                            return cache.computeIfAbsent(nodeId, vp::getVector);
+                            return cache.computeIfAbsent(node1, ravv::getVector);
                         }
                     };
                     var rr = ScoreFunction.Reranker.from(v1, vsf, cachedVectors);
@@ -198,7 +198,7 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(int node) {
-                return searchProviderFor(vp.getVector(node));
+                return searchProviderFor(ravv.getVector(node));
             }
 
             @Override

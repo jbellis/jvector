@@ -203,9 +203,7 @@ public class IPCService
             var testDirectory = Files.createTempDirectory("BenchGraphDir");
             var graphPath = testDirectory.resolve("graph.bin");
 
-            try (var out = new BufferedRandomAccessWriter(graphPath)) {
-                OnDiskGraphIndex.write(onHeapIndex, ravv, out);
-            }
+            OnDiskGraphIndex.write(onHeapIndex, ravv, graphPath);
             return new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
         } catch (IOException e) {
             throw new IOError(e);

@@ -114,10 +114,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
         // write the graph
         var outputPath = testDirectory.resolve("renumbered_graph");
-        try (var out = TestUtil.openBufferedWriter(outputPath))
-        {
-            OnDiskGraphIndex.write(original, ravv, oldToNewMap, out);
-        }
+        OnDiskGraphIndex.write(original, ravv, oldToNewMap, outputPath);
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
@@ -147,9 +144,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
         // write the graph
         var outputPath = testDirectory.resolve("renumbered_graph");
-        try (var out = TestUtil.openBufferedWriter(outputPath)) {
-            OnDiskGraphIndex.write(original, ravv, oldToNewMap, out);
-        }
+        OnDiskGraphIndex.write(original, ravv, oldToNewMap, outputPath);
         // check that written graph ordinals match the new ones
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
@@ -213,7 +208,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     }
 
     @Test
-    public void testIncrementalWrites() {
+    public void testIncrementalWrites() throws IOException {
         // generate 1000 node random graph
         var graph = new TestUtil.RandomlyConnectedGraphIndex(1000, 32, getRandom());
         var vectors = TestUtil.createRandomVectors(1000, 256);
@@ -221,30 +216,24 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
         // write out graph all at once
         var outputPath = testDirectory.resolve("bulk_graph");
-        try (var out = TestUtil.openBufferedWriter(outputPath)) {
-            OnDiskGraphIndex.write(graph, ravv, out);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        OnDiskGraphIndex.write(graph, ravv, outputPath);
 
         var incrementalOutputPath = testDirectory.resolve("incremental_graph");
         var pq = ProductQuantization.compute(ravv, 64, 256, false);
         var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(ravv));
-        try (var out = TestUtil.openBufferedWriter(incrementalOutputPath);
-             var writer = new OnDiskGraphIndexWriter.Builder(graph, out)
-                     .with(new InlineVectors(ravv.dimension()))
-                     .with(new FusedADC(graph.maxDegree(), pq)).build();
-        ) {
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalOutputPath)
+                .with(new InlineVectors(ravv.dimension()))
+                .with(new FusedADC(graph.maxDegree(), pq)).build())
+        {
             // write inline vectors incrementally
             for (int i = 0; i < 1000; i++) {
                 var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i)));
                 writer.writeInline(i, state);
             }
-            var suppliers_ = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
-            suppliers_.put(FeatureId.INLINE_VECTORS, null);
-            suppliers_.put(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i));
-            out.seek(0);
-            writer.write(suppliers_); // write graph structure, fused ADC
+            var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
+            suppliers.put(FeatureId.INLINE_VECTORS, null);
+            suppliers.put(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i));
+            writer.write(suppliers); // write graph structure, fused ADC
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

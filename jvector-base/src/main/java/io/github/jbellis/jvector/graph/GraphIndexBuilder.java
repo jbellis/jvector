@@ -66,7 +66,7 @@ public class GraphIndexBuilder implements AutoCloseable {
     final OnHeapGraphIndex graph;
     private final ConcurrentSkipListSet<Integer> insertionsInProgress = new ConcurrentSkipListSet<>();
 
-    private final BuildScoreProvider scoreProvider;
+    private BuildScoreProvider scoreProvider;
 
     private final ForkJoinPool simdExecutor;
     private final ForkJoinPool parallelExecutor;
@@ -131,7 +131,7 @@ public class GraphIndexBuilder implements AutoCloseable {
                              ForkJoinPool simdExecutor,
                              ForkJoinPool parallelExecutor)
     {
-        this.scoreProvider = Objects.requireNonNull(scoreProvider);
+        this.scoreProvider = scoreProvider;
         this.dimension = dimension;
         this.neighborOverflow = neighborOverflow;
         this.alpha = alpha;
@@ -151,6 +151,16 @@ public class GraphIndexBuilder implements AutoCloseable {
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
         this.concurrentScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
+    }
+
+    /**
+     * Provided to avoid the circular dependency between the GraphIndexBuilder and the BuildScoreProvider
+     * when construction is proceeding incrementally for a larger-than-memory index.
+     * <p>
+     * It is not valid to change the score provider after beginning construction with addGraphNode() or build().
+     */
+    public void setBuildScoreProvider(BuildScoreProvider bsp) {
+        scoreProvider = bsp;
     }
 
     public OnHeapGraphIndex build(RandomAccessVectorValues ravv) {

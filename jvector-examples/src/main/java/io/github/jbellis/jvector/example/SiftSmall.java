@@ -69,8 +69,8 @@ public class SiftSmall {
 
         var graphPath = testDirectory.resolve("graph_test");
         CachingGraphIndex onDiskGraph = null;
-        try (var out = new BufferedRandomAccessWriter(graphPath)) {
-            OnDiskGraphIndex.write(onHeapGraph, ravv, out);
+        try {
+            OnDiskGraphIndex.write(onHeapGraph, ravv, graphPath);
             onDiskGraph = new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
 
             testRecallInternal(onHeapGraph, ravv, queryVectors, groundTruth, null);
