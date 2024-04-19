@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.graph.CachingVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -156,41 +157,8 @@ public interface BuildScoreProvider {
             public SearchScoreProvider.Factory diversityProvider() {
                 var cache = new Int2ObjectHashMap<VectorFloat<?>>();
                 return node1 -> {
-                    var cachedVectors = new RandomAccessVectorValues() {
-                        @Override
-                        public int size() {
-                            return cv.count();
-                        }
+                    var cachedVectors = new CachingVectorValues(cv, dimension, cache, ravv);
 
-                        @Override
-                        public int dimension() {
-                            return dimension;
-                        }
-
-                        @Override
-                        public boolean isValueShared() {
-                            return false;
-                        }
-
-                        @Override
-                        public RandomAccessVectorValues copy() {
-                            return this;
-                        }
-
-                        @Override
-                        public void getVectorInto(int nodeId, VectorFloat<?> result, int offset) {
-                            // getVectorInto is only called by reranking, not diversity code
-                            throw new UnsupportedOperationException();
-                        }
-
-                        @Override
-                        public VectorFloat<?> getVector(int nodeId) {
-                            return cache.computeIfAbsent(nodeId, (int n) -> {
-                                var v = ravv.getVector(n);
-                                return ravv.isValueShared() ? v.copy() : v;
-                            });
-                        }
-                    };
                     var v1 = cachedVectors.getVector(node1);
                     var asf = cv.scoreFunctionFor(v1, vsf);
                     var rr = ScoreFunction.Reranker.from(v1, vsf, cachedVectors);
@@ -215,4 +183,5 @@ public interface BuildScoreProvider {
             }
         };
     }
+
 }

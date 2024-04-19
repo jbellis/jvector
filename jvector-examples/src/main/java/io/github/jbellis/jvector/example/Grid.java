@@ -31,6 +31,7 @@ import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.LVQ;
+import io.github.jbellis.jvector.graph.disk.LvqVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
@@ -163,6 +164,7 @@ public class Grid {
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
         Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers = new HashMap<>();
         OnDiskGraphIndexWriter scoringWriter = null;
+        LVQ lvq = null;
         int n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
@@ -170,16 +172,16 @@ public class Grid {
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
-            if (features.equals(EnumSet.of(FeatureId.INLINE_VECTORS))) {
+            if (features.equals(EnumSet.of(FeatureId.LVQ))) {
                 scoringWriter = writer;
+                lvq = (LVQ) bws.builder.getFeature(FeatureId.LVQ);
             }
         }
         if (scoringWriter == null) {
-            throw new IllegalStateException("Incremental compressed builds are only supported when one of the feature sets is {LVQ}");
+            throw new IllegalStateException("Incremental compressed builds are only supported by Bench when one of the feature sets is {LVQ}");
         }
-        var finalScoringWriter = scoringWriter;
-        var dvv = new InlineVectorValues(floatVectors.dimension(), scoringWriter);
-        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, dvv, pq);
+        var ivv = new LvqVectorValues(floatVectors.dimension(), lvq, scoringWriter);
+        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ivv, pq);
         builder.setBuildScoreProvider(bsp);
 
         // build the graph incrementally
@@ -207,7 +209,7 @@ public class Grid {
             try {
                 writer.write(Map.of());
                 writer.close();
-                dvv.close();
+                ivv.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
