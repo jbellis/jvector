@@ -102,7 +102,7 @@ public class LVQ implements Feature {
     }
 
     public class PackedVectors implements LVQPackedVectors {
-        private final FeatureSource source;
+        final FeatureSource source;
 
         public PackedVectors(FeatureSource source) {
             this.source = source;
@@ -121,10 +121,6 @@ public class LVQ implements Feature {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }
-
-        public FeatureSource getSource() {
-            return source;
         }
     }
 }

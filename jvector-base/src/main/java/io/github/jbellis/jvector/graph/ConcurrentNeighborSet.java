@@ -242,6 +242,9 @@ public class ConcurrentNeighborSet {
             assert diverseBefore == 0;
 
             // rerank with exact scores
+            // Note: this is actually faster than computing diversity using approximate scores (and then rescoring only
+            // the remaining neighbors), we lose more from loading from dozens of codebook locations in memory than we
+            // do from touching disk some extra times to get the exact score
             var sf = dp.createFor(nodeId).exactScoreFunction();
             var exactScoredNeighbors = new NodeArray(neighbors.size);
             for (int i = 0; i < neighbors.size; i++) {

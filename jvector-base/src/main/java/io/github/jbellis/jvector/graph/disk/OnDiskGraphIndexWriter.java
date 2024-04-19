@@ -314,6 +314,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
         public Builder withMap(Map<Integer, Integer> oldToNewOrdinals) {
             return withMapper(new MapMapper(oldToNewOrdinals));
         }
+
+        public Feature getFeature(FeatureId featureId) {
+            return features.get(featureId);
+        }
     }
 
     public interface OrdinalMapper {

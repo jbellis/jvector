@@ -27,7 +27,6 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
-import java.io.Closeable;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
