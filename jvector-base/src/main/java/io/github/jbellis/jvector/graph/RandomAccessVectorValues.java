@@ -27,13 +27,16 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+import java.io.Closeable;
 import java.util.function.Supplier;
+import java.util.logging.Logger;
 
 /**
  * Provides random access to vectors by dense ordinal. This interface is used by graph-based
  * implementations of KNN search.
  */
 public interface RandomAccessVectorValues {
+    Logger LOG = Logger.getLogger(RandomAccessVectorValues.class.getName());
 
     /**
      * Return the number of vector values.
@@ -97,6 +100,9 @@ public interface RandomAccessVectorValues {
             return () -> this;
         }
 
+        if (this instanceof AutoCloseable) {
+            LOG.warning("RAVV is shared and implements AutoCloseable; threadLocalSupplier() may lead to leaks");
+        }
         var tl = ExplicitThreadLocal.withInitial(this::copy);
         return tl::get;
     }
