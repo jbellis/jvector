@@ -21,7 +21,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
 
 /**
- * This is NOT a general "make vectors go faster" class.  It is used specificly by diversity computations
+ * This is NOT a general "make vectors go faster" class.  It is used specifically by diversity computations
  * when loading vectors from disk, because in that specific scenario the same vector is usually loaded multiple times
  * as different neighbors are scored.
  * <p>
