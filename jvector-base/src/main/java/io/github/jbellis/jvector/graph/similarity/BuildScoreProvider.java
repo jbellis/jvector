@@ -65,9 +65,9 @@ public interface BuildScoreProvider {
      * approximate scores *without* reranking.  (In this case, reranking will be done
      * separately by the ConcurrentNeighborSet diversity code.)
      * <p>
-     * @param node the graph node to provide similarity scores against
+     * @param node1 the graph node to provide similarity scores against
      */
-    SearchScoreProvider searchProviderFor(int node);
+    SearchScoreProvider searchProviderFor(int node1);
 
     /**
      * Create a diversity score provider to use internally during construction.
@@ -144,6 +144,7 @@ public interface BuildScoreProvider {
                                                    PQVectors cv)
     {
         int dimension = cv.getOriginalSize() / Float.BYTES;
+        assert dimension == ravv.dimension();
 
         return new BuildScoreProvider() {
             @Override
@@ -155,9 +156,6 @@ public interface BuildScoreProvider {
             public SearchScoreProvider.Factory diversityProvider() {
                 var cache = new Int2ObjectHashMap<VectorFloat<?>>();
                 return node1 -> {
-                    var v1 = cache.computeIfAbsent(node1, ravv::getVector);
-                    var asf = cv.scoreFunctionFor(v1, vsf);
-
                     var cachedVectors = new RandomAccessVectorValues() {
                         @Override
                         public int size() {
@@ -180,16 +178,21 @@ public interface BuildScoreProvider {
                         }
 
                         @Override
-                        public void getVectorInto(int node2, VectorFloat<?> result, int offset) {
+                        public void getVectorInto(int nodeId, VectorFloat<?> result, int offset) {
                             // getVectorInto is only called by reranking, not diversity code
                             throw new UnsupportedOperationException();
                         }
 
                         @Override
                         public VectorFloat<?> getVector(int nodeId) {
-                            return cache.computeIfAbsent(node1, ravv::getVector);
+                            return cache.computeIfAbsent(nodeId, (int n) -> {
+                                var v = ravv.getVector(n);
+                                return ravv.isValueShared() ? v.copy() : v;
+                            });
                         }
                     };
+                    var v1 = cachedVectors.getVector(node1);
+                    var asf = cv.scoreFunctionFor(v1, vsf);
                     var rr = ScoreFunction.Reranker.from(v1, vsf, cachedVectors);
 
                     return new SearchScoreProvider(asf, rr);
@@ -197,8 +200,8 @@ public interface BuildScoreProvider {
             }
 
             @Override
-            public SearchScoreProvider searchProviderFor(int node) {
-                return searchProviderFor(ravv.getVector(node));
+            public SearchScoreProvider searchProviderFor(int node1) {
+                return searchProviderFor(ravv.getVector(node1));
             }
 
             @Override
