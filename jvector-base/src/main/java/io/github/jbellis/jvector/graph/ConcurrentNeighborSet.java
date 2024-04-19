@@ -237,22 +237,26 @@ public class ConcurrentNeighborSet {
             retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction());
             neighbors.retain(selected);
         } else {
-            // provider is natively approximate and we're on the insertDiverse path,
-            // so `neighbors` is approximately-scored
+            // provider is natively approximate and we're on the insertDiverse path
             assert !scoreProvider.isExact();
             assert diverseBefore == 0;
-            retainDiverseInternal(neighbors, maxConnections, 0, selected, node1 -> dp.createFor(node1).scoreFunction());
 
-            // using approximate scores is sufficiently accurate for the diversity computation,
-            // but we want to maintain the invariant that the neighbors are exact-scored before
-            // we use them in a search
-            var neighborNodes = Arrays.copyOf(neighbors.node, neighbors.size);
+            // rerank with exact scores
             var sf = dp.createFor(nodeId).exactScoreFunction();
+            var exactScoredNeighbors = new NodeArray(neighbors.size);
+            for (int i = 0; i < neighbors.size; i++) {
+                int neighborId = neighbors.node[i];
+                float score = sf.similarityTo(neighborId);
+                exactScoredNeighbors.insertSorted(neighborId, score);
+            }
+
+            // compute diversity against the exact-scored and reordered list
+            retainDiverseInternal(exactScoredNeighbors, maxConnections, 0, selected, node1 -> dp.createFor(node1).exactScoreFunction());
+
+            // copy the final result into the original container
             neighbors.clear();
             for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-                int neighborId = neighborNodes[i];
-                float score = sf.similarityTo(neighborId);
-                neighbors.insertSorted(neighborId, score);
+                neighbors.addInOrder(exactScoredNeighbors.node[i], exactScoredNeighbors.score[i]);
             }
         }
     }
