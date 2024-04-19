@@ -178,7 +178,7 @@ public class Grid {
             }
         }
         if (scoringWriter == null) {
-            throw new IllegalStateException("Incremental compressed builds are only supported by Bench when one of the feature sets is {LVQ}");
+            throw new IllegalStateException("For simplicity, Bench looks for exactly {LVQ} feature set for scoring compressed builds. With minor code edits you can switch this to {INLINE_VECTORS} instead.");
         }
         var ivv = new LvqVectorValues(floatVectors.dimension(), lvq, scoringWriter);
         var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ivv, pq);

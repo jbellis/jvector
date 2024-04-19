@@ -37,7 +37,7 @@ import java.util.function.IntFunction;
 /**
  * Write a graph index to disk, for later loading as an OnDiskGraphIndex.
  * <p>
- * Implements FeatureReader to allow incremental construction of a larger-than-memory graph
+ * Implements `getFeatureSource` to allow incremental construction of a larger-than-memory graph
  * (using the writer as the source of INLINE_VECTORS or LVQ).
  */
 public class OnDiskGraphIndexWriter implements Closeable {

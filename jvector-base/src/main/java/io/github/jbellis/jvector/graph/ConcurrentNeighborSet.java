@@ -23,7 +23,6 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 
@@ -126,8 +125,7 @@ public class ConcurrentNeighborSet {
             }
 
             // merge the remaining neighbors with the candidates
-            NodeArray merged = rescoreAndMerge(liveNeighbors, candidates);
-            retainDiverse(merged, 0, scoreProvider.isExact());
+            NodeArray merged = rescoreAndRetainDiverse(liveNeighbors, candidates);
             return new Neighbors(merged, merged.size);
         });
     }
@@ -176,25 +174,28 @@ public class ConcurrentNeighborSet {
             // pruning back extras is expensive.
             NodeArray merged;
             if (old.nodes.size > 0) {
-                merged = rescoreAndMerge(old.nodes, toMerge);
+                merged = rescoreAndRetainDiverse(old.nodes, toMerge);
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
+                retainDiverse(merged, 0, scoreProvider.isExact());
             }
-            retainDiverse(merged, 0, scoreProvider.isExact());
             return new Neighbors(merged, merged.size);
         });
     }
 
-    private NodeArray rescoreAndMerge(NodeArray old, NodeArray toMerge) {
+    private NodeArray rescoreAndRetainDiverse(NodeArray old, NodeArray toMerge) {
         NodeArray merged;
         if (scoreProvider.isExact()) {
             merged = NodeArray.merge(old, toMerge);
         } else {
             // merge assumes that node X will always have the same score in both arrays, so we need
-            // to compute approximate scores for the existing nodes to make the comparison valid
+            // to compute approximate scores for the existing nodes to make the comparison valid.
+            // (we expect to have many more new candidates than existing neighbors)
             var approximatedOld = computeApproximatelyScored(old);
             merged = NodeArray.merge(approximatedOld, toMerge);
         }
+        // retainDiverse will switch back to exact-scored
+        retainDiverse(merged, 0, scoreProvider.isExact());
         return merged;
     }
 

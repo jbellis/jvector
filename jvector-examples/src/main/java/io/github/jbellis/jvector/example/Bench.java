@@ -46,14 +46,13 @@ public class Bench {
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
+                // ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
                 __ -> CompressorParameters.NONE
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
                 __ -> CompressorParameters.NONE,
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
-                ds -> new PQParameters(ds.getDimension() / 4, 32, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
-
+                // ds -> BinaryQuantization.compute(ds.getBaseRavv()),
+                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
                 EnumSet.of(FeatureId.INLINE_VECTORS), // baseline
