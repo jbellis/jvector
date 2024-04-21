@@ -80,7 +80,7 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
         raf.close();
     }
 
-    public long getFilePointer() throws IOException {
+    public long position() throws IOException {
         flush();
         return raf.getFilePointer();
     }

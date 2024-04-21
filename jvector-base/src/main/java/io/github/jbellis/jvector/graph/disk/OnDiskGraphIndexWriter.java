@@ -77,6 +77,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.close();
     }
 
+    public BufferedRandomAccessWriter getOutput() {
+        return out;
+    }
+
     /**
      * Write the inline features of the given ordinal to the output at the correct offset.
      * Nothing else is written (no headers, no edges).
@@ -89,7 +93,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         for (var feature : features) {
             var state = stateMap.get(feature.id());
             if (state == null) {
-                out.seek(out.getFilePointer() + feature.inlineSize());
+                out.seek(out.position() + feature.inlineSize());
             } else {
                 feature.writeInline(out, state);
             }
@@ -205,7 +209,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             for (var feature : featureMap.values()) {
                 var supplier = featureStateSuppliers.get(feature.id());
                 if (supplier == null) {
-                    out.seek(out.getFilePointer() + feature.inlineSize());
+                    out.seek(out.position() + feature.inlineSize());
                 }
                 else {
                     feature.writeInline(out, supplier.apply(originalOrdinal));
@@ -256,7 +260,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
 
     /** CRC32 checksum of bytes written since the starting offset */
     public synchronized long checksum() throws IOException {
-        long endOffset = out.getFilePointer();
+        long endOffset = out.position();
         return out.checksum(startOffset, endOffset);
     }
 
