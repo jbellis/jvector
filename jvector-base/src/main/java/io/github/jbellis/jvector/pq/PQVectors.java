@@ -28,24 +28,34 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ProductQuantization pq;
-    private final ByteSequence<?>[] compressedVectors;
+    private final List<ByteSequence<?>> compressedVectors;
 
-    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedVectors)
+    /**
+     * Initialize the PQVectors with an initial List of vectors.  This list may be
+     * mutated, but caller is responsible for thread safety issues when doing so.
+     */
+    public PQVectors(ProductQuantization pq, List<ByteSequence<?>> compressedVectors)
     {
         this.pq = pq;
         this.compressedVectors = compressedVectors;
     }
 
+    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedVectors)
+    {
+        this(pq, List.of(compressedVectors));
+    }
+
     @Override
     public int count() {
-        return compressedVectors.length;
+        return compressedVectors.size();
     }
 
     @Override
@@ -55,7 +65,7 @@ public class PQVectors implements CompressedVectors {
         pq.write(out);
 
         // compressed vectors
-        out.writeInt(compressedVectors.length);
+        out.writeInt(compressedVectors.size());
         out.writeInt(pq.getSubspaceCount());
         for (var v : compressedVectors) {
             vectorTypeSupport.writeByteSequence(out, v);
@@ -71,7 +81,7 @@ public class PQVectors implements CompressedVectors {
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
-        var compressedVectors = new ByteSequence<?>[size];
+        List<ByteSequence<?>> compressedVectors = new ArrayList<>(size);
 
         int compressedDimension = in.readInt();
         if (compressedDimension < 0) {
@@ -81,7 +91,7 @@ public class PQVectors implements CompressedVectors {
         for (int i = 0; i < size; i++)
         {
             ByteSequence<?> vector = vectorTypeSupport.readByteSequence(in, compressedDimension);
-            compressedVectors[i] = vector;
+            compressedVectors.add(vector);
         }
 
         return new PQVectors(pq, compressedVectors);
@@ -99,13 +109,12 @@ public class PQVectors implements CompressedVectors {
 
         PQVectors that = (PQVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
-        if (compressedVectors.length != that.compressedVectors.length) return false;
-        return Arrays.deepEquals(compressedVectors, that.compressedVectors);
+        return Objects.equals(compressedVectors, that.compressedVectors);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pq, Arrays.deepHashCode(compressedVectors));
+        return Objects.hash(pq, compressedVectors);
     }
 
     @Override
@@ -178,7 +187,7 @@ public class PQVectors implements CompressedVectors {
     }
 
     public ByteSequence<?> get(int ordinal) {
-        return compressedVectors[ordinal];
+        return compressedVectors.get(ordinal);
     }
 
     public ProductQuantization getProductQuantization() {
@@ -211,15 +220,15 @@ public class PQVectors implements CompressedVectors {
     @Override
     public long ramBytesUsed() {
         long codebooksSize = pq.memorySize();
-        long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors[0]);
-        return codebooksSize + (compressedVectorSize * compressedVectors.length);
+        long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors.get(0));
+        return codebooksSize + (compressedVectorSize * compressedVectors.size());
     }
 
     @Override
     public String toString() {
         return "PQVectors{" +
                 "pq=" + pq +
-                ", count=" + compressedVectors.length +
+                ", count=" + compressedVectors.size() +
                 '}';
     }
 }
