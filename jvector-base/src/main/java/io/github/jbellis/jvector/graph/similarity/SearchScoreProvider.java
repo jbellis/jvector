@@ -27,6 +27,15 @@ public final class SearchScoreProvider {
 
     /**
      * @param scoreFunction the primary, fast scoring function
+     * <p>
+     * No reranking is performed.
+     */
+    public SearchScoreProvider(ScoreFunction scoreFunction,) {
+        this(scoreFunction, null);
+    }
+
+    /**
+     * @param scoreFunction the primary, fast scoring function
      * @param reranker optional reranking function
      * Generally, reranker will be null iff scoreFunction is an ExactScoreFunction.  However,
      * it is allowed, and sometimes useful, to only perform approximate scoring without reranking.
@@ -61,7 +70,7 @@ public final class SearchScoreProvider {
      */
     public static SearchScoreProvider exact(VectorFloat<?> v, VectorSimilarityFunction vsf, RandomAccessVectorValues ravv) {
         var sf = ScoreFunction.Reranker.from(v, vsf, ravv);
-        return new SearchScoreProvider(sf, null);
+        return new SearchScoreProvider(sf);
     }
 
     /**

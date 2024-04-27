@@ -176,7 +176,8 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
-                return new SearchScoreProvider(cv.precomputedScoreFunctionFor(vector, vsf), null);
+                // deliberately skips reranking even though we are using an approximate score function
+                return new SearchScoreProvider(cv.precomputedScoreFunctionFor(vector, vsf));
             }
 
             @Override

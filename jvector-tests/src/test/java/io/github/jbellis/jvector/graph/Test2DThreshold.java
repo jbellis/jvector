@@ -61,7 +61,7 @@ public class Test2DThreshold extends LuceneTestCase {
             TestParams tp = createTestParams(vectors);
 
             var sf = ScoreFunction.Reranker.from(tp.q, VectorSimilarityFunction.EUCLIDEAN, ravv);
-            var result = searcher.search(new SearchScoreProvider(sf, null), vectors.length, tp.th, Bits.ALL);
+            var result = searcher.search(new SearchScoreProvider(sf), vectors.length, tp.th, Bits.ALL);
 
             assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             assert result.getNodes().length >= 0.85 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " out of " + tp.exactCount;

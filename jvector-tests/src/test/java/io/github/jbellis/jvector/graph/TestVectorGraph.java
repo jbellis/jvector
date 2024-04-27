@@ -140,7 +140,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var query = randomVector(dim);
         var searcher = new GraphSearcher(graph);
 
-        var ssp = new SearchScoreProvider(ScoreFunction.Reranker.from(query, similarityFunction, vectors), null);
+        var ssp = new SearchScoreProvider(ScoreFunction.Reranker.from(query, similarityFunction, vectors));
         var initial = searcher.search(ssp, initialTopK, acceptOrds);
         assertEquals(initialTopK, initial.getNodes().length);
 
