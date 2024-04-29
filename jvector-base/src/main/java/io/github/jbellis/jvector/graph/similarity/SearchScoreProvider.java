@@ -30,7 +30,7 @@ public final class SearchScoreProvider {
      * <p>
      * No reranking is performed.
      */
-    public SearchScoreProvider(ScoreFunction scoreFunction,) {
+    public SearchScoreProvider(ScoreFunction scoreFunction) {
         this(scoreFunction, null);
     }
 
