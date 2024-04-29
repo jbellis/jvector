@@ -58,14 +58,10 @@ public abstract class ExplicitThreadLocal<U> implements AutoCloseable {
      * Not threadsafe.
      */
     @Override
-    public void close() {
+    public void close() throws Exception {
         for (U value : map.values()) {
             if (value instanceof AutoCloseable) {
-                try {
-                    ((AutoCloseable) value).close();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+                ((AutoCloseable) value).close();
             }
         }
         map.clear();

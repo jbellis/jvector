@@ -135,6 +135,8 @@ public class Grid {
                 indexes.forEach((features, index) -> {
                     try (var cs = new ConfiguredSystem(ds, index, cv)) {
                         testConfiguration(cs, efSearchOptions);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
                     }
                 });
             }
@@ -429,7 +431,7 @@ public class Grid {
         }
 
         @Override
-        public void close() {
+        public void close() throws Exception {
             searchers.close();
         }
     }
