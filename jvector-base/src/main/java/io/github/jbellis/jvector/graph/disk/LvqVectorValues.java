@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
+import io.github.jbellis.jvector.util.ExceptionUtils;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -72,7 +73,11 @@ public class LvqVectorValues implements RandomAccessVectorValues, Closeable {
 
     @Override
     public void close() throws IOException {
-        sources.close();
+        try {
+            sources.close();
+        } catch (Exception e) {
+            ExceptionUtils.throwIoException(e);
+        }
     }
 
     private static class CloseablePackedVectors implements LVQPackedVectors, Closeable {

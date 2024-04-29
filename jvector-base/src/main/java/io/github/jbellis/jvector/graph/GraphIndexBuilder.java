@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.ExceptionUtils;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -29,9 +30,9 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntArrayQueue;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -53,7 +54,7 @@ import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
  * Under most conditions this is not something you need to worry about, but it does mean
  * that spawning a new Thread per call is not advisable.  This includes virtual threads.
  */
-public class GraphIndexBuilder implements AutoCloseable {
+public class GraphIndexBuilder implements Closeable {
     private final int beamWidth;
     private final ExplicitThreadLocal<NodeArray> naturalScratch;
     private final ExplicitThreadLocal<NodeArray> concurrentScratch;
@@ -618,8 +619,12 @@ public class GraphIndexBuilder implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
-        searchers.close();
+    public void close() throws IOException {
+        try {
+            searchers.close();
+        } catch (Exception e) {
+            ExceptionUtils.throwIoException(e);
+        }
     }
 
     @VisibleForTesting
