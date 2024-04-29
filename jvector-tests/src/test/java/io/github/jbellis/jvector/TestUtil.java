@@ -277,6 +277,11 @@ public class TestUtil {
             @Override
             public void close() { }
         }
+
+        @Override
+        public long ramBytesUsed() {
+            throw new UnsupportedOperationException();
+        }
     }
 
     public static class RandomlyConnectedGraphIndex implements GraphIndex {
@@ -352,6 +357,11 @@ public class TestUtil {
 
             @Override
             public void close() { }
+        }
+
+        @Override
+        public long ramBytesUsed() {
+            throw new UnsupportedOperationException();
         }
     }
 }

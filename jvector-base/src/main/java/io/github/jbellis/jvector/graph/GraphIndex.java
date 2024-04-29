@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -42,7 +43,7 @@ import java.io.IOException;
  * All methods are threadsafe.  Operations that require persistent state are wrapped
  * in a View that should be created per accessing thread.
  */
-public interface GraphIndex extends AutoCloseable {
+public interface GraphIndex extends AutoCloseable, Accountable {
     /** Returns the number of nodes in the graph */
     int size();
 

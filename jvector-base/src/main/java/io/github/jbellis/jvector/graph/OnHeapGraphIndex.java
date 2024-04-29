@@ -24,7 +24,6 @@
 
 package io.github.jbellis.jvector.graph;
 
-import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
@@ -42,7 +41,7 @@ import java.util.stream.IntStream;
  * <p>To search this graph, you should use a View obtained from {@link #getView()} to perform `seek`
  * and `nextNeighbor` operations.
  */
-public class OnHeapGraphIndex implements GraphIndex, Accountable {
+public class OnHeapGraphIndex implements GraphIndex {
     static final int NO_ENTRY_POINT = -1;
 
     // the current graph entry node, NO_ENTRY_POINT if not set
