@@ -217,6 +217,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
             }
 
             var neighbors = view.getNeighborsIterator(originalOrdinal);
+            if (neighbors.size() > graph.maxDegree()) {
+                var msg = String.format("Node %d has more neighbors %d than the graph's max degree %d -- run Builder.cleanup()!",
+                                        originalOrdinal, neighbors.size(), graph.maxDegree());
+                throw new IllegalStateException(msg);
+            }
             // write neighbors list
             out.writeInt(neighbors.size());
             int n = 0;
