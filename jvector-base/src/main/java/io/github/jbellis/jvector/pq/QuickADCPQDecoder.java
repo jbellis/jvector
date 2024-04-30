@@ -20,17 +20,16 @@ import io.github.jbellis.jvector.graph.disk.FusedADCNeighbors;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /**
  * Performs similarity comparisons with compressed vectors without decoding them.
  * These decoders use Quick(er) ADC-style transposed vectors fused into a graph.
  */
+// TODO remove one layer of nested inheritance (merge CachingDecoder into QuickADCPQDecoder)
+// (unless we're going to follow the structure of PQDecoder and add a CosineDecoder with a different structure)
 public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScoreFunction {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     protected final ProductQuantization pq;
     protected final VectorFloat<?> query;
     protected final ExactScoreFunction esf;
@@ -45,9 +44,15 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     // The main difference is that since our graph structure rapidly converges towards the best results,
     // we don't need to scan K values to have enough confidence that our worstDistance bound is reasonable.
     protected static abstract class CachingDecoder extends QuickADCPQDecoder {
+        // connected to the Graph View by caller
+        protected final FusedADCNeighbors neighbors;
+        // caller passes this to us for re-use across calls
+        protected final VectorFloat<?> results;
+        // decoder state
         protected final VectorFloat<?> partialSums;
         protected final ByteSequence<?> partialQuantizedSums;
         protected final VectorFloat<?> partialBestDistances;
+        private final VectorSimilarityFunction vsf;
         protected final float bestDistance;
         protected final int invocationThreshold;
         protected float worstDistance;
@@ -55,8 +60,11 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         protected boolean supportsQuantizedSimilarity;
         protected float delta;
 
-        protected CachingDecoder(ProductQuantization pq, VectorFloat<?> query, int invocationThreshold, VectorSimilarityFunction vsf, ExactScoreFunction esf) {
+        protected CachingDecoder(FusedADCNeighbors neighbors, VectorFloat<?> results, ProductQuantization pq, VectorFloat<?> query, int invocationThreshold, VectorSimilarityFunction vsf, ExactScoreFunction esf) {
             super(pq, query, esf);
+            this.neighbors = neighbors;
+            this.results = results;
+            this.vsf = vsf;
             this.invocationThreshold = invocationThreshold;
 
             // compute partialSums, partialBestDistances, and bestDistance from the codebooks
@@ -80,32 +88,15 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
             invocations = 0;
             supportsQuantizedSimilarity = false;
         }
-    }
-
-     static class DotProductDecoder extends CachingDecoder {
-        private final VectorFloat<?> results;
-        private final FusedADCNeighbors neighbors;
-        public DotProductDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
-            super(pq, query, neighbors.maxDegree(), VectorSimilarityFunction.DOT_PRODUCT, esf);
-            worstDistance = Float.MAX_VALUE;
-            this.neighbors = neighbors;
-            this.results = results;
-        }
-
-        @Override
-        public float similarityTo(int node2) {
-            return esf.similarityTo(node2);
-        }
 
         @Override
         public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
-
             var permutedNodes = neighbors.getPackedNeighbors(origin);
             results.zero();
 
             if (supportsQuantizedSimilarity) {
                 // we have seen enough data to compute `delta`, so take the fast path using the permuted nodes
-                VectorUtil.bulkShuffleQuantizedSimilarity(permutedNodes, pq.compressedVectorSize(), partialQuantizedSums, delta, bestDistance, results, VectorSimilarityFunction.DOT_PRODUCT);
+                VectorUtil.bulkShuffleQuantizedSimilarity(permutedNodes, pq.compressedVectorSize(), partialQuantizedSums, delta, bestDistance, results, vsf);
                 return results;
             }
 
@@ -122,7 +113,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
                 var result = results.get(i);
                 invocations++;
                 worstDistance = Math.min(worstDistance, result);
-                results.set(i, (result + 1) / 2);
+                results.set(i, distanceToScore(result));
             }
             // once we have enough data, set up delta and partialQuantizedSums for the fast path
             if (invocations >= invocationThreshold) {
@@ -138,55 +129,36 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         public boolean supportsEdgeLoadingSimilarity() {
             return true;
         }
-    }
-
-    static class EuclideanDecoder extends CachingDecoder {
-        private final FusedADCNeighbors neighbors;
-        private final VectorFloat<?> results;
-
-        public EuclideanDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
-            super(pq, query, neighbors.maxDegree(), VectorSimilarityFunction.EUCLIDEAN, esf);
-            worstDistance = Float.MIN_VALUE;
-            this.neighbors = neighbors;
-            this.results = results;
-        }
 
         @Override
         public float similarityTo(int node2) {
             return esf.similarityTo(node2);
         }
 
-        @Override
-        public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
-            var permutedNodes = neighbors.getPackedNeighbors(origin);
-            var nodeCount = results.length();
-            results.zero();
-            if (supportsQuantizedSimilarity) {
-                VectorUtil.bulkShuffleQuantizedSimilarity(permutedNodes, pq.compressedVectorSize(), partialQuantizedSums, delta, bestDistance, results, VectorSimilarityFunction.EUCLIDEAN);
-            } else {
-                for (int i = 0; i < pq.getSubspaceCount(); i++) {
-                    for (int j = 0; j < nodeCount; j++) {
-                        results.set(j, results.get(j) + partialSums.get(i * pq.getClusterCount() + Byte.toUnsignedInt(permutedNodes.get(i * nodeCount + j))));
-                    }
-                }
-                for (int i = 0; i < nodeCount; i++) {
-                    var result = results.get(i);
-                    invocations++;
-                    worstDistance = Math.max(worstDistance, result);
-                    results.set(i, 1 / (1 + result));
-                }
-            }
-            if (!supportsQuantizedSimilarity && invocations >= invocationThreshold) {
-                delta = (worstDistance - bestDistance) / 65535;
-                VectorUtil.quantizePartialSums(delta, partialSums, partialBestDistances, partialQuantizedSums);
-                supportsQuantizedSimilarity = true;
-            }
-            return results;
+        protected abstract float distanceToScore(float distance);
+    }
+
+    static class DotProductDecoder extends CachingDecoder {
+        public DotProductDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
+            super(neighbors, results, pq, query, neighbors.maxDegree(), VectorSimilarityFunction.DOT_PRODUCT, esf);
+            worstDistance = Float.MAX_VALUE;
         }
 
         @Override
-        public boolean supportsEdgeLoadingSimilarity() {
-            return true;
+        protected float distanceToScore(float distance) {
+            return (distance + 1) / 2;
+        }
+    }
+
+    static class EuclideanDecoder extends CachingDecoder {
+        public EuclideanDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
+            super(neighbors, results, pq, query, neighbors.maxDegree(), VectorSimilarityFunction.EUCLIDEAN, esf);
+            worstDistance = Float.MIN_VALUE;
+        }
+
+        @Override
+        protected float distanceToScore(float distance) {
+            return 1 / (1 + distance);
         }
     }
 
