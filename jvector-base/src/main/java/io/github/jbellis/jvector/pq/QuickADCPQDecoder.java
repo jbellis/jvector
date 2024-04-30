@@ -112,7 +112,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
             for (int i = 0; i < nodeCount; i++) {
                 var result = results.get(i);
                 invocations++;
-                worstDistance = Math.min(worstDistance, result);
+                updateWorstDistance(result);
                 results.set(i, distanceToScore(result));
             }
             // once we have enough data, set up delta and partialQuantizedSums for the fast path
@@ -136,6 +136,8 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
 
         protected abstract float distanceToScore(float distance);
+
+        protected abstract void updateWorstDistance(float distance);
     }
 
     static class DotProductDecoder extends CachingDecoder {
@@ -148,6 +150,11 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         protected float distanceToScore(float distance) {
             return (distance + 1) / 2;
         }
+
+        @Override
+        protected void updateWorstDistance(float distance) {
+            worstDistance = Math.min(worstDistance, distance);
+        }
     }
 
     static class EuclideanDecoder extends CachingDecoder {
@@ -159,6 +166,11 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         @Override
         protected float distanceToScore(float distance) {
             return 1 / (1 + distance);
+        }
+
+        @Override
+        protected void updateWorstDistance(float distance) {
+            worstDistance = Math.max(worstDistance, distance);
         }
     }
 
