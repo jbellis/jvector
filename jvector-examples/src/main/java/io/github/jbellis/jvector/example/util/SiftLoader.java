@@ -24,10 +24,12 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Set;
 
 public class SiftLoader {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
@@ -51,8 +53,8 @@ public class SiftLoader {
         return vectors;
     }
 
-    public static ArrayList<HashSet<Integer>> readIvecs(String filename) {
-        var groundTruthTopK = new ArrayList<HashSet<Integer>>();
+    public static ArrayList<Set<Integer>> readIvecs(String filename) {
+        var groundTruthTopK = new ArrayList<Set<Integer>>();
 
         try (var dis = new DataInputStream(new FileInputStream(filename))) {
             while (dis.available() > 0) {
@@ -67,7 +69,7 @@ public class SiftLoader {
                 groundTruthTopK.add(neighbors);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new UncheckedIOException(e);
         }
 
         return groundTruthTopK;

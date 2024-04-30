@@ -50,5 +50,10 @@ public final class SearchResult {
             this.node = node;
             this.score = score;
         }
+
+        @Override
+        public String toString() {
+            return String.format("NodeScore(%d, %s)", node, score);
+        }
     }
 }

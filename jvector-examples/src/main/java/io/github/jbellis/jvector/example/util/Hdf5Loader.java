@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 public class Hdf5Loader {
@@ -51,7 +52,7 @@ public class Hdf5Loader {
         VectorFloat<?>[] baseVectors;
         VectorFloat<?>[] queryVectors;
         Path path = Path.of(HDF5_DIR).resolve(filename);
-        var gtSets = new ArrayList<HashSet<Integer>>();
+        var gtSets = new ArrayList<Set<Integer>>();
         try (HdfFile hdf = new HdfFile(path)) {
             var baseVectorsArray =
                     (float[][]) hdf.getDatasetByPath("train").getData();

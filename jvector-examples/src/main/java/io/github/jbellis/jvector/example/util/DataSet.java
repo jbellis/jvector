@@ -75,7 +75,7 @@ public class DataSet {
      * Note: This only scrubs and normalizes for dot product similarity.
      */
     public static DataSet getScrubbedDataSet(String pathStr, VectorSimilarityFunction similarityFunction,
-                                             List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<HashSet<Integer>> groundTruth) {
+                                             List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<Set<Integer>> groundTruth) {
         if (similarityFunction == VectorSimilarityFunction.EUCLIDEAN) {
             // Euclidean comparisons are not sensitive to zero vectors or normalization
             return new DataSet(pathStr, similarityFunction, baseVectors, queryVectors, groundTruth);
