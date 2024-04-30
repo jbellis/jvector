@@ -32,10 +32,10 @@ public interface ByteSequence<T> extends Accountable
     void set(int i, byte value);
 
     /**
-     * @param byteIndex byte index inside the sequence to start setting short value
+     * @param shortIndex index (as if this was a short array) inside the sequence to set the short value
      * @param value short value to set
      */
-    void setLittleEndianShort(int byteIndex, short value);
+    void setLittleEndianShort(int shortIndex, short value);
 
     void zero();
 
