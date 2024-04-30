@@ -332,7 +332,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
         for (int j = 0; j < codebookSize; j++) {
             var val = partialSums.get(i * codebookSize + j);
             var quantized = (short) Math.min((val - localBest) / delta, 65535);
-            partialQuantizedSums.setLittleEndianShort(2 * (i * codebookSize + j), quantized);
+            partialQuantizedSums.setLittleEndianShort(i * codebookSize + j, quantized);
         }
     }
   }

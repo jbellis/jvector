@@ -52,9 +52,9 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
     }
 
     @Override
-    public void setLittleEndianShort(int byteIndex, short value) {
-        data[byteIndex] = (byte) (value & 0xFF);
-        data[byteIndex + 1] = (byte) ((value >> 8) & 0xFF);
+    public void setLittleEndianShort(int shortIndex, short value) {
+        data[shortIndex * 2] = (byte) (value & 0xFF);
+        data[shortIndex * 2 + 1] = (byte) ((value >> 8) & 0xFF);
     }
 
     @Override

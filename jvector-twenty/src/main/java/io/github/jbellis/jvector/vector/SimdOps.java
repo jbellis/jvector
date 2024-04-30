@@ -938,7 +938,7 @@ final class SimdOps {
             for (; j < codebookSize; j++) {
                 var val = partialSums.get(i * codebookSize + j);
                 var quantized = (short) Math.min((val - codebookBest) / delta, 65535);
-                partialQuantizedSums.setLittleEndianShort(2 * (i * codebookSize + j), quantized);
+                partialQuantizedSums.setLittleEndianShort(i * codebookSize + j, quantized);
             }
         }
     }

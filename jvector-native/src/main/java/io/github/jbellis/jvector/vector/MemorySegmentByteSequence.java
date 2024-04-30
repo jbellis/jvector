@@ -31,7 +31,7 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     private final MemorySegment segment;
     private final int length;
 
-    private static final ValueLayout.OfShort LITTLEENDIAN_SHORT_LAYOUT_UNALIGNED = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfShort LITTLE_ENDIAN_SHORT_LAYOUT_UNALIGNED = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     MemorySegmentByteSequence(int length) {
         this.length = length;
@@ -75,8 +75,8 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     }
 
     @Override
-    public void setLittleEndianShort(int byteIndex, short value) {
-        segment.set(LITTLEENDIAN_SHORT_LAYOUT_UNALIGNED, byteIndex, value);
+    public void setLittleEndianShort(int shortIndex, short value) {
+        segment.set(LITTLE_ENDIAN_SHORT_LAYOUT_UNALIGNED, shortIndex * 2, value);
     }
 
     @Override
