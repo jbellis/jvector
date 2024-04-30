@@ -102,9 +102,7 @@ public class GraphIndexBuilder implements Closeable {
              M,
              beamWidth,
              neighborOverflow,
-             alpha,
-             PhysicalCoreExecutor.pool(),
-             ForkJoinPool.commonPool());
+             alpha);
     }
 
     /**

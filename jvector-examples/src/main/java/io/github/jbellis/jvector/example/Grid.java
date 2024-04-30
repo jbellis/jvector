@@ -159,8 +159,7 @@ public class Grid {
 
         var quantized = buildCompressor.encodeAll(floatVectors);
         var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
-        GraphIndexBuilder builder = new GraphIndexBuilder(null, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f,
-                                                          PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        GraphIndexBuilder builder = new GraphIndexBuilder(null, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
@@ -275,8 +274,7 @@ public class Grid {
         Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
         long start;
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f,
-                                                          PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
         start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
         System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",

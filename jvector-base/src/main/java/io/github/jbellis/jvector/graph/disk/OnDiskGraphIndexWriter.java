@@ -217,7 +217,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             }
 
             var neighbors = view.getNeighborsIterator(originalOrdinal);
-            // pad out to maxEdgesPerNode
+            // write neighbors list
             out.writeInt(neighbors.size());
             int n = 0;
             for (; n < neighbors.size(); n++) {
