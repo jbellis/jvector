@@ -81,7 +81,7 @@ public class FusedADC implements Feature {
     }
 
     ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, OnDiskGraphIndex.View view, ScoreFunction.ExactScoreFunction esf) {
-        var neighbors = new PackedNeighborsFused(view);
+        var neighbors = new PackedNeighbors(view);
         return QuickADCPQDecoder.newDecoder(neighbors, pq, queryVector, reusableResults.get(), vsf, esf);
     }
 
@@ -126,14 +126,13 @@ public class FusedADC implements Feature {
         }
     }
 
-    private class PackedNeighborsFused implements FusedADCNeighbors {
+    public class PackedNeighbors {
         private final OnDiskGraphIndex.View view;
 
-        public PackedNeighborsFused(OnDiskGraphIndex.View view) {
+        public PackedNeighbors(OnDiskGraphIndex.View view) {
             this.view = view;
         }
 
-        @Override
         public ByteSequence<?> getPackedNeighbors(int node) {
             try {
                 var reader = view.inlineReaderForNode(node, FeatureId.FUSED_ADC);
@@ -145,7 +144,6 @@ public class FusedADC implements Feature {
             }
         }
 
-        @Override
         public int maxDegree() {
             return maxDegree;
         }

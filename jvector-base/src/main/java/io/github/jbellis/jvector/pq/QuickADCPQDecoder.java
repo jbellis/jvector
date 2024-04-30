@@ -16,7 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.graph.disk.FusedADCNeighbors;
+import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -45,7 +45,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     // we don't need to scan K values to have enough confidence that our worstDistance bound is reasonable.
     protected static abstract class CachingDecoder extends QuickADCPQDecoder {
         // connected to the Graph View by caller
-        protected final FusedADCNeighbors neighbors;
+        protected final FusedADC.PackedNeighbors neighbors;
         // caller passes this to us for re-use across calls
         protected final VectorFloat<?> results;
         // decoder state
@@ -60,7 +60,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         protected boolean supportsQuantizedSimilarity;
         protected float delta;
 
-        protected CachingDecoder(FusedADCNeighbors neighbors, VectorFloat<?> results, ProductQuantization pq, VectorFloat<?> query, int invocationThreshold, VectorSimilarityFunction vsf, ExactScoreFunction esf) {
+        protected CachingDecoder(FusedADC.PackedNeighbors neighbors, VectorFloat<?> results, ProductQuantization pq, VectorFloat<?> query, int invocationThreshold, VectorSimilarityFunction vsf, ExactScoreFunction esf) {
             super(pq, query, esf);
             this.neighbors = neighbors;
             this.results = results;
@@ -141,7 +141,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     }
 
     static class DotProductDecoder extends CachingDecoder {
-        public DotProductDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
+        public DotProductDecoder(FusedADC.PackedNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
             super(neighbors, results, pq, query, neighbors.maxDegree(), VectorSimilarityFunction.DOT_PRODUCT, esf);
             worstDistance = Float.MAX_VALUE;
         }
@@ -158,7 +158,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     }
 
     static class EuclideanDecoder extends CachingDecoder {
-        public EuclideanDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
+        public EuclideanDecoder(FusedADC.PackedNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
             super(neighbors, results, pq, query, neighbors.maxDegree(), VectorSimilarityFunction.EUCLIDEAN, esf);
             worstDistance = Float.MIN_VALUE;
         }
@@ -174,7 +174,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         }
     }
 
-    public static QuickADCPQDecoder newDecoder(FusedADCNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query,
+    public static QuickADCPQDecoder newDecoder(FusedADC.PackedNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query,
                                                VectorFloat<?> results, VectorSimilarityFunction similarityFunction, ExactScoreFunction esf) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
