@@ -41,25 +41,27 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
         this.esf = esf;
     }
 
+    // Implements section 3.4 of "Quicker ADC : Unlocking the Hidden Potential of Product Quantization with SIMD"
+    // The main difference is that since our graph structure rapidly converges towards the best results,
+    // we don't need to scan K values to have enough confidence that our worstDistance bound is reasonable.
     protected static abstract class CachingDecoder extends QuickADCPQDecoder {
         protected final VectorFloat<?> partialSums;
         protected final ByteSequence<?> partialQuantizedSums;
         protected final VectorFloat<?> partialBestDistances;
         protected final float bestDistance;
-        protected float worstDistance;
         protected final int invocationThreshold;
-        protected int invocations = 0;
-        protected boolean supportsQuantizedSimilarity = false;
-        protected float delta = 0;
-
+        protected float worstDistance;
+        protected int invocations;
+        protected boolean supportsQuantizedSimilarity;
+        protected float delta;
 
         protected CachingDecoder(ProductQuantization pq, VectorFloat<?> query, int invocationThreshold, VectorSimilarityFunction vsf, ExactScoreFunction esf) {
             super(pq, query, esf);
             this.invocationThreshold = invocationThreshold;
+
+            // compute partialSums, partialBestDistances, and bestDistance from the codebooks
             partialSums = pq.reusablePartialSums();
             partialBestDistances = pq.reusablePartialBestDistances();
-            partialQuantizedSums = pq.reusablePartialQuantizedSums();
-
             VectorFloat<?> center = pq.globalCentroid;
             var centeredQuery = center == null ? query : VectorUtil.sub(query, center);
             for (var i = 0; i < pq.getSubspaceCount(); i++) {
@@ -69,6 +71,14 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
                 VectorUtil.calculatePartialSums(codebook, i, size, pq.getClusterCount(), centeredQuery, offset, vsf, partialSums, partialBestDistances);
             }
             bestDistance = VectorUtil.sum(partialBestDistances);
+
+            // these will be computed by edgeLoadingSimilarityTo as we search
+            partialQuantizedSums = pq.reusablePartialQuantizedSums();
+            delta = 0;
+            worstDistance = 0;
+            // internal state for edgeLoadingSimilarityTo
+            invocations = 0;
+            supportsQuantizedSimilarity = false;
         }
     }
 
@@ -89,29 +99,38 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
 
         @Override
         public VectorFloat<?> edgeLoadingSimilarityTo(int origin) {
+
             var permutedNodes = neighbors.getPackedNeighbors(origin);
-            var nodeCount = results.length();
             results.zero();
+
             if (supportsQuantizedSimilarity) {
+                // we have seen enough data to compute `delta`, so take the fast path using the permuted nodes
                 VectorUtil.bulkShuffleQuantizedSimilarity(permutedNodes, pq.compressedVectorSize(), partialQuantizedSums, delta, bestDistance, results, VectorSimilarityFunction.DOT_PRODUCT);
-            } else {
-                for (int i = 0; i < pq.getSubspaceCount(); i++) {
-                    for (int j = 0; j < nodeCount; j++) {
-                        results.set(j, results.get(j) + partialSums.get(i * pq.getClusterCount() + Byte.toUnsignedInt(permutedNodes.get(i * nodeCount + j))));
-                    }
-                }
-                for (int i = 0; i < nodeCount; i++) {
-                    var result = results.get(i);
-                    invocations++;
-                    worstDistance = Math.min(worstDistance, result);
-                    results.set(i, (result + 1) / 2);
+                return results;
+            }
+
+            // we have not yet computed worstDistance or delta, so we need to assemble the results manually
+            // from the PQ codebooks
+            var nodeCount = results.length();
+            for (int i = 0; i < pq.getSubspaceCount(); i++) {
+                for (int j = 0; j < nodeCount; j++) {
+                    results.set(j, results.get(j) + partialSums.get(i * pq.getClusterCount() + Byte.toUnsignedInt(permutedNodes.get(i * nodeCount + j))));
                 }
             }
-            if (!supportsQuantizedSimilarity && invocations >= invocationThreshold) {
+            // update worstDistance from our new set of results
+            for (int i = 0; i < nodeCount; i++) {
+                var result = results.get(i);
+                invocations++;
+                worstDistance = Math.min(worstDistance, result);
+                results.set(i, (result + 1) / 2);
+            }
+            // once we have enough data, set up delta and partialQuantizedSums for the fast path
+            if (invocations >= invocationThreshold) {
                 delta = (worstDistance - bestDistance) / 65535;
                 VectorUtil.quantizePartialSums(delta, partialSums, partialBestDistances, partialQuantizedSums);
                 supportsQuantizedSimilarity = true;
             }
+
             return results;
         }
 
