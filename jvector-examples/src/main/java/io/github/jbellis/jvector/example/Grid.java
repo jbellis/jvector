@@ -223,7 +223,7 @@ public class Grid {
         n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
-            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath))));
             indexes.put(features, index);
         }
         return indexes;
@@ -296,7 +296,7 @@ public class Grid {
                 System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
             }
 
-            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0)));
+            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath))));
             indexes.put(features, index);
         }
         return indexes;

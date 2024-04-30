@@ -81,6 +81,9 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         this.inlineBlockSize = inlineBlockSize;
     }
 
+    /**
+     * Load an index from the given reader supplier, where the index starts at `offset`.
+     */
     public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
             var info = Header.load(reader, offset);
@@ -88,6 +91,13 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
+    }
+
+    /**
+     * Load an index from the given reader supplier at offset 0.
+     */
+    public static OnDiskGraphIndex load(ReaderSupplier readerSupplier) {
+        return load(readerSupplier, 0);
     }
 
     @Override

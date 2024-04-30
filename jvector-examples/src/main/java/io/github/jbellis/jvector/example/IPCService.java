@@ -204,7 +204,7 @@ public class IPCService
             var graphPath = testDirectory.resolve("graph.bin");
 
             OnDiskGraphIndex.write(onHeapIndex, ravv, graphPath);
-            return new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath), 0));
+            return new CachingGraphIndex(OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath)));
         } catch (IOException e) {
             throw new IOError(e);
         }

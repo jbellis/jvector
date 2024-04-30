@@ -65,7 +65,7 @@ public class TestADCGraphIndex extends RandomizedTest {
         TestUtil.writeFusedGraph(graph, ravv, pqv, outputPath);
 
         try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate, 0);
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
              var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph, 1000))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
