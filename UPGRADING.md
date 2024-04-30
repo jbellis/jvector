@@ -20,9 +20,11 @@ If you only read one thing, read this!
 - Experimental support for native code acceleration has been added. This currently only supports Linux x86-64 
   with certain AVX-512 extensions. This is opt-in and requires the use of MemorySegment `VectorFloat`/`ByteSequence`
   representations.
-- Experimental support for fused graph indexes has been added. These work best in concert with native code acceleration.
+- Experimental support for fused ADC graph indexes has been added. These work best in concert with native code acceleration.
+  Without the NativeVectorizationProvider, results using fused ADC will be valid but performance will degrade.
   This explores a design space allowing for packed representations of vectors fused into the graph in shapes optimal
-  for approximate score calculation. This is a new type of graph index and is opt-in.
+  for approximate score calculation. This is a new feature of graph indexes and is opt-in. At this time, only graphs with
+  maxNeighbors=32 and 256-cluster ProductQuantization can use fused ADC.
 - Support for larger-than-memory graph construction by using quantized vectors + rerank for the searches
   performed during construction.
 - Support for Anisotropic Product Quantization as described in "Accelerating Large-Scale Inference with Anisotropic Vector Quantization"
