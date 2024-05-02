@@ -24,7 +24,7 @@ If you only read one thing, read this!
   Without the NativeVectorizationProvider, results using fused ADC will be valid but performance will degrade.
   This explores a design space allowing for packed representations of vectors fused into the graph in shapes optimal
   for approximate score calculation. This is a new feature of graph indexes and is opt-in. At this time, only graphs with
-  maxNeighbors=32 and 256-cluster ProductQuantization can use fused ADC.
+  a maximum degree of 32 and 256-cluster ProductQuantization can use fused ADC.
 - Support for larger-than-memory graph construction by using quantized vectors + rerank for the searches
   performed during construction.
 - Support for Anisotropic Product Quantization as described in "Accelerating Large-Scale Inference with Anisotropic Vector Quantization"
