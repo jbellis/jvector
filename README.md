@@ -32,9 +32,7 @@ The second pass can be performed with
 [This two-pass design reduces memory usage and reduces latency while preserving accuracy](https://thenewstack.io/why-vector-size-matters/).  
 
 Additionally, JVector is unique in offering the ability to construct the index itself using two-pass searches, allowing larger-than-memory indexes to be built:
-<p id="gdcalert2" ><span style="color: red; font-weight: bold">>>>>>  gd2md-html alert: inline image link here (to images/image2.png). Store image on your image server and adjust path/filename/extension if necessary. </span><br>(<a href="#">Back to top</a>)(<a href="#gdcalert3">Next alert</a>)<br><span style="color: red; font-weight: bold">>>>>> </span></p>
-
-![alt_text](images/image2.png "image_tooltip")
+![Much larger indexes](https://github.com/jbellis/jvector/assets/42158/34cb8094-68fa-4dc3-b3ce-4582fdbd77e1)
 
 This is important because it allows you to take advantage of logarithmic search within a single index, instead of spilling over to linear-time merging of results from multiple indexes.
 
@@ -47,8 +45,39 @@ All code samples are from [SiftSmall](https://github.com/jbellis/jvector/blob/ma
 #### Step 1: Build and query an index in memory
 
 First the code:
+```java
+    public static void siftInMemory(ArrayList<VectorFloat<?>> baseVectors) throws IOException {
+        // infer the dimensionality from the first vector
+        int originalDimension = baseVectors.get(0).length();
+        // wrap the raw vectors in a RandomAccessVectorValues
+        RandomAccessVectorValues ravv = new ListRandomAccessVectorValues(baseVectors, originalDimension);
 
-XXX
+        // score provider using the raw, in-memory vectors
+        BuildScoreProvider bsp = BuildScoreProvider.randomAccessScoreProvider(ravv, VectorSimilarityFunction.EUCLIDEAN);
+        try (GraphIndexBuilder builder = new GraphIndexBuilder(bsp,
+                                                               ravv.dimension(),
+                                                               16, // graph degree
+                                                               100, // construction search depth
+                                                               1.2f, // allow degree overflow during construction by this factor
+                                                               1.2f)) // relax neighbor diversity requirement by this factor
+        {
+            // build the index (in memory)
+            OnHeapGraphIndex index = builder.build(ravv);
+
+            // search for a random vector
+            VectorFloat<?> q = randomVector(originalDimension);
+            SearchResult sr = GraphSearcher.search(q,
+                                                   10, // number of results
+                                                   ravv, // vectors we're searching, used for scoring
+                                                   VectorSimilarityFunction.EUCLIDEAN, // how to score
+                                                   index,
+                                                   Bits.ALL); // valid ordinals to consider
+            for (SearchResult.NodeScore ns : sr.getNodes()) {
+                System.out.println(ns);
+            }
+        }
+    }
+```
 
 Commentary:
 * All indexes assume that you have a source of vectors that has a consistent, fixed dimension (number of float32 components).
@@ -62,8 +91,17 @@ Commentary:
 #### Step 2: more control over GraphSearcher
 
 Keeping the Builder the same, the updated search code looks like this:
-
-XXX
+```java
+            // search for a random vector using a GraphSearcher and SearchScoreProvider
+            VectorFloat<?> q = randomVector(originalDimension);
+            try (GraphSearcher searcher = new GraphSearcher(index)) {
+                SearchScoreProvider ssp = SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, ravv);
+                SearchResult sr = searcher.search(ssp, 10, Bits.ALL);
+                for (SearchResult.NodeScore ns : sr.getNodes()) {
+                    System.out.println(ns);
+                }
+            }
+```
 
 Commentary:
 * Searcher allocation is modestly expensive since there is a bunch of internal state to initialize at construction time.  Therefore, JVector supports pooling searchers (e.g. with [ExplicitThreadLocal](https://javadoc.io/doc/io.github.jbellis/jvector/latest/io/github/jbellis/jvector/util/ExplicitThreadLocal.html), covered below).
@@ -73,25 +111,39 @@ Commentary:
 #### Step 3: Measuring recall
 
 A blisteringly-fast vector index isn’t very useful if it doesn’t return accurate results.  As a sanity check, SiftSmall includes a helper method _testRecall_.  Wiring up that to our code mostly involves turning the SearchScoreProvider into a factory lambda:
-
-XXX
-
-If you run the code, you will see slight differences in recall every time:
-
-XXX
-
+```java
+            Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, ravv);
+            testRecall(index, queryVectors, groundTruth, sspFactory);
+```
+If you run the code, you will see slight differences in recall every time (printed by `testRecall`):
+```
 (OnHeapGraphIndex) Recall: 0.9898
-
-(OnDiskGraphIndex) Recall: 0.9890
-
-This is expected given the approximate nature of the index being created.
+...
+(OnHeapGraphIndex) Recall: 0.9890
+```
+This is expected given the approximate nature of the index being created and the perturbations introduced by the multithreaded concurrency of the `build` call.
 
 
 #### Step 4: write and load index to and from disk
 
 The code:
+```java
+        Path indexPath = Files.createTempFile("siftsmall", ".inline");
+        try (GraphIndexBuilder builder = new GraphIndexBuilder(bsp, ravv.dimension(), 16, 100, 1.2f, 1.2f)) {
+            // build the index (in memory)
+            OnHeapGraphIndex index = builder.build(ravv);
+            // write the index to disk with default options
+            OnDiskGraphIndex.write(index, ravv, indexPath);
+        }
 
-XXX
+        // on-disk indexes require a ReaderSupplier (not just a Reader) because we will want it to
+        // open additional readers for searching
+        ReaderSupplier rs = new SimpleMappedReaderSupplier(indexPath);
+        OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
+        // measure our recall against the (exactly computed) ground truth
+        Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, ravv);
+        testRecall(index, queryVectors, groundTruth, sspFactory);
+```
 
 Commentary:
 * We can write indexes that are constructed in-memory, like this one, to disk with a single method call.
@@ -103,16 +155,41 @@ Commentary:
 #### Step 5: use compressed vectors in the search
 
 Compressing the vectors with product quantization is done as follows:
-
-XXX
-
-
+```java
+        // compute and write compressed vectors to disk
+        Path pqPath = Files.createTempFile("siftsmall", ".pq");
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath)))) {
+            // Compress the original vectors using PQ. this represents a compression ratio of 128 * 4 / 16 = 32x
+            ProductQuantization pq = ProductQuantization.compute(ravv,
+                                                                 16, // number of subspaces
+                                                                 256, // number of centroids per subspace
+                                                                 true); // center the dataset
+            ByteSequence<?>[] compressed = pq.encodeAll(ravv);
+            // write the compressed vectors to disk
+            PQVectors pqv = new PQVectors(pq, compressed);
+            pqv.write(out);
+        }
+```
 * JVector also supports Binary Quantization, but [BQ is generally less useful than PQ since it takes such a large toll on search accuracy](https://thenewstack.io/why-vector-size-matters/).
 
 Then we can wire up the compressed vectors to a two-phase search by getting the fast ApproximateScoreFunction from PQVectors, and the Reranker from the index View:
-
-XXX
-
+```java
+        ReaderSupplier rs = new MMapReaderSupplier(indexPath);
+        OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
+        // load the PQVectors that we just wrote to disk
+        try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {
+            PQVectors pqv = PQVectors.load(in);
+            // SearchScoreProvider that does a first pass with the loaded-in-memory PQVectors,
+            // then reranks with the exact vectors that are stored on disk in the index
+            Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> {
+                ApproximateScoreFunction asf = pqv.precomputedScoreFunctionFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                Reranker reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                return new SearchScoreProvider(asf, reranker);
+            };
+            // measure our recall against the (exactly computed) ground truth
+            testRecall(index, queryVectors, groundTruth, sspFactory);
+        }
+```
 * PQVectors offers both precomputedScoreFunctionFor and scoreFunctionFor factories.  As the name implies, the first precalculates the fragments of distance needed from the PQ codebook for assembly by ADC (asymmetric distance computation).  This is faster for searching all but the smallest of indexes, but if you do have a tiny index or you need to perform ADC in another context, the scoreFunctionFor version with no precomputation will come in handy.
 
 This set of functionality is the classic DiskANN design.
@@ -123,21 +200,61 @@ This set of functionality is the classic DiskANN design.
 JVector can also apply two-phase search to allow building a larger than memory index–only the compressed vectors are kept in memory, while the full-sized ones are kept in the on-disk index.
 
 First we need to set up an OnDiskGraphIndexWriter with full control over the construction process.  From that we’ll derive a RandomAccessVectorValues class called InlineVectorValues that knows how to read the full-resolution vectors from the index while it is being constructed.
+```java
+        // compute the codebook, but don't encode any vectors yet
+        ProductQuantization pq = ProductQuantization.compute(ravv, 16, 256, true);
 
-XXX
+        Path indexPath = Files.createTempFile("siftsmall", ".inline");
+        Path pqPath = Files.createTempFile("siftsmall", ".pq");
+        // Builder creation looks mostly the same, but we need to set the BuildScoreProvider after the PQVectors are created
+        try (GraphIndexBuilder builder = new GraphIndexBuilder(null,
+                                                               ravv.dimension(), 16, 100, 1.2f, 1.2f);
+             // explicit Writer for the first time, this is what's behind OnDiskGraphIndex.write
+             OnDiskGraphIndexWriter writer = new OnDiskGraphIndexWriter.Builder(builder.getGraph(), indexPath)
+                     .with(new InlineVectors(ravv.dimension()))
+                     .withMapper(new OnDiskGraphIndexWriter.IdentityMapper())
+                     .build();
+             // you can use the partially written index as a source of the vectors written so far
+             InlineVectorValues ivv = new InlineVectorValues(ravv.dimension(), writer);
+             // output for the compressed vectors
+             DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
+```
 
 Then we need to set up a PQVectors instance that we can add new vectors to, and a BuildScoreProvider using it:
+```java
+            // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors
+            List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
+            PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
 
-XXX
+            // now we can create the actual BuildScoreProvider based on PQ + reranking
+            BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, ivv, pqv);
+            builder.setBuildScoreProvider(bsp);
+```
 
 Once that’s done, we can index vectors one at a time:
-
-XXX
-
+```java
+            // build the index vector-at-a-time (on disk)
+            for (VectorFloat<?> v : baseVectors) {
+                // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
+                int ordinal = incrementallyCompressedVectors.size();
+                incrementallyCompressedVectors.add(pq.encode(v));
+                // write the full vector to disk
+                writer.writeInline(ordinal, Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(v)));
+                // now add it to the graph -- the previous steps must be completed first since the PQVectors
+                // and InlineVectorValues are both used during the search that runs as part of addGraphNode construction
+                builder.addGraphNode(ordinal, v);
+            }
+```
 Finally, we need to run cleanup() and write the index and the PQVectors to disk:
+```java
+            // cleanup does a final enforcement of maxDegree and handles other scenarios like deleted nodes
+            // that we don't need to worry about here
+            builder.cleanup();
 
-XXX
-
+            // finish writing the index (by filling in the edge lists) and write our completed PQVectors
+            writer.write(Map.of());
+            pqv.write(pqOut);
+````
 Commentary:
 * The search code doesn’t change when switching to incremental index construction – it’s the same index structure on disk, just (potentially) much larger.
 * OnDiskGraphIndexWriter::writeInline is threadsafe via synchronization, but care must be taken that the support structures are threadsafe as well if you plan to use them in a multithreaded scenario (which this example is not).  Alternatively, you can serialize the updates to PQVectors and leave only the call to GraphIndexBuilder::addGraphNode concurrent.  This represents the lion’s share of construction time so you will see good performance with that approach.
@@ -154,13 +271,8 @@ Commentary:
 ### Advanced features
 
 * Fused ADC and LVQ are both represented as Features that are supported during incremental index construction, like InlineVectors above.  [See the Grid class for sample code](https://github.com/jbellis/jvector/blob/main/jvector-examples/src/main/java/io/github/jbellis/jvector/example/Grid.java).
-* Anisotropic PQ is built into the ProductQuantization class and can improve recall, but nobody knows how to tune it (with the T/threshold parameter) except experimentally on a per-model basis, and choosing the wrong setting can make things worse.  From Figure 3 in the paper: \
-
-
-<p id="gdcalert3" ><span style="color: red; font-weight: bold">>>>>>  gd2md-html alert: inline image link here (to images/image3.png). Store image on your image server and adjust path/filename/extension if necessary. </span><br>(<a href="#">Back to top</a>)(<a href="#gdcalert4">Next alert</a>)<br><span style="color: red; font-weight: bold">>>>>> </span></p>
-
-
-![alt_text](images/image3.png "image_tooltip")
+* Anisotropic PQ is built into the ProductQuantization class and can improve recall, but nobody knows how to tune it (with the T/threshold parameter) except experimentally on a per-model basis, and choosing the wrong setting can make things worse.  From Figure 3 in the paper: 
+![APQ performnce on Glove first improves and then degrades as T increases](https://github.com/jbellis/jvector/assets/42158/fd459222-6929-43ca-a405-ac34dbaf6646)
 
 * JVector supports in-place deletes via GraphIndexBuilder::markNodeDeleted.  Deleted nodes are removed and connections replaced during GraphIndexBuilder::cleanup, with runtime proportional to the number of deleted nodes.
 * To checkpoint a graph and reload it for continued editing, use OnHeapGraphIndex::save and GraphIndexBuilder.load.
@@ -172,6 +284,7 @@ Commentary:
 * [LVQ paper](https://arxiv.org/abs/2402.02044)
 * [Anisotropic PQ paper](https://arxiv.org/abs/1908.10396)
 * [Quicker ADC paper](https://arxiv.org/abs/1812.09162)
+
 
 ## Developing and Testing
 This project is organized as a [multimodule Maven build](https://maven.apache.org/guides/mini/guide-multiple-modules.html). The intent is to produce a multirelease jar suitable for use as
