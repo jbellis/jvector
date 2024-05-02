@@ -86,7 +86,7 @@ public class SiftSmall {
                                                                ravv.dimension(),
                                                                16, // graph degree
                                                                100, // construction search depth
-                                                               1.2f, // allow degree overflow by this factor
+                                                               1.2f, // allow degree overflow during construction by this factor
                                                                1.2f)) // relax neighbor diversity requirement by this factor
         {
             // build the index (in memory)
@@ -186,12 +186,10 @@ public class SiftSmall {
                                                                  true); // center the dataset
             ByteSequence<?>[] compressed = pq.encodeAll(ravv);
             // write the compressed vectors to disk
-            PQVectors pqv1 = new PQVectors(pq, compressed);
-            pqv1.write(out);
+            PQVectors pqv = new PQVectors(pq, compressed);
+            pqv.write(out);
         }
 
-        // on-disk indexes require a ReaderSupplier (not just a Reader) because we will want it to
-        // open additional readers for searching
         ReaderSupplier rs = new MMapReaderSupplier(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         // load the PQVectors that we just wrote to disk

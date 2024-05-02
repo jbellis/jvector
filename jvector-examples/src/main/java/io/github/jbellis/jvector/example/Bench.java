@@ -46,18 +46,20 @@ public class Bench {
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1, 2);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
+//                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
                 __ -> CompressorParameters.NONE
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
-                __ -> CompressorParameters.NONE,
+//                __ -> CompressorParameters.NONE,
                 // ds -> BinaryQuantization.compute(ds.getBaseRavv()),
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
+                ds -> new PQParameters(ds.getDimension() / 4, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
+                ds -> new PQParameters(ds.getDimension() / 4, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, 0.075f),
+                ds -> new PQParameters(ds.getDimension() / 4, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, 0.09f)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
-                EnumSet.of(FeatureId.INLINE_VECTORS), // baseline
-                EnumSet.of(FeatureId.LVQ),
-                EnumSet.of(FeatureId.LVQ, FeatureId.FUSED_ADC)
+//                EnumSet.of(FeatureId.INLINE_VECTORS), // baseline
+                EnumSet.of(FeatureId.LVQ)
+//                EnumSet.of(FeatureId.LVQ, FeatureId.FUSED_ADC)
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.
@@ -68,11 +70,9 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var coreFiles = List.of(
-                "ada002-100k",
-                "cohere-english-v3-100k",
+                "colbert-1M",
                 "openai-v3-small-100k",
                 "nv-qa-v4-100k",
-                "colbert-1M",
                 "gecko-100k");
         executeNw(coreFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
 
