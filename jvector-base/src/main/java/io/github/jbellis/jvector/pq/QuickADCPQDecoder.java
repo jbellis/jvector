@@ -143,7 +143,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     static class DotProductDecoder extends CachingDecoder {
         public DotProductDecoder(FusedADC.PackedNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
             super(neighbors, results, pq, query, neighbors.maxDegree(), VectorSimilarityFunction.DOT_PRODUCT, esf);
-            worstDistance = Float.MAX_VALUE;
+            worstDistance = Float.MAX_VALUE; // initialize at best value, update as we search
         }
 
         @Override
@@ -160,7 +160,7 @@ public abstract class QuickADCPQDecoder implements ScoreFunction.ApproximateScor
     static class EuclideanDecoder extends CachingDecoder {
         public EuclideanDecoder(FusedADC.PackedNeighbors neighbors, ProductQuantization pq, VectorFloat<?> query, VectorFloat<?> results, ExactScoreFunction esf) {
             super(neighbors, results, pq, query, neighbors.maxDegree(), VectorSimilarityFunction.EUCLIDEAN, esf);
-            worstDistance = Float.MIN_VALUE;
+            worstDistance = 0; // initialize at best value, update as we search
         }
 
         @Override

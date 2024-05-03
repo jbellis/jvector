@@ -204,10 +204,20 @@ public final class VectorUtil {
     impl.cosineMultiScore(v1, v2, results);
   }
 
+  /**
+   * Calculates the maximum value in the vector.
+   * @param v vector
+   * @return the maximum value, or -Float.MAX_VALUE if the vector is empty
+   */
   public static float max(VectorFloat<?> v) {
     return impl.max(v);
   }
 
+  /**
+   * Calculates the minimum value in the vector.
+   * @param v vector
+   * @return the minimum value, or Float.MAX_VALUE if the vector is empty
+   */
   public static float min(VectorFloat<?> v) {
     return impl.min(v);
   }

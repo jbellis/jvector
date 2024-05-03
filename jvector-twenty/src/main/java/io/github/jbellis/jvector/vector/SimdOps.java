@@ -609,7 +609,7 @@ final class SimdOps {
     }
 
     public static float max(ArrayVectorFloat v) {
-        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MIN_VALUE);
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -Float.MAX_VALUE);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v.get(), i);

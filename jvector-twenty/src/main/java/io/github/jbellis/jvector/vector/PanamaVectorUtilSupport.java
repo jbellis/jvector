@@ -149,7 +149,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBest) {
-        float best = vsf == VectorSimilarityFunction.EUCLIDEAN ? Float.MAX_VALUE : Float.MIN_VALUE;
+        float best = vsf == VectorSimilarityFunction.EUCLIDEAN ? Float.MAX_VALUE : -Float.MAX_VALUE;
         float val;
         int codebookBase = codebookIndex * clusterCount;
         for (int i = 0; i < clusterCount; i++) {

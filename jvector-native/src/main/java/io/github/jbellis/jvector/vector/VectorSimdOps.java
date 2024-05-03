@@ -540,12 +540,13 @@ final class VectorSimdOps {
     }
 
     public static float max(MemorySegmentVectorFloat vector) {
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -Float.MAX_VALUE);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        float max = Float.MIN_VALUE;
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
-            max = Math.max(max, a.reduceLanes(VectorOperators.MAX));
+            accum = accum.max(a);
         }
+        float max = accum.reduceLanes(VectorOperators.MAX);
         for (int i = vectorizedLength; i < vector.length(); i++) {
             max = Math.max(max, vector.get(i));
         }
@@ -553,12 +554,13 @@ final class VectorSimdOps {
     }
 
     public static float min(MemorySegmentVectorFloat vector) {
+        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        float min = Float.MAX_VALUE;
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
-            min = Math.min(min, a.reduceLanes(VectorOperators.MIN));
+            accum = accum.min(a);
         }
+        float min = accum.reduceLanes(VectorOperators.MIN);
         for (int i = vectorizedLength; i < vector.length(); i++) {
             min = Math.min(min, vector.get(i));
         }

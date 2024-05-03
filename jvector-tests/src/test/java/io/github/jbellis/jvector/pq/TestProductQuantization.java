@@ -93,10 +93,10 @@ public class TestProductQuantization extends RandomizedTest {
                                             1_000 + R.nextInt(10_000));
 
         var clusterer = new KMeansPlusPlusClusterer(vectors, DEFAULT_CLUSTERS);
-        var initialLoss = loss(clusterer, vectors, Float.MIN_VALUE);
+        var initialLoss = loss(clusterer, vectors, -Float.MAX_VALUE);
 
         assert clusterer.clusterOnceUnweighted() > 0;
-        var improvedLoss = loss(clusterer, vectors, Float.MIN_VALUE);
+        var improvedLoss = loss(clusterer, vectors, -Float.MAX_VALUE);
 
         assertTrue("improvedLoss=" + improvedLoss + " initialLoss=" + initialLoss, improvedLoss < initialLoss);
     }
