@@ -48,7 +48,7 @@ import java.util.stream.IntStream;
  */
 public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
-    public static final int CURRENT_VERSION = 1;
+    public static final int CURRENT_VERSION = 3;
     static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
     static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ReaderSupplier readerSupplier;

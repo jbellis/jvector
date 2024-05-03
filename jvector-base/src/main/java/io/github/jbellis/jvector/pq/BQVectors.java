@@ -43,9 +43,9 @@ public class BQVectors implements CompressedVectors {
     }
 
     @Override
-    public void write(DataOutput out) throws IOException {
+    public void write(DataOutput out, int version) throws IOException {
         // BQ centering data
-        bq.write(out);
+        bq.write(out, version);
 
         // compressed vectors
         out.writeInt(compressedVectors.length);

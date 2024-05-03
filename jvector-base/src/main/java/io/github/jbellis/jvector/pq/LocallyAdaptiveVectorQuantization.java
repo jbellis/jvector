@@ -99,7 +99,11 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
     }
 
     @Override
-    public void write(DataOutput out) throws IOException {
+    public void write(DataOutput out, int version) throws IOException {
+        if (version < 3) {
+            throw new IllegalArgumentException("LVQ requires version 3 or greater");
+        }
+
         out.writeInt(globalMean.length());
         vectorTypeSupport.writeFloatVector(out, globalMean);
     }

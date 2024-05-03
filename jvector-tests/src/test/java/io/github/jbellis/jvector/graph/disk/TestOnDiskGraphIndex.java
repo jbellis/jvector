@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.function.IntFunction;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -188,7 +189,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     }
 
     @Test
-    public void testV0Compatibility() throws Exception {
+    public void testV0Read() throws IOException {
         // using a random graph from testLargeGraph generated on old version
         var file = new File("resources/version0.odgi");
         try (var smr = new SimpleMappedReader(file.getAbsolutePath());
@@ -205,6 +206,30 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             var expectedNeighbors = Set.of(67461, 9540, 85444, 13638, 89415, 21255, 73737, 46985, 71373, 47436, 94863, 91343, 27215, 59730, 69911, 91867, 89373, 6621, 59106, 98922, 69679, 47728, 60722, 56052, 28854, 38902, 21561, 20665, 41722, 57917, 34495, 5183);
             assertEquals(expectedNeighbors, actualNeighbors);
         }
+    }
+
+    @Test
+    public void testV0Write() throws IOException {
+        var fileIn = new File("resources/version0.odgi");
+        var fileOut = File.createTempFile("version0", ".odgi");
+
+        try (var smr = new SimpleMappedReader(fileIn.getAbsolutePath());
+             var graph = OnDiskGraphIndex.load(smr::duplicate);
+             var view = graph.getView())
+        {
+             try (var writer = new OnDiskGraphIndexWriter.Builder(graph, fileOut.toPath())
+                     .withVersion(2)
+                     .with(new InlineVectors(graph.dimension))
+                     .build())
+             {
+                 writer.write(Feature.singleStateFactory(FeatureId.INLINE_VECTORS, nodeId -> new InlineVectors.State(view.getVector(nodeId))));
+             }
+        }
+
+        // check that the contents match
+        var contents1 = Files.readAllBytes(fileIn.toPath());
+        var contents2 = Files.readAllBytes(fileOut.toPath());
+        assertArrayEquals(contents1, contents2);
     }
 
     @Test

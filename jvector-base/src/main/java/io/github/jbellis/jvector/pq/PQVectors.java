@@ -59,10 +59,10 @@ public class PQVectors implements CompressedVectors {
     }
 
     @Override
-    public void write(DataOutput out) throws IOException
+    public void write(DataOutput out, int version) throws IOException
     {
         // pq codebooks
-        pq.write(out);
+        pq.write(out, version);
 
         // compressed vectors
         out.writeInt(compressedVectors.size());

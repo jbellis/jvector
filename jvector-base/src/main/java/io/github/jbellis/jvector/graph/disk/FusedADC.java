@@ -87,7 +87,7 @@ public class FusedADC implements Feature {
 
     @Override
     public void writeHeader(DataOutput out) throws IOException {
-        pq.write(out);
+        pq.write(out, OnDiskGraphIndex.CURRENT_VERSION);
     }
 
     // this is an awkward fit for the Feature.State design since we need to

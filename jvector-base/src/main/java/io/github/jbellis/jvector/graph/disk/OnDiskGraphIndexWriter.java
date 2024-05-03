@@ -42,6 +42,7 @@ import java.util.function.IntFunction;
  */
 public class OnDiskGraphIndexWriter implements Closeable {
     private final Path outPath;
+    private final int version;
     private final GraphIndex graph;
     private final GraphIndex.View view;
     private final OrdinalMapper ordinalMapper;
@@ -54,6 +55,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     private volatile int maxOrdinalWritten;
 
     private OnDiskGraphIndexWriter(Path outPath,
+                                   int version,
                                    long startOffset,
                                    GraphIndex graph,
                                    OrdinalMapper oldToNewOrdinals,
@@ -62,6 +64,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             throws IOException
     {
         this.outPath = outPath;
+        this.version = version;
         this.graph = graph;
         this.view = graph.getView();
         this.ordinalMapper = oldToNewOrdinals;
@@ -193,7 +196,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         // graph-level properties
         out.seek(startOffset);
         var graphSize = graph.size();
-        var commonHeader = new CommonHeader(OnDiskGraphIndex.CURRENT_VERSION, graphSize, dimension, view.entryNode(), graph.maxDegree());
+        var commonHeader = new CommonHeader(version, graphSize, dimension, view.entryNode(), graph.maxDegree());
         var header = new Header(commonHeader, featureMap);
         header.write(out);
 
@@ -278,11 +281,22 @@ public class OnDiskGraphIndexWriter implements Closeable {
         private final EnumMap<FeatureId, Feature> features;
         private OrdinalMapper ordinalMapper;
         private long startOffset;
+        private int version;
 
         public Builder(GraphIndex graphIndex, Path outPath) {
             this.graphIndex = graphIndex;
             this.outPath = outPath;
             this.features = new EnumMap<>(FeatureId.class);
+            this.version = OnDiskGraphIndex.CURRENT_VERSION;
+        }
+
+        public Builder withVersion(int version) {
+            if (version > OnDiskGraphIndex.CURRENT_VERSION) {
+                throw new IllegalArgumentException("Unsupported version: " + version);
+            }
+
+            this.version = version;
+            return this;
         }
 
         public Builder with(Feature feature) {
@@ -301,6 +315,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
         }
 
         public OnDiskGraphIndexWriter build() throws IOException {
+            if (version < 3 && (!features.containsKey(FeatureId.INLINE_VECTORS) || features.size() > 1)) {
+                throw new IllegalArgumentException("Only INLINE_VECTORS is supported until version 3");
+            }
+
             int dimension;
             if (features.containsKey(FeatureId.INLINE_VECTORS)) {
                 dimension = ((InlineVectors) features.get(FeatureId.INLINE_VECTORS)).dimension();
@@ -313,7 +331,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             if (ordinalMapper == null) {
                 ordinalMapper = new MapMapper(sequentialRenumbering(graphIndex));
             }
-            return new OnDiskGraphIndexWriter(outPath, startOffset, graphIndex, ordinalMapper, dimension, features);
+            return new OnDiskGraphIndexWriter(outPath, version, startOffset, graphIndex, ordinalMapper, dimension, features);
         }
 
         public Builder withMap(Map<Integer, Integer> oldToNewOrdinals) {

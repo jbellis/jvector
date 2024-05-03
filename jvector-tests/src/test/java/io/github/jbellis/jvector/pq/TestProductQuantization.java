@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Assertions;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,6 +42,7 @@ import static io.github.jbellis.jvector.TestUtil.randomVector;
 import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 import static io.github.jbellis.jvector.pq.ProductQuantization.DEFAULT_CLUSTERS;
 import static io.github.jbellis.jvector.pq.ProductQuantization.getSubvectorSizesAndOffsets;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -225,5 +227,25 @@ public class TestProductQuantization extends RandomizedTest {
             assertEquals(pq.subvectorSizesAndOffsets[0][0] * pq.getClusterCount(), pq.codebooks[0].length());
             assertEquals(UNWEIGHTED, pq.anisotropicThreshold, 1E-6); // v0 only supported (implicitly) unweighted
         }
+    }
+
+    @Test
+    public void testSaveVersion0() throws Exception {
+        var fileIn = new File("resources/version0.pq");
+        var fileOut = File.createTempFile("pqtest", ".pq");
+
+        try (var in = new SimpleMappedReader(fileIn.getAbsolutePath())) {
+            var pq = ProductQuantization.load(in);
+
+            // re-save, emulating version 0
+            try (var out = new DataOutputStream(new FileOutputStream(fileOut))) {
+                pq.write(out, 0);
+            }
+        }
+
+        // check that the contents match
+        var contents1 = Files.readAllBytes(fileIn.toPath());
+        var contents2 = Files.readAllBytes(fileOut.toPath());
+        assertArrayEquals(contents1, contents2);
     }
 }
