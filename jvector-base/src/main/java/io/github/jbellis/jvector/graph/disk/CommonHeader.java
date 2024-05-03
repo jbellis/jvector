@@ -40,7 +40,9 @@ class CommonHeader {
     }
 
     void write(DataOutput out) throws IOException {
-        out.writeInt(version);
+        if (version >= 3) {
+            out.writeInt(version);
+        }
         out.writeInt(size);
         out.writeInt(dimension);
         out.writeInt(entryNode);

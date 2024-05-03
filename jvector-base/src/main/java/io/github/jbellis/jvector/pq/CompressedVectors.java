@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -25,8 +26,19 @@ import java.io.DataOutput;
 import java.io.IOException;
 
 public interface CompressedVectors extends Accountable {
-    /** write the compressed vectors to the given DataOutput */
-    void write(DataOutput out) throws IOException;
+    /**
+     * Write the compressed vectors to the given DataOutput
+     * @param out the DataOutput to write to
+     * @param version the serialization version.  versions 2 and 3 are supported
+     */
+    void write(DataOutput out, int version) throws IOException;
+
+    /**
+     * Write the compressed vectors to the given DataOutput at the current serialization version
+     */
+    default void write(DataOutput out) throws IOException {
+        write(out, OnDiskGraphIndex.CURRENT_VERSION);
+    }
 
     /** @return the original size of each vector, in bytes, before compression */
     int getOriginalSize();

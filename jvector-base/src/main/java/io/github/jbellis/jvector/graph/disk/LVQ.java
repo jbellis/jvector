@@ -73,7 +73,7 @@ public class LVQ implements Feature {
 
     @Override
     public void writeHeader(DataOutput out) throws IOException {
-        lvq.write(out);
+        lvq.write(out, OnDiskGraphIndex.CURRENT_VERSION);
     }
 
     @Override

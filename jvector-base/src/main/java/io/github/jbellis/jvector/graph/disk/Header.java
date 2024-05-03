@@ -36,9 +36,17 @@ class Header {
     }
 
     void write(DataOutput out) throws IOException {
-        out.writeInt(OnDiskGraphIndex.MAGIC);
+        if (common.version >= 3) {
+            out.writeInt(OnDiskGraphIndex.MAGIC);
+        }
+
         common.write(out);
-        out.writeInt(FeatureId.serialize(EnumSet.copyOf(features.keySet())));
+
+        if (common.version >= 3) {
+            out.writeInt(FeatureId.serialize(EnumSet.copyOf(features.keySet())));
+        }
+
+        // we restrict pre-version-3 writers to INLINE_VECTORS features, so we don't need additional version-handling here
         for (Feature writer : features.values()) {
             writer.writeHeader(out);
         }

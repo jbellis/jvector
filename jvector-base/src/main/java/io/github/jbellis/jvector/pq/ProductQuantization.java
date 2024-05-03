@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.pq;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -50,7 +51,6 @@ import static java.lang.Math.sqrt;
  */
 public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
     private static final int MAGIC = 0x75EC4012; // JVECTOR, with some imagination
-    private static final int STORAGE_VERSION = 1;
 
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     static final int DEFAULT_CLUSTERS = 256; // number of clusters per subspace = one byte's worth
@@ -526,10 +526,19 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return partialMagnitudes;
     }
 
-    public void write(DataOutput out) throws IOException
+    public void write(DataOutput out, int version) throws IOException
     {
-        out.writeInt(MAGIC);
-        out.writeInt(STORAGE_VERSION);
+        if (version > OnDiskGraphIndex.CURRENT_VERSION) {
+            throw new IllegalArgumentException("Unsupported serialization version " + version);
+        }
+        if (version < 3 && anisotropicThreshold != UNWEIGHTED) {
+            throw new IllegalArgumentException("Anisotropic threshold is only supported in serialization version 3 and above");
+        }
+
+        if (version >= 3) {
+            out.writeInt(MAGIC);
+            out.writeInt(version);
+        }
 
         if (globalCentroid == null) {
             out.writeInt(0);
@@ -545,7 +554,9 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
             out.writeInt(a[0]);
         }
 
-        out.writeFloat(anisotropicThreshold);
+        if (version >= 3) {
+            out.writeFloat(anisotropicThreshold);
+        }
 
         assert codebooks.length == M;
         out.writeInt(clusterCount);
@@ -580,7 +591,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         int version;
         int globalCentroidLength;
         if (maybeMagic != MAGIC) {
-            // old format, no magic or version, starts straight off with the centroid length
+            // JVector 1+2 format, no magic or version, starts straight off with the centroid length
             version = 0;
             globalCentroidLength = maybeMagic;
         } else {
@@ -605,13 +616,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         }
 
         float anisotropicThreshold;
-        if (version == 0) {
+        if (version < 3) {
             anisotropicThreshold = UNWEIGHTED;
         } else {
-            // clunky, but doesn't seem worth making everyone writing a readFloat method for this
-            var scratch = new float[1];
-            in.readFully(scratch);
-            anisotropicThreshold = scratch[0];
+            anisotropicThreshold = in.readFloat();
         }
 
         int clusters = in.readInt();

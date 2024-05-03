@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -46,7 +47,16 @@ public interface VectorCompressor<T> {
 
     T encode(VectorFloat<?> v);
 
-    void write(DataOutput out) throws IOException;
+    /**
+     * @param out DataOutput to write to
+     * @param version serialization version.  Versions 2 and 3 are supported
+     */
+    void write(DataOutput out, int version) throws IOException;
+
+    /** Write with the current serialization version */
+    default void write(DataOutput out) throws IOException {
+        write(out, OnDiskGraphIndex.CURRENT_VERSION);
+    }
 
     /**
      * @param compressedVectors must match the type T for this VectorCompressor, but

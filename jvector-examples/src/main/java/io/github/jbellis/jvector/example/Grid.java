@@ -62,7 +62,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -363,7 +362,7 @@ public class Grid {
                 try {
                     Files.createDirectories(path.getParent());
                     try (var writer = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
-                        compressor.write(writer);
+                        compressor.write(writer, OnDiskGraphIndex.CURRENT_VERSION);
                     }
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);

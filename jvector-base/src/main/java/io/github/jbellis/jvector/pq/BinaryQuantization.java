@@ -104,7 +104,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     }
 
     @Override
-    public void write(DataOutput out) throws IOException {
+    public void write(DataOutput out, int version) throws IOException {
         out.writeInt(globalCentroid.length());
         vectorTypeSupport.writeFloatVector(out, globalCentroid);
     }
