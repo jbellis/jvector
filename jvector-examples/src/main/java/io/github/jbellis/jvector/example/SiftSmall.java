@@ -289,7 +289,13 @@ public class SiftSmall {
         return vec;
     }
 
-    private static void testRecall(GraphIndex graph, List<VectorFloat<?>> queryVectors, List<Set<Integer>> groundTruth, Function<VectorFloat<?>, SearchScoreProvider> sspFactory) throws IOException {
+    private static void testRecall(GraphIndex graph,
+                                   List<VectorFloat<?>> queryVectors,
+                                   List<Set<Integer>> groundTruth,
+                                   Function<VectorFloat<?>,
+                                   SearchScoreProvider> sspFactory)
+            throws IOException
+    {
         AtomicInteger topKfound = new AtomicInteger(0);
         int topK = 100;
         String graphType = graph.getClass().getSimpleName();

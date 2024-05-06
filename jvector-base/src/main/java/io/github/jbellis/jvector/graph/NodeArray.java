@@ -44,9 +44,9 @@ public class NodeArray {
     float[] score;
     int[] node;
 
-    public NodeArray(int maxSize) {
-        node = new int[maxSize];
-        score = new float[maxSize];
+    public NodeArray(int initialSize) {
+        node = new int[initialSize];
+        score = new float[initialSize];
     }
 
     static NodeArray merge(NodeArray a1, NodeArray a2) {
@@ -137,8 +137,7 @@ public class NodeArray {
      */
     public void addInOrder(int newNode, float newScore) {
         if (size == node.length) {
-            node = ArrayUtil.grow(node);
-            score = ArrayUtil.growExact(score, node.length);
+            growArrays();
         }
         if (size > 0) {
             float previousScore = score[size - 1];
