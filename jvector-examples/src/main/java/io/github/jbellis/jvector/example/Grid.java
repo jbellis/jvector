@@ -386,8 +386,7 @@ public class Grid {
         return topKCorrect(topK, a, gt);
     }
 
-    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int efSearch, int queryRuns) {
-        assert efSearch >= topK;
+    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
@@ -396,7 +395,7 @@ public class Grid {
                 SearchResult sr;
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                sr = searcher.search(sf, efSearch, Bits.ALL);
+                sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
 
                 // process search result
                 var gt = cs.ds.groundTruth.get(i);

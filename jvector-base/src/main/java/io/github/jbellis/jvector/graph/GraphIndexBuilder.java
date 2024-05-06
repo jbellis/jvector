@@ -274,7 +274,7 @@ public class GraphIndexBuilder implements Closeable {
                         var notSelfBits = createNotSelfBits(node);
                         var ssp = scoreProvider.searchProviderFor(node);
                         int ep = graph.entry();
-                        result = gs.searchInternal(ssp, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
+                        result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -370,7 +370,7 @@ public class GraphIndexBuilder implements Closeable {
             var bits = new ExcludingBits(node);
             // find best "natural" candidates with a beam search
             var ssp = scoreProvider.searchProviderFor(vector);
-            var result = gs.searchInternal(ssp, beamWidth, 0.0f, 0.0f, ep, bits);
+            var result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, bits);
 
             // Update neighbors with these candidates.
             // The DiskANN paper calls for using the entire set of visited nodes along the search path as
@@ -446,7 +446,7 @@ public class GraphIndexBuilder implements Closeable {
             int ep = graph.entry();
             var bits = new ExcludingBits(node);
             var ssp = scoreProvider.searchProviderFor(node);
-            result = gs.searchInternal(ssp, beamWidth, 0.0f, 0.0f, ep, bits);
+            result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, bits);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -591,7 +591,7 @@ public class GraphIndexBuilder implements Closeable {
         int ep = graph.entry();
         var ssp = scoreProvider.searchProviderFor(centroid);
         try (var gs = searchers.get()) {
-            var result = gs.searchInternal(ssp, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
+            var result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
             if (result.getNodes().length == 0) {
                 // graph contains only deleted nodes
                 return NO_ENTRY_POINT;

@@ -28,10 +28,9 @@ import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import org.agrona.collections.Int2ObjectHashMap;
 
-import java.util.stream.IntStream;
+import static java.lang.Math.min;
 
 /**
  * NodeQueue uses a {@link io.github.jbellis.jvector.util.AbstractLongHeap} to store lists of nodes in a graph,
@@ -40,15 +39,15 @@ import java.util.stream.IntStream;
  * or unbounded operations, depending on the implementation subclasses, and either maxheap or minheap behavior.
  */
 public class NodeQueue {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
     public enum Order {
+        /** Smallest values at the top of the heap */
         MIN_HEAP {
             @Override
             long apply(long v) {
                 return v;
             }
         },
+        /** Largest values at the top of the heap */
         MAX_HEAP {
             @Override
             long apply(long v) {
@@ -139,17 +138,62 @@ public class NodeQueue {
         return nodes;
     }
 
-    public SearchResult.NodeScore[] nodesCopy(ScoreFunction.Reranker reranker, float rerankFloor) {
-        var ids = IntStream.range(0, size())
-                                    .mapToLong(i -> heap.get(i + 1))
-                                    .filter(m -> decodeScore(m) >= rerankFloor)
-                                    .mapToInt(this::decodeNodeId).toArray();
-        var scores = reranker.similarityTo(ids);
-        var nodeScores = new SearchResult.NodeScore[ids.length];
-        for (int i = 0; i < ids.length; i++) {
-            nodeScores[i] = new SearchResult.NodeScore(ids[i], scores.get(i));
+    /**
+     * Rerank results and return the worst approximate score that made it into the topK.
+     * The topK results will be placed into `reranked`, and the remainder into `unused`.
+     */
+    public float rerank(int topK, ScoreFunction.Reranker reranker, float rerankFloor, NodeQueue reranked, NodesUnsorted unused) {
+        // Rescore the nodes whose approximate score meets the floor.  Nodes that do not will be marked as -1
+        int[] ids = new int[size()];
+        float[] exactScores = new float[size()];
+        var approximateScoresById = new Int2ObjectHashMap<Float>();
+        for (int i = 0; i < size(); i++) {
+            long heapValue = heap.get(i + 1);
+            float score = decodeScore(heapValue);
+            var nodeId = decodeNodeId(heapValue);
+            if (score >= rerankFloor) {
+                ids[i] = nodeId;
+                exactScores[i] = reranker.similarityTo(ids[i]);
+                approximateScoresById.put(ids[i], Float.valueOf(score));
+            } else {
+                // if it didn't qualify for reranking, add it to the unused pile
+                unused.add(nodeId, score);
+                ids[i] = -1;
+            }
         }
-        return nodeScores;
+
+        // go through the entries and add to the appropriate collection
+        for (int i = 0; i < ids.length; i++) {
+            if (ids[i] == -1) {
+                continue;
+            }
+
+            // if the reranked queue is full, then either this node, or the one it replaces on the heap, will be added
+            // to the unused pile, but push() can't tell us what node was evicted when the queue was already full, so
+            // we examine that manually
+            if (reranked.size() < topK) {
+                reranked.push(ids[i], exactScores[i]);
+            } else if (exactScores[i] > reranked.topScore()) {
+                int evictedNode = reranked.topNode();
+                unused.add(evictedNode, approximateScoresById.get(evictedNode));
+                reranked.push(ids[i], exactScores[i]);
+            } else {
+                unused.add(ids[i], decodeScore(heap.get(i + 1)));
+            }
+        }
+
+        // final pass to find the worst approximate score in the topK
+        // (we can't do this as part of the earlier loops because we don't know which nodes will be in the final topK)
+        float worstApproximateInTopK = Float.POSITIVE_INFINITY;
+        if (reranked.size() < topK) {
+            return worstApproximateInTopK;
+        }
+        for (int i = 0; i < reranked.size(); i++) {
+            int nodeId = decodeNodeId(reranked.heap.get(i + 1));
+            worstApproximateInTopK = min(worstApproximateInTopK, approximateScoresById.get(nodeId));
+        }
+
+        return worstApproximateInTopK;
     }
 
     /** Returns the top element's node id. */
@@ -179,5 +223,17 @@ public class NodeQueue {
     @Override
     public String toString() {
         return "Nodes[" + heap.size() + "]";
+    }
+
+    public void foreach(NodeConsumer consumer) {
+        for (int i = 0; i < heap.size(); i++) {
+            long heapValue = heap.get(i + 1);
+            consumer.accept(decodeNodeId(heapValue), decodeScore(heapValue));
+        }
+    }
+
+    @FunctionalInterface
+    public interface NodeConsumer {
+        void accept(int node, float score);
     }
 }

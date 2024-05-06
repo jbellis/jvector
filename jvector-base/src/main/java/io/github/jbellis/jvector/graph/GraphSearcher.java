@@ -36,8 +36,6 @@ import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Comparator;
 
 
 /**
@@ -50,10 +48,10 @@ public class GraphSearcher implements Closeable {
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
     // to allocate, so they're cleared and reused across calls.
     private final NodeQueue candidates;
-    private final NodeQueue resultsQueue;
+    private final NodeQueue approximateResults;
+    private final NodeQueue rerankedResults;
     private final IntHashSet visited;
-    // we don't actually need this ordered, but NQ is our only structure that doesn't need to allocate extra containers
-    private final NodeQueue evictedResults;
+    private final NodesUnsorted evictedResults;
 
     // Search parameters that we save here for use by resume()
     private Bits acceptOrds;
@@ -69,8 +67,9 @@ public class GraphSearcher implements Closeable {
     private GraphSearcher(GraphIndex.View view) {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
-        this.evictedResults = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
-        this.resultsQueue = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
+        this.evictedResults = new NodesUnsorted(100);
+        this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
+        this.rerankedResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
     }
 
@@ -115,6 +114,7 @@ public class GraphSearcher implements Closeable {
      * @param scoreProvider   provides functions to return the similarity of a given node to the query vector
      * @param topK            the number of results to look for. With threshold=0, the search will continue until at least
      *                        `topK` results have been found, or until the entire graph has been searched.
+     * @param rerankK         the number of (approximately-scored) results to rerank before returning the best `topK`.
      * @param threshold       the minimum similarity (0..1) to accept; 0 will accept everything. May be used
      *                        with a large topK to find (approximately) all nodes above the given threshold.
      *                        If threshold > 0 then the search will stop when it is probabilistically unlikely
@@ -133,10 +133,11 @@ public class GraphSearcher implements Closeable {
     @Experimental
     public SearchResult search(SearchScoreProvider scoreProvider,
                                int topK,
+                               int rerankK,
                                float threshold,
                                float rerankFloor,
                                Bits acceptOrds) {
-        return searchInternal(scoreProvider, topK, threshold, rerankFloor, view.entryNode(), acceptOrds);
+        return searchInternal(scoreProvider, topK, rerankK, threshold, rerankFloor, view.entryNode(), acceptOrds);
     }
 
     /**
@@ -157,7 +158,7 @@ public class GraphSearcher implements Closeable {
                                int topK,
                                float threshold,
                                Bits acceptOrds) {
-        return search(scoreProvider, topK, threshold, 0.0f, acceptOrds);
+        return search(scoreProvider, topK, topK, threshold, 0.0f, acceptOrds);
     }
 
 
@@ -183,6 +184,7 @@ public class GraphSearcher implements Closeable {
      */
     SearchResult searchInternal(SearchScoreProvider scoreProvider,
                                 int topK,
+                                int rerankK,
                                 float threshold,
                                 float rerankFloor,
                                 int ep,
@@ -190,6 +192,9 @@ public class GraphSearcher implements Closeable {
     {
         if (rawAcceptOrds == null) {
             throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
+        }
+        if (rerankK < topK) {
+            throw new IllegalArgumentException(String.format("rerankK %d must be >= topK %d", rerankK, topK));
         }
 
         // save search parameters for potential later resume
@@ -203,34 +208,50 @@ public class GraphSearcher implements Closeable {
 
         // no entry point -> empty results
         if (ep < 0) {
-            return new SearchResult(new SearchResult.NodeScore[0], 0);
+            return new SearchResult(new SearchResult.NodeScore[0], 0, Float.POSITIVE_INFINITY);
         }
 
         // kick off the actual search at the entry point
         float score = scoreProvider.scoreFunction().similarityTo(ep);
         visited.add(ep);
         candidates.push(ep, score);
-        var sr = resume(topK, threshold, rerankFloor);
-
-        // include the entry node in visitedCount
-        return new SearchResult(sr.getNodes(), sr.getVisitedCount() + 1);
+        return resume(1, topK, rerankK, threshold, rerankFloor);
     }
 
     /**
-     * Experimental!
-     * <p>
-     * Resume the previous search where it left off and search for the best `additionalK` neighbors.
-     * It is NOT valid to call this method before calling
-     * `search`, but `resume` may be called as many times as desired once the search is initialized.
+     * Resume the previous search where it left off and search for the best (new) `topK` neighbors.
      * <p>
      * SearchResult.visitedCount resets with each call to `search` or `resume`.
      */
-    @Experimental
-    public SearchResult resume(int additionalK, float threshold, float rerankFloor) {
-        assert resultsQueue.size() == 0; // should be cleared out by extractScores
-        resultsQueue.setMaxSize(additionalK);
+    // Since Astra / Cassandra's usage drives the design decisions here, it's worth being explicit
+    // about how that works and why.
+    //
+    // Astra breaks logical indexes up across multiple physical OnDiskGraphIndex pieces, one per sstable.
+    // Each of these pieces is searched independently, and the results are combined.  To avoid doing
+    // more work than necessary, Astra assumes that each physical ODGI will contribute responses
+    // to the final result in proportion to its size, and only asks for that many results in the initial
+    // search.  If this assumption is incorrect, or if the rows found turn out to be deleted or overwritten
+    // by later requests (which will be in a different sstable), Astra wants a lightweight way to resume
+    // the search where it was left off to get more results.
+    //
+    // Because Astra uses a nonlinear overquerying strategy (i.e. rerankK will be larger in proportion to
+    // topK for small values of topK than for large), it's especially important to avoid reranking more
+    // results than necessary.  Thus, Astra will look at the worstApproximateInTopK value from the first
+    // ODGI, and use that as the rerankFloor for the next.  Thus, rerankFloor helps avoid believed-to-be-
+    // unnecessary work in the initial search, but if the caller needs to resume() then that belief was
+    // incorrect and is discarded, and there is no reason to pass a rerankFloor parameter to resume().
+    //
+    // Finally: in the majority of cases, the initial search() does suffice.  So while we could add the
+    // complexity of caching exact scores from candidates that were ultimately evicted from the results,
+    // we expect that to be useful only in a small minority of cases -- particularly since we are using
+    // rerankFloor to attempt to avoid doing that work in the first place.
+    private SearchResult resume(int initialVisited, int topK, int rerankK, float threshold, float rerankFloor) {
+        assert approximateResults.size() == 0; // should be cleared out by extractScores
+        assert rerankedResults.size() == 0; // should be cleared out by extractScores
+        approximateResults.setMaxSize(rerankK);
+        rerankedResults.setMaxSize(topK);
 
-        int numVisited = 0;
+        int numVisited = initialVisited;
         // A bound that holds the minimum similarity to the query vector that a candidate vector must
         // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
         var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
@@ -240,14 +261,13 @@ public class GraphSearcher implements Closeable {
 
         // add evicted results from the last call back to the candidates
         var previouslyEvicted = evictedResults.size() > 0 ? new SparseBits() : Bits.NONE;
-        while (evictedResults.size() > 0) {
-            float score = evictedResults.topScore();
-            int node = evictedResults.pop();
+        evictedResults.foreach((node, score) -> {
             candidates.push(node, score);
             ((SparseBits) previouslyEvicted).set(node);
-        }
+        });
         evictedResults.clear();
 
+        // the main search loop
         while (candidates.size() > 0) {
             // we're done when we have K results and the best candidate is worse than the worst result so far
             float topCandidateScore = candidates.topScore();
@@ -265,22 +285,22 @@ public class GraphSearcher implements Closeable {
                 // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
                 // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
                 boolean added;
-                if (resultsQueue.size() < additionalK) {
-                    resultsQueue.push(topCandidateNode, topCandidateScore);
+                if (approximateResults.size() < rerankK) {
+                    approximateResults.push(topCandidateNode, topCandidateScore);
                     added = true;
-                } else if (topCandidateScore > resultsQueue.topScore()) {
-                    int evictedNode = resultsQueue.topNode();
-                    float evictedScore = resultsQueue.topScore();
-                    evictedResults.push(evictedNode, evictedScore);
-                    resultsQueue.push(topCandidateNode, topCandidateScore);
+                } else if (topCandidateScore > approximateResults.topScore()) {
+                    int evictedNode = approximateResults.topNode();
+                    float evictedScore = approximateResults.topScore();
+                    evictedResults.add(evictedNode, evictedScore);
+                    approximateResults.push(topCandidateNode, topCandidateScore);
                     added = true;
                 } else {
                     added = false;
                 }
 
                 // update minAcceptedSimilarity if we've found K results
-                if (added && resultsQueue.size() >= additionalK) {
-                    minAcceptedSimilarity = resultsQueue.topScore();
+                if (added && approximateResults.size() >= rerankK) {
+                    minAcceptedSimilarity = approximateResults.topScore();
                 }
             }
 
@@ -312,9 +332,37 @@ public class GraphSearcher implements Closeable {
             }
         }
 
-        assert resultsQueue.size() <= additionalK;
-        SearchResult.NodeScore[] nodes = extractScores(scoreProvider, resultsQueue, rerankFloor);
-        return new SearchResult(nodes, numVisited);
+        // rerank results
+        assert approximateResults.size() <= rerankK;
+        NodeQueue popFromQueue;
+        float worstApproximateInTopK;
+        if (scoreProvider.reranker() == null) {
+            // save the worst candidates in evictedResults for potential resume()
+            while (approximateResults.size() > topK) {
+                var nScore = approximateResults.topScore();
+                var n = approximateResults.pop();
+                evictedResults.add(n, nScore);
+            }
+
+            worstApproximateInTopK = Float.POSITIVE_INFINITY;
+            popFromQueue = approximateResults;
+        } else {
+            worstApproximateInTopK = approximateResults.rerank(topK, scoreProvider.reranker(), rerankFloor, rerankedResults, evictedResults);
+            approximateResults.clear();
+            popFromQueue = rerankedResults;
+        }
+        // pop the top K results from the results queue, which has the worst candidates at the top
+        assert popFromQueue.size() <= topK;
+        var nodes = new SearchResult.NodeScore[popFromQueue.size()];
+        for (int i = nodes.length - 1; i >= 0; i--) {
+            var nScore = popFromQueue.topScore();
+            var n = popFromQueue.pop();
+            nodes[i] = new SearchResult.NodeScore(n, nScore);
+        }
+        // that should be everything
+        assert popFromQueue.size() == 0;
+
+        return new SearchResult(nodes, numVisited, worstApproximateInTopK);
     }
 
     /**
@@ -327,31 +375,8 @@ public class GraphSearcher implements Closeable {
      * SearchResult.visitedCount resets with each call to `search` or `resume`.
      */
     @Experimental
-    public SearchResult resume(int additionalK) {
-        return resume(additionalK, 0.0f, 0.0f);
-    }
-
-    /**
-     * Empty resultsQueue and rerank its contents, if necessary, and return them in sorted order.
-     */
-    private static SearchResult.NodeScore[] extractScores(SearchScoreProvider scoreProvider,
-                                                          NodeQueue resultsQueue,
-                                                          float rerankFloor)
-    {
-        SearchResult.NodeScore[] nodes;
-        if (scoreProvider.reranker() == null) {
-            nodes = new SearchResult.NodeScore[resultsQueue.size()];
-            for (int i = nodes.length - 1; i >= 0; i--) {
-                var nScore = resultsQueue.topScore();
-                var n = resultsQueue.pop();
-                nodes[i] = new SearchResult.NodeScore(n, nScore);
-            }
-        } else {
-            nodes = resultsQueue.nodesCopy(scoreProvider.reranker(), rerankFloor);
-            Arrays.sort(nodes, 0, nodes.length, Comparator.comparingDouble((SearchResult.NodeScore nodeScore) -> nodeScore.score).reversed());
-            resultsQueue.clear();
-        }
-        return nodes;
+    public SearchResult resume(int additionalK, int rerankK) {
+        return resume(0, additionalK, rerankK, 0.0f, 0.0f);
     }
 
     @Override
