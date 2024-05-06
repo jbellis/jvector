@@ -122,11 +122,7 @@ public class TestVectorGraph extends LuceneTestCase {
     }
 
     @Test
-    // build a random graph and check that resuming a search finds the same nodes as an equivalent from-search search
-    // this test is float-specific because random byte vectors are far more likely to have tied similarities,
-    // which throws off our assumption that resume picks back up with the same state that the original search
-    // left off in (because evictedResults from the first search may not end up in the same order in the
-    // candidates queue)
+    // build a random graph and check that resuming a search finds the same nodes as an equivalent from-scratch search
     public void testResume() {
         int size = 1000;
         int dim = 2;
@@ -144,7 +140,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var initial = searcher.search(ssp, initialTopK, acceptOrds);
         assertEquals(initialTopK, initial.getNodes().length);
 
-        var resumed = searcher.resume(resumeTopK);
+        var resumed = searcher.resume(resumeTopK, resumeTopK);
         assertEquals(resumeTopK, resumed.getNodes().length);
 
         var expected = searcher.search(ssp, initialTopK + resumeTopK, acceptOrds);

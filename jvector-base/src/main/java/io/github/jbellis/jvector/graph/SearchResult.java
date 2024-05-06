@@ -22,10 +22,12 @@ package io.github.jbellis.jvector.graph;
 public final class SearchResult {
     private final NodeScore[] nodes;
     private final int visitedCount;
+    private final float worstApproximateScoreInTopK;
 
-    public SearchResult(NodeScore[] nodes, int visitedCount) {
+    public SearchResult(NodeScore[] nodes, int visitedCount, float worstApproximateScoreInTopK) {
         this.nodes = nodes;
         this.visitedCount = visitedCount;
+        this.worstApproximateScoreInTopK = worstApproximateScoreInTopK;
     }
 
     /**
@@ -40,6 +42,15 @@ public final class SearchResult {
      */
     public int getVisitedCount() {
         return visitedCount;
+    }
+
+    /**
+     * @return the worst approximate score of the top K nodes in the search result.  Useful
+     * for passing to rerankFloor during search across multiple indexes.  Will be
+     * Float.POSITIVE_INFINITY if no reranking was performed or no results were found.
+     */
+    public float getWorstApproximateScoreInTopK() {
+        return worstApproximateScoreInTopK;
     }
 
     public static final class NodeScore {
