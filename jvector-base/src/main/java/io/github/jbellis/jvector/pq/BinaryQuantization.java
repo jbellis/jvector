@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -34,21 +33,28 @@ import java.util.stream.IntStream;
  * and similarity is computed with a simple Hamming distance.
  */
 public class BinaryQuantization implements VectorCompressor<long[]> {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    private final VectorFloat<?> globalCentroid;
+    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
 
-    public BinaryQuantization(VectorFloat<?> globalCentroid) {
-        this.globalCentroid = globalCentroid;
+    private final int dimension;
+
+    public BinaryQuantization(int dimension) {
+        this.dimension = dimension;
     }
 
+    /**
+     * Use BQ constructor instead
+     */
+    @Deprecated
     public static BinaryQuantization compute(RandomAccessVectorValues ravv) {
         return compute(ravv, ForkJoinPool.commonPool());
     }
 
+    /**
+     * Use BQ constructor instead
+     */
+    @Deprecated
     public static BinaryQuantization compute(RandomAccessVectorValues ravv, ForkJoinPool parallelExecutor) {
-        var vectors = ProductQuantization.extractTrainingVectors(ravv, parallelExecutor);
-        VectorFloat<?> globalCentroid = KMeansPlusPlusClusterer.centroidOf(vectors);
-        return new BinaryQuantization(globalCentroid);
+        return new BinaryQuantization(ravv.dimension());
     }
 
     @Override
@@ -72,18 +78,16 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
      */
     @Override
     public long[] encode(VectorFloat<?> v) {
-        var centered = VectorUtil.sub(v, globalCentroid);
-
-        int M = (int) Math.ceil(centered.length() / 64.0);
+        int M = (int) Math.ceil(v.length() / 64.0);
         long[] encoded = new long[M];
         for (int i = 0; i < M; i++) {
             long bits = 0;
             for (int j = 0; j < 64; j++) {
                 int idx = i * 64 + j;
-                if (idx >= centered.length()) {
+                if (idx >= v.length()) {
                     break;
                 }
-                if (centered.get(idx) > 0) {
+                if (v.get(idx) > 0) {
                     bits |= 1L << j;
                 }
             }
@@ -94,29 +98,33 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
 
     @Override
     public int compressorSize() {
-        return Integer.BYTES + globalCentroid.length() * Float.BYTES;
+        return Integer.BYTES + dimension * Float.BYTES;
     }
 
     @Override
     public int compressedVectorSize() {
-        int M = (int) Math.ceil(globalCentroid.length() / 64.0);
+        int M = (int) Math.ceil(dimension / 64.0);
         return Long.BYTES * M;
     }
 
     @Override
     public void write(DataOutput out, int version) throws IOException {
-        out.writeInt(globalCentroid.length());
-        vectorTypeSupport.writeFloatVector(out, globalCentroid);
+        out.writeInt(dimension);
+        // We used to record the center of the dataset but this actually degrades performance.
+        // Write a zero vector to maintain compatibility.
+        vts.writeFloatVector(out, vts.createFloatVector(dimension));
     }
 
     public int getOriginalDimension() {
-        return globalCentroid.length();
+        return dimension;
     }
 
     public static BinaryQuantization load(RandomAccessReader in) throws IOException {
-        int length = in.readInt();
-        var centroid = vectorTypeSupport.readFloatVector(in, length);
-        return new BinaryQuantization(centroid);
+        int dimension = in.readInt();
+        // We used to record the center of the dataset but this actually degrades performance.
+        // Read it and discard it.
+        vts.readFloatVector(in, dimension);
+        return new BinaryQuantization(dimension);
     }
 
     @Override
@@ -124,12 +132,12 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         BinaryQuantization that = (BinaryQuantization) o;
-        return Objects.equals(globalCentroid, that.globalCentroid);
+        return Objects.equals(dimension, that.dimension);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(globalCentroid);
+        return Objects.hashCode(dimension);
     }
 
     @Override

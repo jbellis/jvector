@@ -66,7 +66,7 @@ public abstract class CompressorParameters {
     public static class BQParameters extends CompressorParameters {
         @Override
         public VectorCompressor<?> computeCompressor(DataSet ds) {
-            return BinaryQuantization.compute(ds.getBaseRavv());
+            return new BinaryQuantization(ds.getDimension());
         }
     }
 

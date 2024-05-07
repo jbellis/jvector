@@ -250,36 +250,4 @@ public class TestProductQuantization extends RandomizedTest {
         var contents2 = Files.readAllBytes(fileOut.toPath());
         assertArrayEquals(contents1, contents2);
     }
-
-    @Test
-    public void testBqCentering() {
-        // vectors all in the top right quadrant of the unit circle
-        var R = ThreadLocalRandom.current();
-        var L = new ArrayList<VectorFloat<?>>();
-        for (int i = 0; i < 100; i++) {
-            var v = vectorTypeSupport.createFloatVector(new float[] {R.nextFloat(), R.nextFloat()});
-            VectorUtil.l2normalize(v);
-            L.add(v);
-        }
-
-        var bq = new BinaryQuantization(vectorTypeSupport.createFloatVector(2));
-        assertAllEqual(bq, L); // passes
-
-        var center = VectorUtil.sum(L);
-        VectorUtil.scale(center, 1.0f / L.size());
-        var bq2 = new BinaryQuantization(center);
-        assertAllEqual(bq2, L); // fails with about 5000 (half the pairs)
-    }
-
-    private static void assertAllEqual(BinaryQuantization bq, ArrayList<VectorFloat<?>> L) {
-        var compressed = bq.encodeAll(new ListRandomAccessVectorValues(L, 2));
-        var bqv = new BQVectors(bq, compressed);
-        float loss = 0;
-        for (int i = 0; i < 100; i++) {
-            for (int j = 0; j < 100; j++) {
-                loss += bqv.similarityBetween(bqv.get(i), bqv.get(j));
-            }
-        }
-        assertEquals(100 * 100, loss, 1E-6);
-    }
 }

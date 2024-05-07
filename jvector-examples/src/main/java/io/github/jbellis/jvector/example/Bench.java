@@ -51,7 +51,7 @@ public class Bench {
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
                 __ -> CompressorParameters.NONE,
-                // ds -> BinaryQuantization.compute(ds.getBaseRavv()),
+                // ds -> new CompressorParameters.BQParameters(),
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(

@@ -65,8 +65,8 @@ public class TestCompressedVectors extends RandomizedTest {
     public void testSaveLoadBQ() throws Exception {
         // Generate a PQ for random vectors
         var vectors = createRandomVectors(512, 64);
-        var ravv = new ListRandomAccessVectorValues(vectors, 2);
-        var bq = BinaryQuantization.compute(ravv);
+        var ravv = new ListRandomAccessVectorValues(vectors, 64);
+        var bq = new BinaryQuantization(ravv.dimension());
 
         // Compress the vectors
         var compressed = bq.encodeAll(ravv);

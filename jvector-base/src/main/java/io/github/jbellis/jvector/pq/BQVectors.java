@@ -96,6 +96,10 @@ public class BQVectors implements CompressedVectors {
         return scoreFunctionFor(q, similarityFunction);
     }
 
+    /**
+     * Note that `similarityFunction` is ignored, you always get Hamming distance similarity with BQ, which
+     * is a useful approximation for cosine distance and not really anything else.
+     */
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         var qBQ = bq.encode(q);

@@ -73,6 +73,8 @@ If you only read one thing, read this!
 ## Other changes to public classes
 - `FixedBitSet.nextSetBit` behaves as expected
 - Removed vestigal references to node level in several places that were left over from old HNSW code
+- Centering of binary quantization makes things worse, not better, and has been removed.  Saved BQ and BQVectors
+  that have centering data will ignore it on load.
 
 # Upgrading from 1.0.x to 2.0.x
 
