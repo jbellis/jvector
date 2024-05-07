@@ -101,8 +101,12 @@ public class BQVectors implements CompressedVectors {
         var qBQ = bq.encode(q);
         return node2 -> {
             var vBQ = compressedVectors[node2];
-            return 1 - (float) VectorUtil.hammingDistance(qBQ, vBQ) / q.length();
+            return similarityBetween(qBQ, vBQ);
         };
+    }
+
+    public float similarityBetween(long[] encoded1, long[] encoded2) {
+        return 1 - (float) VectorUtil.hammingDistance(encoded1, encoded2) / bq.getOriginalDimension();
     }
 
     public long[] get(int i) {
