@@ -233,6 +233,34 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     }
 
     @Test
+    public void testV0WriteIncremental() throws IOException {
+        var fileIn = new File("resources/version0.odgi");
+        var fileOut = File.createTempFile("version0", ".odgi");
+
+        try (var smr = new SimpleMappedReader(fileIn.getAbsolutePath());
+             var graph = OnDiskGraphIndex.load(smr::duplicate);
+             var view = graph.getView())
+        {
+            try (var writer = new OnDiskGraphIndexWriter.Builder(graph, fileOut.toPath())
+                    .withVersion(2)
+                    .with(new InlineVectors(graph.dimension))
+                    .build())
+            {
+                for (int i = 0; i < view.size(); i++) {
+                    var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(view.getVector(i)));
+                    writer.writeInline(i, state);
+                }
+                writer.write(Map.of());
+            }
+        }
+
+        // check that the contents match
+        var contents1 = Files.readAllBytes(fileIn.toPath());
+        var contents2 = Files.readAllBytes(fileOut.toPath());
+        assertArrayEquals(contents1, contents2);
+    }
+
+    @Test
     public void testIncrementalWrites() throws IOException {
         // generate 1000 node random graph
         var graph = new TestUtil.RandomlyConnectedGraphIndex(1000, 32, getRandom());
@@ -243,12 +271,15 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("bulk_graph");
         OnDiskGraphIndex.write(graph, ravv, outputPath);
 
+        // TODO add test of incremental and all-at-once that verifies byte-for-byte
+
         var incrementalOutputPath = testDirectory.resolve("incremental_graph");
         var pq = ProductQuantization.compute(ravv, 64, 256, false);
         var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(ravv));
         try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalOutputPath)
                 .with(new InlineVectors(ravv.dimension()))
-                .with(new FusedADC(graph.maxDegree(), pq)).build())
+                .with(new FusedADC(graph.maxDegree(), pq))
+                .build())
         {
             // write inline vectors incrementally
             for (int i = 0; i < 1000; i++) {
@@ -262,12 +293,14 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             throw new RuntimeException(e);
         }
 
+        // graph and vectors should be identical
         try (var bulkMarr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
              var bulkGraph = OnDiskGraphIndex.load(bulkMarr::duplicate);
              var incrementalMarr = new SimpleMappedReader(incrementalOutputPath.toAbsolutePath().toString());
              var incrementalGraph = OnDiskGraphIndex.load(incrementalMarr::duplicate);
              var incrementalView = incrementalGraph.getView())
         {
+            assertTrue(OnDiskGraphIndex.areHeadersEqual(incrementalGraph, bulkGraph));
             TestUtil.assertGraphEquals(incrementalGraph, bulkGraph); // incremental and bulk graph should have same structure
             validateVectors(incrementalView, ravv); // inline vectors should be the same
         } catch (Exception e) {

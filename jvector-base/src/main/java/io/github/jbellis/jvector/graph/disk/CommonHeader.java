@@ -41,6 +41,7 @@ class CommonHeader {
 
     void write(DataOutput out) throws IOException {
         if (version >= 3) {
+            out.writeInt(OnDiskGraphIndex.MAGIC);
             out.writeInt(version);
         }
         out.writeInt(size);
@@ -50,8 +51,16 @@ class CommonHeader {
     }
 
     static CommonHeader load(RandomAccessReader reader) throws IOException {
-        int version = reader.readInt();
-        int size = reader.readInt();
+        int maybeMagic = reader.readInt();
+        int version;
+        int size;
+        if (maybeMagic == OnDiskGraphIndex.MAGIC) {
+            version = reader.readInt();
+            size = reader.readInt();
+        } else {
+            version = 2;
+            size = maybeMagic;
+        }
         int dimension = reader.readInt();
         int entryNode = reader.readInt();
         int maxDegree = reader.readInt();
@@ -59,7 +68,7 @@ class CommonHeader {
         return new CommonHeader(version, size, dimension, entryNode, maxDegree);
     }
 
-    static int size() {
-        return 5 * Integer.BYTES;
+    int size() {
+        return ((version >= 3 ? 2 : 0) + 4) * Integer.BYTES;
     }
 }

@@ -52,6 +52,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     private final EnumMap<FeatureId, Feature> featureMap;
     private final BufferedRandomAccessWriter out;
     private final long startOffset;
+    private final int headerSize;
     private volatile int maxOrdinalWritten;
 
     private OnDiskGraphIndexWriter(Path outPath,
@@ -72,6 +73,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
         this.featureMap = features;
         this.out = new BufferedRandomAccessWriter(outPath);
         this.startOffset = startOffset;
+
+        // create a mock Header to determine the correct size
+        var ch = new CommonHeader(version, 0, dimension, view.entryNode(), graph.maxDegree());
+        var placeholderHeader = new Header(ch, featureMap);
+        this.headerSize = placeholderHeader.size();
     }
 
     @Override
@@ -90,10 +96,9 @@ public class OnDiskGraphIndexWriter implements Closeable {
      */
     public synchronized void writeInline(int ordinal, Map<FeatureId, Feature.State> stateMap) throws IOException
     {
-        var features = featureMap.values();
-        out.seek(getOffsetForOrdinal(ordinal, features));
+        out.seek(featureOffsetForOrdinal(ordinal));
 
-        for (var feature : features) {
+        for (var feature : featureMap.values()) {
             var state = stateMap.get(feature.id());
             if (state == null) {
                 out.seek(out.position() + feature.inlineSize());
@@ -109,14 +114,13 @@ public class OnDiskGraphIndexWriter implements Closeable {
         return maxOrdinalWritten;
     }
 
-    private long getOffsetForOrdinal(int ordinal, Collection<Feature> features) {
-        int headerBytes = Integer.BYTES // MAGIC
-                + Integer.BYTES // featureid bitset
-                + CommonHeader.size()
-                + features.stream().mapToInt(Feature::headerSize).sum();
+    private long featureOffsetForOrdinal(int ordinal) {
         int edgeSize = Integer.BYTES * (1 + graph.maxDegree());
-        int inlineBytes = ordinal * (Integer.BYTES + features.stream().mapToInt(Feature::inlineSize).sum() + edgeSize);
-        return startOffset + headerBytes + inlineBytes + Integer.BYTES;
+        int inlineBytes = ordinal * (Integer.BYTES + featureMap.values().stream().mapToInt(Feature::inlineSize).sum() + edgeSize);
+        return startOffset
+                + headerSize
+                + inlineBytes // previous nodes
+                + Integer.BYTES; // the ordinal of the node whose features we're about to write
     }
 
     @SuppressWarnings("resource")
@@ -152,9 +156,8 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 }
 
                 // read the feature
-                var features = featureMap.values();
-                in.seek(getOffsetForOrdinal(ordinal, features));
-                for (var feature : features) {
+                in.seek(featureOffsetForOrdinal(ordinal));
+                for (var feature : featureMap.values()) {
                     var featureSize = feature.inlineSize();
                     if (feature.id() != featureId) {
                         in.seek(in.getFilePointer() + featureSize);
@@ -199,8 +202,9 @@ public class OnDiskGraphIndexWriter implements Closeable {
         var commonHeader = new CommonHeader(version, graphSize, dimension, view.entryNode(), graph.maxDegree());
         var header = new Header(commonHeader, featureMap);
         header.write(out);
+        assert out.position() == startOffset + headerSize : String.format("%d != %d", out.position(), startOffset + headerSize);
 
-        // for each graph node, write the associated vector and its neighbors
+        // for each graph node, write the associated features, followed by its neighbors
         for (int newOrdinal = 0; newOrdinal < graphSize; newOrdinal++) {
             var originalOrdinal = ordinalMapper.newToOld(newOrdinal);
             if (!graph.containsNode(originalOrdinal)) {
@@ -209,6 +213,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             }
 
             out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
+            assert out.position() == featureOffsetForOrdinal(newOrdinal) : String.format("%d != %d", out.position(), featureOffsetForOrdinal(newOrdinal));
             for (var feature : featureMap.values()) {
                 var supplier = featureStateSuppliers.get(feature.id());
                 if (supplier == null) {
