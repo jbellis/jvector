@@ -268,35 +268,52 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var ravv = new ListRandomAccessVectorValues(vectors, 256);
 
         // write out graph all at once
-        var outputPath = testDirectory.resolve("bulk_graph");
-        OnDiskGraphIndex.write(graph, ravv, outputPath);
+        var bulkPath = testDirectory.resolve("bulk_graph");
+        OnDiskGraphIndex.write(graph, ravv, bulkPath);
 
-        // TODO add test of incremental and all-at-once that verifies byte-for-byte
+        // write incrementally
+        var incrementalPath = testDirectory.resolve("bulk_graph");
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalPath)
+                .with(new InlineVectors(ravv.dimension()))
+                .build())
+        {
+            // write inline vectors incrementally
+            for (int i = 0; i < vectors.size(); i++) {
+                var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i)));
+                writer.writeInline(i, state);
+            }
+            // write graph structure
+            writer.write(Map.of());
+        }
 
-        var incrementalOutputPath = testDirectory.resolve("incremental_graph");
+        // all-at-once and incremental builds should be identical on disk
+        var bulkContents = Files.readAllBytes(bulkPath);
+        var incrementalContents = Files.readAllBytes(incrementalPath);
+        assertArrayEquals(bulkContents, incrementalContents);
+
+        // write incrementally and add Fused ADC Feature
+        var incrementalFadcPath = testDirectory.resolve("incremental_graph");
         var pq = ProductQuantization.compute(ravv, 64, 256, false);
         var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(ravv));
-        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalOutputPath)
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalFadcPath)
                 .with(new InlineVectors(ravv.dimension()))
                 .with(new FusedADC(graph.maxDegree(), pq))
                 .build())
         {
             // write inline vectors incrementally
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i < vectors.size(); i++) {
                 var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i)));
                 writer.writeInline(i, state);
             }
             // write graph structure, fused ADC
             writer.write(Feature.singleStateFactory(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i)));
             writer.write(Map.of());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
 
         // graph and vectors should be identical
-        try (var bulkMarr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+        try (var bulkMarr = new SimpleMappedReader(bulkPath.toAbsolutePath().toString());
              var bulkGraph = OnDiskGraphIndex.load(bulkMarr::duplicate);
-             var incrementalMarr = new SimpleMappedReader(incrementalOutputPath.toAbsolutePath().toString());
+             var incrementalMarr = new SimpleMappedReader(incrementalFadcPath.toAbsolutePath().toString());
              var incrementalGraph = OnDiskGraphIndex.load(incrementalMarr::duplicate);
              var incrementalView = incrementalGraph.getView())
         {
