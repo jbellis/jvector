@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
@@ -86,8 +87,8 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
      */
     public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
-            var info = Header.load(reader, offset);
-            return new OnDiskGraphIndex(readerSupplier, info, reader.getPosition());
+            var header = Header.load(reader, offset);
+            return new OnDiskGraphIndex(readerSupplier, header, reader.getPosition());
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
@@ -296,5 +297,14 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                                                        nodeId -> new InlineVectors.State(vectors.getVector(nodeId)));
             writer.write(suppliers);
         }
+    }
+
+    @VisibleForTesting
+    static boolean areHeadersEqual(OnDiskGraphIndex g1, OnDiskGraphIndex g2) {
+        return g1.version == g2.version &&
+               g1.size == g2.size &&
+               g1.maxDegree == g2.maxDegree &&
+               g1.dimension == g2.dimension &&
+               g1.entryNode == g2.entryNode;
     }
 }

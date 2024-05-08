@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
+import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 
 import java.io.DataOutput;
@@ -36,10 +37,6 @@ class Header {
     }
 
     void write(DataOutput out) throws IOException {
-        if (common.version >= 3) {
-            out.writeInt(OnDiskGraphIndex.MAGIC);
-        }
-
         common.write(out);
 
         if (common.version >= 3) {
@@ -52,26 +49,28 @@ class Header {
         }
     }
 
+    public int size() {
+        int size = common.size();
+
+        if (common.version >= 3) {
+            size += Integer.BYTES;
+        }
+
+        size += features.values().stream().mapToInt(Feature::headerSize).sum();
+
+        return size;
+    }
+
     static Header load(RandomAccessReader reader, long offset) throws IOException {
         reader.seek(offset);
-        int maybeMagic = reader.readInt();
-        int version;
+
         EnumSet<FeatureId> featureIds;
         EnumMap<FeatureId, Feature> features = new EnumMap<>(FeatureId.class);
-        CommonHeader common;
-
-        if (maybeMagic != OnDiskGraphIndex.MAGIC) {
-            // old format ODGI (DiskANN-style graph with inline full vectors)
-            // maybeMagic contains size
-            version = 0;
-            featureIds = EnumSet.of(FeatureId.INLINE_VECTORS);
-            int dimension = reader.readInt();
-            int entryNode = reader.readInt();
-            int maxDegree = reader.readInt();
-            common = new CommonHeader(version, maybeMagic, dimension, entryNode, maxDegree);
-        } else {
-            common = CommonHeader.load(reader);
+        CommonHeader common = CommonHeader.load(reader);
+        if (common.version >= 3) {
             featureIds = FeatureId.deserialize(reader.readInt());
+        } else {
+            featureIds = EnumSet.of(FeatureId.INLINE_VECTORS);
         }
 
         for (FeatureId featureId : featureIds) {
