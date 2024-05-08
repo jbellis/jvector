@@ -213,8 +213,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 var supplier = featureStateSuppliers.get(feature.id());
                 if (supplier == null) {
                     out.seek(out.position() + feature.inlineSize());
-                }
-                else {
+                } else {
                     feature.writeInline(out, supplier.apply(originalOrdinal));
                 }
             }

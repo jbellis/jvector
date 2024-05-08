@@ -197,7 +197,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(32, onDiskGraph.maxDegree);
-            assertEquals(0, onDiskGraph.version);
+            assertEquals(2, onDiskGraph.version);
             assertEquals(100_000, onDiskGraph.size);
             assertEquals(2, onDiskGraph.dimension);
             assertEquals(99779, onDiskGraph.entryNode);
@@ -255,10 +255,9 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
                 var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i)));
                 writer.writeInline(i, state);
             }
-            var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
-            suppliers.put(FeatureId.INLINE_VECTORS, null);
-            suppliers.put(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i));
-            writer.write(suppliers); // write graph structure, fused ADC
+            // write graph structure, fused ADC
+            writer.write(Feature.singleStateFactory(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i)));
+            writer.write(Map.of());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

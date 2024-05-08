@@ -86,8 +86,8 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
      */
     public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
-            var info = Header.load(reader, offset);
-            return new OnDiskGraphIndex(readerSupplier, info, reader.getPosition());
+            var header = Header.load(reader, offset);
+            return new OnDiskGraphIndex(readerSupplier, header, reader.getPosition());
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
         }
