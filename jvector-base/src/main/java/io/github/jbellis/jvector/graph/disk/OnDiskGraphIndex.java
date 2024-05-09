@@ -105,6 +105,10 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return features.keySet();
     }
 
+    public int getDimension() {
+        return dimension;
+    }
+
     @Override
     public int size() {
         return size;
