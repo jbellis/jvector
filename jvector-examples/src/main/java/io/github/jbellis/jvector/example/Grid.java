@@ -430,9 +430,9 @@ public class Grid {
 
             var scoringView = (GraphIndex.ScoringView) view;
             ScoreFunction.ApproximateScoreFunction asf;
-            try {
+            if (index instanceof OnDiskGraphIndex && ((OnDiskGraphIndex) index).getFeatureSet().contains(FeatureId.FUSED_ADC)) {
                 asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-            } catch (UnsupportedOperationException e) {
+            } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
             var rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);

@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.IntFunction;
 
 /**
@@ -78,6 +79,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
         var ch = new CommonHeader(version, 0, dimension, view.entryNode(), graph.maxDegree());
         var placeholderHeader = new Header(ch, featureMap);
         this.headerSize = placeholderHeader.size();
+    }
+
+    public Set<FeatureId> getFeatureSet() {
+        return featureMap.keySet();
     }
 
     @Override
