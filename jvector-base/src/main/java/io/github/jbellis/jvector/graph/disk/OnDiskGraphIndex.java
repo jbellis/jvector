@@ -101,6 +101,10 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return load(readerSupplier, 0);
     }
 
+    public Set<FeatureId> getFeatureSet() {
+        return features.keySet();
+    }
+
     @Override
     public int size() {
         return size;
@@ -263,17 +267,13 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             return rerankerFor(queryVector, vsf, FeatureId.ALL);
         }
 
-        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
-            if (permissibleFeatures.contains(FeatureId.FUSED_ADC) && features.containsKey(FeatureId.FUSED_ADC)) {
+        @Override
+        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            if (features.containsKey(FeatureId.FUSED_ADC)) {
                 return ((FusedADC) features.get(FeatureId.FUSED_ADC)).approximateScoreFunctionFor(queryVector, vsf, this, rerankerFor(queryVector, vsf));
             } else {
                 throw new UnsupportedOperationException("No approximate score function available for this graph");
             }
-        }
-
-        @Override
-        public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
-            return approximateScoreFunctionFor(queryVector, vsf, FeatureId.ALL);
         }
     }
 
