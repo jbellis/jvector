@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -49,7 +50,7 @@ import static java.lang.Math.sqrt;
  * Product Quantization for float vectors.  Supports arbitrary source and target dimensionality;
  * in particular, the source does not need to be evenly divisible by the target.
  */
-public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
+public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, Accountable {
     private static final int MAGIC = 0x75EC4012; // JVECTOR, with some imagination
 
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
@@ -685,7 +686,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>> {
         return codebooks.length;
     }
 
-    public long memorySize() {
+    @Override
+    public long ramBytesUsed() {
         long size = 0;
         for (VectorFloat<?> codebook : codebooks) {
             size += codebook.ramBytesUsed();

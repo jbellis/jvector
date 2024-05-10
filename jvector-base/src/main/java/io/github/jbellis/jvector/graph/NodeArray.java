@@ -27,6 +27,7 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.util.ArrayUtil;
 import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.agrona.collections.IntHashSet;
 
 import java.util.Arrays;
@@ -285,6 +286,18 @@ public class NodeArray {
             else start = mid + 1;
         }
         return start;
+    }
+
+    public static long ramBytesUsed(int size) {
+        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        int AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+
+        return OH_BYTES
+                + Integer.BYTES // size field
+                + REF_BYTES + AH_BYTES // nodes array
+                + REF_BYTES + AH_BYTES // scores array
+                + (long) size * (Integer.BYTES + Float.BYTES); // array contents
     }
 
     /**

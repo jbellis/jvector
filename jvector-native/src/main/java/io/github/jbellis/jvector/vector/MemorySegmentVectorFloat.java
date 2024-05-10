@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.lang.foreign.MemorySegment;
@@ -44,7 +45,9 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     @Override
     public long ramBytesUsed()
     {
-        return segment.byteSize();
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        return OH_BYTES + REF_BYTES + segment.byteSize();
     }
 
     @Override

@@ -219,13 +219,14 @@ public class PQVectors implements CompressedVectors {
 
     @Override
     public long ramBytesUsed() {
-        long codebooksSize = pq.memorySize();
-        if (compressedVectors.isEmpty()) {
-            return codebooksSize;
-        }
+        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        int AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
 
-        long compressedVectorSize = RamUsageEstimator.sizeOf(compressedVectors.get(0));
-        return codebooksSize + (compressedVectorSize * compressedVectors.size());
+        long codebooksSize = pq.ramBytesUsed();
+        long listSize = (long) REF_BYTES * (1 + compressedVectors.size());
+        long dataSize = (long) (OH_BYTES + AH_BYTES + pq.compressedVectorSize()) * compressedVectors.size();
+        return codebooksSize + listSize + dataSize;
     }
 
     @Override
