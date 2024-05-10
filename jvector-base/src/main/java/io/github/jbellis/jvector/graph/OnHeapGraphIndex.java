@@ -53,11 +53,13 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     // max neighbors/edges per node
     final int maxDegree;
+    private final int maxOverflowDegree;
     private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
 
-    OnHeapGraphIndex(int M, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
-        this.neighborFactory = neighborFactory;
+    OnHeapGraphIndex(int M, int maxOverflowDegree, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
         this.maxDegree = M;
+        this.maxOverflowDegree = maxOverflowDegree;
+        this.neighborFactory = neighborFactory;
         this.nodes = new DenseIntMap<>(1024);
     }
 
@@ -146,13 +148,13 @@ public class OnHeapGraphIndex implements GraphIndex {
     public long ramBytesUsed() {
         // the main graph structure
         long total = (long) size() * RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        long neighborSize = neighborsRamUsed(maxDegree()) * size();
+        long neighborSize = neighborsRamUsed(maxOverflowDegree) * size();
         return total + neighborSize + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
     }
 
     public long ramBytesUsedOneNode() {
         var graphBytesUsed =
-                neighborsRamUsed(maxDegree());
+                neighborsRamUsed(maxOverflowDegree);
         var clockBytesUsed = Integer.BYTES;
         return graphBytesUsed + clockBytesUsed;
     }

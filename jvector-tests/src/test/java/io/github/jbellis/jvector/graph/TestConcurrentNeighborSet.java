@@ -102,7 +102,7 @@ public class TestConcurrentNeighborSet extends RandomizedTest {
     var cna2 = new NodeArray(1);
     cna2.addInOrder(8, scoreBetween(bsp, 7, 6));
 
-    var neighbors = new ConcurrentNeighborSet(7, 3, bsp, 1.0f, cna);
+    var neighbors = new ConcurrentNeighborSet(7, 3, 3, bsp, 1.0f, cna);
     neighbors.insertDiverse(cna2);
     assertEquals(2, neighbors.size());
   }
