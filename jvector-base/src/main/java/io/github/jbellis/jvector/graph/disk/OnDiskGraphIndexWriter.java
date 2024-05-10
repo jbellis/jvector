@@ -121,7 +121,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
 
     private long featureOffsetForOrdinal(int ordinal) {
         int edgeSize = Integer.BYTES * (1 + graph.maxDegree());
-        int inlineBytes = ordinal * (Integer.BYTES + featureMap.values().stream().mapToInt(Feature::inlineSize).sum() + edgeSize);
+        long inlineBytes = ordinal * (long) (Integer.BYTES + featureMap.values().stream().mapToInt(Feature::inlineSize).sum() + edgeSize);
         return startOffset
                 + headerSize
                 + inlineBytes // previous nodes
