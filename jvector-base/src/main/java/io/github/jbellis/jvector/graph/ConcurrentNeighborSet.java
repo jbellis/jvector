@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.BitSet;
@@ -51,28 +52,33 @@ public class ConcurrentNeighborSet {
     /** used to compute diversity */
     private final BuildScoreProvider scoreProvider;
 
-    /** the maximum number of neighbors we can store */
+    /** the maximum number of neighbors we will end up with */
     private final int maxDegree;
+    /** the maximum number of neighbors we can have temporarily during construction */
+    private final int maxOverflowDegree;
 
-    /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
+    /** the proportion of edges that are diverse at alpha=1.0.  updated by retainDiverseInternal */
     private float shortEdges = Float.NaN;
 
+    @VisibleForTesting
     public ConcurrentNeighborSet(int nodeId, int maxDegree, BuildScoreProvider scoreProvider) {
-        this(nodeId, maxDegree, scoreProvider, 1.0f);
+        this(nodeId, maxDegree, maxDegree, scoreProvider, 1.0f);
     }
 
-    public ConcurrentNeighborSet(int nodeId, int maxDegree, BuildScoreProvider scoreProvider, float alpha) {
-        this(nodeId, maxDegree, scoreProvider, alpha, new NodeArray(maxDegree));
+    public ConcurrentNeighborSet(int nodeId, int maxDegree, int maxOverflowDegree, BuildScoreProvider scoreProvider, float alpha) {
+        this(nodeId, maxDegree, maxOverflowDegree, scoreProvider, alpha, new NodeArray(maxOverflowDegree + 1));
     }
 
     ConcurrentNeighborSet(int nodeId,
                           int maxDegree,
+                          int maxOverflowDegree,
                           BuildScoreProvider scoreProvider,
                           float alpha,
                           NodeArray nodes)
     {
         this.nodeId = nodeId;
         this.maxDegree = maxDegree;
+        this.maxOverflowDegree = maxOverflowDegree;
         this.scoreProvider = scoreProvider;
         this.alpha = alpha;
         this.neighborsRef = new AtomicReference<>(new Neighbors(nodes, 0));
@@ -108,8 +114,12 @@ public class ConcurrentNeighborSet {
      */
     public void enforceDegree() {
         neighborsRef.getAndUpdate(old -> {
-            var nodes = removeAllNonDiverse(old.nodes, old.diverseBefore);
-            return new Neighbors(nodes, nodes.size);
+            if (old.nodes.size <= maxDegree) {
+                return old;
+            }
+            var nextNodes = old.nodes.copy();
+            retainDiverse(nextNodes, old.diverseBefore, true);
+            return new Neighbors(nextNodes, nextNodes.size);
         });
     }
 
@@ -179,10 +189,13 @@ public class ConcurrentNeighborSet {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
                 retainDiverse(merged, 0, scoreProvider.isExact());
             }
-            return new Neighbors(merged, merged.size);
+            // insertDiverse usually gets called with a LOT of candidates, so trim down the resulting NodeArray
+            var nextNodes = merged.node.length <= nodeArrayLength() ? merged : merged.copy(nodeArrayLength());
+            return new Neighbors(nextNodes, nextNodes.size);
         });
     }
 
+    // does not modify `old` or `toMerge`
     private NodeArray rescoreAndRetainDiverse(NodeArray old, NodeArray toMerge) {
         NodeArray merged;
         if (scoreProvider.isExact()) {
@@ -199,6 +212,11 @@ public class ConcurrentNeighborSet {
         return merged;
     }
 
+    private int nodeArrayLength() {
+        // one extra so that insert() against a full NodeArray doesn't invoke growArrays()
+        return maxOverflowDegree + 1;
+    }
+
     private NodeArray computeApproximatelyScored(NodeArray exact) {
         var approximated = new NodeArray(exact.size);
         var sf = scoreProvider.diversityProvider().createFor(nodeId).scoreFunction();
@@ -211,7 +229,8 @@ public class ConcurrentNeighborSet {
 
     void insertNotDiverse(int node, float score) {
         neighborsRef.getAndUpdate(old -> {
-            NodeArray nextNodes = old.nodes.copy();
+            assert old.nodes.size <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
+            NodeArray nextNodes = old.nodes.copy(maxDegree);
             // remove the worst edge to make room for the new one, if necessary
             nextNodes.size = min(nextNodes.size, maxDegree - 1);
             int insertedAt = nextNodes.insertSorted(node, score);
@@ -309,15 +328,6 @@ public class ConcurrentNeighborSet {
         return true;
     }
 
-    private NodeArray removeAllNonDiverse(NodeArray neighbors, int diverseBefore) {
-        if (neighbors.size <= maxDegree) {
-            return neighbors;
-        }
-        var copy = neighbors.copy();
-        retainDiverse(copy, diverseBefore, true);
-        return copy;
-    }
-
     NodeArray getCurrent() {
         return neighborsRef.get().nodes;
     }
@@ -328,8 +338,12 @@ public class ConcurrentNeighborSet {
      */
     public void insert(int neighborId, float score, float overflow) {
         assert neighborId != nodeId : "can't add self as neighbor at node " + nodeId;
+
+        int hardMax = (int) (overflow * maxDegree);
+        assert hardMax <= maxOverflowDegree : String.format("overflow %s could exceed max overflow degree %d", overflow, maxOverflowDegree);
+
         neighborsRef.getAndUpdate(old -> {
-            NodeArray nextNodes = old.nodes.copy();
+            NodeArray nextNodes = old.nodes.copy(nodeArrayLength());
             int insertionPoint = nextNodes.insertSorted(neighborId, score);
             if (insertionPoint == -1) {
                 return old;
@@ -338,9 +352,8 @@ public class ConcurrentNeighborSet {
             // batch up the enforcement of the max connection limit, since otherwise
             // we do a lot of duplicate work scanning nodes that we won't remove
             int nextDiverseBefore = min(insertionPoint, old.diverseBefore);
-            var hardMax = overflow * maxDegree;
             if (nextNodes.size > hardMax) {
-                nextNodes = removeAllNonDiverse(nextNodes, nextDiverseBefore);
+                retainDiverse(nextNodes, nextDiverseBefore, true);
                 nextDiverseBefore = nextNodes.size;
             }
 

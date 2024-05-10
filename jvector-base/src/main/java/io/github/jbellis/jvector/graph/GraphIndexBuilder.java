@@ -168,7 +168,8 @@ public class GraphIndexBuilder implements Closeable {
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
 
-        this.graph = new OnHeapGraphIndex(M, (node, m) -> new ConcurrentNeighborSet(node, m, this.scoreProvider, alpha));
+        int maxOverflowDegree = (int) (M * neighborOverflow);
+        this.graph = new OnHeapGraphIndex(M, maxOverflowDegree, (node, m) -> new ConcurrentNeighborSet(node, m, maxOverflowDegree, this.scoreProvider, alpha));
         this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph));
 
         // in scratch we store candidates in reverse order: worse candidates are first
@@ -725,7 +726,12 @@ public class GraphIndexBuilder implements Closeable {
                 int neighbor = in.readInt();
                 ca.addInOrder(neighbor, sf.similarityTo(neighbor));
             }
-            graph.addNode(node, new ConcurrentNeighborSet(node, maxDegree, scoreProvider, alpha, ca));
+            graph.addNode(node, new ConcurrentNeighborSet(node,
+                                                          maxDegree,
+                                                          (int) (maxDegree * neighborOverflow),
+                                                          scoreProvider,
+                                                          alpha,
+                                                          ca));
         }
 
         graph.updateEntryNode(entryNode);

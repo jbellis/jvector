@@ -222,7 +222,15 @@ public class NodeArray {
     }
 
     public NodeArray copy() {
-        NodeArray copy = new NodeArray(node.length);
+        return copy(size);
+    }
+
+    public NodeArray copy(int newSize) {
+        if (size > newSize) {
+            throw new IllegalArgumentException("Cannot copy to a smaller size");
+        }
+
+        NodeArray copy = new NodeArray(newSize);
         copy.size = size;
         System.arraycopy(node, 0, copy.node, 0, size);
         System.arraycopy(score, 0, copy.score, 0, size);
