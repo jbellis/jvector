@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 
 import java.lang.foreign.MemoryLayout;
@@ -50,7 +51,9 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
 
     @Override
     public long ramBytesUsed() {
-        return MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_BYTE).byteSize();
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        return OH_BYTES + REF_BYTES + Integer.BYTES + MemoryLayout.sequenceLayout(length, ValueLayout.JAVA_BYTE).byteSize();
     }
 
     @Override

@@ -146,32 +146,18 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     @Override
     public long ramBytesUsed() {
-        // the main graph structure
-        long total = (long) size() * RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        long neighborSize = neighborsRamUsed(maxOverflowDegree) * size();
-        return total + neighborSize + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        var REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        var AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
+
+        long neighborSize = ramBytesUsedOneNode() * size();
+        return OH_BYTES + REF_BYTES * 2L + AH_BYTES + neighborSize;
     }
 
     public long ramBytesUsedOneNode() {
-        var graphBytesUsed =
-                neighborsRamUsed(maxOverflowDegree);
-        var clockBytesUsed = Integer.BYTES;
-        return graphBytesUsed + clockBytesUsed;
-    }
-
-    private static long neighborsRamUsed(int count) {
-        long REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        long AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
-        long neighborSetBytes =
-                REF_BYTES // atomicreference
-                        + Integer.BYTES
-                        + Integer.BYTES
-                        + REF_BYTES // NeighborArray
-                        + AH_BYTES * 2 // NeighborArray internals
-                        + REF_BYTES * 2
-                        + Integer.BYTES
-                        + 1;
-        return neighborSetBytes + (long) count * (Integer.BYTES + Float.BYTES);
+        // we include the REF_BYTES for the CNS reference here to make it self-contained for addGraphNode()
+        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        return REF_BYTES + ConcurrentNeighborSet.ramBytesUsed(maxOverflowDegree + 1);
     }
 
 

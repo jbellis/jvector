@@ -74,7 +74,8 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
 
     @Override
     public long ramBytesUsed() {
-        return RamUsageEstimator.sizeOf(data) + RamUsageEstimator.shallowSizeOfInstance(ByteSequence.class);
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        return OH_BYTES + RamUsageEstimator.sizeOf(data);
     }
 
     @Override

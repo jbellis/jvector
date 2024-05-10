@@ -81,7 +81,8 @@ final public class ArrayVectorFloat implements VectorFloat<float[]>
     @Override
     public long ramBytesUsed()
     {
-        return RamUsageEstimator.sizeOf(data) + RamUsageEstimator.shallowSizeOfInstance(ArrayVectorFloat.class);
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        return OH_BYTES + RamUsageEstimator.sizeOf(data);
     }
 
     @Override

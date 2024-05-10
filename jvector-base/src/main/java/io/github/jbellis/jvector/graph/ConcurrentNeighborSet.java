@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
@@ -359,6 +360,22 @@ public class ConcurrentNeighborSet {
 
             return new Neighbors(nextNodes, nextDiverseBefore);
         });
+    }
+
+    public static long ramBytesUsed(int nodes) {
+        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
+        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+        int AREF_BYTES = OH_BYTES + 2 * REF_BYTES;
+
+        return OH_BYTES
+                + REF_BYTES + AREF_BYTES // Neighbors AtomicReference
+                + OH_BYTES + REF_BYTES + Integer.BYTES // Neighbors
+                + NodeArray.ramBytesUsed(nodes) // NodeArray
+                + Float.BYTES // alpha
+                + REF_BYTES // BSP
+                + Integer.BYTES // maxDegree
+                + Integer.BYTES // maxOverflowDegree
+                + Float.BYTES; // shortEdges
     }
 
     /** Only for testing; this is a linear search */
