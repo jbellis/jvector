@@ -52,27 +52,27 @@ public class ConcurrentNeighborSet {
     private final BuildScoreProvider scoreProvider;
 
     /** the maximum number of neighbors we can store */
-    private final int maxConnections;
+    private final int maxDegree;
 
     /** the proportion of edges that are diverse at alpha=1.0.  updated by removeAllNonDiverse */
     private float shortEdges = Float.NaN;
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, BuildScoreProvider scoreProvider) {
-        this(nodeId, maxConnections, scoreProvider, 1.0f);
+    public ConcurrentNeighborSet(int nodeId, int maxDegree, BuildScoreProvider scoreProvider) {
+        this(nodeId, maxDegree, scoreProvider, 1.0f);
     }
 
-    public ConcurrentNeighborSet(int nodeId, int maxConnections, BuildScoreProvider scoreProvider, float alpha) {
-        this(nodeId, maxConnections, scoreProvider, alpha, new NodeArray(maxConnections));
+    public ConcurrentNeighborSet(int nodeId, int maxDegree, BuildScoreProvider scoreProvider, float alpha) {
+        this(nodeId, maxDegree, scoreProvider, alpha, new NodeArray(maxDegree));
     }
 
     ConcurrentNeighborSet(int nodeId,
-                          int maxConnections,
+                          int maxDegree,
                           BuildScoreProvider scoreProvider,
                           float alpha,
                           NodeArray nodes)
     {
         this.nodeId = nodeId;
-        this.maxConnections = maxConnections;
+        this.maxDegree = maxDegree;
         this.scoreProvider = scoreProvider;
         this.alpha = alpha;
         this.neighborsRef = new AtomicReference<>(new Neighbors(nodes, 0));
@@ -213,7 +213,7 @@ public class ConcurrentNeighborSet {
         neighborsRef.getAndUpdate(old -> {
             NodeArray nextNodes = old.nodes.copy();
             // remove the worst edge to make room for the new one, if necessary
-            nextNodes.size = min(nextNodes.size, maxConnections - 1);
+            nextNodes.size = min(nextNodes.size, maxDegree - 1);
             int insertedAt = nextNodes.insertSorted(node, score);
             if (insertedAt == -1) {
                 return old;
@@ -227,7 +227,7 @@ public class ConcurrentNeighborSet {
      */
     private void retainDiverse(NodeArray neighbors, int diverseBefore, boolean isExactScored) {
         BitSet selected = new FixedBitSet(neighbors.size());
-        for (int i = 0; i < min(diverseBefore, maxConnections); i++) {
+        for (int i = 0; i < min(diverseBefore, maxDegree); i++) {
             selected.set(i);
         }
 
@@ -235,7 +235,7 @@ public class ConcurrentNeighborSet {
         if (isExactScored) {
             // either the provider is natively exact, or we're on the backlink->insert path,
             // so `neighbors` is exact-scored
-            retainDiverseInternal(neighbors, maxConnections, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction());
+            retainDiverseInternal(neighbors, maxDegree, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction());
             neighbors.retain(selected);
         } else {
             // provider is natively approximate and we're on the insertDiverse path
@@ -255,7 +255,7 @@ public class ConcurrentNeighborSet {
             }
 
             // compute diversity against the exact-scored and reordered list
-            retainDiverseInternal(exactScoredNeighbors, maxConnections, 0, selected, node1 -> dp.createFor(node1).exactScoreFunction());
+            retainDiverseInternal(exactScoredNeighbors, maxDegree, 0, selected, node1 -> dp.createFor(node1).exactScoreFunction());
 
             // copy the final result into the original container
             neighbors.clear();
@@ -284,10 +284,10 @@ public class ConcurrentNeighborSet {
                 }
             }
 
-            if (a == 1.0f && max == maxConnections) {
+            if (a == 1.0f && max == maxDegree) {
                 // this isn't threadsafe, but (for now) we only care about the result after calling cleanup(),
                 // when we don't have to worry about concurrent changes
-                shortEdges = nSelected / (float) maxConnections;
+                shortEdges = nSelected / (float) maxDegree;
             }
         }
     }
@@ -310,7 +310,7 @@ public class ConcurrentNeighborSet {
     }
 
     private NodeArray removeAllNonDiverse(NodeArray neighbors, int diverseBefore) {
-        if (neighbors.size <= maxConnections) {
+        if (neighbors.size <= maxDegree) {
             return neighbors;
         }
         var copy = neighbors.copy();
@@ -338,7 +338,7 @@ public class ConcurrentNeighborSet {
             // batch up the enforcement of the max connection limit, since otherwise
             // we do a lot of duplicate work scanning nodes that we won't remove
             int nextDiverseBefore = min(insertionPoint, old.diverseBefore);
-            var hardMax = overflow * maxConnections;
+            var hardMax = overflow * maxDegree;
             if (nextNodes.size > hardMax) {
                 nextNodes = removeAllNonDiverse(nextNodes, nextDiverseBefore);
                 nextDiverseBefore = nextNodes.size;
