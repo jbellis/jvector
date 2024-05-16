@@ -46,7 +46,7 @@ public class InlineVectorValues implements RandomAccessVectorValues, Closeable {
 
     @Override
     public int size() {
-        return writer.getMaxOrdinal();
+        return writer.getMaxOrdinal() + 1; // +1 because ordinals are 0-based
     }
 
     @Override
