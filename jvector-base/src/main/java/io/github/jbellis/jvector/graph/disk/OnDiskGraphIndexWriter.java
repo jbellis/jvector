@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
@@ -54,7 +53,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     private final BufferedRandomAccessWriter out;
     private final long startOffset;
     private final int headerSize;
-    private volatile int maxOrdinalWritten;
+    private volatile int maxOrdinalWritten = -1;
 
     private OnDiskGraphIndexWriter(Path outPath,
                                    int version,
@@ -115,6 +114,9 @@ public class OnDiskGraphIndexWriter implements Closeable {
         maxOrdinalWritten = Math.max(maxOrdinalWritten, ordinal);
     }
 
+    /**
+     * @return the maximum ordinal written so far, or -1 if no ordinals have been written yet
+     */
     public int getMaxOrdinal() {
         return maxOrdinalWritten;
     }
