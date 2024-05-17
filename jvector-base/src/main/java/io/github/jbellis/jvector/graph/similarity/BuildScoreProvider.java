@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
-import io.github.jbellis.jvector.graph.CachingVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;

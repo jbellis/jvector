@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph;
+package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
@@ -24,12 +25,8 @@ import org.agrona.collections.Int2ObjectHashMap;
  * This is NOT a general "make vectors go faster" class.  It is used specifically by diversity computations
  * when loading vectors from disk, because in that specific scenario the same vector is usually loaded multiple times
  * as different neighbors are scored.
- * <p>
- * In particular, this will NOT make searches go faster, unless you can load the entire index into memory,
- * in which case you are better served by doing that explicitly up front instead of adding the overhead
- * of a caching layer.
  */
-public class CachingVectorValues implements RandomAccessVectorValues {
+class CachingVectorValues implements RandomAccessVectorValues {
     private final PQVectors cv;
     private final int dimension;
     private final Int2ObjectHashMap<VectorFloat<?>> cache;
