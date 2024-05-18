@@ -17,10 +17,13 @@ package io.github.jbellis.jvector.example.util;
 
 import com.indeed.util.mmap.MMapBuffer;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.disk.ReaderSupplier;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
 
 public class MMapReader implements RandomAccessReader {
     private final MMapBuffer buffer;
@@ -126,5 +129,23 @@ public class MMapReader implements RandomAccessReader {
     @Override
     public void close() {
         // don't close buffer, let the Supplier handle that
+    }
+
+    public static class Supplier implements ReaderSupplier {
+        private final MMapBuffer buffer;
+
+        public Supplier(Path path) throws IOException {
+            buffer = new MMapBuffer(path, FileChannel.MapMode.READ_ONLY, ByteOrder.BIG_ENDIAN);
+        }
+
+        @Override
+        public RandomAccessReader get() {
+            return new MMapReader(buffer);
+        }
+
+        @Override
+        public void close() throws IOException {
+            buffer.close();
+        }
     }
 }

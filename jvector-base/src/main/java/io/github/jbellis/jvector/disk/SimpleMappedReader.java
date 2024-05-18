@@ -85,4 +85,22 @@ public class SimpleMappedReader extends ByteBufferReader {
     public SimpleMappedReader duplicate() {
         return new SimpleMappedReader((MappedByteBuffer) bb.duplicate());
     }
+
+    public static class Supplier implements ReaderSupplier {
+        private final SimpleMappedReader smr;
+
+        public Supplier(Path path) throws IOException {
+            smr = new SimpleMappedReader(path);
+        }
+
+        @Override
+        public RandomAccessReader get() {
+            return smr.duplicate();
+        }
+
+        @Override
+        public void close() {
+            smr.close();
+        }
+    }
 }

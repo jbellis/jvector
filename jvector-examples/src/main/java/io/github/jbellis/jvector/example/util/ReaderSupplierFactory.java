@@ -16,7 +16,7 @@
 package io.github.jbellis.jvector.example.util;
 
 import io.github.jbellis.jvector.disk.ReaderSupplier;
-import io.github.jbellis.jvector.disk.SimpleMappedReaderSupplier;
+import io.github.jbellis.jvector.disk.SimpleMappedReader;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -27,7 +27,7 @@ import java.util.logging.Logger;
 
 public class ReaderSupplierFactory {
     private static final Logger LOG = Logger.getLogger(ReaderSupplierFactory.class.getName());
-    private static final String MEMORY_SEGMENT_READER_CLASSNAME = "io.github.jbellis.jvector.disk.MemorySegmentReaderSupplier";
+    private static final String MEMORY_SEGMENT_READER_CLASSNAME = "io.github.jbellis.jvector.disk.MemorySegmentReader.MemorySegmentReaderSupplier";
 
     public static ReaderSupplier open(Path path) throws IOException {
         try {
@@ -40,7 +40,7 @@ public class ReaderSupplierFactory {
         }
 
         try {
-            return new MMapReaderSupplier(path);
+            return new MMapReader.Supplier(path);
         } catch (UnsatisfiedLinkError|NoClassDefFoundError e) {
             LOG.log(Level.WARNING, "MMapReaderSupplier not available, falling back to SimpleMappedReaderSupplier. More details available at level FINE.");
             LOG.log(Level.FINE, "MMapReaderSupplier instantiation exception:", e);
@@ -48,7 +48,7 @@ public class ReaderSupplierFactory {
                 throw new RuntimeException("File sizes greater than 2GB are not supported on Windows--contributions welcome");
             }
 
-            return new SimpleMappedReaderSupplier(path);
+            return new SimpleMappedReader.Supplier(path);
         }
     }
 }

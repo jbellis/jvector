@@ -94,4 +94,17 @@ public class SimpleReader implements RandomAccessReader {
     public void close() throws IOException {
         raf.close();
     }
+
+    public static class Supplier implements ReaderSupplier {
+        private final Path path;
+
+        public Supplier(Path path) {
+            this.path = path;
+        }
+
+        @Override
+        public RandomAccessReader get() throws FileNotFoundException {
+            return new SimpleReader(path);
+        }
+    }
 }
