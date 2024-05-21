@@ -142,4 +142,48 @@ public class MemorySegmentReader implements RandomAccessReader {
     public MemorySegmentReader duplicate() {
         return new MemorySegmentReader(arena, memory);
     }
+
+    public static class Supplier implements ReaderSupplier {
+        private final InternalMemorySegmentReader reader;
+
+        public Supplier(Path path) throws IOException {
+            reader = new InternalMemorySegmentReader(path);
+        }
+
+        @Override
+        public RandomAccessReader get() {
+            return reader.duplicate();
+        }
+
+        @Override
+        public void close() {
+            reader.close();
+        }
+
+        private static class InternalMemorySegmentReader extends MemorySegmentReader {
+            private final boolean shouldClose;
+
+            private InternalMemorySegmentReader(Path path) throws IOException {
+                super(path);
+                shouldClose = true;
+            }
+
+            private InternalMemorySegmentReader(Arena arena, MemorySegment memory) {
+                super(arena, memory);
+                shouldClose = false;
+            }
+
+            @Override
+            public void close() {
+                if (shouldClose) {
+                    super.close();
+                }
+            }
+
+            @Override
+            public InternalMemorySegmentReader duplicate() {
+                return new InternalMemorySegmentReader(arena, memory);
+            }
+        }
+    }
 }

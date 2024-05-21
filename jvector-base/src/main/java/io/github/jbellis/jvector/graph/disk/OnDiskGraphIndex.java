@@ -144,7 +144,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     // re-declared to specify type
     @Override
     public View getView() {
-        return new View(readerSupplier.get());
+        try {
+            return new View(readerSupplier.get());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public class View implements FeatureSource, ScoringView, RandomAccessVectorValues {

@@ -102,7 +102,7 @@ public class MemorySegmentReaderTest extends RandomizedTest {
 
     @Test
     public void testSupplierClose() throws Exception {
-        var s = new MemorySegmentReaderSupplier(tempFile);
+        var s = new MemorySegmentReader.Supplier(tempFile);
         var r1 = s.get();
         var r2 = s.get();
 

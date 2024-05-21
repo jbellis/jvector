@@ -19,8 +19,7 @@ package io.github.jbellis.jvector.example;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
-import io.github.jbellis.jvector.disk.SimpleMappedReaderSupplier;
-import io.github.jbellis.jvector.example.util.MMapReaderSupplier;
+import io.github.jbellis.jvector.example.util.MMapReader;
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
@@ -157,7 +156,7 @@ public class SiftSmall {
 
         // on-disk indexes require a ReaderSupplier (not just a Reader) because we will want it to
         // open additional readers for searching
-        ReaderSupplier rs = new SimpleMappedReaderSupplier(indexPath);
+        ReaderSupplier rs = new SimpleMappedReader.Supplier(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         // measure our recall against the (exactly computed) ground truth
         Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, ravv);
@@ -190,7 +189,7 @@ public class SiftSmall {
             pqv.write(out);
         }
 
-        ReaderSupplier rs = new MMapReaderSupplier(indexPath);
+        ReaderSupplier rs = new MMapReader.Supplier(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         // load the PQVectors that we just wrote to disk
         try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {
@@ -259,7 +258,7 @@ public class SiftSmall {
         }
 
         // searching the index does not change
-        ReaderSupplier rs = new MMapReaderSupplier(indexPath);
+        ReaderSupplier rs = new MMapReader.Supplier(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {
             PQVectors pqv = PQVectors.load(in);
