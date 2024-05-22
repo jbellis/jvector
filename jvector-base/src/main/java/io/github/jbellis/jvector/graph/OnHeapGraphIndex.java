@@ -152,7 +152,7 @@ public class OnHeapGraphIndex implements GraphIndex {
     public long ramBytesUsedOneNode() {
         // we include the REF_BYTES for the CNS reference here to make it self-contained for addGraphNode()
         int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        return REF_BYTES + ConcurrentNeighborMap.neighborRamBytesUsed(nodes.maxOverflowDegree + 1);
+        return REF_BYTES + ConcurrentNeighborMap.Neighbors.ramBytesUsed(nodes.nodeArrayLength());
     }
 
     @Override
@@ -208,14 +208,6 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     public boolean containsNode(int nodeId) {
         return nodes.contains(nodeId);
-    }
-
-    public double getAverageShortEdges() {
-        return IntStream.range(0, getIdUpperBound())
-                .filter(this::containsNode)
-                .mapToDouble(i -> getNeighbors(i).getShortEdges())
-                .average()
-                .orElse(Double.NaN);
     }
 
     public double getAverageDegree() {
