@@ -155,6 +155,13 @@ public final class VectorUtil {
     impl.bulkShuffleQuantizedSimilarity(shuffles, codebookCount, quantizedPartials, delta, minDistance, vsf, results);
   }
 
+  public static void bulkShuffleQuantizedSimilarityCosine(ByteSequence<?> shuffles, int codebookCount,
+                                                          ByteSequence<?> quantizedPartialSums, float sumDelta, float minDistance,
+                                                          ByteSequence<?> quantizedPartialMagnitudes, float magnitudeDelta, float minMagnitude,
+                                                          float queryMagnitudeSquared, VectorFloat<?> results) {
+    impl.bulkShuffleQuantizedSimilarityCosine(shuffles, codebookCount, quantizedPartialSums, sumDelta, minDistance, quantizedPartialMagnitudes, magnitudeDelta, minMagnitude, queryMagnitudeSquared, results);
+  }
+
   public static int hammingDistance(long[] v1, long[] v2) {
     return impl.hammingDistance(v1, v2);
   }
@@ -167,8 +174,8 @@ public final class VectorUtil {
     impl.calculatePartialSums(codebook, codebookIndex, size, clusterCount, query, offset, vsf, partialSums);
   }
 
-  public static void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBest, ByteSequence<?> partialQuantizedSums) {
-    impl.quantizePartialSums(delta, partialSums, partialBest, partialQuantizedSums);
+  public static void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBase, ByteSequence<?> quantizedPartials) {
+    impl.quantizePartials(delta, partials, partialBase, quantizedPartials);
   }
 
   /**

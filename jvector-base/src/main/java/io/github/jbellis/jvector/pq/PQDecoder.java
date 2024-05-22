@@ -90,7 +90,7 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
             var pq = this.cv.pq;
 
             // this part is not query-dependent, so we can cache it
-            aMagnitude = cv.partialMagnitudes().updateAndGet(current -> {
+            aMagnitude = cv.partialSquaredMagnitudes().updateAndGet(current -> {
                 if (current != null) {
                     return current;
                 }

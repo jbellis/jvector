@@ -172,8 +172,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances, ByteSequence<?> partialQuantizedSums) {
-        SimdOps.quantizePartialSums(delta, (ArrayVectorFloat) partialSums, (ArrayVectorFloat) partialBestDistances, (ArrayByteSequence) partialQuantizedSums);
+    public void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBases, ByteSequence<?> quantizedPartials) {
+        SimdOps.quantizePartials(delta, (ArrayVectorFloat) partials, (ArrayVectorFloat) partialBases, (ArrayByteSequence) quantizedPartials);
     }
 }
 

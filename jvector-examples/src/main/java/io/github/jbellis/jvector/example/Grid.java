@@ -131,7 +131,8 @@ public class Grid {
                 }
 
                 indexes.forEach((features, index) -> {
-                    try (var cs = new ConfiguredSystem(ds, index, cv)) {
+                    try (var cs = new ConfiguredSystem(ds, index instanceof OnDiskGraphIndex ? new CachingGraphIndex((OnDiskGraphIndex) index) : index, cv,
+                                                       index instanceof OnDiskGraphIndex ? ((OnDiskGraphIndex) index).getFeatureSet() : Set.of())) {
                         testConfiguration(cs, efSearchOptions);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
@@ -230,7 +231,7 @@ public class Grid {
         n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
-            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath))));
+            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
             indexes.put(features, index);
         }
         return indexes;
@@ -308,7 +309,7 @@ public class Grid {
                 System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
             }
 
-            var index = new CachingGraphIndex((OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath))));
+            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
             indexes.put(features, index);
         }
         return indexes;
@@ -410,15 +411,17 @@ public class Grid {
         DataSet ds;
         GraphIndex index;
         CompressedVectors cv;
+        Set<FeatureId> features;
 
         private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
             return new GraphSearcher(index);
         });
 
-        ConfiguredSystem(DataSet ds, GraphIndex index, CompressedVectors cv) {
+        ConfiguredSystem(DataSet ds, GraphIndex index, CompressedVectors cv, Set<FeatureId> features) {
             this.ds = ds;
             this.index = index;
             this.cv = cv;
+            this.features = features;
         }
 
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
@@ -429,7 +432,7 @@ public class Grid {
 
             var scoringView = (GraphIndex.ScoringView) view;
             ScoreFunction.ApproximateScoreFunction asf;
-            if (index instanceof OnDiskGraphIndex && ((OnDiskGraphIndex) index).getFeatureSet().contains(FeatureId.FUSED_ADC)) {
+            if (features.contains(FeatureId.FUSED_ADC)) {
                 asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);

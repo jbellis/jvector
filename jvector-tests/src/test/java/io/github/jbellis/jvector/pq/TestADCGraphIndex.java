@@ -31,7 +31,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
 import static org.junit.Assert.assertEquals;
@@ -72,25 +71,31 @@ public class TestADCGraphIndex extends RandomizedTest {
             TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);
             try (var cachedOnDiskView = cachedOnDiskGraph.getView())
             {
-                var queryVector = TestUtil.randomVector(getRandom(), 512);
-
-                for (var similarityFunction : List.of(VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.EUCLIDEAN)) {
+                for (var similarityFunction : VectorSimilarityFunction.values()) {
+                    var queryVector = TestUtil.randomVector(getRandom(), 512);
                     var pqScoreFunction = pqv.precomputedScoreFunctionFor(queryVector, similarityFunction);
                     var reranker = cachedOnDiskView.rerankerFor(queryVector, similarityFunction);
                     for (int i = 0; i < 50; i++) {
                         var fusedScoreFunction = cachedOnDiskView.approximateScoreFunctionFor(queryVector, similarityFunction);
                         var ordinal = getRandom().nextInt(graph.size());
+                        // first pass compares fused ADC's direct similarity to reranker's similarity, used for comparisons to a specific node
                         var neighbors = cachedOnDiskView.getNeighborsIterator(ordinal);
-                        for (; neighbors.hasNext();) {
+                        for (; neighbors.hasNext(); ) {
                             var neighbor = neighbors.next();
                             var similarity = fusedScoreFunction.similarityTo(neighbor);
                             assertEquals(reranker.similarityTo(neighbor), similarity, 0.01);
                         }
+                        // second pass compares fused ADC's edge similarity prior to having enough information for quantization to PQ
                         neighbors = cachedOnDiskView.getNeighborsIterator(ordinal);
                         var edgeSimilarities = fusedScoreFunction.edgeLoadingSimilarityTo(ordinal);
                         for (int j = 0; neighbors.hasNext(); j++) {
                             var neighbor = neighbors.next();
-                            assertEquals(pqScoreFunction.similarityTo(neighbor), edgeSimilarities.get(j), 0.05);
+                            assertEquals(pqScoreFunction.similarityTo(neighbor), edgeSimilarities.get(j), 0.01);
+                        }
+                        // third pass compares fused ADC's edge similarity after quantization to edge similarity before quantization
+                        var fusedEdgeSimilarities = fusedScoreFunction.edgeLoadingSimilarityTo(ordinal);
+                        for (int j = 0; j < fusedEdgeSimilarities.length(); j++) {
+                            assertEquals(fusedEdgeSimilarities.get(j), edgeSimilarities.get(j), 0.01);
                         }
                     }
                 }

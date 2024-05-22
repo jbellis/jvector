@@ -198,8 +198,8 @@ public class PQVectors implements CompressedVectors {
         return pq.reusablePartialSums();
     }
 
-    AtomicReference<VectorFloat<?>> partialMagnitudes() {
-        return pq.partialMagnitudes();
+    AtomicReference<VectorFloat<?>> partialSquaredMagnitudes() {
+        return pq.partialSquaredMagnitudes();
     }
 
     @Override

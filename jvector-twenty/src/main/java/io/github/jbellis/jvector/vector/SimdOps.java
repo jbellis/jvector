@@ -919,26 +919,26 @@ final class SimdOps {
         }
     }
 
-    public static void quantizePartialSums(float delta, ArrayVectorFloat partialSums, ArrayVectorFloat partialBestDistances, ArrayByteSequence partialQuantizedSums) {
-        var codebookSize = partialSums.length() / partialBestDistances.length();
-        var codebookCount = partialBestDistances.length();
+    public static void quantizePartials(float delta, ArrayVectorFloat partials, ArrayVectorFloat partialBases, ArrayByteSequence quantizedPartials) {
+        var codebookSize = partials.length() / partialBases.length();
+        var codebookCount = partialBases.length();
 
         for (int i = 0; i < codebookCount; i++) {
             var vectorizedLength = FloatVector.SPECIES_512.loopBound(codebookSize);
-            var codebookBest = partialBestDistances.get(i);
-            var codebookBestVector = FloatVector.broadcast(FloatVector.SPECIES_512, codebookBest);
+            var codebookBase = partialBases.get(i);
+            var codebookBaseVector = FloatVector.broadcast(FloatVector.SPECIES_512, codebookBase);
             int j = 0;
             for (; j < vectorizedLength; j += FloatVector.SPECIES_512.length()) {
-                var partialSumVector = FloatVector.fromArray(FloatVector.SPECIES_512, partialSums.get(), i * codebookSize + j);
-                var quantized = (partialSumVector.sub(codebookBestVector)).div(delta);
+                var partialVector = FloatVector.fromArray(FloatVector.SPECIES_512, partials.get(), i * codebookSize + j);
+                var quantized = (partialVector.sub(codebookBaseVector)).div(delta);
                 quantized = quantized.max(FloatVector.zero(FloatVector.SPECIES_512)).min(FloatVector.broadcast(FloatVector.SPECIES_512, 65535));
                 var quantizedBytes = (ShortVector) quantized.convertShape(VectorOperators.F2S, ShortVector.SPECIES_256, 0);
-                quantizedBytes.reinterpretAsBytes().intoArray(partialQuantizedSums.get(), 2 * (i * codebookSize + j));
+                quantizedBytes.reinterpretAsBytes().intoArray(quantizedPartials.get(), 2 * (i * codebookSize + j));
             }
             for (; j < codebookSize; j++) {
-                var val = partialSums.get(i * codebookSize + j);
-                var quantized = (short) Math.min((val - codebookBest) / delta, 65535);
-                partialQuantizedSums.setLittleEndianShort(i * codebookSize + j, quantized);
+                var val = partials.get(i * codebookSize + j);
+                var quantized = (short) Math.min((val - codebookBase) / delta, 65535);
+                quantizedPartials.setLittleEndianShort(i * codebookSize + j, quantized);
             }
         }
     }

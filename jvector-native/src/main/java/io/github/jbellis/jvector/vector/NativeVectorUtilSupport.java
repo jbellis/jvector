@@ -160,8 +160,8 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances, ByteSequence<?> partialQuantizedSums) {
-        VectorSimdOps.quantizePartialSums(delta, (MemorySegmentVectorFloat) partialSums, (MemorySegmentVectorFloat) partialBestDistances, (MemorySegmentByteSequence) partialQuantizedSums);
+    public void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBases, ByteSequence<?> quantizedPartials) {
+        VectorSimdOps.quantizePartials(delta, (MemorySegmentVectorFloat) partials, (MemorySegmentVectorFloat) partialBases, (MemorySegmentByteSequence) quantizedPartials);
     }
 
     @Override
@@ -171,5 +171,14 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
             case EUCLIDEAN -> NativeSimdOps.bulk_quantized_shuffle_euclidean_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartials).get(), delta, bestDistance, ((MemorySegmentVectorFloat) results).get());
             case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for bulkShuffleQuantizedSimilarity");
         }
+    }
+
+    @Override
+    public void bulkShuffleQuantizedSimilarityCosine(ByteSequence<?> shuffles, int codebookCount,
+                                                     ByteSequence<?> quantizedPartialSums, float sumDelta, float minDistance,
+                                                     ByteSequence<?> quantizedPartialSquaredMagnitudes, float magnitudeDelta, float minMagnitude,
+                                                     float queryMagnitudeSquared, VectorFloat<?> results) {
+        NativeSimdOps.bulk_quantized_shuffle_cosine_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartialSums).get(), sumDelta, minDistance,
+                ((MemorySegmentByteSequence) quantizedPartialSquaredMagnitudes).get(), magnitudeDelta, minMagnitude, queryMagnitudeSquared, ((MemorySegmentVectorFloat) results).get());
     }
 }
