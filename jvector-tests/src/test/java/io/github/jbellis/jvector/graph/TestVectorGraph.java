@@ -185,7 +185,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
 
         for (int i = 0; i < nDoc; i++) {
-            ConcurrentNeighborSet neighbors = graph.getNeighbors(i);
+            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(i);
             Iterator<Integer> it = neighbors.iterator();
             while (it.hasNext()) {
                 // all neighbors should be valid node ids.
@@ -406,7 +406,7 @@ public class TestVectorGraph extends LuceneTestCase {
 
     private void assertNeighbors(OnHeapGraphIndex graph, int node, int... expected) {
         Arrays.sort(expected);
-        ConcurrentNeighborSet nn = graph.getNeighbors(node);
+        ConcurrentNeighborMap.Neighbors nn = graph.getNeighbors(node);
         Iterator<Integer> it = nn.iterator();
         int[] actual = new int[nn.size()];
         for (int i = 0; i < actual.length; i++) {

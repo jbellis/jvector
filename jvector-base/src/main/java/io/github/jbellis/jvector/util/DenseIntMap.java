@@ -17,10 +17,6 @@ package io.github.jbellis.jvector.util;
 
 import io.github.jbellis.jvector.graph.NodesIterator;
 
-import java.util.AbstractMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -51,7 +47,9 @@ public class DenseIntMap<T> {
 
     /**
      * @param key ordinal
+     * Prefer compareAndPut()
      */
+    @Deprecated
     public void put(int key, T value) {
         if (value == null) {
             throw new IllegalArgumentException("put() value cannot be null -- use remove() instead");
@@ -64,6 +62,29 @@ public class DenseIntMap<T> {
             if (isInsert) {
                 size.incrementAndGet();
             }
+        } finally {
+            rwl.readLock().unlock();
+        }
+    }
+
+    /**
+     * @param key ordinal
+     * @return true if successful, false if the current value != `existing`
+     */
+    public boolean compareAndPut(int key, T existing, T value) {
+        if (value == null) {
+            throw new IllegalArgumentException("compareAndPut() value cannot be null -- use remove() instead");
+        }
+
+        ensureCapacity(key);
+        rwl.readLock().lock();
+        try {
+            var success = objects.compareAndSet(key, existing, value);
+            var isInsert = success && existing == null;
+            if (isInsert) {
+                size.incrementAndGet();
+            }
+            return success;
         } finally {
             rwl.readLock().unlock();
         }
@@ -138,35 +159,29 @@ public class DenseIntMap<T> {
         return get(key) != null;
     }
 
-    public Set<Map.Entry<Integer, T>> entrySet() {
-        var entries = new HashSet<Map.Entry<Integer, T>>(size());
-        var ref = objects;
-        for (int i = 0; i < ref.length(); i++) {
-            var value = ref.get(i);
-            if (value != null) {
-                entries.add(new AbstractMap.SimpleEntry<>(i, value));
-            }
-        }
-        return entries;
-    }
-
-    public Set<Integer> keySet() {
-        var keys = new HashSet<Integer>(size());
-        var ref = objects;
-        for (int i = 0; i < ref.length(); i++) {
-            var value = ref.get(i);
-            if (value != null) {
-                keys.add(i);
-            }
-        }
-        return keys;
-    }
-
-    public NodesIterator getNodesIterator() {
+    public NodesIterator keysIterator() {
         // implemented here because we can't make it threadsafe AND performant elsewhere
         var minSize = size(); // if keys are added concurrently we will miss them
         var ref = objects;
         var keysInts = IntStream.range(0, ref.length()).filter(i -> ref.get(i) != null).iterator();
         return NodesIterator.fromPrimitiveIterator(keysInts, minSize);
+    }
+
+    /**
+     * Iterates keys in ascending order and calls the consumer for each non-null key-value pair.
+     */
+    public void forEach(IntBiConsumer<T> consumer) {
+        var ref = objects;
+        for (int i = 0; i < ref.length(); i++) {
+            var value = get(i);
+            if (value != null) {
+                consumer.consume(i, value);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    public interface IntBiConsumer<T> {
+        void consume(int key, T value);
     }
 }
