@@ -452,7 +452,7 @@ public class GraphIndexBuilder implements Closeable {
         var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
         var neighbors = graph.nodes.insertDiverse(node, natural);
         // no overflow -- this method gets called from cleanup
-        neighbors.backlink(1.0f);
+        graph.nodes.backlink(neighbors.getCurrent(), node, 1.0f);
     }
 
     public void markNodeDeleted(int node) {
@@ -606,7 +606,7 @@ public class GraphIndexBuilder implements Closeable {
         }
         // toMerge may be approximate-scored, but insertDiverse will compute exact scores for the diverse ones
         var neighbors = graph.nodes.insertDiverse(nodeId, toMerge);
-        neighbors.backlink(neighborOverflow);
+        graph.nodes.backlink(neighbors.getCurrent(), nodeId, neighborOverflow);
     }
 
     private static NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, NodeArray scratch) {
