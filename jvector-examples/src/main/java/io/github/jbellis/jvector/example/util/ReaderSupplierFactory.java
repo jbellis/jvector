@@ -27,7 +27,7 @@ import java.util.logging.Logger;
 
 public class ReaderSupplierFactory {
     private static final Logger LOG = Logger.getLogger(ReaderSupplierFactory.class.getName());
-    private static final String MEMORY_SEGMENT_READER_CLASSNAME = "io.github.jbellis.jvector.disk.MemorySegmentReader.Supplier";
+    private static final String MEMORY_SEGMENT_READER_CLASSNAME = "io.github.jbellis.jvector.disk.MemorySegmentReader$Supplier";
 
     public static ReaderSupplier open(Path path) throws IOException {
         try {
