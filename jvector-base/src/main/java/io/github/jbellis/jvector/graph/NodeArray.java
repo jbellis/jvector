@@ -45,11 +45,16 @@ public class NodeArray {
     float[] score;
     int[] node;
 
+    protected NodeArray() {
+        // let subclasses do their thing
+    }
+
     public NodeArray(int initialSize) {
         node = new int[initialSize];
         score = new float[initialSize];
     }
 
+    /** always creates a new NodeArray to return, even when a1 or a2 is empty */
     static NodeArray merge(NodeArray a1, NodeArray a2) {
         NodeArray merged = new NodeArray(a1.size() + a2.size());
         int i = 0, j = 0;

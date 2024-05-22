@@ -65,6 +65,8 @@ public class GraphIndexBuilder implements Closeable {
 
     @VisibleForTesting
     final OnHeapGraphIndex graph;
+    private double averageShortEdges = Double.NaN;
+
     private final ConcurrentSkipListSet<Integer> insertionsInProgress = new ConcurrentSkipListSet<>();
 
     private BuildScoreProvider scoreProvider;
@@ -226,10 +228,13 @@ public class GraphIndexBuilder implements Closeable {
             return;
         }
 
-        // clean up overflowed neighbor lists
-        parallelExecutor.submit(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
-            graph.nodes.enforceDegree(i);
-        })).join();
+        // clean up overflowed neighbor lists and compute short edges
+        averageShortEdges = parallelExecutor.submit(
+            () -> IntStream.range(0, graph.getIdUpperBound()).parallel()
+                    .mapToDouble(graph.nodes::enforceDegree)
+                    .filter(Double::isFinite)
+                    .average()
+        ).join().orElse(Double.NaN);
 
         // reconnect any orphaned nodes.  this will maintain neighbors size
         reconnectOrphanedNodes();
@@ -247,7 +252,8 @@ public class GraphIndexBuilder implements Closeable {
             // find all nodes reachable from the entry node
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
-            var entryNeighbors = graph.getNeighbors(graph.entry()).getCurrent();
+            ConcurrentNeighborMap.Neighbors self1 = graph.getNeighbors(graph.entry());
+            var entryNeighbors = (NodeArray) self1;
             parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.node[node]))).join();
 
             // reconnect unreachable nodes
@@ -260,7 +266,8 @@ public class GraphIndexBuilder implements Closeable {
                 nReconnected.incrementAndGet();
 
                 // first, attempt to connect one of our own neighbors to us
-                var neighbors = graph.getNeighbors(node).getCurrent();
+                ConcurrentNeighborMap.Neighbors self = graph.getNeighbors(node);
+                var neighbors = (NodeArray) self;
                 if (connectToClosestNeighbor(node, neighbors, connectionTargets)) {
                     return;
                 }
@@ -452,7 +459,7 @@ public class GraphIndexBuilder implements Closeable {
         var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
         var neighbors = graph.nodes.insertDiverse(node, natural);
         // no overflow -- this method gets called from cleanup
-        graph.nodes.backlink(neighbors.getCurrent(), node, 1.0f);
+        graph.nodes.backlink(neighbors, node, 1.0f);
     }
 
     public void markNodeDeleted(int node) {
@@ -606,7 +613,7 @@ public class GraphIndexBuilder implements Closeable {
         }
         // toMerge may be approximate-scored, but insertDiverse will compute exact scores for the diverse ones
         var neighbors = graph.nodes.insertDiverse(nodeId, toMerge);
-        graph.nodes.backlink(neighbors.getCurrent(), nodeId, neighborOverflow);
+        graph.nodes.backlink(neighbors, nodeId, neighborOverflow);
     }
 
     private static NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, NodeArray scratch) {
@@ -684,6 +691,14 @@ public class GraphIndexBuilder implements Closeable {
                 assert graph.containsNode(j) : String.format("Edge %d -> %d is invalid", i, j);
             }
         }
+    }
+
+    /**
+     * @return the average short edges.  Will be NaN if cleanup() has not been run,
+     * or if no edge lists in the graph needed to be trimmed at cleanup time.
+     */
+    public double getAverageShortEdges() {
+        return averageShortEdges;
     }
 
     private static class ExcludingBits implements Bits {

@@ -24,7 +24,6 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
-import io.github.jbellis.jvector.util.RamUsageEstimator;
 
 import static java.lang.Math.min;
 
@@ -73,17 +72,20 @@ public class ConcurrentNeighborMap {
         }
     }
 
-    public void enforceDegree(int nodeId) {
+    /**
+     * @return the fraction of short edges, i.e., neighbors within alpha=1.0
+     */
+    public double enforceDegree(int nodeId) {
         var old = neighbors.get(nodeId);
         if (old == null) {
-            return;
+            return Double.NaN;
         }
 
         while (true) {
             old = neighbors.get(nodeId);
-            var next = old.enforceDegree(this);
-            if (next == old || neighbors.compareAndPut(nodeId, old, next)) {
-                break;
+            var nwse = old.enforceDegree(this);
+            if (nwse.neighbors == old || neighbors.compareAndPut(nodeId, old, nwse.neighbors)) {
+                return nwse.shortEdges;
             }
         }
     }
@@ -116,9 +118,12 @@ public class ConcurrentNeighborMap {
         return neighbors.size();
     }
 
-    public void addNode(int nodeId, NodeArray nodes) {
-        var nodeNeighbors = new Neighbors(nodeId, nodes, 0);
-        if (!neighbors.compareAndPut(nodeId, null, nodeNeighbors)) {
+    /**
+     * Only for internal use and by Builder loading a saved graph
+     */
+    void addNode(int nodeId, NodeArray nodes) {
+        var next = new Neighbors(nodeId, nodes);
+        if (!neighbors.compareAndPut(nodeId, null, next)) {
             throw new IllegalStateException("Node " + nodeId + " already exists");
         }
     }
@@ -147,7 +152,7 @@ public class ConcurrentNeighborMap {
         scoreProvider = bsp;
     }
 
-    private int nodeArrayLength() {
+    int nodeArrayLength() {
         // one extra so that insert() against a full NodeArray doesn't invoke growArrays()
         return maxOverflowDegree + 1;
     }
@@ -172,34 +177,56 @@ public class ConcurrentNeighborMap {
      * performs the appropriate CAS dance.
      * <p>
      * CNM is passed as an explicit parameter to these methods (instead of making this a non-static
-     * inner class) to avoid the overhead on the heap of the CNM$this reference.
+     * inner class) to avoid the overhead on the heap of the CNM$this reference.  Similarly,
+     * Neighbors extends NodeArray instead of composing with it to avoid the overhead of an extra
+     * object header.
      */
-    public static class Neighbors {
+    public static class Neighbors extends NodeArray {
         /** the node id whose neighbors we are storing */
         private final int nodeId;
 
-        /** the proportion of edges that are diverse at alpha=1.0.  updated by retainDiverseInternal */
-        private float shortEdges = Float.NaN;
-
-        /** our neighbors and their scores */
-        private final NodeArray nodes;
-
         /** entries in `nodes` before this index are diverse and don't need to be checked again */
-        private final int diverseBefore;
+        private int diverseBefore;
 
-        Neighbors(int nodeId, NodeArray nodes, int diverseBefore)
+        private Neighbors(int nodeId, int initialSize, int diverseBefore)
         {
+            super(initialSize);
             this.nodeId = nodeId;
             this.diverseBefore = diverseBefore;
-            this.nodes = nodes;
         }
 
-        public float getShortEdges() {
-            return shortEdges;
+        /**
+         * uses the node and score references directly from `nodeArray`, without copying
+         * `nodeArray` is assumed to have had diversity enforced already
+         */
+        private Neighbors(int nodeId, NodeArray nodeArray) {
+            this.nodeId = nodeId;
+            this.size = nodeArray.size;
+            this.node = nodeArray.node;
+            this.score = nodeArray.score;
+            this.diverseBefore = this.size;
         }
 
         public NodesIterator iterator() {
-            return new NeighborIterator(nodes);
+            return new NeighborIterator(this);
+        }
+
+        @Override
+        public Neighbors copy() {
+            return copy(size);
+        }
+
+        @Override
+        public Neighbors copy(int newSize) {
+            if (size > newSize) {
+                throw new IllegalArgumentException("Cannot copy to a smaller size");
+            }
+
+            var next = new Neighbors(nodeId, newSize, diverseBefore);
+            next.size = size;
+            System.arraycopy(node, 0, next.node, 0, size);
+            System.arraycopy(score, 0, next.score, 0, size);
+            return next;
         }
 
         /**
@@ -207,32 +234,29 @@ public class ConcurrentNeighborMap {
          * for efficiency.  This method is threadsafe, but if you call it concurrently with other inserts,
          * the limit may end up being exceeded again.
          */
-        private Neighbors enforceDegree(ConcurrentNeighborMap map) {
-            if (nodes.size <= map.maxDegree) {
-                return this;
+        private NeighborWithShortEdges enforceDegree(ConcurrentNeighborMap map) {
+            if (size <= map.maxDegree) {
+                return new NeighborWithShortEdges(this, Double.NaN);
             }
-            var nextNodes = nodes.copy();
-            retainDiverse(nextNodes, diverseBefore, true, map);
-            return new Neighbors(nodeId, nextNodes, nextNodes.size);
+            var next = copy();
+            double shortEdges = retainDiverse(next, diverseBefore, true, map);
+            next.diverseBefore = next.size;
+            return new NeighborWithShortEdges(next, shortEdges);
         }
 
         private Neighbors replaceDeletedNeighbors(Bits deletedNodes, NodeArray candidates, ConcurrentNeighborMap map) {
             // copy the non-deleted neighbors to a new NodeArray
-            var liveNeighbors = new NodeArray(nodes.size);
-            for (int i = 0; i < nodes.size(); i++) {
-                int node = nodes.node[i];
-                if (!deletedNodes.get(node)) {
-                    liveNeighbors.addInOrder(node, nodes.score[i]);
+            var liveNeighbors = new NodeArray(size);
+            for (int i = 0; i < size; i++) {
+                int nodeId = node[i];
+                if (!deletedNodes.get(nodeId)) {
+                    liveNeighbors.addInOrder(nodeId, score[i]);
                 }
             }
 
             // merge the remaining neighbors with the candidates
-            NodeArray merged = rescoreAndRetainDiverse(liveNeighbors, candidates, map);
-            return new Neighbors(nodeId, merged, merged.size);
-        }
-
-        public int size() {
-            return nodes.size();
+            var merged = rescoreAndRetainDiverse(liveNeighbors, candidates, map);
+            return new Neighbors(nodeId, merged);
         }
 
         /**
@@ -247,23 +271,23 @@ public class ConcurrentNeighborMap {
             }
 
             // merge all the candidates into a single array and compute the diverse ones to keep
-            // from that.  we do this first by selecting the ones to keep, and then by copying
-            // only those into a new NeighborArray.  This is less expensive than doing the
-            // diversity computation in-place, since we are going to do multiple passes and
-            // pruning back extras is expensive.
+            // from that.
             NodeArray merged;
-            if (nodes.size > 0) {
-                merged = rescoreAndRetainDiverse(nodes, toMerge, map);
+            if (size > 0) {
+                merged = rescoreAndRetainDiverse(this, toMerge, map);
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
                 retainDiverse(merged, 0, map.scoreProvider.isExact(), map);
             }
             // insertDiverse usually gets called with a LOT of candidates, so trim down the resulting NodeArray
             var nextNodes = merged.node.length <= map.nodeArrayLength() ? merged : merged.copy(map.nodeArrayLength());
-            return new Neighbors(nodeId, nextNodes, nextNodes.size);
+            return new Neighbors(nodeId, nextNodes);
         }
 
-        // does not modify `old` or `toMerge`
+        /**
+         * Merge `old` and `toMerge` and retain the diverse nodes from the result.  Allocates
+         * a new NodeArray; does not modify `old` or `toMerge`
+         */
         private NodeArray rescoreAndRetainDiverse(NodeArray old, NodeArray toMerge, ConcurrentNeighborMap map) {
             NodeArray merged;
             if (map.scoreProvider.isExact()) {
@@ -292,31 +316,35 @@ public class ConcurrentNeighborMap {
 
         private Neighbors insertNotDiverse(int node, float score, ConcurrentNeighborMap map) {
             int maxDegree = map.maxDegree;
-            assert nodes.size <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
-            NodeArray nextNodes = nodes.copy(maxDegree);
+            assert size <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
+            // TODO check insertion point before copying
+            var next = copy(maxDegree); // called during cleanup -- use actual maxDegree not nodeArrayLength()
             // remove the worst edge to make room for the new one, if necessary
-            nextNodes.size = min(nextNodes.size, maxDegree - 1);
-            int insertedAt = nextNodes.insertSorted(node, score);
+            next.size = min(next.size, maxDegree - 1);
+            int insertedAt = next.insertSorted(node, score);
             if (insertedAt == -1) {
                 return this;
             }
-            return new Neighbors(nodeId, nextNodes, min(insertedAt, diverseBefore));
+            next.diverseBefore = min(insertedAt, diverseBefore);
+            return next;
         }
 
         /**
          * Retain the diverse neighbors, updating `neighbors` in place
+         * @return post-diversity short edges fraction
          */
-        private void retainDiverse(NodeArray neighbors, int diverseBefore, boolean isExactScored, ConcurrentNeighborMap map) {
+        private double retainDiverse(NodeArray neighbors, int diverseBefore, boolean isExactScored, ConcurrentNeighborMap map) {
             BitSet selected = new FixedBitSet(neighbors.size());
             for (int i = 0; i < min(diverseBefore, map.maxDegree); i++) {
                 selected.set(i);
             }
 
             var dp = map.scoreProvider.diversityProvider();
+            double shortEdges;
             if (isExactScored) {
                 // either the provider is natively exact, or we're on the backlink->insert path,
                 // so `neighbors` is exact-scored
-                retainDiverseInternal(neighbors, map.maxDegree, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction(), map);
+                shortEdges = retainDiverseInternal(neighbors, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction(), map);
                 neighbors.retain(selected);
             } else {
                 // provider is natively approximate and we're on the insertDiverse path
@@ -336,7 +364,7 @@ public class ConcurrentNeighborMap {
                 }
 
                 // compute diversity against the exact-scored and reordered list
-                retainDiverseInternal(exactScoredNeighbors, map.maxDegree, 0, selected, node1 -> dp.createFor(node1).exactScoreFunction(), map);
+                shortEdges = retainDiverseInternal(exactScoredNeighbors, 0, selected, node1 -> dp.createFor(node1).exactScoreFunction(), map);
 
                 // copy the final result into the original container
                 neighbors.clear();
@@ -344,14 +372,20 @@ public class ConcurrentNeighborMap {
                     neighbors.addInOrder(exactScoredNeighbors.node[i], exactScoredNeighbors.score[i]);
                 }
             }
+            return shortEdges;
         }
 
-        private void retainDiverseInternal(NodeArray neighbors, int max, int diverseBefore, BitSet selected, ScoreFunction.Provider scoreProvider, ConcurrentNeighborMap map) {
+        /**
+         * update `selected` with the diverse members of `neighbors`.  `neighbors` is not modified
+         * @return the fraction of short edges (neighbors within alpha=1.0)
+         */
+        private double retainDiverseInternal(NodeArray neighbors, int diverseBefore, BitSet selected, ScoreFunction.Provider scoreProvider, ConcurrentNeighborMap map) {
             int nSelected = diverseBefore;
+            double shortEdges = Double.NaN;
             // add diverse candidates, gradually increasing alpha to the threshold
             // (so that the nearest candidates are prioritized)
-            for (float a = 1.0f; a <= map.alpha + 1E-6 && nSelected < max; a += 0.2f) {
-                for (int i = diverseBefore; i < neighbors.size() && nSelected < max; i++) {
+            for (float a = 1.0f; a <= map.alpha + 1E-6 && nSelected < map.maxDegree; a += 0.2f) {
+                for (int i = diverseBefore; i < neighbors.size() && nSelected < map.maxDegree; i++) {
                     if (selected.get(i)) {
                         continue;
                     }
@@ -365,12 +399,13 @@ public class ConcurrentNeighborMap {
                     }
                 }
 
-                if (a == 1.0f && max == map.maxDegree) {
+                if (a == 1.0f) {
                     // this isn't threadsafe, but (for now) we only care about the result after calling cleanup(),
                     // when we don't have to worry about concurrent changes
-                    shortEdges = nSelected / (float) max;
+                    shortEdges = nSelected / (float) map.maxDegree;
                 }
             }
+            return shortEdges;
         }
 
         // is the candidate node with the given score closer to the base node than it is to any of the
@@ -390,36 +425,38 @@ public class ConcurrentNeighborMap {
             return true;
         }
 
-        NodeArray getCurrent() {
-            return nodes;
-        }
-
         /**
          * Insert a new neighbor, maintaining our size cap by removing the least diverse neighbor if
          * necessary. "Overflow" is the factor by which to allow going over the size cap temporarily.
          */
-        public Neighbors insert(int neighborId, float score, float overflow, ConcurrentNeighborMap map) {
+        private Neighbors insert(int neighborId, float score, float overflow, ConcurrentNeighborMap map) {
             assert neighborId != nodeId : "can't add self as neighbor at node " + nodeId;
 
             int hardMax = (int) (overflow * map.maxDegree);
             assert hardMax <= map.maxOverflowDegree
                     : String.format("overflow %s could exceed max overflow degree %d", overflow, map.maxOverflowDegree);
 
-            NodeArray nextNodes = nodes.copy(map.nodeArrayLength());
-            int insertionPoint = nextNodes.insertSorted(neighborId, score);
+            var next = copy(map.nodeArrayLength());
+            int insertionPoint = next.insertSorted(neighborId, score);
             if (insertionPoint == -1) {
                 return this;
             }
 
             // batch up the enforcement of the max connection limit, since otherwise
             // we do a lot of duplicate work scanning nodes that we won't remove
-            int nextDiverseBefore = min(insertionPoint, diverseBefore);
-            if (nextNodes.size > hardMax) {
-                retainDiverse(nextNodes, nextDiverseBefore, true, map);
-                nextDiverseBefore = nextNodes.size;
+            next.diverseBefore = min(insertionPoint, diverseBefore);
+            if (next.size > hardMax) {
+                retainDiverse(next, next.diverseBefore, true, map);
+                next.diverseBefore = next.size;
             }
 
-            return new Neighbors(nodeId, nextNodes, nextDiverseBefore);
+            return next;
+        }
+
+        public static long ramBytesUsed(int count) {
+            return NodeArray.ramBytesUsed(count) // includes our object header
+                    + Integer.BYTES // nodeId
+                    + Integer.BYTES; // diverseBefore
         }
 
         /** Only for testing; this is a linear search */
@@ -435,16 +472,14 @@ public class ConcurrentNeighborMap {
         }
     }
 
-    // Not part of Neighbor because under JDK 11, inner classes may not have static methods
-    public static long neighborRamBytesUsed(int count) {
-        int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
+    private static class NeighborWithShortEdges {
+        public final Neighbors neighbors;
+        public final double shortEdges;
 
-        return OH_BYTES
-                + REF_BYTES + NodeArray.ramBytesUsed(count) // NodeArray
-                + Integer.BYTES // nodeId
-                + Integer.BYTES // diverseBefore
-                + Float.BYTES; // shortEdges
+        public NeighborWithShortEdges(Neighbors neighbors, double shortEdges) {
+            this.neighbors = neighbors;
+            this.shortEdges = shortEdges;
+        }
     }
 
     private static class NeighborIterator extends NodesIterator {

@@ -295,7 +295,7 @@ public class Grid {
                           efConstruction,
                           (System.nanoTime() - start) / 1_000_000_000.0,
                           onHeapGraph.getAverageDegree(),
-                          onHeapGraph.getAverageShortEdges());
+                          builder.getAverageShortEdges());
         int n = 0;
         for (var features : featureSets) {
             if (features.contains(FeatureId.FUSED_ADC)) {

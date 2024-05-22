@@ -48,7 +48,7 @@ public class TestNeighbors extends RandomizedTest {
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
-    validateSortedByScore(neighbors.getCurrent());
+    validateSortedByScore(neighbors);
   }
 
   private static float scoreBetween(BuildScoreProvider bsp, int i, int j) {
@@ -77,7 +77,7 @@ public class TestNeighbors extends RandomizedTest {
     assertEquals(2, neighbors.size());
     assert neighbors.contains(8);
     assert neighbors.contains(6);
-    validateSortedByScore(neighbors.getCurrent());
+    validateSortedByScore(neighbors);
   }
 
   @Test
