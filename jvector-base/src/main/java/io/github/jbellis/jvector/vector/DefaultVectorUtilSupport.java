@@ -325,14 +325,14 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void quantizePartialSums(float delta, VectorFloat<?> partialSums, VectorFloat<?> partialBest, ByteSequence<?> partialQuantizedSums) {
-    var codebookSize = partialSums.length() / partialBest.length();
-    for (int i = 0; i < partialBest.length(); i++) {
-      var localBest = partialBest.get(i);
+  public void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBases, ByteSequence<?> quantizedPartials) {
+    var codebookSize = partials.length() / partialBases.length();
+    for (int i = 0; i < partialBases.length(); i++) {
+      var localBest = partialBases.get(i);
         for (int j = 0; j < codebookSize; j++) {
-            var val = partialSums.get(i * codebookSize + j);
+            var val = partials.get(i * codebookSize + j);
             var quantized = (short) Math.min((val - localBest) / delta, 65535);
-            partialQuantizedSums.setLittleEndianShort(i * codebookSize + j, quantized);
+            quantizedPartials.setLittleEndianShort(i * codebookSize + j, quantized);
         }
     }
   }
