@@ -24,14 +24,15 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
 
 import java.io.DataOutput;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import java.util.stream.IntStream;
 
 /**
@@ -47,20 +48,16 @@ public class OnHeapGraphIndex implements GraphIndex {
     // the current graph entry node, NO_ENTRY_POINT if not set
     private final AtomicInteger entryPoint = new AtomicInteger(NO_ENTRY_POINT);
 
-    private final DenseIntMap<ConcurrentNeighborSet> nodes;
+    final ConcurrentNeighborMap nodes;
     private final ThreadSafeGrowableBitSet deletedNodes = new ThreadSafeGrowableBitSet(0);
     private final AtomicInteger maxNodeId = new AtomicInteger(NO_ENTRY_POINT);
 
     // max neighbors/edges per node
     final int maxDegree;
-    private final int maxOverflowDegree;
-    private final BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory;
 
-    OnHeapGraphIndex(int M, int maxOverflowDegree, BiFunction<Integer, Integer, ConcurrentNeighborSet> neighborFactory) {
+    OnHeapGraphIndex(int M, int maxOverflowDegree, BuildScoreProvider scoreProvider, float alpha) {
         this.maxDegree = M;
-        this.maxOverflowDegree = maxOverflowDegree;
-        this.neighborFactory = neighborFactory;
-        this.nodes = new DenseIntMap<>(1024);
+        this.nodes = new ConcurrentNeighborMap(scoreProvider, maxDegree, maxOverflowDegree, alpha);
     }
 
     /**
@@ -68,7 +65,7 @@ public class OnHeapGraphIndex implements GraphIndex {
      *
      * @param node the node whose neighbors are returned, represented as an ordinal.
      */
-    ConcurrentNeighborSet getNeighbors(int node) {
+    ConcurrentNeighborMap.Neighbors getNeighbors(int node) {
         return nodes.get(node);
     }
 
@@ -89,22 +86,20 @@ public class OnHeapGraphIndex implements GraphIndex {
      *
      * <p>It is also the responsibility of the caller to ensure that each node is only added once.
      *
-     * @param node the node to add, represented as an ordinal
-     * @return the neighbor set for this node
+     * @param nodeId the node to add, represented as an ordinal
      */
-    public ConcurrentNeighborSet addNode(int node) {
-        var newNeighborSet = neighborFactory.apply(node, maxDegree());
-        addNode(node, newNeighborSet);
-        return newNeighborSet;
+    public void addNode(int nodeId) {
+        nodes.addNode(nodeId);
+        maxNodeId.accumulateAndGet(nodeId, Math::max);
     }
 
     /**
      * Only for use by Builder loading a saved graph
      */
-    void addNode(int node, ConcurrentNeighborSet neighbors) {
-        assert neighbors != null;
-        nodes.put(node, neighbors);
-        maxNodeId.accumulateAndGet(node, Math::max);
+    void addNode(int nodeId, NodeArray nodes) {
+        assert nodes != null;
+        this.nodes.addNode(nodeId, nodes);
+        maxNodeId.accumulateAndGet(nodeId, Math::max);
     }
 
     /**
@@ -141,7 +136,7 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     @Override
     public NodesIterator getNodes() {
-        return nodes.getNodesIterator();
+        return nodes.nodesIterator();
     }
 
     @Override
@@ -157,9 +152,8 @@ public class OnHeapGraphIndex implements GraphIndex {
     public long ramBytesUsedOneNode() {
         // we include the REF_BYTES for the CNS reference here to make it self-contained for addGraphNode()
         int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        return REF_BYTES + ConcurrentNeighborSet.ramBytesUsed(maxOverflowDegree + 1);
+        return REF_BYTES + ConcurrentNeighborMap.neighborRamBytesUsed(nodes.maxOverflowDegree + 1);
     }
-
 
     @Override
     public String toString() {
@@ -213,7 +207,7 @@ public class OnHeapGraphIndex implements GraphIndex {
     }
 
     public boolean containsNode(int nodeId) {
-        return nodes.containsKey(nodeId);
+        return nodes.contains(nodeId);
     }
 
     public double getAverageShortEdges() {
@@ -230,6 +224,10 @@ public class OnHeapGraphIndex implements GraphIndex {
                 .mapToDouble(i -> getNeighbors(i).size())
                 .average()
                 .orElse(Double.NaN);
+    }
+
+    public void setScoreProvider(BuildScoreProvider bsp) {
+        nodes.setScoreProvider(bsp);
     }
 
     public class ConcurrentGraphIndexView implements GraphIndex.View {
@@ -283,19 +281,22 @@ public class OnHeapGraphIndex implements GraphIndex {
             out.writeInt(maxDegree());
 
             // neighbors
-            for (var entry : nodes.entrySet()) {
-                var i = (int) (long) entry.getKey();
-                var neighbors = entry.getValue().iterator();
-                out.writeInt(i);
+            nodes.forEach((nodeId, value) -> {
+                try {
+                    var neighbors = value.iterator();
+                    out.writeInt(nodeId);
 
-                out.writeInt(neighbors.size());
-                for (int n = 0; n < neighbors.size(); n++) {
-                    out.writeInt(neighbors.nextInt());
+                    out.writeInt(neighbors.size());
+                    for (int n = 0; n < neighbors.size(); n++) {
+                        out.writeInt(neighbors.nextInt());
+                    }
+                    assert !neighbors.hasNext();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
                 }
-                assert !neighbors.hasNext();
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 }

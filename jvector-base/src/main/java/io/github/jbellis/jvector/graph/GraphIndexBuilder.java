@@ -169,7 +169,7 @@ public class GraphIndexBuilder implements Closeable {
         this.parallelExecutor = parallelExecutor;
 
         int maxOverflowDegree = (int) (M * neighborOverflow);
-        this.graph = new OnHeapGraphIndex(M, maxOverflowDegree, (node, m) -> new ConcurrentNeighborSet(node, m, maxOverflowDegree, this.scoreProvider, alpha));
+        this.graph = new OnHeapGraphIndex(M, maxOverflowDegree, scoreProvider, alpha);
         this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph));
 
         // in scratch we store candidates in reverse order: worse candidates are first
@@ -185,6 +185,7 @@ public class GraphIndexBuilder implements Closeable {
      */
     public void setBuildScoreProvider(BuildScoreProvider bsp) {
         scoreProvider = bsp;
+        graph.setScoreProvider(bsp);
     }
 
     public OnHeapGraphIndex build(RandomAccessVectorValues ravv) {
@@ -227,10 +228,7 @@ public class GraphIndexBuilder implements Closeable {
 
         // clean up overflowed neighbor lists
         parallelExecutor.submit(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
-            var neighbors = graph.getNeighbors(i);
-            if (neighbors != null) {
-                neighbors.enforceDegree();
-            }
+            graph.nodes.enforceDegree(i);
         })).join();
 
         // reconnect any orphaned nodes.  this will maintain neighbors size
@@ -303,7 +301,7 @@ public class GraphIndexBuilder implements Closeable {
             var neighborNode = neighbors.node[i];
             var neighborScore = neighbors.score[i];
             if (connectionTargets.add(neighborNode)) {
-                graph.getNeighbors(neighborNode).insertNotDiverse(node, neighborScore);
+                graph.nodes.insertNotDiverse(neighborNode, node, neighborScore);
                 return true;
             }
         }
@@ -358,7 +356,7 @@ public class GraphIndexBuilder implements Closeable {
     public long addGraphNode(int node, VectorFloat<?> vector) {
         // do this before adding to in-progress, so a concurrent writer checking
         // the in-progress set doesn't have to worry about uninitialized neighbor sets
-        var newNodeNeighbors = graph.addNode(node);
+        graph.addNode(node);
 
         insertionsInProgress.add(node);
         ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
@@ -382,7 +380,7 @@ public class GraphIndexBuilder implements Closeable {
             // TODO if we made NeighborArray an interface we could wrap the NodeScore[] directly instead of copying
             var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
             var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, ssp.scoreFunction());
-            updateNeighbors(newNodeNeighbors, natural, concurrent);
+            updateNeighbors(node, natural, concurrent);
 
             maybeUpdateEntryPoint(node);
             maybeImproveOlderNode();
@@ -452,10 +450,9 @@ public class GraphIndexBuilder implements Closeable {
             throw new RuntimeException(e);
         }
         var natural = toScratchCandidates(result.getNodes(), naturalScratchPooled);
-        ConcurrentNeighborSet neighbors = graph.getNeighbors(node);
-        neighbors.insertDiverse(natural);
+        var neighbors = graph.nodes.insertDiverse(node, natural);
         // no overflow -- this method gets called from cleanup
-        neighbors.backlink(graph::getNeighbors, 1.0f);
+        neighbors.backlink(1.0f);
     }
 
     public void markNodeDeleted(int node) {
@@ -518,7 +515,6 @@ public class GraphIndexBuilder implements Closeable {
                 // each deleted node has ALL of its neighbors added as candidates, so using approximate
                 // scoring and then re-scoring only the best options later makes sense here
                 var sf = scoreProvider.searchProviderFor(node).scoreFunction();
-                var neighbors = graph.getNeighbors(node);
                 var candidates = new NodeArray(graph.maxDegree);
                 for (var k : e.getValue()) {
                     candidates.insertSorted(k, sf.similarityTo(k));
@@ -545,7 +541,7 @@ public class GraphIndexBuilder implements Closeable {
                 }
 
                 // remove edges to deleted nodes and add the new connections, maintaining diversity
-                neighbors.replaceDeletedNeighbors(toDelete, candidates);
+                graph.nodes.replaceDeletedNeighbors(node, toDelete, candidates);
             });
         }).join();
 
@@ -565,12 +561,7 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     private static Bits createNotSelfBits(int node) {
-        return new Bits() {
-            @Override
-            public boolean get(int index) {
-                return index != node;
-            }
-        };
+        return index -> index != node;
     }
 
     /**
@@ -603,7 +594,7 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
-    private void updateNeighbors(ConcurrentNeighborSet neighbors, NodeArray natural, NodeArray concurrent) {
+    private void updateNeighbors(int nodeId, NodeArray natural, NodeArray concurrent) {
         // if either natural or concurrent is empty, skip the merge
         NodeArray toMerge;
         if (concurrent.size == 0) {
@@ -614,8 +605,8 @@ public class GraphIndexBuilder implements Closeable {
             toMerge = NodeArray.merge(natural, concurrent);
         }
         // toMerge may be approximate-scored, but insertDiverse will compute exact scores for the diverse ones
-        neighbors.insertDiverse(toMerge);
-        neighbors.backlink(graph::getNeighbors, neighborOverflow);
+        var neighbors = graph.nodes.insertDiverse(nodeId, toMerge);
+        neighbors.backlink(neighborOverflow);
     }
 
     private static NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, NodeArray scratch) {
@@ -718,20 +709,15 @@ public class GraphIndexBuilder implements Closeable {
         int maxDegree = in.readInt();
 
         for (int i = 0; i < size; i++) {
-            int node = in.readInt();
+            int nodeId = in.readInt();
             int nNeighbors = in.readInt();
-            var sf = scoreProvider.searchProviderFor(node).exactScoreFunction();
-            var ca = new NodeArray(maxDegree);
+            var sf = scoreProvider.searchProviderFor(nodeId).exactScoreFunction();
+            var ca = new NodeArray(nNeighbors);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();
                 ca.addInOrder(neighbor, sf.similarityTo(neighbor));
             }
-            graph.addNode(node, new ConcurrentNeighborSet(node,
-                                                          maxDegree,
-                                                          (int) (maxDegree * neighborOverflow),
-                                                          scoreProvider,
-                                                          alpha,
-                                                          ca));
+            graph.addNode(nodeId, ca);
         }
 
         graph.updateEntryNode(entryNode);
