@@ -317,12 +317,12 @@ public class ConcurrentNeighborMap {
         private Neighbors insertNotDiverse(int node, float score, ConcurrentNeighborMap map) {
             int maxDegree = map.maxDegree;
             assert size <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
-            // TODO check insertion point before copying
             var next = copy(maxDegree); // called during cleanup -- use actual maxDegree not nodeArrayLength()
             // remove the worst edge to make room for the new one, if necessary
             next.size = min(next.size, maxDegree - 1);
             int insertedAt = next.insertSorted(node, score);
             if (insertedAt == -1) {
+                // "new" node already existed
                 return this;
             }
             next.diverseBefore = min(insertedAt, diverseBefore);
@@ -439,6 +439,7 @@ public class ConcurrentNeighborMap {
             var next = copy(map.nodeArrayLength());
             int insertionPoint = next.insertSorted(neighborId, score);
             if (insertionPoint == -1) {
+                // "new" node already existed
                 return this;
             }
 
