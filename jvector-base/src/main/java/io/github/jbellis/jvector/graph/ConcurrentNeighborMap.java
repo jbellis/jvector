@@ -239,7 +239,7 @@ public class ConcurrentNeighborMap {
                 return new NeighborWithShortEdges(this, Double.NaN);
             }
             var next = copy();
-            double shortEdges = retainDiverse(next, diverseBefore, true, map);
+            double shortEdges = retainDiverse(next, diverseBefore, map);
             next.diverseBefore = next.size;
             return new NeighborWithShortEdges(next, shortEdges);
         }
@@ -277,7 +277,7 @@ public class ConcurrentNeighborMap {
                 merged = rescoreAndRetainDiverse(this, toMerge, map);
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
-                retainDiverse(merged, 0, map.scoreProvider.isExact(), map);
+                retainDiverse(merged, 0, map);
             }
             // insertDiverse usually gets called with a LOT of candidates, so trim down the resulting NodeArray
             var nextNodes = merged.node.length <= map.nodeArrayLength() ? merged : merged.copy(map.nodeArrayLength());
@@ -289,29 +289,9 @@ public class ConcurrentNeighborMap {
          * a new NodeArray; does not modify `old` or `toMerge`
          */
         private NodeArray rescoreAndRetainDiverse(NodeArray old, NodeArray toMerge, ConcurrentNeighborMap map) {
-            NodeArray merged;
-            if (map.scoreProvider.isExact()) {
-                merged = NodeArray.merge(old, toMerge);
-            } else {
-                // merge assumes that node X will always have the same score in both arrays, so we need
-                // to compute approximate scores for the existing nodes to make the comparison valid.
-                // (we expect to have many more new candidates than existing neighbors)
-                var approximatedOld = computeApproximatelyScored(old, map);
-                merged = NodeArray.merge(approximatedOld, toMerge);
-            }
-            // retainDiverse will switch back to exact-scored
-            retainDiverse(merged, 0, map.scoreProvider.isExact(), map);
+            NodeArray merged = NodeArray.merge(old, toMerge);
+            retainDiverse(merged, 0, map);
             return merged;
-        }
-
-        private NodeArray computeApproximatelyScored(NodeArray exact, ConcurrentNeighborMap map) {
-            var approximated = new NodeArray(exact.size);
-            var sf = map.scoreProvider.diversityProvider().createFor(nodeId).scoreFunction();
-            assert !sf.isExact();
-            for (int i = 0; i < exact.size; i++) {
-                approximated.insertSorted(exact.node[i], sf.similarityTo(exact.node[i]));
-            }
-            return approximated;
         }
 
         private Neighbors insertNotDiverse(int node, float score, ConcurrentNeighborMap map) {
@@ -333,45 +313,14 @@ public class ConcurrentNeighborMap {
          * Retain the diverse neighbors, updating `neighbors` in place
          * @return post-diversity short edges fraction
          */
-        private double retainDiverse(NodeArray neighbors, int diverseBefore, boolean isExactScored, ConcurrentNeighborMap map) {
+        private double retainDiverse(NodeArray neighbors, int diverseBefore, ConcurrentNeighborMap map) {
             BitSet selected = new FixedBitSet(neighbors.size());
             for (int i = 0; i < min(diverseBefore, map.maxDegree); i++) {
                 selected.set(i);
             }
 
-            var dp = map.scoreProvider.diversityProvider();
-            double shortEdges;
-            if (isExactScored) {
-                // either the provider is natively exact, or we're on the backlink->insert path,
-                // so `neighbors` is exact-scored
-                shortEdges = retainDiverseInternal(neighbors, diverseBefore, selected, node1 -> dp.createFor(node1).exactScoreFunction(), map);
-                neighbors.retain(selected);
-            } else {
-                // provider is natively approximate and we're on the insertDiverse path
-                assert !map.scoreProvider.isExact();
-                assert diverseBefore == 0;
-
-                // rerank with exact scores
-                // Note: this is actually faster than computing diversity using approximate scores (and then rescoring only
-                // the remaining neighbors), we lose more from loading from dozens of codebook locations in memory than we
-                // do from touching disk some extra times to get the exact score
-                var sf = dp.createFor(nodeId).exactScoreFunction();
-                var exactScoredNeighbors = new NodeArray(neighbors.size);
-                for (int i = 0; i < neighbors.size; i++) {
-                    int neighborId = neighbors.node[i];
-                    float score = sf.similarityTo(neighborId);
-                    exactScoredNeighbors.insertSorted(neighborId, score);
-                }
-
-                // compute diversity against the exact-scored and reordered list
-                shortEdges = retainDiverseInternal(exactScoredNeighbors, 0, selected, node1 -> dp.createFor(node1).exactScoreFunction(), map);
-
-                // copy the final result into the original container
-                neighbors.clear();
-                for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-                    neighbors.addInOrder(exactScoredNeighbors.node[i], exactScoredNeighbors.score[i]);
-                }
-            }
+            double shortEdges = retainDiverseInternal(neighbors, diverseBefore, selected, map);
+            neighbors.retain(selected);
             return shortEdges;
         }
 
@@ -379,7 +328,7 @@ public class ConcurrentNeighborMap {
          * update `selected` with the diverse members of `neighbors`.  `neighbors` is not modified
          * @return the fraction of short edges (neighbors within alpha=1.0)
          */
-        private double retainDiverseInternal(NodeArray neighbors, int diverseBefore, BitSet selected, ScoreFunction.Provider scoreProvider, ConcurrentNeighborMap map) {
+        private double retainDiverseInternal(NodeArray neighbors, int diverseBefore, BitSet selected, ConcurrentNeighborMap map) {
             int nSelected = diverseBefore;
             double shortEdges = Double.NaN;
             // add diverse candidates, gradually increasing alpha to the threshold
@@ -392,7 +341,7 @@ public class ConcurrentNeighborMap {
 
                     int cNode = neighbors.node()[i];
                     float cScore = neighbors.score()[i];
-                    var sf = scoreProvider.scoreFunctionFor(cNode);
+                    var sf = map.scoreProvider.diversityProviderFor(cNode).scoreFunction();
                     if (isDiverse(cNode, cScore, neighbors, sf, selected, a)) {
                         selected.set(i);
                         nSelected++;
@@ -447,7 +396,7 @@ public class ConcurrentNeighborMap {
             // we do a lot of duplicate work scanning nodes that we won't remove
             next.diverseBefore = min(insertionPoint, diverseBefore);
             if (next.size > hardMax) {
-                retainDiverse(next, next.diverseBefore, true, map);
+                retainDiverse(next, next.diverseBefore, map);
                 next.diverseBefore = next.size;
             }
 

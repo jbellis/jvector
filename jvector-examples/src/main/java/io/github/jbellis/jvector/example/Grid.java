@@ -31,7 +31,6 @@ import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.LVQ;
-import io.github.jbellis.jvector.graph.disk.LvqVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
@@ -183,8 +182,7 @@ public class Grid {
         if (scoringWriter == null) {
             throw new IllegalStateException("For simplicity, Bench looks for exactly {LVQ} feature set for scoring compressed builds. With minor code edits you can switch this to {INLINE_VECTORS} instead.");
         }
-        var ivv = new LvqVectorValues(floatVectors.dimension(), lvq, scoringWriter);
-        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ivv, pq);
+        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
         builder.setBuildScoreProvider(bsp);
 
         // build the graph incrementally
@@ -223,7 +221,6 @@ public class Grid {
             try {
                 writer.write(writeSuppliers);
                 writer.close();
-                ivv.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

@@ -17,17 +17,12 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
-import io.github.jbellis.jvector.disk.ByteBufferReader;
-import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import org.agrona.collections.Int2IntHashMap;
 
 import java.io.Closeable;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.Map;
@@ -90,6 +85,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.close();
     }
 
+    // used by Cassandra
     public BufferedRandomAccessWriter getOutput() {
         return out;
     }
@@ -128,60 +124,6 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 + headerSize
                 + inlineBytes // previous nodes
                 + Integer.BYTES; // the ordinal of the node whose features we're about to write
-    }
-
-    @SuppressWarnings("resource")
-    public FeatureSource getFeatureSource() {
-        RandomAccessFile in;
-        try {
-            in = new RandomAccessFile(outPath.toFile(), "r");
-        } catch (FileNotFoundException e) {
-            throw new AssertionError(e);
-        }
-
-        return new FeatureSource() {
-            private byte[] scratch;
-
-            @Override
-            public RandomAccessReader inlineReaderForNode(int ordinal, FeatureId featureId) throws IOException {
-                // validation
-                if (ordinal > maxOrdinalWritten) {
-                    throw new IllegalArgumentException("Ordinal " + ordinal + " has not been written yet");
-                }
-                var toRead = featureMap.get(featureId);
-                if (toRead == null) {
-                    throw new IllegalStateException("Feature not present: " + featureId);
-                }
-
-                synchronized (OnDiskGraphIndexWriter.this) {
-                    out.flush();
-                }
-
-                // resize the buffer if necessary
-                if (scratch == null || scratch.length < toRead.inlineSize()) {
-                    scratch = new byte[toRead.inlineSize()];
-                }
-
-                // read the feature
-                in.seek(featureOffsetForOrdinal(ordinal));
-                for (var feature : featureMap.values()) {
-                    var featureSize = feature.inlineSize();
-                    if (feature.id() != featureId) {
-                        in.seek(in.getFilePointer() + featureSize);
-                        continue;
-                    }
-
-                    in.readFully(scratch, 0, featureSize);
-                    return new ByteBufferReader(ByteBuffer.wrap(scratch, 0, featureSize));
-                }
-                throw new AssertionError(); // we checked for the feature in the map at the start
-            }
-
-            @Override
-            public void close() throws IOException {
-                in.close();
-            }
-        };
     }
 
     /**
@@ -278,6 +220,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     }
 
     /** CRC32 checksum of bytes written since the starting offset */
+    // used by Cassandra
     public synchronized long checksum() throws IOException {
         long endOffset = out.position();
         return out.checksum(startOffset, endOffset);
@@ -320,6 +263,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             return this;
         }
 
+        // used by Cassandra
         public Builder withStartOffset(long startOffset) {
             this.startOffset = startOffset;
             return this;

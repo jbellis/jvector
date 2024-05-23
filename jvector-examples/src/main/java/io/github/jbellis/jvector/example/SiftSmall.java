@@ -30,7 +30,6 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.InlineVectorValues;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
@@ -223,8 +222,6 @@ public class SiftSmall {
                      .with(new InlineVectors(ravv.dimension()))
                      .withMapper(new OnDiskGraphIndexWriter.IdentityMapper())
                      .build();
-             // you can use the partially written index as a source of the vectors written so far
-             InlineVectorValues ivv = new InlineVectorValues(ravv.dimension(), writer);
              // output for the compressed vectors
              DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
         {
@@ -233,7 +230,7 @@ public class SiftSmall {
             PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
 
             // now we can create the actual BuildScoreProvider based on PQ + reranking
-            BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, ivv, pqv);
+            BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
             builder.setBuildScoreProvider(bsp);
 
             // build the index vector-at-a-time (on disk)
