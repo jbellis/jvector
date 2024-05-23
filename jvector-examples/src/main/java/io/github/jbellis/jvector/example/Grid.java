@@ -139,6 +139,9 @@ public class Grid {
                     }
                 });
             }
+            for (var index : indexes.values()) {
+                index.close();
+            }
         } finally {
             for (int n = 0; n < featureSets.size(); n++) {
                 Files.deleteIfExists(testDirectory.resolve("graph" + n));
@@ -225,6 +228,7 @@ public class Grid {
                 throw new UncheckedIOException(e);
             }
         });
+        builder.close();
         System.out.format("Build and write %s in %ss%n", featureSets, (System.nanoTime() - start) / 1_000_000_000.0);
 
         // open indexes
