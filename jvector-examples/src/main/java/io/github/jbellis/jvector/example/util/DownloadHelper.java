@@ -66,25 +66,26 @@ public class DownloadHelper {
 
         try (S3AsyncClient s3Client = s3AsyncClientBuilder().build()) {
             S3TransferManager tm = S3TransferManager.builder().s3Client(s3Client).build();
-            for (var remotePath : mfd.paths()) {
-                Path path = Paths.get(fvecDir).resolve(remotePath);
-                if (Files.exists(path)) {
+            for (var pathFragment : mfd.paths()) {
+                Path localPath = Paths.get(fvecDir).resolve(pathFragment);
+                if (Files.exists(localPath)) {
                     continue;
                 }
 
-                System.out.println("Downloading: " + remotePath);
+                var urlPath = pathFragment.toString().replace('\\', '/');
+                System.out.println("Downloading: " + urlPath);
                 DownloadFileRequest downloadFileRequest =
                         DownloadFileRequest.builder()
-                                .getObjectRequest(b -> b.bucket(bucketName).key(remotePath.toString()))
+                                .getObjectRequest(b -> b.bucket(bucketName).key(urlPath))
                                 .addTransferListener(LoggingTransferListener.create())
-                                .destination(Paths.get(path.toString()))
+                                .destination(Paths.get(localPath.toString()))
                                 .build();
 
                 // 3 retries
                 for (int i = 0; i < 3; i++) {
                     FileDownload downloadFile = tm.downloadFile(downloadFileRequest);
                     CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
-                    long downloadedSize = Files.size(path);
+                    long downloadedSize = Files.size(localPath);
 
                     // Check if downloaded file size matches the expected size
                     if (downloadedSize == downloadResult.response().contentLength()) {
@@ -106,8 +107,8 @@ public class DownloadHelper {
 
     public static void maybeDownloadHdf5(String datasetName) {
         Path path = Path.of(Hdf5Loader.HDF5_DIR);
-        var fullPath = path.resolve(datasetName);
-        if (Files.exists(fullPath)) {
+        var localPath = path.resolve(datasetName);
+        if (Files.exists(localPath)) {
             return;
         }
 
@@ -135,7 +136,7 @@ public class DownloadHelper {
 
         try (InputStream in = connection.getInputStream()) {
             Files.createDirectories(path);
-            Files.copy(in, fullPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(in, localPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             System.out.println("Error downloading data: " + e.getMessage());
             System.exit(1);
