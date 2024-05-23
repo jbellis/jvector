@@ -39,7 +39,7 @@ public class Hdf5Loader {
         // infer the similarity
         VectorSimilarityFunction similarityFunction;
         if (filename.contains("-angular") || filename.contains("-dot")) {
-            similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
+            similarityFunction = VectorSimilarityFunction.COSINE;
         }
         else if (filename.contains("-euclidean")) {
             similarityFunction = VectorSimilarityFunction.EUCLIDEAN;
