@@ -83,7 +83,7 @@ public class Grid {
                        List<? extends Set<FeatureId>> featureSets,
                        List<Function<DataSet, CompressorParameters>> buildCompressors,
                        List<Function<DataSet, CompressorParameters>> compressionGrid,
-                       List<Integer> efSearchFactor) throws IOException
+                       List<Double> efSearchFactor) throws IOException
     {
         var testDirectory = Files.createTempDirectory(dirPrefix);
         try {
@@ -106,7 +106,7 @@ public class Grid {
                             int efConstruction,
                             VectorCompressor<?> buildCompressor,
                             List<Function<DataSet, CompressorParameters>> compressionGrid,
-                            List<Integer> efSearchOptions,
+                            List<Double> efSearchOptions,
                             DataSet ds,
                             Path testDirectory) throws IOException
     {
@@ -319,15 +319,16 @@ public class Grid {
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
     static final Map<String, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
 
-    private static void testConfiguration(ConfiguredSystem cs, List<Integer> efSearchOptions) {
+    private static void testConfiguration(ConfiguredSystem cs, List<Double> efSearchOptions) {
         var topK = cs.ds.groundTruth.get(0).size();
         System.out.format("Using %s:%n", cs.index);
-        for (int overquery : efSearchOptions) {
+        for (var overquery : efSearchOptions) {
             var start = System.nanoTime();
-            var pqr = performQueries(cs, topK, topK * overquery, 2);
+            int rerankK = (int) (topK * overquery);
+            var pqr = performQueries(cs, topK, rerankK, 2);
             var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
             System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                              topK, overquery, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+                              topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
 
         }
     }

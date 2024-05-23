@@ -44,7 +44,7 @@ public class Bench {
 
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(1, 2);
+        var efSearchGrid = List.of(1.0, 2.0);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
                 __ -> CompressorParameters.NONE
@@ -112,7 +112,7 @@ public class Bench {
         }
     }
 
-    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, CompressorParameters>> buildCompression, List<EnumSet<FeatureId>> featureSets, List<Function<DataSet, CompressorParameters>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Integer> efSearchGrid) throws IOException {
+    private static void executeNw(List<String> coreFiles, Pattern pattern, List<Function<DataSet, CompressorParameters>> buildCompression, List<EnumSet<FeatureId>> featureSets, List<Function<DataSet, CompressorParameters>> compressionGrid, List<Integer> mGrid, List<Integer> efConstructionGrid, List<Double> efSearchGrid) throws IOException {
         for (var nwDatasetName : coreFiles) {
             if (pattern.matcher(nwDatasetName).find()) {
                 var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
