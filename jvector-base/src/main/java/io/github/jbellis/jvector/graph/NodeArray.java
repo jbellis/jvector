@@ -165,20 +165,26 @@ public class NodeArray {
      * @return the insertion point of the new node, or -1 if it already existed
      */
     public int insertSorted(int newNode, float newScore) {
-        if (size == node.length) {
-            growArrays();
-        }
-        int insertionPoint = descSortFindRightMostInsertionPoint(newScore);
-        if (duplicateExistsNear(insertionPoint, newNode, newScore)) {
+        int insertionPoint = findInsertionPoint(newNode, newScore);
+        if (insertionPoint < 0) {
             return -1;
         }
 
+        if (size == node.length) {
+            growArrays();
+        }
+
+        insertSortedInternal(insertionPoint, newNode, newScore);
+
+        return insertionPoint;
+    }
+
+    protected void insertSortedInternal(int insertionPoint, int newNode, float newScore) {
         System.arraycopy(node, insertionPoint, node, insertionPoint + 1, size - insertionPoint);
         System.arraycopy(score, insertionPoint, score, insertionPoint + 1, size - insertionPoint);
         node[insertionPoint] = newNode;
         score[insertionPoint] = newScore;
         ++size;
-        return insertionPoint;
     }
 
     private boolean duplicateExistsNear(int insertionPoint, int newNode, float newScore) {
@@ -282,15 +288,38 @@ public class NodeArray {
         return "NodeArray[" + size + "]";
     }
 
-    protected final int descSortFindRightMostInsertionPoint(float newScore) {
-        int start = 0;
+    /**
+     * Find the insertion point for a new node that maintains increasing score order.
+     * No guarantees are made about the order of nodes with the same score.
+     * <p>
+     * If the new node already exists, the method returns -1.  (It is assumed that the same node will
+     * not be inserted with a different score.)
+     * <p>
+     * If the new node's score is worse than all existing nodes, the insertion point will be equal
+     * to `size`.  It is the caller's responsibility to grow the arrays, if necessary, before performing
+     * the insert.
+     *
+     * @param newNode  The id of the new node to be inserted.
+     * @param newScore The score of the new node to be inserted.
+     * @return The index at which the new node should be inserted, or -1 if it already exists.
+     */
+    protected final int findInsertionPoint(int newNode, float newScore) {
+        // find the insertion point
+        int insertionPoint = 0;
         int end = size - 1;
-        while (start <= end) {
-            int mid = (start + end) / 2;
+        while (insertionPoint <= end) {
+            int mid = (insertionPoint + end) / 2;
             if (score[mid] < newScore) end = mid - 1;
-            else start = mid + 1;
+            else insertionPoint = mid + 1;
         }
-        return start;
+
+        // if the node already exists, it should be in the group of nodes with the same score
+        // that contains the insertion point
+        if (duplicateExistsNear(insertionPoint, newNode, newScore)) {
+            return -1;
+        }
+
+        return insertionPoint;
     }
 
     public static long ramBytesUsed(int size) {

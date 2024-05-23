@@ -270,8 +270,7 @@ public class ConcurrentNeighborMap {
                 return this;
             }
 
-            // merge all the candidates into a single array and compute the diverse ones to keep
-            // from that.
+            // merge all the candidates into a single array and compute the diverse ones to keep from that.
             NodeArray merged;
             if (size > 0) {
                 merged = rescoreAndRetainDiverse(this, toMerge, map);
@@ -317,12 +316,12 @@ public class ConcurrentNeighborMap {
         private Neighbors insertNotDiverse(int node, float score, ConcurrentNeighborMap map) {
             int maxDegree = map.maxDegree;
             assert size <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
-            // TODO check insertion point before copying
             var next = copy(maxDegree); // called during cleanup -- use actual maxDegree not nodeArrayLength()
             // remove the worst edge to make room for the new one, if necessary
             next.size = min(next.size, maxDegree - 1);
             int insertedAt = next.insertSorted(node, score);
             if (insertedAt == -1) {
+                // turns out the new node is already in our edge list.  this is very rare so we don't check for it up front
                 return this;
             }
             next.diverseBefore = min(insertedAt, diverseBefore);
@@ -436,11 +435,14 @@ public class ConcurrentNeighborMap {
             assert hardMax <= map.maxOverflowDegree
                     : String.format("overflow %s could exceed max overflow degree %d", overflow, map.maxOverflowDegree);
 
-            var next = copy(map.nodeArrayLength());
-            int insertionPoint = next.insertSorted(neighborId, score);
-            if (insertionPoint == -1) {
+            // avoid making a copy if the new neighbor already exists or we're at capacity and it's worse than our worst edge
+            int insertionPoint = findInsertionPoint(neighborId, score);
+            if (insertionPoint == -1 || insertionPoint == hardMax) {
                 return this;
             }
+            // copy and perform the insert
+            var next = copy(map.nodeArrayLength());
+            next.insertSortedInternal(insertionPoint, neighborId, score);
 
             // batch up the enforcement of the max connection limit, since otherwise
             // we do a lot of duplicate work scanning nodes that we won't remove
