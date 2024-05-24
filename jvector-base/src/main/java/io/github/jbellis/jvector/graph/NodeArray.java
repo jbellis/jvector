@@ -32,6 +32,8 @@ import org.agrona.collections.IntHashSet;
 
 import java.util.Arrays;
 
+import static java.lang.Math.min;
+
 /**
  * NodeArray encodes nodeids and their scores relative to some other element 
  * (a query vector, or another graph node) as a pair of growable arrays. 
@@ -41,17 +43,20 @@ import java.util.Arrays;
 public class NodeArray {
     public static final NodeArray EMPTY = new NodeArray(0);
 
-    protected int size;
-    float[] score;
-    int[] node;
-
-    protected NodeArray() {
-        // let subclasses do their thing
-    }
+    private int size;
+    private float[] scores;
+    private int[] nodes;
 
     public NodeArray(int initialSize) {
-        node = new int[initialSize];
-        score = new float[initialSize];
+        nodes = new int[initialSize];
+        scores = new float[initialSize];
+    }
+
+    // this idiosyncratic constructor exists for the benefit of subclass ConcurrentNeighborMap
+    protected NodeArray(NodeArray nodeArray) {
+        this.size = nodeArray.size();
+        this.nodes = nodeArray.nodes;
+        this.scores = nodeArray.scores;
     }
 
     /** always creates a new NodeArray to return, even when a1 or a2 is empty */
@@ -67,37 +72,37 @@ public class NodeArray {
         // loop through both source arrays, adding the highest score element to the merged array,
         // until we reach the end of one of the sources
         while (i < a1.size() && j < a2.size()) {
-            if (a1.score()[i] < a2.score[j]) {
+            if (a1.scores[i] < a2.scores[j]) {
                 // add from a2
-                if (a2.score[j] != lastAddedScore) {
+                if (a2.scores[j] != lastAddedScore) {
                     nodesWithLastScore.clear();
-                    lastAddedScore = a2.score[j];
+                    lastAddedScore = a2.scores[j];
                 }
-                if (nodesWithLastScore.add(a2.node[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
+                if (nodesWithLastScore.add(a2.nodes[j])) {
+                    merged.addInOrder(a2.nodes[j], a2.scores[j]);
                 }
                 j++;
-            } else if (a1.score()[i] > a2.score[j]) {
+            } else if (a1.scores[i] > a2.scores[j]) {
                 // add from a1
-                if (a1.score()[i] != lastAddedScore) {
+                if (a1.scores[i] != lastAddedScore) {
                     nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
+                    lastAddedScore = a1.scores[i];
                 }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
+                if (nodesWithLastScore.add(a1.nodes[i])) {
+                    merged.addInOrder(a1.nodes[i], a1.scores[i]);
                 }
                 i++;
             } else {
                 // same score -- add both
-                if (a1.score()[i] != lastAddedScore) {
+                if (a1.scores[i] != lastAddedScore) {
                     nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
+                    lastAddedScore = a1.scores[i];
                 }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
+                if (nodesWithLastScore.add(a1.nodes[i])) {
+                    merged.addInOrder(a1.nodes[i], a1.scores[i]);
                 }
-                if (nodesWithLastScore.add(a2.node()[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
+                if (nodesWithLastScore.add(a2.nodes[j])) {
+                    merged.addInOrder(a2.nodes[j], a2.scores[j]);
                 }
                 i++;
                 j++;
@@ -107,30 +112,30 @@ public class NodeArray {
         // If elements remain in a1, add them
         if (i < a1.size()) {
             // avoid duplicates while adding nodes with the same score
-            while (i < a1.size && a1.score()[i] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
+            while (i < a1.size && a1.scores[i] == lastAddedScore) {
+                if (!nodesWithLastScore.contains(a1.nodes[i])) {
+                    merged.addInOrder(a1.nodes[i], a1.scores[i]);
                 }
                 i++;
             }
             // the remaining nodes have a different score, so we can bulk-add them
-            System.arraycopy(a1.node, i, merged.node, merged.size, a1.size - i);
-            System.arraycopy(a1.score, i, merged.score, merged.size, a1.size - i);
+            System.arraycopy(a1.nodes, i, merged.nodes, merged.size, a1.size - i);
+            System.arraycopy(a1.scores, i, merged.scores, merged.size, a1.size - i);
             merged.size += a1.size - i;
         }
 
         // If elements remain in a2, add them
         if (j < a2.size()) {
             // avoid duplicates while adding nodes with the same score
-            while (j < a2.size && a2.score[j] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a2.node[j])) {
-                    merged.addInOrder(a2.node[j], a2.score[j]);
+            while (j < a2.size && a2.scores[j] == lastAddedScore) {
+                if (!nodesWithLastScore.contains(a2.nodes[j])) {
+                    merged.addInOrder(a2.nodes[j], a2.scores[j]);
                 }
                 j++;
             }
             // the remaining nodes have a different score, so we can bulk-add them
-            System.arraycopy(a2.node, j, merged.node, merged.size, a2.size - j);
-            System.arraycopy(a2.score, j, merged.score, merged.size, a2.size - j);
+            System.arraycopy(a2.nodes, j, merged.nodes, merged.size, a2.size - j);
+            System.arraycopy(a2.scores, j, merged.scores, merged.size, a2.size - j);
             merged.size += a2.size - j;
         }
 
@@ -142,19 +147,19 @@ public class NodeArray {
      * nodes.
      */
     public void addInOrder(int newNode, float newScore) {
-        if (size == node.length) {
+        if (size == nodes.length) {
             growArrays();
         }
         if (size > 0) {
-            float previousScore = score[size - 1];
+            float previousScore = scores[size - 1];
             assert ((previousScore >= newScore))
                     : "Nodes are added in the incorrect order! Comparing "
                     + newScore
                     + " to "
-                    + Arrays.toString(ArrayUtil.copyOfSubArray(score, 0, size));
+                    + Arrays.toString(ArrayUtil.copyOfSubArray(scores, 0, size));
         }
-        node[size] = newNode;
-        score[size] = newScore;
+        nodes[size] = newNode;
+        scores[size] = newScore;
         ++size;
     }
 
@@ -165,7 +170,7 @@ public class NodeArray {
      * @return the insertion point of the new node, or -1 if it already existed
      */
     public int insertSorted(int newNode, float newScore) {
-        if (size == node.length) {
+        if (size == nodes.length) {
             growArrays();
         }
         int insertionPoint = descSortFindRightMostInsertionPoint(newScore);
@@ -173,25 +178,25 @@ public class NodeArray {
             return -1;
         }
 
-        System.arraycopy(node, insertionPoint, node, insertionPoint + 1, size - insertionPoint);
-        System.arraycopy(score, insertionPoint, score, insertionPoint + 1, size - insertionPoint);
-        node[insertionPoint] = newNode;
-        score[insertionPoint] = newScore;
+        System.arraycopy(nodes, insertionPoint, nodes, insertionPoint + 1, size - insertionPoint);
+        System.arraycopy(scores, insertionPoint, scores, insertionPoint + 1, size - insertionPoint);
+        nodes[insertionPoint] = newNode;
+        scores[insertionPoint] = newScore;
         ++size;
         return insertionPoint;
     }
 
     private boolean duplicateExistsNear(int insertionPoint, int newNode, float newScore) {
         // Check to the left
-        for (int i = insertionPoint - 1; i >= 0 && score[i] == newScore; i--) {
-            if (node[i] == newNode) {
+        for (int i = insertionPoint - 1; i >= 0 && scores[i] == newScore; i--) {
+            if (nodes[i] == newNode) {
                 return true;
             }
         }
 
         // Check to the right
-        for (int i = insertionPoint; i < size && score[i] == newScore; i++) {
-            if (node[i] == newNode) {
+        for (int i = insertionPoint; i < size && scores[i] == newScore; i++) {
+            if (nodes[i] == newNode) {
                 return true;
             }
         }
@@ -216,8 +221,8 @@ public class NodeArray {
             if (selected.get(readIdx)) {
                 if (writeIdx != readIdx) {
                     // Move the selected entries to the front while maintaining their relative order
-                    node[writeIdx] = node[readIdx];
-                    score[writeIdx] = score[readIdx];
+                    nodes[writeIdx] = nodes[readIdx];
+                    scores[writeIdx] = scores[readIdx];
                 }
                 // else { we haven't created any gaps in the backing arrays yet, so we don't need to move anything }
                 writeIdx++;
@@ -238,29 +243,18 @@ public class NodeArray {
 
         NodeArray copy = new NodeArray(newSize);
         copy.size = size;
-        System.arraycopy(node, 0, copy.node, 0, size);
-        System.arraycopy(score, 0, copy.score, 0, size);
+        System.arraycopy(nodes, 0, copy.nodes, 0, size);
+        System.arraycopy(scores, 0, copy.scores, 0, size);
         return copy;
     }
 
     protected final void growArrays() {
-        node = ArrayUtil.grow(node);
-        score = ArrayUtil.growExact(score, node.length);
+        nodes = ArrayUtil.grow(nodes);
+        scores = ArrayUtil.growExact(scores, nodes.length);
     }
 
     public int size() {
         return size;
-    }
-
-    /**
-     * Direct access to the internal list of node ids; provided for efficient writing of the graph
-     */
-    public int[] node() {
-        return node;
-    }
-
-    public float[] score() {
-        return score;
     }
 
     public void clear() {
@@ -272,14 +266,20 @@ public class NodeArray {
     }
 
     public void removeIndex(int idx) {
-        System.arraycopy(node, idx + 1, node, idx, size - idx - 1);
-        System.arraycopy(score, idx + 1, score, idx, size - idx - 1);
+        System.arraycopy(nodes, idx + 1, nodes, idx, size - idx - 1);
+        System.arraycopy(scores, idx + 1, scores, idx, size - idx - 1);
         size--;
     }
 
     @Override
     public String toString() {
-        return "NodeArray[" + size + "]";
+        var sb = new StringBuilder("NodeArray(");
+        sb.append(size).append("/").append(nodes.length).append(") [");
+        for (int i = 0; i < size; i++) {
+            sb.append("(").append(nodes[i]).append(",").append(scores[i]).append(")").append(", ");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     protected final int descSortFindRightMostInsertionPoint(float newScore) {
@@ -287,7 +287,7 @@ public class NodeArray {
         int end = size - 1;
         while (start <= end) {
             int mid = (start + end) / 2;
-            if (score[mid] < newScore) end = mid - 1;
+            if (scores[mid] < newScore) end = mid - 1;
             else start = mid + 1;
         }
         return start;
@@ -311,7 +311,7 @@ public class NodeArray {
     @VisibleForTesting
     boolean contains(int node) {
         for (int i = 0; i < size; i++) {
-            if (this.node[i] == node) {
+            if (this.nodes[i] == node) {
                 return true;
             }
         }
@@ -320,6 +320,32 @@ public class NodeArray {
 
     @VisibleForTesting
     int[] copyDenseNodes() {
-        return Arrays.copyOf(node, size);
+        return Arrays.copyOf(nodes, size);
+    }
+
+    @VisibleForTesting
+    float[] copyDenseScores() {
+        return Arrays.copyOf(scores, size);
+    }
+
+    /**
+     * Insert a new node, without growing the array.  If the array is full, drop the worst existing node to make room.
+     * (Even if the worst existing one is better than newNode!)
+     */
+    protected int insertOrReplaceWorst(int newNode, float newScore) {
+        size = min(size, nodes.length - 1);
+        return insertSorted(newNode, newScore);
+    }
+
+    public float getScore(int i) {
+        return scores[i];
+    }
+
+    public int getNode(int i) {
+        return nodes[i];
+    }
+
+    protected int getArrayLength() {
+        return nodes.length;
     }
 }
