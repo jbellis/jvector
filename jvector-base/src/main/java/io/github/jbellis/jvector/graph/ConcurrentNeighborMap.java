@@ -37,7 +37,7 @@ public class ConcurrentNeighborMap {
     private final float alpha;
 
     /** used to compute diversity */
-    private BuildScoreProvider scoreProvider;
+    private final BuildScoreProvider scoreProvider;
 
     /** the maximum number of neighbors desired per node */
     public final int maxDegree;
@@ -146,10 +146,6 @@ public class ConcurrentNeighborMap {
 
     public void forEach(DenseIntMap.IntBiConsumer<Neighbors> consumer) {
         neighbors.forEach(consumer);
-    }
-
-    public void setScoreProvider(BuildScoreProvider bsp) {
-        scoreProvider = bsp;
     }
 
     int nodeArrayLength() {
