@@ -271,7 +271,10 @@ public class ConcurrentNeighborMap {
             assert size() <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
             var next = copy(maxDegree); // we are only called during cleanup -- use actual maxDegree not nodeArrayLength()
             int insertedAt = next.insertOrReplaceWorst(node, score);
-            assert insertedAt >= 0;
+            if (insertedAt == -1) {
+                // node already existed in the array -- this is rare enough that we don't check up front
+                return this;
+            }
             next.diverseBefore = min(insertedAt, diverseBefore);
             return next;
         }
