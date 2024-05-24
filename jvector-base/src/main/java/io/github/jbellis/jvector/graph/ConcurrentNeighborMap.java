@@ -184,13 +184,6 @@ public class ConcurrentNeighborMap {
         /** entries in `nodes` before this index are diverse and don't need to be checked again */
         private int diverseBefore;
 
-        private Neighbors(int nodeId, int initialSize, int diverseBefore)
-        {
-            super(initialSize);
-            this.nodeId = nodeId;
-            this.diverseBefore = diverseBefore;
-        }
-
         /**
          * uses the node and score references directly from `nodeArray`, without copying
          * `nodeArray` is assumed to have had diversity enforced already
