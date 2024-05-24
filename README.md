@@ -197,38 +197,33 @@ This set of functionality is the classic DiskANN design.
 
 #### Step 6: building a larger-than-memory index
 
-JVector can also apply two-phase search to allow building a larger than memory index–only the compressed vectors are kept in memory, while the full-sized ones are kept in the on-disk index.
+JVector can also apply PQ compression to allow indexing a larger than memory dataset: only the compressed vectors are kept in memory.
 
-First we need to set up an OnDiskGraphIndexWriter with full control over the construction process.  From that we’ll derive a RandomAccessVectorValues class called InlineVectorValues that knows how to read the full-resolution vectors from the index while it is being constructed.
+First we need to set up a PQVectors instance that we can add new vectors to, and a BuildScoreProvider using it:
 ```java
         // compute the codebook, but don't encode any vectors yet
         ProductQuantization pq = ProductQuantization.compute(ravv, 16, 256, true);
 
+        // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
+        // this is used to score the construction searches
+        List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
+        PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
+        BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
+```
+
+Then we need to set up an OnDiskGraphIndexWriter with full control over the construction process.
+```java
         Path indexPath = Files.createTempFile("siftsmall", ".inline");
         Path pqPath = Files.createTempFile("siftsmall", ".pq");
-        // Builder creation looks mostly the same, but we need to set the BuildScoreProvider after the PQVectors are created
-        try (GraphIndexBuilder builder = new GraphIndexBuilder(null,
-                                                               ravv.dimension(), 16, 100, 1.2f, 1.2f);
+        // Builder creation looks mostly the same
+        try (GraphIndexBuilder builder = new GraphIndexBuilder(bsp, ravv.dimension(), 16, 100, 1.2f, 1.2f);
              // explicit Writer for the first time, this is what's behind OnDiskGraphIndex.write
              OnDiskGraphIndexWriter writer = new OnDiskGraphIndexWriter.Builder(builder.getGraph(), indexPath)
                      .with(new InlineVectors(ravv.dimension()))
                      .withMapper(new OnDiskGraphIndexWriter.IdentityMapper())
                      .build();
-             // you can use the partially written index as a source of the vectors written so far
-             InlineVectorValues ivv = new InlineVectorValues(ravv.dimension(), writer);
              // output for the compressed vectors
              DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
-```
-
-Then we need to set up a PQVectors instance that we can add new vectors to, and a BuildScoreProvider using it:
-```java
-            // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors
-            List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
-            PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
-
-            // now we can create the actual BuildScoreProvider based on PQ + reranking
-            BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, ivv, pqv);
-            builder.setBuildScoreProvider(bsp);
 ```
 
 Once that’s done, we can index vectors one at a time:

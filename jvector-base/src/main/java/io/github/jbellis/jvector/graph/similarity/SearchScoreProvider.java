@@ -72,13 +72,4 @@ public final class SearchScoreProvider {
         var sf = ScoreFunction.Reranker.from(v, vsf, ravv);
         return new SearchScoreProvider(sf);
     }
-
-    /**
-     * This interface allows implementations to cache the vectors needed
-     * for its lifetime of a single ConcurrentNeighborSet diversity computation,
-     * since diversity computations are done pairwise for each of the potential neighbors.
-     */
-    public interface Factory {
-        SearchScoreProvider createFor(int node1);
-    }
 }

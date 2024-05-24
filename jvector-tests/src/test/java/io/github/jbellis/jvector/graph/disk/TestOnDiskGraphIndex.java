@@ -272,18 +272,13 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var incrementalPath = testDirectory.resolve("bulk_graph");
         try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalPath)
                 .with(new InlineVectors(ravv.dimension()))
-                .build();
-             var ivv = new InlineVectorValues(ravv.dimension(), writer))
+                .build())
         {
-            assertEquals(0, ivv.size());
-
             // write inline vectors incrementally
             for (int i = 0; i < vectors.size(); i++) {
                 var state = Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(ravv.getVector(i)));
                 writer.writeInline(i, state);
             }
-
-            assertEquals(vectors.size(), ivv.size());
 
             // write graph structure
             writer.write(Map.of());
@@ -335,18 +330,13 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalLvqPath)
                 .with(lvqFeature)
                 .with(new FusedADC(graph.maxDegree(), pq))
-                .build();
-             var lvqvv = new LvqVectorValues(ravv.dimension(), lvqFeature, writer);)
+                .build())
         {
-            assertEquals(0, lvqvv.size());
-
             // write inline vectors incrementally
             for (int i = 0; i < vectors.size(); i++) {
                 var state = Feature.singleState(FeatureId.LVQ, new LVQ.State(lvq.encode(ravv.getVector(i))));
                 writer.writeInline(i, state);
             }
-
-            assertEquals(vectors.size(), lvqvv.size());
 
             // write graph structure, fused ADC
             writer.write(Feature.singleStateFactory(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i)));

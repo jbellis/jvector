@@ -218,10 +218,6 @@ public class OnHeapGraphIndex implements GraphIndex {
                 .orElse(Double.NaN);
     }
 
-    public void setScoreProvider(BuildScoreProvider bsp) {
-        nodes.setScoreProvider(bsp);
-    }
-
     public class ConcurrentGraphIndexView implements GraphIndex.View {
         public NodesIterator getNeighborsIterator(int node) {
             var neighbors = getNeighbors(node);

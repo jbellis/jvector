@@ -23,7 +23,6 @@ import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-import org.agrona.collections.Int2ObjectHashMap;
 
 /**
  * Encapsulates comparing node distances for GraphIndexBuilder.
@@ -70,16 +69,16 @@ public interface BuildScoreProvider {
     SearchScoreProvider searchProviderFor(int node1);
 
     /**
-     * Create a diversity score provider to use internally during construction.
+     * Create a score provider to use internally during construction.
      * <p>
      * The difference between the diversity provider and the search provider is
-     * that the diversity provider MUST include a non-null ExactScoreFunction if the
-     * primary score function is approximate.
+     * that the diversity provider is only expected to be used a few dozen times per node,
+     * which influences the implementation choices.
      * <p>
      * When scoring is approximate, the scores from the search and diversity provider
      * must be consistent, i.e. mixing different types of CompressedVectors will cause problems.
      */
-    SearchScoreProvider.Factory diversityProvider();
+    SearchScoreProvider diversityProviderFor(int node1);
 
     /**
      * Returns a BSP that performs exact score comparisons using the given RandomAccessVectorValues and VectorSimilarityFunction.
@@ -124,13 +123,11 @@ public interface BuildScoreProvider {
             }
 
             @Override
-            public SearchScoreProvider.Factory diversityProvider() {
-                return (int node1) -> {
-                    RandomAccessVectorValues randomAccessVectorValues = vectors.get();
-                    var v = randomAccessVectorValues.getVector(node1);
-                    var vc = vectorsCopy.get();
-                    return SearchScoreProvider.exact(v, similarityFunction, vc);
-                };
+            public SearchScoreProvider diversityProviderFor(int node1) {
+                RandomAccessVectorValues randomAccessVectorValues = vectors.get();
+                var v = randomAccessVectorValues.getVector(node1);
+                var vc = vectorsCopy.get();
+                return SearchScoreProvider.exact(v, similarityFunction, vc);
             }
         };
     }
@@ -141,12 +138,8 @@ public interface BuildScoreProvider {
      * InlineVectorValues or LvqVectorValues for building incrementally, but should technically
      * work with any RAVV implementation).
      */
-    static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf,
-                                                   RandomAccessVectorValues ravv,
-                                                   PQVectors cv)
-    {
-        int dimension = cv.getOriginalSize() / Float.BYTES;
-        assert dimension == ravv.dimension();
+    static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf, PQVectors pqv) {
+        int dimension = pqv.getOriginalSize() / Float.BYTES;
 
         return new BuildScoreProvider() {
             @Override
@@ -155,33 +148,32 @@ public interface BuildScoreProvider {
             }
 
             @Override
-            public SearchScoreProvider.Factory diversityProvider() {
-                var cache = new Int2ObjectHashMap<VectorFloat<?>>();
-                return node1 -> {
-                    var cachedVectors = new CachingVectorValues(cv, dimension, cache, ravv);
-
-                    var v1 = cachedVectors.getVector(node1);
-                    var asf = cv.scoreFunctionFor(v1, vsf);
-                    var rr = ScoreFunction.Reranker.from(v1, vsf, cachedVectors);
-
-                    return new SearchScoreProvider(asf, rr);
-                };
+            public SearchScoreProvider diversityProviderFor(int node1) {
+                // like searchProviderFor, this skips reranking; unlike sPF, it uses pqv.scoreFunctionFor
+                // instead of precomputedScoreFunctionFor; since we only perform a few dozen comparisons
+                // during diversity computation, this is cheaper than precomputing a lookup table
+                VectorFloat<?> v1 = vts.createFloatVector(dimension);
+                pqv.getCompressor().decode(pqv.get(node1), v1);
+                var asf = pqv.scoreFunctionFor(v1, vsf); // not precomputed!
+                return new SearchScoreProvider(asf);
             }
 
             @Override
             public SearchScoreProvider searchProviderFor(int node1) {
-                return searchProviderFor(ravv.getVector(node1));
+                VectorFloat<?> decoded = vts.createFloatVector(dimension);
+                pqv.getCompressor().decode(pqv.get(node1), decoded);
+                return searchProviderFor(decoded);
             }
 
             @Override
             public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
                 // deliberately skips reranking even though we are using an approximate score function
-                return new SearchScoreProvider(cv.precomputedScoreFunctionFor(vector, vsf));
+                return new SearchScoreProvider(pqv.precomputedScoreFunctionFor(vector, vsf));
             }
 
             @Override
             public VectorFloat<?> approximateCentroid() {
-                return cv.getCompressor().getOrComputeCentroid();
+                return pqv.getCompressor().getOrComputeCentroid();
             }
         };
     }

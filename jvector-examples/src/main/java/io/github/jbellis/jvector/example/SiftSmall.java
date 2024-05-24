@@ -30,7 +30,6 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.InlineVectorValues;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
@@ -213,29 +212,24 @@ public class SiftSmall {
         // compute the codebook, but don't encode any vectors yet
         ProductQuantization pq = ProductQuantization.compute(ravv, 16, 256, true);
 
+        // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
+        // this is used to score the construction searches
+        List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
+        PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
+        BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
+
         Path indexPath = Files.createTempFile("siftsmall", ".inline");
         Path pqPath = Files.createTempFile("siftsmall", ".pq");
-        // Builder creation looks mostly the same, but we need to set the BuildScoreProvider after the PQVectors are created
-        try (GraphIndexBuilder builder = new GraphIndexBuilder(null,
-                                                               ravv.dimension(), 16, 100, 1.2f, 1.2f);
+        // Builder creation looks mostly the same
+        try (GraphIndexBuilder builder = new GraphIndexBuilder(bsp, ravv.dimension(), 16, 100, 1.2f, 1.2f);
              // explicit Writer for the first time, this is what's behind OnDiskGraphIndex.write
              OnDiskGraphIndexWriter writer = new OnDiskGraphIndexWriter.Builder(builder.getGraph(), indexPath)
                      .with(new InlineVectors(ravv.dimension()))
                      .withMapper(new OnDiskGraphIndexWriter.IdentityMapper())
                      .build();
-             // you can use the partially written index as a source of the vectors written so far
-             InlineVectorValues ivv = new InlineVectorValues(ravv.dimension(), writer);
              // output for the compressed vectors
              DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
         {
-            // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors
-            List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
-            PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
-
-            // now we can create the actual BuildScoreProvider based on PQ + reranking
-            BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, ivv, pqv);
-            builder.setBuildScoreProvider(bsp);
-
             // build the index vector-at-a-time (on disk)
             for (VectorFloat<?> v : baseVectors) {
                 // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
@@ -261,9 +255,9 @@ public class SiftSmall {
         ReaderSupplier rs = new MMapReader.Supplier(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {
-            PQVectors pqv = PQVectors.load(in);
+            var pqvSearch = PQVectors.load(in);
             Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> {
-                ApproximateScoreFunction asf = pqv.precomputedScoreFunctionFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                ApproximateScoreFunction asf = pqvSearch.precomputedScoreFunctionFor(q, VectorSimilarityFunction.EUCLIDEAN);
                 Reranker reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
                 return new SearchScoreProvider(asf, reranker);
             };

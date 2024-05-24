@@ -31,7 +31,6 @@ import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.LVQ;
-import io.github.jbellis.jvector.graph.disk.LvqVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
@@ -161,13 +160,13 @@ public class Grid {
 
         var quantized = buildCompressor.encodeAll(floatVectors);
         var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
-        GraphIndexBuilder builder = new GraphIndexBuilder(null, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
+        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
         Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers = new HashMap<>();
         OnDiskGraphIndexWriter scoringWriter = null;
-        LVQ lvq = null;
         int n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
@@ -177,15 +176,11 @@ public class Grid {
             suppliers.put(features, bws.suppliers);
             if (features.equals(EnumSet.of(FeatureId.LVQ))) {
                 scoringWriter = writer;
-                lvq = (LVQ) bws.builder.getFeature(FeatureId.LVQ);
             }
         }
         if (scoringWriter == null) {
             throw new IllegalStateException("For simplicity, Bench looks for exactly {LVQ} feature set for scoring compressed builds. With minor code edits you can switch this to {INLINE_VECTORS} instead.");
         }
-        var ivv = new LvqVectorValues(floatVectors.dimension(), lvq, scoringWriter);
-        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, ivv, pq);
-        builder.setBuildScoreProvider(bsp);
 
         // build the graph incrementally
         long start = System.nanoTime();
@@ -223,7 +218,6 @@ public class Grid {
             try {
                 writer.write(writeSuppliers);
                 writer.close();
-                ivv.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

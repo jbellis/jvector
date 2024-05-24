@@ -104,8 +104,4 @@ public interface ScoreFunction {
             return false;
         }
     }
-
-    interface Provider {
-        ScoreFunction scoreFunctionFor(int node1);
-    }
 }
