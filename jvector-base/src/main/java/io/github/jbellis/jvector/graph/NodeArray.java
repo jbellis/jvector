@@ -44,8 +44,8 @@ public class NodeArray {
     public static final NodeArray EMPTY = new NodeArray(0);
 
     private int size;
-    float[] score;
-    int[] node;
+    private float[] score;
+    private int[] node;
 
     public NodeArray(int initialSize) {
         node = new int[initialSize];
@@ -72,7 +72,7 @@ public class NodeArray {
         // loop through both source arrays, adding the highest score element to the merged array,
         // until we reach the end of one of the sources
         while (i < a1.size() && j < a2.size()) {
-            if (a1.score()[i] < a2.score[j]) {
+            if (a1.score[i] < a2.score[j]) {
                 // add from a2
                 if (a2.score[j] != lastAddedScore) {
                     nodesWithLastScore.clear();
@@ -82,26 +82,26 @@ public class NodeArray {
                     merged.addInOrder(a2.node[j], a2.score[j]);
                 }
                 j++;
-            } else if (a1.score()[i] > a2.score[j]) {
+            } else if (a1.score[i] > a2.score[j]) {
                 // add from a1
-                if (a1.score()[i] != lastAddedScore) {
+                if (a1.score[i] != lastAddedScore) {
                     nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
+                    lastAddedScore = a1.score[i];
                 }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
+                if (nodesWithLastScore.add(a1.node[i])) {
+                    merged.addInOrder(a1.node[i], a1.score[i]);
                 }
                 i++;
             } else {
                 // same score -- add both
-                if (a1.score()[i] != lastAddedScore) {
+                if (a1.score[i] != lastAddedScore) {
                     nodesWithLastScore.clear();
-                    lastAddedScore = a1.score()[i];
+                    lastAddedScore = a1.score[i];
                 }
-                if (nodesWithLastScore.add(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
+                if (nodesWithLastScore.add(a1.node[i])) {
+                    merged.addInOrder(a1.node[i], a1.score[i]);
                 }
-                if (nodesWithLastScore.add(a2.node()[j])) {
+                if (nodesWithLastScore.add(a2.node[j])) {
                     merged.addInOrder(a2.node[j], a2.score[j]);
                 }
                 i++;
@@ -112,9 +112,9 @@ public class NodeArray {
         // If elements remain in a1, add them
         if (i < a1.size()) {
             // avoid duplicates while adding nodes with the same score
-            while (i < a1.size && a1.score()[i] == lastAddedScore) {
-                if (!nodesWithLastScore.contains(a1.node()[i])) {
-                    merged.addInOrder(a1.node()[i], a1.score()[i]);
+            while (i < a1.size && a1.score[i] == lastAddedScore) {
+                if (!nodesWithLastScore.contains(a1.node[i])) {
+                    merged.addInOrder(a1.node[i], a1.score[i]);
                 }
                 i++;
             }
@@ -257,17 +257,6 @@ public class NodeArray {
         return size;
     }
 
-    /**
-     * Direct access to the internal list of node ids; provided for efficient writing of the graph
-     */
-    public int[] node() {
-        return node;
-    }
-
-    public float[] score() {
-        return score;
-    }
-
     public void clear() {
         size = 0;
     }
@@ -284,7 +273,13 @@ public class NodeArray {
 
     @Override
     public String toString() {
-        return "NodeArray[" + size + "]";
+        var sb = new StringBuilder("NodeArray(");
+        sb.append(size).append("/").append(node.length).append(") [");
+        for (int i = 0; i < size; i++) {
+            sb.append("(").append(node[i]).append(",").append(score[i]).append(")").append(", ");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     protected final int descSortFindRightMostInsertionPoint(float newScore) {
@@ -328,6 +323,11 @@ public class NodeArray {
         return Arrays.copyOf(node, size);
     }
 
+    @VisibleForTesting
+    float[] copyDenseScores() {
+        return Arrays.copyOf(score, size);
+    }
+
     /**
      * Insert a new node, without growing the array.  If the array is full, drop the worst existing node to make room.
      * (Even if the worst existing one is better than newNode!)
@@ -335,5 +335,17 @@ public class NodeArray {
     protected int insertOrReplaceWorst(int newNode, float newScore) {
         size = min(size, node.length - 1);
         return insertSorted(newNode, newScore);
+    }
+
+    public float getScore(int i) {
+        return score[i];
+    }
+
+    public int getNode(int i) {
+        return node[i];
+    }
+
+    protected int getArrayLength() {
+        return node.length;
     }
 }

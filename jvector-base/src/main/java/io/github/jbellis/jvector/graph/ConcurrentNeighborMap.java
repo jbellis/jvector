@@ -159,8 +159,8 @@ public class ConcurrentNeighborMap {
      */
     public void backlink(NodeArray nodes, int toId, float overflow) {
         for (int i = 0; i < nodes.size(); i++) {
-            int nbr = nodes.node[i];
-            float nbrScore = nodes.score[i];
+            int nbr = nodes.getNode(i);
+            float nbrScore = nodes.getScore(i);
             insertOne(nbr, toId, nbrScore, overflow);
         }
     }
@@ -235,9 +235,9 @@ public class ConcurrentNeighborMap {
             // copy the non-deleted neighbors to a new NodeArray
             var liveNeighbors = new NodeArray(size());
             for (int i = 0; i < size(); i++) {
-                int nodeId = node[i];
+                int nodeId = getNode(i);
                 if (!deletedNodes.get(nodeId)) {
-                    liveNeighbors.addInOrder(nodeId, score[i]);
+                    liveNeighbors.addInOrder(nodeId, getScore(i));
                 }
             }
 
@@ -269,7 +269,7 @@ public class ConcurrentNeighborMap {
                 retainDiverse(merged, 0, map);
             }
             // insertDiverse usually gets called with a LOT of candidates, so trim down the resulting NodeArray
-            var nextNodes = merged.node.length <= map.nodeArrayLength() ? merged : merged.copy(map.nodeArrayLength());
+            var nextNodes = merged.getArrayLength() <= map.nodeArrayLength() ? merged : merged.copy(map.nodeArrayLength());
             return new Neighbors(nodeId, nextNodes);
         }
 
@@ -313,8 +313,8 @@ public class ConcurrentNeighborMap {
                         continue;
                     }
 
-                    int cNode = neighbors.node()[i];
-                    float cScore = neighbors.score()[i];
+                    int cNode = neighbors.getNode(i);
+                    float cScore = neighbors.getScore(i);
                     var sf = map.scoreProvider.diversityProviderFor(cNode).scoreFunction();
                     if (isDiverse(cNode, cScore, neighbors, sf, selected, a)) {
                         selected.set(i);
@@ -337,7 +337,7 @@ public class ConcurrentNeighborMap {
             assert others.size() > 0;
 
             for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
-                int otherNode = others.node()[i];
+                int otherNode = others.getNode(i);
                 if (node == otherNode) {
                     break;
                 }
@@ -423,7 +423,7 @@ public class ConcurrentNeighborMap {
 
         @Override
         public int nextInt() {
-            return neighbors.node[i++];
+            return neighbors.getNode(i++);
         }
     }
 }

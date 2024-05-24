@@ -243,7 +243,7 @@ public class GraphIndexBuilder implements Closeable {
             connectedNodes.set(graph.entry());
             ConcurrentNeighborMap.Neighbors self1 = graph.getNeighbors(graph.entry());
             var entryNeighbors = (NodeArray) self1;
-            parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size()).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.node[node]))).join();
+            parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size()).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.getNode(node)))).join();
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();
@@ -294,8 +294,8 @@ public class GraphIndexBuilder implements Closeable {
         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
         // overwritten by the next node to need reconnection if we don't choose a unique target)
         for (int i = 0; i < neighbors.size(); i++) {
-            var neighborNode = neighbors.node[i];
-            var neighborScore = neighbors.score[i];
+            var neighborNode = neighbors.getNode(i);
+            var neighborScore = neighbors.getScore(i);
             if (connectionTargets.add(neighborNode)) {
                 graph.nodes.insertNotDiverse(neighborNode, node, neighborScore);
                 return true;

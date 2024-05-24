@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestNodeArray extends RandomizedTest {
   static void validateSortedByScore(NodeArray na) {
     for (int i = 0; i < na.size() - 1; i++) {
-      assertTrue(na.score[i] >= na.score[i + 1]);
+      assertTrue(na.getScore(i) >= na.getScore(i + 1));
     }
   }
 
@@ -97,13 +97,13 @@ public class TestNodeArray extends RandomizedTest {
 
   private void assertScoresEqual(float[] scores, NodeArray neighbors) {
     for (int i = 0; i < scores.length; i++) {
-      assertEquals(scores[i], neighbors.score[i], 0.01f);
+      assertEquals(scores[i], neighbors.getScore(i), 0.01f);
     }
   }
 
   private void assertNodesEqual(int[] nodes, NodeArray neighbors) {
     for (int i = 0; i < nodes.length; i++) {
-      assertEquals(nodes[i], neighbors.node[i]);
+      assertEquals(nodes[i], neighbors.getNode(i));
     }
   }
 
@@ -168,9 +168,8 @@ public class TestNodeArray extends RandomizedTest {
     cna.insertSorted(3, 8.0f);
     cna.insertSorted(1, 10.0f); // This is a duplicate and should be ignored
     cna.insertSorted(3, 8.0f); // This is also a duplicate
-    Assert.assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
-    assertArrayEquals(
-            new float[] {10.0f, 9.0f, 8.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
+    Assert.assertArrayEquals(new int[] {1, 2, 3}, cna.copyDenseNodes());
+    assertArrayEquals(new float[] {10.0f, 9.0f, 8.0f}, cna.copyDenseScores(), 0.01f);
     validateSortedByScore(cna);
   }
 
@@ -182,8 +181,8 @@ public class TestNodeArray extends RandomizedTest {
     cna.insertSorted(3, 10.0f);
     cna.insertSorted(1, 10.0f); // This is a duplicate and should be ignored
     cna.insertSorted(3, 10.0f); // This is also a duplicate
-    assertArrayEquals(new int[] {1, 2, 3}, ArrayUtil.copyOfSubArray(cna.node(), 0, cna.size()));
-    assertArrayEquals(new float[] {10.0f, 10.0f, 10.0f}, ArrayUtil.copyOfSubArray(cna.score, 0, cna.size()), 0.01f);
+    assertArrayEquals(new int[] {1, 2, 3}, cna.copyDenseNodes());
+    assertArrayEquals(new float[] {10.0f, 10.0f, 10.0f}, cna.copyDenseScores(), 0.01f);
     validateSortedByScore(cna);
   }
 
@@ -197,8 +196,7 @@ public class TestNodeArray extends RandomizedTest {
 
     var merged = NodeArray.merge(arr1, arr2);
     // Expected result: [0, 1]
-    Assert.assertEquals(2, merged.size());
-    assertArrayEquals(new int[] {0, 1}, Arrays.copyOf(merged.node(), 2));
+    assertArrayEquals(new int[] {0, 1}, merged.copyDenseNodes());
 
     arr1 = new NodeArray(3);
     arr1.addInOrder(3, 3.0f);
@@ -212,9 +210,8 @@ public class TestNodeArray extends RandomizedTest {
 
     merged = NodeArray.merge(arr1, arr2);
     // Expected result: [4, 3, 2, 1]
-    Assert.assertEquals(4, merged.size());
-    assertArrayEquals(new int[] {4, 3, 2, 1}, Arrays.copyOf(merged.node(), 4));
-    assertArrayEquals(new float[] {4.0f, 3.0f, 2.0f, 1.0f}, Arrays.copyOf(merged.score(), 4), 0.0f);
+    assertArrayEquals(new int[] {4, 3, 2, 1}, merged.copyDenseNodes());
+    assertArrayEquals(new float[] {4.0f, 3.0f, 2.0f, 1.0f}, merged.copyDenseScores(), 0.0f);
 
     // Testing boundary conditions
     arr1 = new NodeArray(2);
@@ -226,9 +223,8 @@ public class TestNodeArray extends RandomizedTest {
 
     merged = NodeArray.merge(arr1, arr2);
     // Expected result: [3, 2]
-    Assert.assertEquals(2, merged.size());
-    assertArrayEquals(new int[] {3, 2}, Arrays.copyOf(merged.node(), 2));
-    assertArrayEquals(new float[] {3.0f, 2.0f}, Arrays.copyOf(merged.score(), 2), 0.0f);
+    assertArrayEquals(new int[] {3, 2}, merged.copyDenseNodes());
+    assertArrayEquals(new float[] {3.0f, 2.0f}, merged.copyDenseScores(), 0.0f);
     validateSortedByScore(merged);
   }
 
@@ -253,8 +249,8 @@ public class TestNodeArray extends RandomizedTest {
       if (i < a1Size && getRandom().nextBoolean()) {
         // duplicate entry
         int j = getRandom().nextInt(a1Size);
-        if (!arr2.contains(arr1.node[j])) {
-          arr2.insertSorted(arr1.node[j], arr1.score[j]);
+        if (!arr2.contains(arr1.getNode(j))) {
+          arr2.insertSorted(arr1.getNode(j), arr1.getScore(j));
         }
       } else {
         // duplicate just score
@@ -262,7 +258,7 @@ public class TestNodeArray extends RandomizedTest {
         if (getRandom().nextBoolean()) {
           score = getRandom().nextFloat();
         } else {
-          score = arr1.score[getRandom().nextInt(a1Size)];
+          score = arr1.getScore(getRandom().nextInt(a1Size));
         }
         arr2.insertSorted(i + arr1.size(), score);
       }
@@ -278,27 +274,21 @@ public class TestNodeArray extends RandomizedTest {
 
     // results should be sorted by score, and not contain duplicates
     for (int i = 0; i < merged.size() - 1; i++) {
-      assertTrue(merged.score[i] >= merged.score[i + 1]);
-      assertTrue(uniqueNodes.add(merged.node[i]));
+      assertTrue(merged.getScore(i) >= merged.getScore(i + 1));
+      assertTrue(uniqueNodes.add(merged.getNode(i)));
     }
-    assertTrue(uniqueNodes.add(merged.node[merged.size() - 1]));
+    assertTrue(uniqueNodes.add(merged.getNode(merged.size() - 1)));
 
     // results should contain all the nodes that were in the source arrays
     for (int i = 0; i < arr1.size(); i++) {
       assertTrue(String.format("%s missing%na1: %s%na2: %s%nmerged: %s%n",
-                               arr1.node[i],
-                               Arrays.toString(arr1.node),
-                               Arrays.toString(arr2.node),
-                               Arrays.toString(merged.node)),
-                 uniqueNodes.contains(arr1.node[i]));
+                               arr1.getNode(i), arr1, arr2, merged),
+                 uniqueNodes.contains(arr1.getNode(i)));
     }
     for (int i = 0; i < arr2.size(); i++) {
       assertTrue(String.format("%s missing%na1: %s%na2: %s%nmerged: %s%n",
-                               arr2.node[i],
-                               Arrays.toString(arr1.node),
-                               Arrays.toString(arr2.node),
-                               Arrays.toString(merged.node)),
-                 uniqueNodes.contains(arr2.node[i]));
+                               arr2.getNode(i), arr1, arr2, merged),
+                 uniqueNodes.contains(arr2.getNode(i)));
     }
   }
 
@@ -309,3 +299,4 @@ public class TestNodeArray extends RandomizedTest {
     }
   }
 }
+
