@@ -250,8 +250,9 @@ public class ConcurrentNeighborMap {
                 }
             }
 
-            // merge the remaining neighbors with the candidates
-            var merged = rescoreAndRetainDiverse(liveNeighbors, candidates, map);
+            // merge the remaining neighbors with the candidates and keep the diverse results
+            NodeArray merged = NodeArray.merge(liveNeighbors, candidates);
+            retainDiverse(merged, 0, map);
             return new Neighbors(nodeId, merged);
         }
 
@@ -270,7 +271,8 @@ public class ConcurrentNeighborMap {
             // from that.
             NodeArray merged;
             if (size > 0) {
-                merged = rescoreAndRetainDiverse(this, toMerge, map);
+                merged = NodeArray.merge(this, toMerge);
+                retainDiverse(merged, 0, map);
             } else {
                 merged = toMerge.copy(); // still need to copy in case we lose the race
                 retainDiverse(merged, 0, map);
@@ -278,16 +280,6 @@ public class ConcurrentNeighborMap {
             // insertDiverse usually gets called with a LOT of candidates, so trim down the resulting NodeArray
             var nextNodes = merged.node.length <= map.nodeArrayLength() ? merged : merged.copy(map.nodeArrayLength());
             return new Neighbors(nodeId, nextNodes);
-        }
-
-        /**
-         * Merge `old` and `toMerge` and retain the diverse nodes from the result.  Allocates
-         * a new NodeArray; does not modify `old` or `toMerge`
-         */
-        private NodeArray rescoreAndRetainDiverse(NodeArray old, NodeArray toMerge, ConcurrentNeighborMap map) {
-            NodeArray merged = NodeArray.merge(old, toMerge);
-            retainDiverse(merged, 0, map);
-            return merged;
         }
 
         private Neighbors insertNotDiverse(int node, float score, ConcurrentNeighborMap map) {
