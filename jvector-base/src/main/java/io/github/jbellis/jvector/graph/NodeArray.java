@@ -32,6 +32,8 @@ import org.agrona.collections.IntHashSet;
 
 import java.util.Arrays;
 
+import static java.lang.Math.min;
+
 /**
  * NodeArray encodes nodeids and their scores relative to some other element 
  * (a query vector, or another graph node) as a pair of growable arrays. 
@@ -41,17 +43,20 @@ import java.util.Arrays;
 public class NodeArray {
     public static final NodeArray EMPTY = new NodeArray(0);
 
-    protected int size;
+    private int size;
     float[] score;
     int[] node;
-
-    protected NodeArray() {
-        // let subclasses do their thing
-    }
 
     public NodeArray(int initialSize) {
         node = new int[initialSize];
         score = new float[initialSize];
+    }
+
+    // this idiosyncratic constructor exists for the benefit of subclass ConcurrentNeighborMap
+    protected NodeArray(NodeArray nodeArray) {
+        this.size = nodeArray.size();
+        this.node = nodeArray.node;
+        this.score = nodeArray.score;
     }
 
     /** always creates a new NodeArray to return, even when a1 or a2 is empty */
@@ -321,5 +326,14 @@ public class NodeArray {
     @VisibleForTesting
     int[] copyDenseNodes() {
         return Arrays.copyOf(node, size);
+    }
+
+    /**
+     * Insert a new node, without growing the array.  If the array is full, drop the worst existing node to make room.
+     * (Even if the worst existing one is better than newNode!)
+     */
+    protected int insertOrReplaceWorst(int newNode, float newScore) {
+        size = min(size, node.length - 1);
+        return insertSorted(newNode, newScore);
     }
 }

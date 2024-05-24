@@ -243,7 +243,7 @@ public class GraphIndexBuilder implements Closeable {
             connectedNodes.set(graph.entry());
             ConcurrentNeighborMap.Neighbors self1 = graph.getNeighbors(graph.entry());
             var entryNeighbors = (NodeArray) self1;
-            parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.node[node]))).join();
+            parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size()).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.node[node]))).join();
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();
@@ -293,7 +293,7 @@ public class GraphIndexBuilder implements Closeable {
         // connect this node to the closest neighbor that hasn't already been used as a connection target
         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
         // overwritten by the next node to need reconnection if we don't choose a unique target)
-        for (int i = 0; i < neighbors.size; i++) {
+        for (int i = 0; i < neighbors.size(); i++) {
             var neighborNode = neighbors.node[i];
             var neighborScore = neighbors.score[i];
             if (connectionTargets.add(neighborNode)) {
@@ -530,7 +530,7 @@ public class GraphIndexBuilder implements Closeable {
                             float score = sf.similarityTo(randomNode);
                             candidates.insertSorted(randomNode, score);
                         }
-                        if (candidates.size == graph.maxDegree) {
+                        if (candidates.size() == graph.maxDegree) {
                             break;
                         }
                     }
@@ -593,9 +593,9 @@ public class GraphIndexBuilder implements Closeable {
     private void updateNeighbors(int nodeId, NodeArray natural, NodeArray concurrent) {
         // if either natural or concurrent is empty, skip the merge
         NodeArray toMerge;
-        if (concurrent.size == 0) {
+        if (concurrent.size() == 0) {
             toMerge = natural;
-        } else if (natural.size == 0) {
+        } else if (natural.size() == 0) {
             toMerge = concurrent;
         } else {
             toMerge = NodeArray.merge(natural, concurrent);

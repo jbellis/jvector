@@ -196,11 +196,9 @@ public class ConcurrentNeighborMap {
          * `nodeArray` is assumed to have had diversity enforced already
          */
         private Neighbors(int nodeId, NodeArray nodeArray) {
+            super(nodeArray);
             this.nodeId = nodeId;
-            this.size = nodeArray.size;
-            this.node = nodeArray.node;
-            this.score = nodeArray.score;
-            this.diverseBefore = this.size;
+            this.diverseBefore = size();
         }
 
         public NodesIterator iterator() {
@@ -209,20 +207,13 @@ public class ConcurrentNeighborMap {
 
         @Override
         public Neighbors copy() {
-            return copy(size);
+            return copy(size());
         }
 
         @Override
         public Neighbors copy(int newSize) {
-            if (size > newSize) {
-                throw new IllegalArgumentException("Cannot copy to a smaller size");
-            }
-
-            var next = new Neighbors(nodeId, newSize, diverseBefore);
-            next.size = size;
-            System.arraycopy(node, 0, next.node, 0, size);
-            System.arraycopy(score, 0, next.score, 0, size);
-            return next;
+            var superCopy = new NodeArray(this).copy(newSize);
+            return new Neighbors(nodeId, superCopy);
         }
 
         /**
@@ -231,19 +222,19 @@ public class ConcurrentNeighborMap {
          * the limit may end up being exceeded again.
          */
         private NeighborWithShortEdges enforceDegree(ConcurrentNeighborMap map) {
-            if (size <= map.maxDegree) {
+            if (size() <= map.maxDegree) {
                 return new NeighborWithShortEdges(this, Double.NaN);
             }
             var next = copy();
             double shortEdges = retainDiverse(next, diverseBefore, map);
-            next.diverseBefore = next.size;
+            next.diverseBefore = next.size();
             return new NeighborWithShortEdges(next, shortEdges);
         }
 
         private Neighbors replaceDeletedNeighbors(Bits deletedNodes, NodeArray candidates, ConcurrentNeighborMap map) {
             // copy the non-deleted neighbors to a new NodeArray
-            var liveNeighbors = new NodeArray(size);
-            for (int i = 0; i < size; i++) {
+            var liveNeighbors = new NodeArray(size());
+            for (int i = 0; i < size(); i++) {
                 int nodeId = node[i];
                 if (!deletedNodes.get(nodeId)) {
                     liveNeighbors.addInOrder(nodeId, score[i]);
@@ -270,7 +261,7 @@ public class ConcurrentNeighborMap {
             // merge all the candidates into a single array and compute the diverse ones to keep
             // from that.
             NodeArray merged;
-            if (size > 0) {
+            if (size() > 0) {
                 merged = NodeArray.merge(this, toMerge);
                 retainDiverse(merged, 0, map);
             } else {
@@ -284,15 +275,10 @@ public class ConcurrentNeighborMap {
 
         private Neighbors insertNotDiverse(int node, float score, ConcurrentNeighborMap map) {
             int maxDegree = map.maxDegree;
-            assert size <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
-            var next = copy(maxDegree); // called during cleanup -- use actual maxDegree not nodeArrayLength()
-            // remove the worst edge to make room for the new one, if necessary
-            next.size = min(next.size, maxDegree - 1);
-            int insertedAt = next.insertSorted(node, score);
-            if (insertedAt == -1) {
-                // "new" node already existed
-                return this;
-            }
+            assert size() <= maxDegree : "insertNotDiverse called before enforcing degree/diversity";
+            var next = copy(maxDegree); // we are only called during cleanup -- use actual maxDegree not nodeArrayLength()
+            int insertedAt = next.insertOrReplaceWorst(node, score);
+            assert insertedAt >= 0;
             next.diverseBefore = min(insertedAt, diverseBefore);
             return next;
         }
@@ -348,7 +334,7 @@ public class ConcurrentNeighborMap {
         // is the candidate node with the given score closer to the base node than it is to any of the
         // already-selected neighbors
         private boolean isDiverse(int node, float score, NodeArray others, ScoreFunction sf, BitSet selected, float alpha) {
-            assert others.size > 0;
+            assert others.size() > 0;
 
             for (int i = selected.nextSetBit(0); i != DocIdSetIterator.NO_MORE_DOCS; i = selected.nextSetBit(i + 1)) {
                 int otherNode = others.node()[i];
@@ -383,9 +369,9 @@ public class ConcurrentNeighborMap {
             // batch up the enforcement of the max connection limit, since otherwise
             // we do a lot of duplicate work scanning nodes that we won't remove
             next.diverseBefore = min(insertionPoint, diverseBefore);
-            if (next.size > hardMax) {
+            if (next.size() > hardMax) {
                 retainDiverse(next, next.diverseBefore, map);
-                next.diverseBefore = next.size;
+                next.diverseBefore = next.size();
             }
 
             return next;

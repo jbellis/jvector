@@ -264,7 +264,7 @@ public class TestNodeArray extends RandomizedTest {
         } else {
           score = arr1.score[getRandom().nextInt(a1Size)];
         }
-        arr2.insertSorted(i + arr1.size, score);
+        arr2.insertSorted(i + arr1.size(), score);
       }
     }
 
@@ -272,16 +272,16 @@ public class TestNodeArray extends RandomizedTest {
     var merged = NodeArray.merge(arr1, arr2);
 
     // sanity check
-    assert merged.size <= arr1.size() + arr2.size();
-    assert merged.size >= Math.max(arr1.size(), arr2.size());
+    assert merged.size() <= arr1.size() + arr2.size();
+    assert merged.size() >= Math.max(arr1.size(), arr2.size());
     var uniqueNodes = new HashSet<>();
 
     // results should be sorted by score, and not contain duplicates
-    for (int i = 0; i < merged.size - 1; i++) {
+    for (int i = 0; i < merged.size() - 1; i++) {
       assertTrue(merged.score[i] >= merged.score[i + 1]);
       assertTrue(uniqueNodes.add(merged.node[i]));
     }
-    assertTrue(uniqueNodes.add(merged.node[merged.size - 1]));
+    assertTrue(uniqueNodes.add(merged.node[merged.size() - 1]));
 
     // results should contain all the nodes that were in the source arrays
     for (int i = 0; i < arr1.size(); i++) {
