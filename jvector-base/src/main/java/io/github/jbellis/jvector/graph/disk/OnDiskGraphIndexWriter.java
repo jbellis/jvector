@@ -86,13 +86,21 @@ public class OnDiskGraphIndexWriter implements Closeable {
     }
 
     // used by Cassandra
+    /**
+     * Caller should synchronize on this OnDiskGraphIndexWriter instance if mixing usage of the
+     * output with calls to any of the synchronized methods in this class.
+     */
     public BufferedRandomAccessWriter getOutput() {
         return out;
     }
 
+    public Path getPath() {
+        return outPath;
+    }
+
     /**
      * Write the inline features of the given ordinal to the output at the correct offset.
-     * Nothing else is written (no headers, no edges).
+     * Nothing else is written (no headers, no edges).  The output IS NOT flushed.
      */
     public synchronized void writeInline(int ordinal, Map<FeatureId, Feature.State> stateMap) throws IOException
     {
@@ -127,9 +135,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
     }
 
     /**
-     * Write the complete index to the given output.  Features that do not have a supplier are assumed
-     * to have already been written by calls to writeInline.  The supplier takes node ordinals
-     * and returns FeatureState suitable for Feature.writeInline.
+     * Write the index header and completed edge lists to the given output.  Inline features given in
+     * `featureStateSuppliers` will also be written.  (Features that do not have a supplier are assumed
+     * to have already been written by calls to writeInline).  The output IS flushed.
+     * <p>
+     * Each supplier takes a node ordinal and returns a FeatureState suitable for Feature.writeInline.
      */
     public synchronized void write(Map<FeatureId, IntFunction<Feature.State>> featureStateSuppliers) throws IOException
     {
@@ -145,15 +155,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
             }
         }
 
-        // graph-level properties
-        out.seek(startOffset);
-        var graphSize = graph.size();
-        var commonHeader = new CommonHeader(version, graphSize, dimension, view.entryNode(), graph.maxDegree());
-        var header = new Header(commonHeader, featureMap);
-        header.write(out);
-        assert out.position() == startOffset + headerSize : String.format("%d != %d", out.position(), startOffset + headerSize);
+        writeHeader();
 
         // for each graph node, write the associated features, followed by its neighbors
+        int graphSize = graph.size();
         for (int newOrdinal = 0; newOrdinal < graphSize; newOrdinal++) {
             var originalOrdinal = ordinalMapper.newToOld(newOrdinal);
             if (!graph.containsNode(originalOrdinal)) {
@@ -196,6 +201,22 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 out.writeInt(-1);
             }
         }
+        out.flush();
+    }
+
+    // used by Cassandra
+    /**
+     * Writes the index header, including the graph size, so that OnDiskGraphIndex can open it.
+     * The output IS flushed.
+     */
+    public synchronized void writeHeader() throws IOException {
+        // graph-level properties
+        out.seek(startOffset);
+        var commonHeader = new CommonHeader(version, graph.size(), dimension, view.entryNode(), graph.maxDegree());
+        var header = new Header(commonHeader, featureMap);
+        header.write(out);
+        out.flush();
+        assert out.position() == startOffset + headerSize : String.format("%d != %d", out.position(), startOffset + headerSize);
     }
 
     /**
