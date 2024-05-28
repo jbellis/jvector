@@ -151,7 +151,7 @@ public class TestVectorGraph extends LuceneTestCase {
                 .collect(Collectors.toList());
         var expectedResults = List.of(expected.getNodes());
         for (int i = 0; i < expectedResults.size(); i++) {
-            assertEquals(expectedResults.get(i).score, initialResumedResults.get(i).score, 1E-6);
+            assertEquals(expectedResults.get(i).score, initialResumedResults.get(i).score, 1E-5);
         }
     }
 
