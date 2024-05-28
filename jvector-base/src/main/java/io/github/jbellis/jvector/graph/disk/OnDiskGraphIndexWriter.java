@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
+import io.github.jbellis.jvector.annotations.ForDatabases;
 import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
@@ -85,11 +86,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.close();
     }
 
-    // used by Cassandra
     /**
      * Caller should synchronize on this OnDiskGraphIndexWriter instance if mixing usage of the
      * output with calls to any of the synchronized methods in this class.
      */
+    @ForDatabases
     public BufferedRandomAccessWriter getOutput() {
         return out;
     }
@@ -204,11 +205,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.flush();
     }
 
-    // used by Cassandra
     /**
      * Writes the index header, including the graph size, so that OnDiskGraphIndex can open it.
      * The output IS flushed.
      */
+    @ForDatabases
     public synchronized void writeHeader() throws IOException {
         // graph-level properties
         out.seek(startOffset);
@@ -241,7 +242,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     }
 
     /** CRC32 checksum of bytes written since the starting offset */
-    // used by Cassandra
+    @ForDatabases
     public synchronized long checksum() throws IOException {
         long endOffset = out.position();
         return out.checksum(startOffset, endOffset);
@@ -284,7 +285,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             return this;
         }
 
-        // used by Cassandra
+        @ForDatabases
         public Builder withStartOffset(long startOffset) {
             this.startOffset = startOffset;
             return this;

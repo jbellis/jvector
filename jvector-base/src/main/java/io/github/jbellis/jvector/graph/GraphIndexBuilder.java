@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.annotations.ForDatabases;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
@@ -330,6 +331,7 @@ public class GraphIndexBuilder implements Closeable {
     /**
      * Number of inserts in progress, across all threads.
      */
+    @ForDatabases
     public int insertsInProgress() {
         return insertionsInProgress.size();
     }
@@ -433,7 +435,7 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
-    public void improveConnections(int node) {
+    private void improveConnections(int node) {
         NodeArray naturalScratchPooled;
         SearchResult result;
         try (var gs = searchers.get()) {
@@ -461,6 +463,7 @@ public class GraphIndexBuilder implements Closeable {
      *
      * @return approximate size of memory no longer used
      */
+    @ForDatabases
     public synchronized long removeDeletedNodes() {
         // Take a snapshot of the nodes to delete
         var toDelete = graph.getDeletedNodes().copy();
