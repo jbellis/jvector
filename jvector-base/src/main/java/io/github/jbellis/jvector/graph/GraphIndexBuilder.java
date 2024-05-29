@@ -328,7 +328,9 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     /**
-     * Number of inserts in progress, across all threads.
+     * Number of inserts in progress, across all threads.  Useful as a sanity check
+     * when calling non-threadsafe methods like cleanup().  (Do not use it to try to
+     * _prevent_ races, only to detect them.)
      */
     public int insertsInProgress() {
         return insertionsInProgress.size();
@@ -433,7 +435,7 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
-    public void improveConnections(int node) {
+    private void improveConnections(int node) {
         NodeArray naturalScratchPooled;
         SearchResult result;
         try (var gs = searchers.get()) {
@@ -457,7 +459,8 @@ public class GraphIndexBuilder implements Closeable {
 
     /**
      * Remove nodes marked for deletion from the graph, and update neighbor lists
-     * to maintain connectivity.
+     * to maintain connectivity.  Not threadsafe with respect to other modifications;
+     * the `synchronized` flag only prevents concurrent calls to this method.
      *
      * @return approximate size of memory no longer used
      */

@@ -85,10 +85,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.close();
     }
 
-    // used by Cassandra
     /**
      * Caller should synchronize on this OnDiskGraphIndexWriter instance if mixing usage of the
      * output with calls to any of the synchronized methods in this class.
+     * <p>
+     * Provided for callers (like Cassandra) that want to add their own header/footer to the output.
      */
     public BufferedRandomAccessWriter getOutput() {
         return out;
@@ -204,10 +205,12 @@ public class OnDiskGraphIndexWriter implements Closeable {
         out.flush();
     }
 
-    // used by Cassandra
     /**
      * Writes the index header, including the graph size, so that OnDiskGraphIndex can open it.
      * The output IS flushed.
+     * <p>
+     * Public so that you can write the index size (and thus usefully open an OnDiskGraphIndex against the index)
+     * to read Features from it before writing the edges.
      */
     public synchronized void writeHeader() throws IOException {
         // graph-level properties
@@ -241,7 +244,6 @@ public class OnDiskGraphIndexWriter implements Closeable {
     }
 
     /** CRC32 checksum of bytes written since the starting offset */
-    // used by Cassandra
     public synchronized long checksum() throws IOException {
         long endOffset = out.position();
         return out.checksum(startOffset, endOffset);
@@ -284,7 +286,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
             return this;
         }
 
-        // used by Cassandra
+        /**
+         * Set the starting offset for the graph index in the output file.  This is useful if you want to
+         * write the index to an existing file.
+         */
         public Builder withStartOffset(long startOffset) {
             this.startOffset = startOffset;
             return this;
