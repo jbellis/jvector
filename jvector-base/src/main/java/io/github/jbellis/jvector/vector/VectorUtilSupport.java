@@ -59,7 +59,7 @@ public interface VectorUtilSupport {
   /** return the sum of the components of the vector */
   float sum(VectorFloat<?> vector);
 
-  /** Divide vector by divisor, in place (vector will be modified) */
+  /** Multiply vector by multiplier, in place (vector will be modified) */
   void scale(VectorFloat<?> vector, float multiplier);
 
   /** Adds v2 into v1, in place (v1 will be modified) */
