@@ -236,9 +236,11 @@ public class GraphIndexBuilder implements Closeable {
     private void reconnectOrphanedNodes() {
         var searchPathNeighbors = new ConcurrentHashMap<Integer, NodeArray>();
         // It's possible that reconnecting one node will result in disconnecting another, since we are maintaining
-        // the maxConnections invariant. So, we do a best effort of 5 loops.
+        // the maxConnections invariant. So, we do a best effort of 3 loops. We claim the entry node as an
+        // already used connectionTarget so that we don't clutter its edge list.
         var connectionTargets = ConcurrentHashMap.<Integer>newKeySet();
-        for (int i = 0; i < 5; i++) {
+        connectionTargets.add(graph.entry());
+        for (int i = 0; i < 3; i++) {
             // find all nodes reachable from the entry node
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
