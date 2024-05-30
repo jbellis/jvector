@@ -225,19 +225,22 @@ public class GraphIndexBuilder implements Closeable {
                     .average()
         ).join().orElse(Double.NaN);
 
+        // optimize entry node -- we do this before reconnecting, as otherwise, improving the entry node's
+        // connections will tend to disconnect any orphaned nodes reconnected to the entry node
+        updateEntryPoint();
+
         // reconnect any orphaned nodes.  this will maintain neighbors size
         reconnectOrphanedNodes();
-
-        // optimize entry node
-        updateEntryPoint();
     }
 
     private void reconnectOrphanedNodes() {
         var searchPathNeighbors = new ConcurrentHashMap<Integer, NodeArray>();
         // It's possible that reconnecting one node will result in disconnecting another, since we are maintaining
-        // the maxConnections invariant.  In an extreme case, reconnecting node X disconnects Y, and reconnecting
-        // Y disconnects X again.  So we do a best effort of 3 loops.
-        for (int i = 0; i < 5; i++) {
+        // the maxConnections invariant. So, we do a best effort of 3 loops. We claim the entry node as an
+        // already used connectionTarget so that we don't clutter its edge list.
+        var connectionTargets = ConcurrentHashMap.<Integer>newKeySet();
+        connectionTargets.add(graph.entry());
+        for (int i = 0; i < 3; i++) {
             // find all nodes reachable from the entry node
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             connectedNodes.set(graph.entry());
@@ -247,7 +250,6 @@ public class GraphIndexBuilder implements Closeable {
 
             // reconnect unreachable nodes
             var nReconnected = new AtomicInteger();
-            var connectionTargets = ConcurrentHashMap.<Integer>newKeySet();
             simdExecutor.submit(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(node -> {
                 if (connectedNodes.get(node) || !graph.containsNode(node)) {
                     return;
@@ -263,13 +265,14 @@ public class GraphIndexBuilder implements Closeable {
 
                 // no unused candidate found -- search for more neighbors and try again
                 neighbors = searchPathNeighbors.get(node);
-                if (neighbors == null) {
+                // run search again if neighbors is empty or if every neighbor is already in connection targets
+                if (neighbors == null || isSubset(neighbors, connectionTargets)) {
                     SearchResult result;
                     try (var gs = searchers.get()) {
-                        var notSelfBits = createNotSelfBits(node);
+                        var excludeBits = createExcludeBits(node, connectionTargets);
                         var ssp = scoreProvider.searchProviderFor(node);
                         int ep = graph.entry();
-                        result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, notSelfBits);
+                        result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, excludeBits);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -283,6 +286,15 @@ public class GraphIndexBuilder implements Closeable {
                 break;
             }
         }
+    }
+
+    private boolean isSubset(NodeArray neighbors, Set<Integer> nodeIds) {
+        for (int i = 0; i < neighbors.size(); i++) {
+            if (!nodeIds.contains(neighbors.getNode(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -559,8 +571,8 @@ public class GraphIndexBuilder implements Closeable {
         return nRemoved * graph.ramBytesUsedOneNode();
     }
 
-    private static Bits createNotSelfBits(int node) {
-        return index -> index != node;
+    private static Bits createExcludeBits(int node, Set<Integer> connectionTargets) {
+        return index -> index != node && !connectionTargets.contains(index);
     }
 
     /**
