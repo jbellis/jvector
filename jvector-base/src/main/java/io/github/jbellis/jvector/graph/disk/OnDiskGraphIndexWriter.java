@@ -105,6 +105,12 @@ public class OnDiskGraphIndexWriter implements Closeable {
      */
     public synchronized void writeInline(int ordinal, Map<FeatureId, Feature.State> stateMap) throws IOException
     {
+        for (var featureId : stateMap.keySet()) {
+            if (!featureMap.containsKey(featureId)) {
+                throw new IllegalArgumentException(String.format("Feature %s not configured for index", featureId));
+            }
+        }
+
         out.seek(featureOffsetForOrdinal(ordinal));
 
         for (var feature : featureMap.values()) {
@@ -150,9 +156,9 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 throw new IllegalArgumentException("Run builder.cleanup() before writing the graph");
             }
         }
-        for (var id : featureStateSuppliers.entrySet()) {
-            if (!featureMap.containsKey(id.getKey())) {
-                throw new IllegalArgumentException("Feature supplier provided for feature not in the graph");
+        for (var featureId : featureStateSuppliers.keySet()) {
+            if (!featureMap.containsKey(featureId)) {
+                throw new IllegalArgumentException(String.format("Feature %s not configured for index", featureId));
             }
         }
 
