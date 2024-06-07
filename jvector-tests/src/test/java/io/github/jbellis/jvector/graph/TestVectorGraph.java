@@ -155,6 +155,78 @@ public class TestVectorGraph extends LuceneTestCase {
         }
     }
 
+    // If an exception is thrown during search, the next search should still function
+    @Test
+    public void testExceptionalTermination() {
+        int nDoc = 100;
+        similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
+        RandomAccessVectorValues vectors = circularVectorValues(nDoc);
+        GraphIndexBuilder builder =
+                new GraphIndexBuilder(vectors, similarityFunction, 20, 100, 1.0f, 1.4f);
+        var graph = TestUtil.buildSequentially(builder, vectors);
+
+        // wrap vectors so that the second access to a vector throws an exception
+        var wrappedVectors = new RandomAccessVectorValues() {
+            private int count = 0;
+
+            @Override
+            public RandomAccessVectorValues copy() {
+                return this;
+            }
+
+            @Override
+            public int dimension() {
+                return vectors.dimension();
+            }
+
+            @Override
+            public boolean isValueShared() {
+                return false;
+            }
+
+            @Override
+            public VectorFloat<?> getVector(int targetOrd) {
+                if (count++ == 3) {
+                    throw new RuntimeException("test exception");
+                }
+                return vectors.getVector(targetOrd);
+            }
+
+            @Override
+            public int size() {
+                return vectors.size();
+            }
+        };
+
+        var searcher = new GraphSearcher(graph);
+        var ssp = new SearchScoreProvider(ScoreFunction.Reranker.from(getTargetVector(), similarityFunction, wrappedVectors));
+
+        assertThrows(RuntimeException.class, () -> {
+            searcher.search(ssp, 10, Bits.ALL);
+        });
+
+        // run some searches
+        SearchResult.NodeScore[] nn = searcher.search(ssp, 10, Bits.ALL).getNodes();
+        int[] nodes = Arrays.stream(nn).mapToInt(nodeScore -> nodeScore.node).toArray();
+        assertEquals("Number of found results is not equal to [10].", 10, nodes.length);
+        int sum = 0;
+        for (int node : nodes) {
+            sum += node;
+        }
+        // We expect to get approximately 100% recall;
+        // the lowest docIds are closest to zero; sum(0,9) = 45
+        assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
+
+        for (int i = 0; i < nDoc; i++) {
+            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(i);
+            Iterator<Integer> it = neighbors.iterator();
+            while (it.hasNext()) {
+                // all neighbors should be valid node ids.
+                assertTrue(it.next() < nDoc);
+            }
+        }
+    }
+
     // Make sure we actually approximately find the closest k elements. Mostly this is about
     // ensuring that we have all the distance functions, comparators, priority queues and so on
     // oriented in the right directions
