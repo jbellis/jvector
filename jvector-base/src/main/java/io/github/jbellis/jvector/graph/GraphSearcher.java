@@ -246,123 +246,130 @@ public class GraphSearcher implements Closeable {
     // we expect that to be useful only in a small minority of cases -- particularly since we are using
     // rerankFloor to attempt to avoid doing that work in the first place.
     private SearchResult resume(int initialVisited, int topK, int rerankK, float threshold, float rerankFloor) {
-        assert approximateResults.size() == 0; // should be cleared out by extractScores
-        assert rerankedResults.size() == 0; // should be cleared out by extractScores
-        approximateResults.setMaxSize(rerankK);
-        rerankedResults.setMaxSize(topK);
+        try {
+            assert approximateResults.size() == 0; // should be cleared out by extractScores
+            assert rerankedResults.size() == 0; // should be cleared out by extractScores
+            approximateResults.setMaxSize(rerankK);
+            rerankedResults.setMaxSize(topK);
 
-        int numVisited = initialVisited;
-        // A bound that holds the minimum similarity to the query vector that a candidate vector must
-        // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
-        var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
-        // track scores to predict when we are done with threshold queries
-        var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : ScoreTracker.NO_OP;
-        VectorFloat<?> similarities = null;
+            int numVisited = initialVisited;
+            // A bound that holds the minimum similarity to the query vector that a candidate vector must
+            // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
+            var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
+            // track scores to predict when we are done with threshold queries
+            var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : ScoreTracker.NO_OP;
+            VectorFloat<?> similarities = null;
 
-        // add evicted results from the last call back to the candidates
-        var previouslyEvicted = evictedResults.size() > 0 ? new SparseBits() : Bits.NONE;
-        evictedResults.foreach((node, score) -> {
-            candidates.push(node, score);
-            ((SparseBits) previouslyEvicted).set(node);
-        });
-        evictedResults.clear();
+            // add evicted results from the last call back to the candidates
+            var previouslyEvicted = evictedResults.size() > 0 ? new SparseBits() : Bits.NONE;
+            evictedResults.foreach((node, score) -> {
+                candidates.push(node, score);
+                ((SparseBits) previouslyEvicted).set(node);
+            });
+            evictedResults.clear();
 
-        // the main search loop
-        while (candidates.size() > 0) {
-            // we're done when we have K results and the best candidate is worse than the worst result so far
-            float topCandidateScore = candidates.topScore();
-            if (topCandidateScore < minAcceptedSimilarity) {
-                break;
-            }
-            // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
-            if (scoreTracker.shouldStop()) {
-                break;
-            }
-
-            // process the top candidate
-            int topCandidateNode = candidates.pop();
-            if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
-                // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
-                // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
-                boolean added;
-                if (approximateResults.size() < rerankK) {
-                    approximateResults.push(topCandidateNode, topCandidateScore);
-                    added = true;
-                } else if (topCandidateScore > approximateResults.topScore()) {
-                    int evictedNode = approximateResults.topNode();
-                    float evictedScore = approximateResults.topScore();
-                    evictedResults.add(evictedNode, evictedScore);
-                    approximateResults.push(topCandidateNode, topCandidateScore);
-                    added = true;
-                } else {
-                    added = false;
+            // the main search loop
+            while (candidates.size() > 0) {
+                // we're done when we have K results and the best candidate is worse than the worst result so far
+                float topCandidateScore = candidates.topScore();
+                if (topCandidateScore < minAcceptedSimilarity) {
+                    break;
+                }
+                // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
+                if (scoreTracker.shouldStop()) {
+                    break;
                 }
 
-                // update minAcceptedSimilarity if we've found K results
-                if (added && approximateResults.size() >= rerankK) {
-                    minAcceptedSimilarity = approximateResults.topScore();
+                // process the top candidate
+                int topCandidateNode = candidates.pop();
+                if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
+                    // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
+                    // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
+                    boolean added;
+                    if (approximateResults.size() < rerankK) {
+                        approximateResults.push(topCandidateNode, topCandidateScore);
+                        added = true;
+                    } else if (topCandidateScore > approximateResults.topScore()) {
+                        int evictedNode = approximateResults.topNode();
+                        float evictedScore = approximateResults.topScore();
+                        evictedResults.add(evictedNode, evictedScore);
+                        approximateResults.push(topCandidateNode, topCandidateScore);
+                        added = true;
+                    } else {
+                        added = false;
+                    }
+
+                    // update minAcceptedSimilarity if we've found K results
+                    if (added && approximateResults.size() >= rerankK) {
+                        minAcceptedSimilarity = approximateResults.topScore();
+                    }
                 }
-            }
 
-            // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
-            if (previouslyEvicted.get(topCandidateNode)) {
-                continue;
-            }
-
-            // score the neighbors of the top candidate and add them to the queue
-            var scoreFunction = scoreProvider.scoreFunction();
-            var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
-            if (useEdgeLoading) {
-                similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
-            }
-
-            var it = view.getNeighborsIterator(topCandidateNode);
-            for (int i = 0; i < it.size(); i++) {
-                var friendOrd = it.nextInt();
-                if (!visited.add(friendOrd)) {
+                // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
+                if (previouslyEvicted.get(topCandidateNode)) {
                     continue;
                 }
-                numVisited++;
 
-                float friendSimilarity = useEdgeLoading
-                        ? similarities.get(i)
-                        : scoreFunction.similarityTo(friendOrd);
-                scoreTracker.track(friendSimilarity);
-                candidates.push(friendOrd, friendSimilarity);
+                // score the neighbors of the top candidate and add them to the queue
+                var scoreFunction = scoreProvider.scoreFunction();
+                var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
+                if (useEdgeLoading) {
+                    similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
+                }
+
+                var it = view.getNeighborsIterator(topCandidateNode);
+                for (int i = 0; i < it.size(); i++) {
+                    var friendOrd = it.nextInt();
+                    if (!visited.add(friendOrd)) {
+                        continue;
+                    }
+                    numVisited++;
+
+                    float friendSimilarity = useEdgeLoading
+                            ? similarities.get(i)
+                            : scoreFunction.similarityTo(friendOrd);
+                    scoreTracker.track(friendSimilarity);
+                    candidates.push(friendOrd, friendSimilarity);
+                }
             }
-        }
 
-        // rerank results
-        assert approximateResults.size() <= rerankK;
-        NodeQueue popFromQueue;
-        float worstApproximateInTopK;
-        if (scoreProvider.reranker() == null) {
-            // save the worst candidates in evictedResults for potential resume()
-            while (approximateResults.size() > topK) {
-                var nScore = approximateResults.topScore();
-                var n = approximateResults.pop();
-                evictedResults.add(n, nScore);
+            // rerank results
+            assert approximateResults.size() <= rerankK;
+            NodeQueue popFromQueue;
+            float worstApproximateInTopK;
+            if (scoreProvider.reranker() == null) {
+                // save the worst candidates in evictedResults for potential resume()
+                while (approximateResults.size() > topK) {
+                    var nScore = approximateResults.topScore();
+                    var n = approximateResults.pop();
+                    evictedResults.add(n, nScore);
+                }
+
+                worstApproximateInTopK = Float.POSITIVE_INFINITY;
+                popFromQueue = approximateResults;
+            } else {
+                worstApproximateInTopK = approximateResults.rerank(topK, scoreProvider.reranker(), rerankFloor, rerankedResults, evictedResults);
+                approximateResults.clear();
+                popFromQueue = rerankedResults;
             }
+            // pop the top K results from the results queue, which has the worst candidates at the top
+            assert popFromQueue.size() <= topK;
+            var nodes = new SearchResult.NodeScore[popFromQueue.size()];
+            for (int i = nodes.length - 1; i >= 0; i--) {
+                var nScore = popFromQueue.topScore();
+                var n = popFromQueue.pop();
+                nodes[i] = new SearchResult.NodeScore(n, nScore);
+            }
+            // that should be everything
+            assert popFromQueue.size() == 0;
 
-            worstApproximateInTopK = Float.POSITIVE_INFINITY;
-            popFromQueue = approximateResults;
-        } else {
-            worstApproximateInTopK = approximateResults.rerank(topK, scoreProvider.reranker(), rerankFloor, rerankedResults, evictedResults);
+            return new SearchResult(nodes, numVisited, worstApproximateInTopK);
+        } catch (Throwable t) {
+            // clear scratch structures if terminated via throwable, as they may not have been drained
             approximateResults.clear();
-            popFromQueue = rerankedResults;
+            rerankedResults.clear();
+            throw t;
         }
-        // pop the top K results from the results queue, which has the worst candidates at the top
-        assert popFromQueue.size() <= topK;
-        var nodes = new SearchResult.NodeScore[popFromQueue.size()];
-        for (int i = nodes.length - 1; i >= 0; i--) {
-            var nScore = popFromQueue.topScore();
-            var n = popFromQueue.pop();
-            nodes[i] = new SearchResult.NodeScore(n, nScore);
-        }
-        // that should be everything
-        assert popFromQueue.size() == 0;
-
-        return new SearchResult(nodes, numVisited, worstApproximateInTopK);
     }
 
     /**
