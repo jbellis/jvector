@@ -24,7 +24,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -227,37 +226,5 @@ public final class VectorUtil {
    */
   public static float min(VectorFloat<?> v) {
     return impl.min(v);
-  }
-
-  /**
-   * Calculates the dot product between the vector v and the LVQ-compressed vector quantizedVector.
-   * @param v the uncompressed vector
-   * @param quantizedVector the LVQ-compressed vector
-   * @param querySum the horizontal sum of v
-   * @return the dot product
-   */
-  public static float lvqDotProduct(VectorFloat<?> v, LocallyAdaptiveVectorQuantization.PackedVector quantizedVector, float querySum) {
-    return impl.lvqDotProduct(v, quantizedVector, querySum);
-  }
-
-  /**
-   * Calculates the square of the L2 distance between the centered vector centeredVector and the LVQ-compressed vector quantizedVector.
-   * @param centeredV the de-meaned vector (using the same centroid as used to quantize quantizedVector)
-   * @param quantizedVector the LVQ-compressed vector (using the same centroid as used to de-mean centeredV)
-   * @return the square of the L2 distance
-   */
-  public static float lvqSquareL2Distance(VectorFloat<?> centeredV, LocallyAdaptiveVectorQuantization.PackedVector quantizedVector) {
-    return impl.lvqSquareL2Distance(centeredV, quantizedVector);
-  }
-
-  /**
-   * Calculates the cosine similarity between the vector v and LVQ-compressed vector quantizedVector.
-   * @param v the uncompressed vector
-   * @param quantizedVector the LVQ-compressed vector
-   * @param centroid the centroid used to de-mean quantizedVector
-   * @return the cosine similarity
-   */
-  public static float lvqCosine(VectorFloat<?> v, LocallyAdaptiveVectorQuantization.PackedVector quantizedVector, VectorFloat<?> centroid) {
-    return impl.lvqCosine(v, quantizedVector, centroid);
   }
 }

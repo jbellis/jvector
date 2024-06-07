@@ -30,14 +30,12 @@ import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
-import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -175,12 +173,9 @@ public class Grid {
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
-            if (features.equals(EnumSet.of(FeatureId.LVQ))) {
+            if (features.equals(EnumSet.of(FeatureId.INLINE_VECTORS))) {
                 scoringWriter = writer;
             }
-        }
-        if (scoringWriter == null) {
-            throw new IllegalStateException("For simplicity, Bench looks for exactly {LVQ} feature set for scoring compressed builds. With minor code edits you can switch this to {INLINE_VECTORS} instead.");
         }
 
         // build the graph incrementally
@@ -245,11 +240,6 @@ public class Grid {
                 case INLINE_VECTORS:
                     builder.with(new InlineVectors(floatVectors.dimension()));
                     suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
-                    break;
-                case LVQ:
-                    var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
-                    builder.with(new LVQ(lvq));
-                    suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
                     break;
                 case FUSED_ADC:
                     if (pq == null) {

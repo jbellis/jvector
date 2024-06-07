@@ -58,7 +58,7 @@ If you only read one thing, read this!
     to perform more work per FFM call.
   - `example/Grid.java` shows how to use these.
 - `OnDiskGraphIndex`, `CachingGraphIndex`, and `GraphCache` have moved to the package `jvector.graph.disk`
-- Writing graphs using the new features (LVQ, FusedADC) is performed with `OnDiskGraphIndexWriter`; see `OnDiskGraphIndex.write` for an example of how to use it
+- Writing graphs using the new feature (FusedADC) is performed with `OnDiskGraphIndexWriter`; see `OnDiskGraphIndex.write` for an example of how to use it
 - `RandomAccessVectorValues::vectorValue` is deprecated, replaced by `getVector` (which has the same semantics
   as `vectorValue`) and `getVectorInto`.  The latter allows JVector to avoid an unnecessary copy when there
   is a specific destination already created that needs the data.
