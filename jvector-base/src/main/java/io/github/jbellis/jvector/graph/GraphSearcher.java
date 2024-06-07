@@ -364,11 +364,11 @@ public class GraphSearcher implements Closeable {
             assert popFromQueue.size() == 0;
 
             return new SearchResult(nodes, numVisited, worstApproximateInTopK);
-        } catch (Exception e) {
-            // clear scratch structures if terminated via exception, as they may not have been drained
+        } catch (Throwable t) {
+            // clear scratch structures if terminated via throwable, as they may not have been drained
             approximateResults.clear();
             rerankedResults.clear();
-            throw e;
+            throw t;
         }
     }
 
