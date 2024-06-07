@@ -135,7 +135,7 @@ public interface BuildScoreProvider {
     /**
      * Returns a BSP that performs approximate score comparisons using the given PQVectors,
      * with reranking performed using RandomAccessVectorValues (which is intended to be
-     * InlineVectorValues or LvqVectorValues for building incrementally, but should technically
+     * InlineVectorValues for building incrementally, but should technically
      * work with any RAVV implementation).
      */
     static BuildScoreProvider pqBuildScoreProvider(VectorSimilarityFunction vsf, PQVectors pqv) {

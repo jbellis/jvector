@@ -24,7 +24,6 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
-import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -318,39 +317,6 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             assertTrue(OnDiskGraphIndex.areHeadersEqual(incrementalGraph, bulkGraph));
             TestUtil.assertGraphEquals(incrementalGraph, bulkGraph); // incremental and bulk graph should have same structure
             validateVectors(incrementalView, ravv); // inline vectors should be the same
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        // write incrementally with LVQ and add Fused ADC feature
-        var incrementalLvqPath = testDirectory.resolve("incremental_lvq_graph");
-        var lvq = LocallyAdaptiveVectorQuantization.compute(ravv);
-        var lvqFeature = new LVQ(lvq);
-
-        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalLvqPath)
-                .with(lvqFeature)
-                .with(new FusedADC(graph.maxDegree(), pq))
-                .build())
-        {
-            // write inline vectors incrementally
-            for (int i = 0; i < vectors.size(); i++) {
-                var state = Feature.singleState(FeatureId.LVQ, new LVQ.State(lvq.encode(ravv.getVector(i))));
-                writer.writeInline(i, state);
-            }
-
-            // write graph structure, fused ADC
-            writer.write(Feature.singleStateFactory(FeatureId.FUSED_ADC, i -> new FusedADC.State(graph.getView(), pqv, i)));
-            writer.write(Map.of());
-        }
-
-        // graph and vectors should be identical
-        try (var bulkMarr = new SimpleMappedReader(bulkPath.toAbsolutePath().toString());
-             var bulkGraph = OnDiskGraphIndex.load(bulkMarr::duplicate);
-             var incrementalMarr = new SimpleMappedReader(incrementalLvqPath.toAbsolutePath().toString());
-             var incrementalGraph = OnDiskGraphIndex.load(incrementalMarr::duplicate))
-        {
-            assertTrue(OnDiskGraphIndex.areHeadersEqual(incrementalGraph, bulkGraph));
-            TestUtil.assertGraphEquals(incrementalGraph, bulkGraph); // incremental and bulk graph should have same structure
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

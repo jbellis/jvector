@@ -24,7 +24,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -217,10 +216,4 @@ public interface VectorUtilSupport {
       results.set(i, (1 + cosine(v1, 0, v2, i * v1.length(), v1.length())) / 2);
     }
   }
-
-  float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum);
-
-  float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector);
-
-  float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid);
 }

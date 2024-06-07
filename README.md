@@ -27,7 +27,6 @@ The graph is represented by an on-disk adjacency list per node, with additional 
 
 The second pass can be performed with
 * Full resolution float32 vectors
-* [LVQ](https://arxiv.org/abs/2304.04759)-compressed int8 vectors
 
 [This two-pass design reduces memory usage and reduces latency while preserving accuracy](https://thenewstack.io/why-vector-size-matters/).  
 
@@ -265,7 +264,7 @@ Commentary:
 
 ### Advanced features
 
-* Fused ADC and LVQ are both represented as Features that are supported during incremental index construction, like InlineVectors above.  [See the Grid class for sample code](https://github.com/jbellis/jvector/blob/main/jvector-examples/src/main/java/io/github/jbellis/jvector/example/Grid.java).
+* Fused ADC is represented as a Feature that is supported during incremental index construction, like InlineVectors above.  [See the Grid class for sample code](https://github.com/jbellis/jvector/blob/main/jvector-examples/src/main/java/io/github/jbellis/jvector/example/Grid.java).
 * Anisotropic PQ is built into the ProductQuantization class and can improve recall, but nobody knows how to tune it (with the T/threshold parameter) except experimentally on a per-model basis, and choosing the wrong setting can make things worse.  From Figure 3 in the paper: 
 ![APQ performnce on Glove first improves and then degrades as T increases](https://github.com/jbellis/jvector/assets/42158/fd459222-6929-43ca-a405-ac34dbaf6646)
 
@@ -276,7 +275,6 @@ Commentary:
 ## The research behind the algorithms
 
 * Foundational work: [HNSW](https://ieeexplore.ieee.org/abstract/document/8594636) and [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf) papers, and [a higher level explainer](https://www.datastax.com/guides/hierarchical-navigable-small-worlds)
-* [LVQ paper](https://arxiv.org/abs/2402.02044)
 * [Anisotropic PQ paper](https://arxiv.org/abs/1908.10396)
 * [Quicker ADC paper](https://arxiv.org/abs/1812.09162)
 
