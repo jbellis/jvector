@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.example.util.MMapRandomAccessVectorValues;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.example.util.UpdatableRandomAccessVectorValues;

@@ -46,6 +46,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -232,7 +233,13 @@ public class Grid {
         return indexes;
     }
 
-    private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features, OnHeapGraphIndex onHeapGraph, Path outPath, RandomAccessVectorValues floatVectors, ProductQuantization pq) {
+    private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features,
+                                                             OnHeapGraphIndex onHeapGraph,
+                                                             Path outPath,
+                                                             RandomAccessVectorValues floatVectors,
+                                                             ProductQuantization pq)
+            throws FileNotFoundException
+    {
         var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(new OnDiskGraphIndexWriter.IdentityMapper());
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         for (var featureId : features) {

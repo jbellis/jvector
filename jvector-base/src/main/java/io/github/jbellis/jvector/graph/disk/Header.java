@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
-import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 
 import java.io.DataOutput;
