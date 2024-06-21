@@ -17,8 +17,6 @@
 package io.github.jbellis.jvector.disk;
 
 import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -28,9 +26,19 @@ import java.nio.file.Path;
 import java.util.zip.CRC32;
 
 /**
- * A buffered DataOutput that adds seek(), checksum(), and readFully methods
+ * Implements RandomAccessWriter as a buffered RandomAccessFile.
  */
-public class BufferedRandomAccessWriter implements DataOutput, Closeable {
+public class BufferedRandomAccessWriter implements RandomAccessWriter {
+    // Our approach is to create an OutputStream that writes to the RAF,
+    // and then buffer that and wrap it in a DataOutputStream.  Obviously this means
+    // that we need to be careful to flush the buffer when seeking to a new position.
+    private final RandomAccessFile raf;
+    private final DataOutputStream stream;
+
+    public BufferedRandomAccessWriter(Path path) throws FileNotFoundException {
+        raf = new RandomAccessFile(path.toFile(), "rw");
+        stream = new DataOutputStream(new BufferedOutputStream(new RandomAccessOutputStream(raf)));
+    }
 
     private static class RandomAccessOutputStream extends OutputStream {
         private final RandomAccessFile raf;
@@ -55,22 +63,10 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
         }
     }
 
-    private final RandomAccessFile raf;
-    private final DataOutputStream stream;
-
-    public BufferedRandomAccessWriter(Path path) throws FileNotFoundException {
-        raf = new RandomAccessFile(path.toFile(), "rw");
-        stream = new DataOutputStream(new BufferedOutputStream(new RandomAccessOutputStream(raf)));
-    }
-
+    @Override
     public void seek(long position) throws IOException {
         flush();
         raf.seek(position);
-    }
-
-    public void readFully(byte[] dest, int destOffset, int size) throws IOException {
-        flush();
-        raf.readFully(dest, destOffset, size);
     }
 
     @Override
@@ -80,11 +76,13 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
         raf.close();
     }
 
+    @Override
     public long position() throws IOException {
         flush();
         return raf.getFilePointer();
     }
 
+    @Override
     public void flush() throws IOException {
         stream.flush();
     }
@@ -95,6 +93,7 @@ public class BufferedRandomAccessWriter implements DataOutput, Closeable {
      * the file pointer will be left at endOffset.
      * <p>
      */
+    @Override
     public long checksum(long startOffset, long endOffset) throws IOException {
         flush();
 

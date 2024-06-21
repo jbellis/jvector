@@ -17,11 +17,13 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
+import io.github.jbellis.jvector.disk.RandomAccessWriter;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import org.agrona.collections.Int2IntHashMap;
 
 import java.io.Closeable;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.EnumMap;
@@ -36,7 +38,6 @@ import java.util.function.IntFunction;
  * (using the writer as the source of INLINE_VECTORS).
  */
 public class OnDiskGraphIndexWriter implements Closeable {
-    private final Path outPath;
     private final int version;
     private final GraphIndex graph;
     private final GraphIndex.View view;
@@ -45,28 +46,26 @@ public class OnDiskGraphIndexWriter implements Closeable {
     // we don't use Map features but EnumMap is the best way to make sure we don't
     // accidentally introduce an ordering bug in the future
     private final EnumMap<FeatureId, Feature> featureMap;
-    private final BufferedRandomAccessWriter out;
+    private final RandomAccessWriter out;
     private final long startOffset;
     private final int headerSize;
     private volatile int maxOrdinalWritten = -1;
 
-    private OnDiskGraphIndexWriter(Path outPath,
+    private OnDiskGraphIndexWriter(RandomAccessWriter out,
                                    int version,
                                    long startOffset,
                                    GraphIndex graph,
                                    OrdinalMapper oldToNewOrdinals,
                                    int dimension,
                                    EnumMap<FeatureId, Feature> features)
-            throws IOException
     {
-        this.outPath = outPath;
         this.version = version;
         this.graph = graph;
         this.view = graph.getView();
         this.ordinalMapper = oldToNewOrdinals;
         this.dimension = dimension;
         this.featureMap = features;
-        this.out = new BufferedRandomAccessWriter(outPath);
+        this.out = out;
         this.startOffset = startOffset;
 
         // create a mock Header to determine the correct size
@@ -91,12 +90,8 @@ public class OnDiskGraphIndexWriter implements Closeable {
      * <p>
      * Provided for callers (like Cassandra) that want to add their own header/footer to the output.
      */
-    public BufferedRandomAccessWriter getOutput() {
+    public RandomAccessWriter getOutput() {
         return out;
-    }
-
-    public Path getPath() {
-        return outPath;
     }
 
     /**
@@ -260,15 +255,19 @@ public class OnDiskGraphIndexWriter implements Closeable {
      */
     public static class Builder {
         private final GraphIndex graphIndex;
-        private final Path outPath;
         private final EnumMap<FeatureId, Feature> features;
+        private final RandomAccessWriter out;
         private OrdinalMapper ordinalMapper;
         private long startOffset;
         private int version;
 
-        public Builder(GraphIndex graphIndex, Path outPath) {
+        public Builder(GraphIndex graphIndex, Path outPath) throws FileNotFoundException {
+            this(graphIndex, new BufferedRandomAccessWriter(outPath));
+        }
+
+        public Builder(GraphIndex graphIndex, RandomAccessWriter out) {
             this.graphIndex = graphIndex;
-            this.outPath = outPath;
+            this.out = out;
             this.features = new EnumMap<>(FeatureId.class);
             this.version = OnDiskGraphIndex.CURRENT_VERSION;
         }
@@ -316,7 +315,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             if (ordinalMapper == null) {
                 ordinalMapper = new MapMapper(sequentialRenumbering(graphIndex));
             }
-            return new OnDiskGraphIndexWriter(outPath, version, startOffset, graphIndex, ordinalMapper, dimension, features);
+            return new OnDiskGraphIndexWriter(out, version, startOffset, graphIndex, ordinalMapper, dimension, features);
         }
 
         public Builder withMap(Map<Integer, Integer> oldToNewOrdinals) {
