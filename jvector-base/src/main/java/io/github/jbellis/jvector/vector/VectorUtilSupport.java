@@ -199,21 +199,4 @@ public interface VectorUtilSupport {
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);
 
-  default void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-    for (int i = 0; i < results.length(); i++) {
-      results.set(i, (1 + dotProduct(v1, 0, v2, i * v1.length(), v1.length())) / 2);
-    }
-  }
-
-  default void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-    for (int i = 0; i < results.length(); i++) {
-      results.set(i, 1 / (1 + squareDistance(v1, 0, v2, i * v1.length(), v1.length())));
-    }
-  }
-
-  default void cosineMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-    for (int i = 0; i < results.length(); i++) {
-      results.set(i, (1 + cosine(v1, 0, v2, i * v1.length(), v1.length())) / 2);
-    }
-  }
 }
