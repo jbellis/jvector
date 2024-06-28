@@ -23,7 +23,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 /** Encapsulates comparing node distances to a specific vector for GraphSearcher. */
 public final class SearchScoreProvider {
     private final ScoreFunction scoreFunction;
-    private final ScoreFunction.Reranker reranker;
+    private final ScoreFunction.ExactScoreFunction reranker;
 
     /**
      * @param scoreFunction the primary, fast scoring function
@@ -40,10 +40,10 @@ public final class SearchScoreProvider {
      * Generally, reranker will be null iff scoreFunction is an ExactScoreFunction.  However,
      * it is allowed, and sometimes useful, to only perform approximate scoring without reranking.
      * <p>
-     * Most often it will be convenient to get the Reranker either using `Reranker.from`
+     * Most often it will be convenient to get the reranker either using `ExactScoreFunction.from`
      * or `ScoringView.rerankerFor`.
      */
-    public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.Reranker reranker) {
+    public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.ExactScoreFunction reranker) {
         assert scoreFunction != null;
         this.scoreFunction = scoreFunction;
         this.reranker = reranker;
@@ -53,7 +53,7 @@ public final class SearchScoreProvider {
         return scoreFunction;
     }
 
-    public ScoreFunction.Reranker reranker() {
+    public ScoreFunction.ExactScoreFunction reranker() {
         return reranker;
     }
 
@@ -69,7 +69,13 @@ public final class SearchScoreProvider {
      * e.g. during construction.
      */
     public static SearchScoreProvider exact(VectorFloat<?> v, VectorSimilarityFunction vsf, RandomAccessVectorValues ravv) {
-        var sf = ScoreFunction.Reranker.from(v, vsf, ravv);
+        // don't use ESF.reranker, we need thread safety here
+        var sf = new ScoreFunction.ExactScoreFunction() {
+            @Override
+            public float similarityTo(int node2) {
+                return vsf.compare(v, ravv.getVector(node2));
+            }
+        };
         return new SearchScoreProvider(sf);
     }
 }

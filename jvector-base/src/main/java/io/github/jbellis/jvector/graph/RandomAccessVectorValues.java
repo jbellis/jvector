@@ -24,7 +24,9 @@
 
 package io.github.jbellis.jvector.graph;
 
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.function.Supplier;
@@ -104,5 +106,20 @@ public interface RandomAccessVectorValues {
         }
         var tl = ExplicitThreadLocal.withInitial(this::copy);
         return tl::get;
+    }
+
+    /**
+     * Convenience method to create an ExactScoreFunction for reranking.  The resulting function is NOT thread-safe.
+     */
+    default ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+        return new ScoreFunction.ExactScoreFunction() {
+            private final VectorFloat<?> scratch = vts.createFloatVector(dimension());
+
+            @Override
+            public float similarityTo(int node2) {
+                getVectorInto(node2, scratch, 0);
+                return vsf.compare(queryVector, scratch);
+            }
+        };
     }
 }

@@ -118,7 +118,7 @@ public class CachingGraphIndex implements GraphIndex, Accountable
         }
 
         @Override
-        public ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
             return view.rerankerFor(queryVector, vsf);
         }
 

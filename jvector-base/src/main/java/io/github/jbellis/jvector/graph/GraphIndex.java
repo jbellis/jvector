@@ -130,7 +130,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
      * except for OnHeapGraphIndex.ConcurrentGraphIndexView.)
      */
     interface ScoringView extends View {
-        ScoreFunction.Reranker rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf);
+        ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf);
         ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf);
     }
 

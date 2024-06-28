@@ -138,7 +138,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var query = randomVector(dim);
         var searcher = new GraphSearcher(graph);
 
-        var ssp = new SearchScoreProvider(ScoreFunction.Reranker.from(query, similarityFunction, vectors));
+        var ssp = new SearchScoreProvider(vectors.rerankerFor(query, similarityFunction));
         var initial = searcher.search(ssp, initialTopK, acceptOrds);
         assertEquals(initialTopK, initial.getNodes().length);
 
@@ -176,7 +176,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var searcher = new GraphSearcher(graph);
 
         var ssp = new SearchScoreProvider(pqv.scoreFunctionFor(query, similarityFunction),
-                                          ScoreFunction.Reranker.from(query, similarityFunction, vectors));
+                                          vectors.rerankerFor(query, similarityFunction));
         var initial = searcher.search(ssp, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
         assertEquals(topK, initial.getNodes().length);
         assertEquals(rerankK, initial.getRerankedCount());
@@ -229,7 +229,7 @@ public class TestVectorGraph extends LuceneTestCase {
         };
 
         var searcher = new GraphSearcher(graph);
-        var ssp = new SearchScoreProvider(ScoreFunction.Reranker.from(getTargetVector(), similarityFunction, wrappedVectors));
+        var ssp = new SearchScoreProvider(wrappedVectors.rerankerFor(getTargetVector(), similarityFunction));
 
         assertThrows(RuntimeException.class, () -> {
             searcher.search(ssp, 10, Bits.ALL);

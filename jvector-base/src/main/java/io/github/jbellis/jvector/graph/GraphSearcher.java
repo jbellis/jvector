@@ -409,7 +409,7 @@ public class GraphSearcher implements Closeable {
         view.close();
     }
 
-    private static class CachingReranker implements ScoreFunction.Reranker {
+    private static class CachingReranker implements ScoreFunction.ExactScoreFunction {
         // this cache never gets cleared out (until a new search reinitializes it),
         // but we expect resume() to be called at most a few times so it's fine
         private final Int2ObjectHashMap<Float> cachedScores;
@@ -420,11 +420,6 @@ public class GraphSearcher implements Closeable {
             this.scoreProvider = scoreProvider;
             cachedScores = new Int2ObjectHashMap<>();
             rerankCalls = 0;
-        }
-
-        @Override
-        public VectorFloat<?> similarityTo(int[] nodes) {
-            throw new UnsupportedOperationException();
         }
 
         @Override

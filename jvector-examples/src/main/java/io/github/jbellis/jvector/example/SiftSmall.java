@@ -35,7 +35,7 @@ import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ApproximateScoreFunction;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction.Reranker;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ExactScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -197,7 +197,7 @@ public class SiftSmall {
             // then reranks with the exact vectors that are stored on disk in the index
             Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> {
                 ApproximateScoreFunction asf = pqv.precomputedScoreFunctionFor(q, VectorSimilarityFunction.EUCLIDEAN);
-                Reranker reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                ExactScoreFunction reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
                 return new SearchScoreProvider(asf, reranker);
             };
             // measure our recall against the (exactly computed) ground truth
@@ -258,7 +258,7 @@ public class SiftSmall {
             var pqvSearch = PQVectors.load(in);
             Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> {
                 ApproximateScoreFunction asf = pqvSearch.precomputedScoreFunctionFor(q, VectorSimilarityFunction.EUCLIDEAN);
-                Reranker reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                ExactScoreFunction reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
                 return new SearchScoreProvider(asf, reranker);
             };
             testRecall(index, queryVectors, groundTruth, sspFactory);
