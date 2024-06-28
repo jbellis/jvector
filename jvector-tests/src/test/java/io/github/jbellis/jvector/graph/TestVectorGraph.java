@@ -30,6 +30,8 @@ import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
+import io.github.jbellis.jvector.pq.PQVectors;
+import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.FixedBitSet;
@@ -153,6 +155,34 @@ public class TestVectorGraph extends LuceneTestCase {
         for (int i = 0; i < expectedResults.size(); i++) {
             assertEquals(expectedResults.get(i).score, initialResumedResults.get(i).score, 1E-5);
         }
+    }
+
+    @Test
+    // resuming a search should not need to rerank the nodes that were already evaluated
+    public void testRerankCaching() {
+        int size = 1000;
+        int dim = 2;
+        var vectors = vectorValues(size, dim);
+        var builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
+        var graph = builder.build(vectors);
+
+        var pq = ProductQuantization.compute(vectors, 2, 256, false);
+        var encoded = pq.encodeAll(vectors);
+        var pqv = new PQVectors(pq, encoded);
+
+        int topK = 10;
+        int rerankK = 30;
+        var query = randomVector(dim);
+        var searcher = new GraphSearcher(graph);
+
+        var ssp = new SearchScoreProvider(pqv.scoreFunctionFor(query, similarityFunction),
+                                          ScoreFunction.Reranker.from(query, similarityFunction, vectors));
+        var initial = searcher.search(ssp, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+        assertEquals(topK, initial.getNodes().length);
+        assertEquals(rerankK, initial.getRerankedCount());
+
+        var resumed = searcher.resume(topK, rerankK);
+        assert resumed.getRerankedCount() < rerankK;
     }
 
     // If an exception is thrown during search, the next search should still function

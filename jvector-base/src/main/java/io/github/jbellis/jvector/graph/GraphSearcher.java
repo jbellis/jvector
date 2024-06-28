@@ -58,7 +58,7 @@ public class GraphSearcher implements Closeable {
     // Search parameters that we save here for use by resume()
     private Bits acceptOrds;
     private SearchScoreProvider scoreProvider;
-    private ScoreFunction.Reranker cachingReranker;
+    private CachingReranker cachingReranker;
 
     /**
      * Creates a new graph searcher from the given GraphIndex
@@ -83,26 +83,7 @@ public class GraphSearcher implements Closeable {
             return;
         }
 
-        cachingReranker = new ScoreFunction.Reranker() {
-            // this cache never gets cleared out (until a new search reinitializes it),
-            // but we expect resume() to be called at most a few times so it's fine
-            final Int2ObjectHashMap<Float> cachedScores = new Int2ObjectHashMap<>();
-
-            @Override
-            public VectorFloat<?> similarityTo(int[] nodes) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public float similarityTo(int node2) {
-                if (cachedScores.containsKey(node2)) {
-                    return cachedScores.get(node2);
-                }
-                float score = scoreProvider.reranker().similarityTo(node2);
-                cachedScores.put(node2, Float.valueOf(score));
-                return score;
-            }
-        };
+        cachingReranker = new CachingReranker(scoreProvider);
     }
 
     public GraphIndex.View getView() {
@@ -241,7 +222,7 @@ public class GraphSearcher implements Closeable {
 
         // no entry point -> empty results
         if (ep < 0) {
-            return new SearchResult(new SearchResult.NodeScore[0], 0, Float.POSITIVE_INFINITY);
+            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, Float.POSITIVE_INFINITY);
         }
 
         // kick off the actual search at the entry point
@@ -370,6 +351,7 @@ public class GraphSearcher implements Closeable {
             assert approximateResults.size() <= rerankK;
             NodeQueue popFromQueue;
             float worstApproximateInTopK;
+            int reranked;
             if (cachingReranker == null) {
                 // save the worst candidates in evictedResults for potential resume()
                 while (approximateResults.size() > topK) {
@@ -378,10 +360,13 @@ public class GraphSearcher implements Closeable {
                     evictedResults.add(n, nScore);
                 }
 
+                reranked = 0;
                 worstApproximateInTopK = Float.POSITIVE_INFINITY;
                 popFromQueue = approximateResults;
             } else {
+                int oldReranked = cachingReranker.getRerankCalls();
                 worstApproximateInTopK = approximateResults.rerank(topK, cachingReranker, rerankFloor, rerankedResults, evictedResults);
+                reranked = cachingReranker.getRerankCalls() - oldReranked;
                 approximateResults.clear();
                 popFromQueue = rerankedResults;
             }
@@ -396,7 +381,7 @@ public class GraphSearcher implements Closeable {
             // that should be everything
             assert popFromQueue.size() == 0;
 
-            return new SearchResult(nodes, numVisited, worstApproximateInTopK);
+            return new SearchResult(nodes, numVisited, reranked, worstApproximateInTopK);
         } catch (Throwable t) {
             // clear scratch structures if terminated via throwable, as they may not have been drained
             approximateResults.clear();
@@ -422,5 +407,39 @@ public class GraphSearcher implements Closeable {
     @Override
     public void close() throws IOException {
         view.close();
+    }
+
+    private static class CachingReranker implements ScoreFunction.Reranker {
+        // this cache never gets cleared out (until a new search reinitializes it),
+        // but we expect resume() to be called at most a few times so it's fine
+        private final Int2ObjectHashMap<Float> cachedScores;
+        private final SearchScoreProvider scoreProvider;
+        private int rerankCalls;
+
+        public CachingReranker(SearchScoreProvider scoreProvider) {
+            this.scoreProvider = scoreProvider;
+            cachedScores = new Int2ObjectHashMap<>();
+            rerankCalls = 0;
+        }
+
+        @Override
+        public VectorFloat<?> similarityTo(int[] nodes) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public float similarityTo(int node2) {
+            if (cachedScores.containsKey(node2)) {
+                return cachedScores.get(node2);
+            }
+            rerankCalls++;
+            float score = scoreProvider.reranker().similarityTo(node2);
+            cachedScores.put(node2, Float.valueOf(score));
+            return score;
+        }
+
+        public int getRerankCalls() {
+            return rerankCalls;
+        }
     }
 }
