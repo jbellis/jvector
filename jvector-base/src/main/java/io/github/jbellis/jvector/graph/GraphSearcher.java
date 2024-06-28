@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.Experimental;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
@@ -32,6 +33,7 @@ import io.github.jbellis.jvector.util.GrowableLongHeap;
 import io.github.jbellis.jvector.util.SparseBits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
@@ -56,6 +58,7 @@ public class GraphSearcher implements Closeable {
     // Search parameters that we save here for use by resume()
     private Bits acceptOrds;
     private SearchScoreProvider scoreProvider;
+    private ScoreFunction.Reranker cachingReranker;
 
     /**
      * Creates a new graph searcher from the given GraphIndex
@@ -71,6 +74,35 @@ public class GraphSearcher implements Closeable {
         this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.rerankedResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
+    }
+
+    private void initializeScoreProvider(SearchScoreProvider scoreProvider) {
+        this.scoreProvider = scoreProvider;
+        if (scoreProvider.reranker() == null) {
+            cachingReranker = null;
+            return;
+        }
+
+        cachingReranker = new ScoreFunction.Reranker() {
+            // this cache never gets cleared out (until a new search reinitializes it),
+            // but we expect resume() to be called at most a few times so it's fine
+            final Int2ObjectHashMap<Float> cachedScores = new Int2ObjectHashMap<>();
+
+            @Override
+            public VectorFloat<?> similarityTo(int[] nodes) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public float similarityTo(int node2) {
+                if (cachedScores.containsKey(node2)) {
+                    return cachedScores.get(node2);
+                }
+                float score = scoreProvider.reranker().similarityTo(node2);
+                cachedScores.put(node2, Float.valueOf(score));
+                return score;
+            }
+        };
     }
 
     public GraphIndex.View getView() {
@@ -120,10 +152,11 @@ public class GraphSearcher implements Closeable {
      *                        If threshold > 0 then the search will stop when it is probabilistically unlikely
      *                        to find more nodes above the threshold, even if `topK` results have not yet been found.
      * @param rerankFloor     (Experimental!) Candidates whose approximate similarity is at least this value
-     *                        will not be reranked with the exact score (which requires loading the raw vector)
+     *                        will be reranked with the exact score (which requires loading a high-res vector from disk)
      *                        and included in the final results.  (Potentially leaving fewer than topK entries
-     *                        in the results.)  Other candidates will be discarded.  This is intended for use
-     *                        when combining results from multiple indexes.
+     *                        in the results.)  Other candidates will be discarded, but will be potentially
+     *                        resurfaced if `resume` is called.  This is intended for use when combining results
+     *                        from multiple indexes.
      * @param acceptOrds      a Bits instance indicating which nodes are acceptable results.
      *                        If {@link Bits#ALL}, all nodes are acceptable.
      *                        It is caller's responsibility to ensure that there are enough acceptable nodes
@@ -198,7 +231,7 @@ public class GraphSearcher implements Closeable {
         }
 
         // save search parameters for potential later resume
-        this.scoreProvider = scoreProvider;
+        initializeScoreProvider(scoreProvider);
         this.acceptOrds = Bits.intersectionOf(rawAcceptOrds, view.liveNodes());
 
         // reset the scratch data structures
@@ -337,7 +370,7 @@ public class GraphSearcher implements Closeable {
             assert approximateResults.size() <= rerankK;
             NodeQueue popFromQueue;
             float worstApproximateInTopK;
-            if (scoreProvider.reranker() == null) {
+            if (cachingReranker == null) {
                 // save the worst candidates in evictedResults for potential resume()
                 while (approximateResults.size() > topK) {
                     var nScore = approximateResults.topScore();
@@ -348,7 +381,7 @@ public class GraphSearcher implements Closeable {
                 worstApproximateInTopK = Float.POSITIVE_INFINITY;
                 popFromQueue = approximateResults;
             } else {
-                worstApproximateInTopK = approximateResults.rerank(topK, scoreProvider.reranker(), rerankFloor, rerankedResults, evictedResults);
+                worstApproximateInTopK = approximateResults.rerank(topK, cachingReranker, rerankFloor, rerankedResults, evictedResults);
                 approximateResults.clear();
                 popFromQueue = rerankedResults;
             }
