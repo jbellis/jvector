@@ -64,41 +64,6 @@ public interface ScoreFunction {
         }
     }
 
-    /**
-     * An ExactScoreFunction with an optimized batch `similarityTo` method for reranking
-     * results after an approximate-scored search.
-     */
-    interface Reranker extends ExactScoreFunction {
-        /**
-         * @return a vector of size `nodes.length` containing the corresponding score for
-         * each of the nodes in `nodes`.  Used when reranking search results.
-         */
-        VectorFloat<?> similarityTo(int[] nodes);
-
-        static Reranker from(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, RandomAccessVectorValues vp) {
-            return new Reranker() {
-                @Override
-                public VectorFloat<?> similarityTo(int[] nodes) {
-                    var results = vts.createFloatVector(nodes.length);
-                    var nodeCount = nodes.length;
-                    var dimension = queryVector.length();
-                    var packedVectors = vts.createFloatVector(nodeCount * dimension);
-                    for (int i1 = 0; i1 < nodeCount; i1++) {
-                        var node = nodes[i1];
-                        vp.getVectorInto(node, packedVectors, i1 * dimension);
-                    }
-                    vsf.compareMulti(queryVector, packedVectors, results);
-                    return results;
-                }
-
-                @Override
-                public float similarityTo(int node2) {
-                    return vsf.compare(queryVector, vp.getVector(node2));
-                }
-            };
-        }
-    }
-
     interface ApproximateScoreFunction extends ScoreFunction {
         default boolean isExact() {
             return false;

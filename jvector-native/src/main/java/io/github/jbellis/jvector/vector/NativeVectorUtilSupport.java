@@ -134,16 +134,6 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void dotProductMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-        NativeSimdOps.dot_product_multi_f32_512(((MemorySegmentVectorFloat)v1).get(), ((MemorySegmentVectorFloat)v2).get(), v1.length(), results.length(), ((MemorySegmentVectorFloat)results).get());
-    }
-
-    @Override
-    public void squareL2DistanceMultiScore(VectorFloat<?> v1, VectorFloat<?> v2, VectorFloat<?> results) {
-        NativeSimdOps.square_distance_multi_f32_512(((MemorySegmentVectorFloat)v1).get(), ((MemorySegmentVectorFloat)v2).get(), v1.length(), results.length(), ((MemorySegmentVectorFloat)results).get());
-    }
-
-    @Override
     public void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBases, ByteSequence<?> quantizedPartials) {
         VectorSimdOps.quantizePartials(delta, (MemorySegmentVectorFloat) partials, (MemorySegmentVectorFloat) partialBases, (MemorySegmentByteSequence) quantizedPartials);
     }

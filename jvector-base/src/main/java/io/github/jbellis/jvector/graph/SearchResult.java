@@ -22,11 +22,13 @@ package io.github.jbellis.jvector.graph;
 public final class SearchResult {
     private final NodeScore[] nodes;
     private final int visitedCount;
+    private final int rerankedCount;
     private final float worstApproximateScoreInTopK;
 
-    public SearchResult(NodeScore[] nodes, int visitedCount, float worstApproximateScoreInTopK) {
+    public SearchResult(NodeScore[] nodes, int visitedCount, int rerankedCount, float worstApproximateScoreInTopK) {
         this.nodes = nodes;
         this.visitedCount = visitedCount;
+        this.rerankedCount = rerankedCount;
         this.worstApproximateScoreInTopK = worstApproximateScoreInTopK;
     }
 
@@ -42,6 +44,13 @@ public final class SearchResult {
      */
     public int getVisitedCount() {
         return visitedCount;
+    }
+
+    /**
+     * @return the number of nodes that were reranked during the search
+     */
+    public int getRerankedCount() {
+        return rerankedCount;
     }
 
     /**
