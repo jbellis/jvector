@@ -106,6 +106,7 @@ public class Bench {
         if (pattern.matcher("2dgrid").find()) {
             searchCompression = Arrays.asList(__ -> CompressorParameters.NONE,
                                               ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
+            buildCompression = Arrays.asList(__ -> CompressorParameters.NONE);
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
             Grid.runAll(grid2d, mGrid, efConstructionGrid, featureSets, buildCompression, searchCompression, efSearchGrid);
         }
