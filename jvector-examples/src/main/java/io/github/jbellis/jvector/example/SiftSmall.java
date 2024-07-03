@@ -33,6 +33,7 @@ import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
+import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ApproximateScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ExactScoreFunction;
@@ -225,7 +226,7 @@ public class SiftSmall {
              // explicit Writer for the first time, this is what's behind OnDiskGraphIndex.write
              OnDiskGraphIndexWriter writer = new OnDiskGraphIndexWriter.Builder(builder.getGraph(), indexPath)
                      .with(new InlineVectors(ravv.dimension()))
-                     .withMapper(new OnDiskGraphIndexWriter.IdentityMapper())
+                     .withMapper(new OrdinalMapper.IdentityMapper())
                      .build();
              // output for the compressed vectors
              DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
