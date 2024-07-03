@@ -92,6 +92,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         // delete the first node
         builder.markNodeDeleted(0);
         builder.cleanup();
+        builder.setEntryPoint(builder.getGraph().getIdUpperBound() - 1);
 
         // check
         assertEquals(2, original.size());
@@ -117,6 +118,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
              var onDiskView = onDiskGraph.getView())
         {
+            // entry point renumbering
+            assertNotNull(onDiskView.getVector(onDiskGraph.entryNode));
             // 0 -> 1
             assertTrue(getNeighborNodes(onDiskView, 0).contains(1));
             // 1 -> 0

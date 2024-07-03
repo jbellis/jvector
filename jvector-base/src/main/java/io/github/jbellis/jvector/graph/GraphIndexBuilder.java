@@ -436,6 +436,11 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
+    @VisibleForTesting
+    public void setEntryPoint(int ep) {
+        graph.updateEntryNode(ep);
+    }
+
     private void updateEntryPoint() {
         int newEntryNode = approximateMedioid();
         graph.updateEntryNode(newEntryNode);

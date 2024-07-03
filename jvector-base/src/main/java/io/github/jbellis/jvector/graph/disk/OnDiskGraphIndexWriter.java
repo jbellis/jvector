@@ -216,7 +216,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
     public synchronized void writeHeader() throws IOException {
         // graph-level properties
         out.seek(startOffset);
-        var commonHeader = new CommonHeader(version, graph.size(), dimension, view.entryNode(), graph.maxDegree());
+        var commonHeader = new CommonHeader(version,
+                                            graph.size(),
+                                            dimension,
+                                            ordinalMapper.oldToNew(view.entryNode()),
+                                            graph.maxDegree());
         var header = new Header(commonHeader, featureMap);
         header.write(out);
         out.flush();
