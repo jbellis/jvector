@@ -317,55 +317,17 @@ public class OnDiskGraphIndexWriter implements Closeable {
             }
 
             if (ordinalMapper == null) {
-                ordinalMapper = new MapMapper(sequentialRenumbering(graphIndex));
+                ordinalMapper = new OrdinalMapper.MapMapper(sequentialRenumbering(graphIndex));
             }
             return new OnDiskGraphIndexWriter(out, version, startOffset, graphIndex, ordinalMapper, dimension, features);
         }
 
         public Builder withMap(Map<Integer, Integer> oldToNewOrdinals) {
-            return withMapper(new MapMapper(oldToNewOrdinals));
+            return withMapper(new OrdinalMapper.MapMapper(oldToNewOrdinals));
         }
 
         public Feature getFeature(FeatureId featureId) {
             return features.get(featureId);
-        }
-    }
-
-    public interface OrdinalMapper {
-        int oldToNew(int oldOrdinal);
-        int newToOld(int newOrdinal);
-    }
-
-    public static class IdentityMapper implements OrdinalMapper {
-        @Override
-        public int oldToNew(int oldOrdinal) {
-            return oldOrdinal;
-        }
-
-        @Override
-        public int newToOld(int newOrdinal) {
-            return newOrdinal;
-        }
-    }
-
-    private static class MapMapper implements OrdinalMapper {
-        private final Map<Integer, Integer> oldToNew;
-        private final int[] newToOld;
-
-        public MapMapper(Map<Integer, Integer> oldToNew) {
-            this.oldToNew = oldToNew;
-            this.newToOld = new int[oldToNew.size()];
-            oldToNew.forEach((old, newOrdinal) -> newToOld[newOrdinal] = old);
-        }
-
-        @Override
-        public int oldToNew(int oldOrdinal) {
-            return oldToNew.get(oldOrdinal);
-        }
-
-        @Override
-        public int newToOld(int newOrdinal) {
-            return newToOld[newOrdinal];
         }
     }
 }
