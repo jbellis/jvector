@@ -98,7 +98,10 @@ public class BufferedRandomAccessWriter implements RandomAccessWriter {
         flush();
 
         var crc = new CRC32();
-        var a = new byte[4096];
+        // Explicitly use a large buffer in case readahead is disabled (which we want it to be,
+        // except for this one operation)
+        // 256 KB = default readahead size on linux
+        var a = new byte[262144];
         seek(startOffset);
         for (long p = startOffset; p < endOffset; ) {
             int toRead = (int) Math.min(a.length, endOffset - p);
