@@ -501,6 +501,9 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
      */
     @VisibleForTesting
     static int[][] getSubvectorSizesAndOffsets(int dimensions, int M) {
+        if (M > dimensions) {
+            throw new IllegalArgumentException("Number of subspaces must be less than or equal to the vector dimension");
+        }
         int[][] sizes = new int[M][];
         int baseSize = dimensions / M;
         int remainder = dimensions % M;
