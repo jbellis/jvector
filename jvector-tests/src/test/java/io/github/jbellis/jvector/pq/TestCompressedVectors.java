@@ -21,6 +21,7 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
@@ -30,6 +31,7 @@ import java.io.FileOutputStream;
 import java.util.List;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
+import static io.github.jbellis.jvector.TestUtil.nextInt;
 import static java.lang.Math.abs;
 import static java.lang.Math.log;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,7 +89,7 @@ public class TestCompressedVectors extends RandomizedTest {
     }
 
     private void testEncodings(int dimension, int codebooks) {
-        // Generate a PQ for random 2D vectors
+        // Generate a PQ for random vectors
         var vectors = createRandomVectors(512, dimension);
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
         var pq = ProductQuantization.compute(ravv, codebooks, 256, false);
@@ -123,6 +125,35 @@ public class TestCompressedVectors extends RandomizedTest {
         for (int i = 2; i <= 8; i++) {
             for (int M = 1; M <= i; M++) {
                 testEncodings(2 * i, M);
+            }
+        }
+    }
+
+    @Test
+    public void testRawEqualsPrecomputed() {
+        // Generate a PQ for random vectors
+        int dimension = nextInt(getRandom(), 4, 2048);
+        int codebooks = nextInt(getRandom(), 1, dimension / 2);
+        var vectors = createRandomVectors(512, dimension);
+        var ravv = new ListRandomAccessVectorValues(vectors, dimension);
+        for (boolean center : new boolean[] {true, false}) {
+            var pq = ProductQuantization.compute(ravv, codebooks, 256, center);
+
+            // Compress the vectors
+            var compressed = pq.encodeAll(ravv);
+            var cv = new PQVectors(pq, compressed);
+
+            // compare the precomputed similarities to the raw
+            for (int i = 0; i < 10; i++) {
+                var q = TestUtil.randomVector(getRandom(), dimension);
+                for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {
+                    var precomputed = cv.precomputedScoreFunctionFor(q, vsf);
+                    var raw = cv.scoreFunctionFor(q, vsf);
+                    for (int j = 0; j < 10; j++) {
+                        var target = getRandom().nextInt(vectors.size());
+                        assertEquals(raw.similarityTo(target), precomputed.similarityTo(target), 1e-6);
+                    }
+                }
             }
         }
     }

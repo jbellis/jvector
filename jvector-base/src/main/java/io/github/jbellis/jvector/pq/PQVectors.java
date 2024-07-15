@@ -133,6 +133,7 @@ public class PQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        VectorFloat<?> centeredQuery = pq.globalCentroid == null ? q : VectorUtil.sub(q, pq.globalCentroid);
         switch (similarityFunction) {
             case DOT_PRODUCT:
                 return (node2) -> {
@@ -143,13 +144,13 @@ public class PQVectors implements CompressedVectors {
                         int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
                         int centroidLength = pq.subvectorSizesAndOffsets[m][0];
                         int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
-                        dp += VectorUtil.dotProduct(pq.codebooks[m], centroidIndex * centroidLength, q, centroidOffset, centroidLength);
+                        dp += VectorUtil.dotProduct(pq.codebooks[m], centroidIndex * centroidLength, centeredQuery, centroidOffset, centroidLength);
                     }
                     // scale to [0, 1]
                     return (1 + dp) / 2;
                 };
             case COSINE:
-                float norm1 = VectorUtil.dotProduct(q, q);
+                float norm1 = VectorUtil.dotProduct(centeredQuery, centeredQuery);
                 return (node2) -> {
                     var encoded = get(node2);
                     // compute the dot product of the query and the codebook centroids corresponding to the encoded points
@@ -160,7 +161,7 @@ public class PQVectors implements CompressedVectors {
                         int centroidLength = pq.subvectorSizesAndOffsets[m][0];
                         int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
                         var codebookOffset = centroidIndex * centroidLength;
-                        sum += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, q, centroidOffset, centroidLength);
+                        sum += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, centeredQuery, centroidOffset, centroidLength);
                         norm2 += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, pq.codebooks[m], codebookOffset, centroidLength);
                     }
                     float cosine = sum / (float) Math.sqrt(norm1 * norm2);
@@ -176,7 +177,7 @@ public class PQVectors implements CompressedVectors {
                         int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
                         int centroidLength = pq.subvectorSizesAndOffsets[m][0];
                         int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
-                        sum += VectorUtil.squareL2Distance(pq.codebooks[m], centroidIndex * centroidLength, q, centroidOffset, centroidLength);
+                        sum += VectorUtil.squareL2Distance(pq.codebooks[m], centroidIndex * centroidLength, centeredQuery, centroidOffset, centroidLength);
                     }
                     // scale to [0, 1]
                     return 1 / (1 + sum);
