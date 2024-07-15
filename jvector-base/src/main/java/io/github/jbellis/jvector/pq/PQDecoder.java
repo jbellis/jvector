@@ -109,7 +109,6 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
 
             // Compute and cache partial sums and magnitudes for query vector
             partialSums = cv.reusablePartialSums();
-            float bMagSum = 0.0f;
 
             VectorFloat<?> center = pq.globalCentroid;
             VectorFloat<?> centeredQuery = center == null ? query : VectorUtil.sub(query, center);
@@ -121,11 +120,9 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
                 for (int j = 0; j < pq.getClusterCount(); ++j) {
                     partialSums.set((m * pq.getClusterCount()) + j, VectorUtil.dotProduct(codebook, j * size, centeredQuery, offset, size));
                 }
-
-                bMagSum += VectorUtil.dotProduct(centeredQuery, offset, centeredQuery, offset, pq.subvectorSizesAndOffsets[m][0]);
             }
 
-            this.bMagnitude = bMagSum;
+            this.bMagnitude = VectorUtil.dotProduct(centeredQuery, centeredQuery);
         }
 
         @Override
