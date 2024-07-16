@@ -78,7 +78,7 @@ public class SimpleReader implements RandomAccessReader {
     @Override
     public void read(int[] ints, int offset, int count) throws IOException {
         for (int i = 0; i < count; i++) {
-            ints[i] = raf.readInt();
+            ints[offset + i] = raf.readInt();
         }
     }
 
