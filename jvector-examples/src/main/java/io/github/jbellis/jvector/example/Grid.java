@@ -309,7 +309,7 @@ public class Grid {
                 System.out.println("Skipping Fused ADC feature when building in memory");
                 continue;
             }
-            var graphPath = testDirectory.resolve("graph" + n++);
+            var graphPath = Path.of("/tmp/cohere.ann");
             var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors, null);
             try (var writer = bws.builder.build()) {
                 start = System.nanoTime();

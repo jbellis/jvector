@@ -46,18 +46,15 @@ public class Bench {
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var efSearchGrid = List.of(1.0, 2.0);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
-                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
                 __ -> CompressorParameters.NONE
         );
         List<Function<DataSet, CompressorParameters>> searchCompression = Arrays.asList(
-                __ -> CompressorParameters.NONE,
                 // ds -> new CompressorParameters.BQParameters(),
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
 //                EnumSet.of(FeatureId.INLINE_VECTORS) // baseline
-                EnumSet.of(FeatureId.LVQ),
-                EnumSet.of(FeatureId.LVQ, FeatureId.FUSED_ADC)
+                EnumSet.of(FeatureId.LVQ)
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.
@@ -68,7 +65,6 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var coreFiles = List.of(
-                "ada002-100k",
                 "cohere-english-v3-100k",
                 "openai-v3-small-100k",
                 "nv-qa-v4-100k",
