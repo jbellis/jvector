@@ -260,6 +260,16 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             reader.close();
         }
 
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
+            if (permissibleFeatures.contains(FeatureId.LVQ) && features.containsKey(FeatureId.LVQ)) {
+                return ((LVQ) features.get(FeatureId.LVQ)).rerankerFor(queryVector, vsf, this);
+            } else if (permissibleFeatures.contains(FeatureId.INLINE_VECTORS) && features.containsKey(FeatureId.INLINE_VECTORS)) {
+                return rerankerFor(queryVector, vsf);
+            } else {
+                throw new UnsupportedOperationException("No reranker available for this graph");
+            }
+        }
+
         @Override
         public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
             if (!features.containsKey(FeatureId.INLINE_VECTORS)) {

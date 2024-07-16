@@ -35,7 +35,7 @@ import java.util.function.IntFunction;
  * Write a graph index to disk, for later loading as an OnDiskGraphIndex.
  * <p>
  * Implements `getFeatureSource` to allow incremental construction of a larger-than-memory graph
- * (using the writer as the source of INLINE_VECTORS).
+ * (using the writer as the source of INLINE_VECTORS or LVQ).
  */
 public class OnDiskGraphIndexWriter implements Closeable {
     private final int version;
@@ -312,8 +312,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
             int dimension;
             if (features.containsKey(FeatureId.INLINE_VECTORS)) {
                 dimension = ((InlineVectors) features.get(FeatureId.INLINE_VECTORS)).dimension();
+            } else if (features.containsKey(FeatureId.LVQ)) {
+                dimension = ((LVQ) features.get(FeatureId.LVQ)).dimension();
             } else {
-                throw new IllegalArgumentException("Inline vectors must be provided.");
+                throw new IllegalArgumentException("Either LVQ or inline vectors must be provided.");
             }
 
             if (ordinalMapper == null) {
