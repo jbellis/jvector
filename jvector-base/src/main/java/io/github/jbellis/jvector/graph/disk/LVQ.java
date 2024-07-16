@@ -94,7 +94,11 @@ public class LVQ implements Feature {
                                        VectorSimilarityFunction vsf,
                                        FeatureSource source)
     {
-        return lvq.scoreFunctionFrom(queryVector, vsf, createPackedVectors(source));
+        return rerankerFor(queryVector, vsf, createPackedVectors(source));
+    }
+
+    public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, LVQPackedVectors packedVectors) {
+        return lvq.scoreFunctionFrom(queryVector, vsf, packedVectors);
     }
 
     public PackedVectors createPackedVectors(FeatureSource source) {
