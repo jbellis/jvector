@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -199,4 +200,9 @@ public interface VectorUtilSupport {
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);
 
+  float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum);
+
+  float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector);
+
+  float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid);
 }

@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -131,6 +132,21 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
             case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_best_euclidean_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get(), ((MemorySegmentVectorFloat)partialBestDistances).get());
             case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
         }
+    }
+
+    @Override
+    public float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        return VectorSimdOps.lvqDotProduct((MemorySegmentVectorFloat) query, vector, querySum);
+    }
+
+    @Override
+    public float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+        return VectorSimdOps.lvqSquareL2Distance((MemorySegmentVectorFloat) query, vector);
+    }
+
+    @Override
+    public float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+        return VectorSimdOps.lvqCosine((MemorySegmentVectorFloat) query, vector, (MemorySegmentVectorFloat) centroid);
     }
 
     @Override
