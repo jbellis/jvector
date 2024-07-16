@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.Buffer;
 
 /**
@@ -37,6 +38,11 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
         this(buffer.remaining());
         segment.copyFrom(MemorySegment.ofBuffer(buffer));
     }
+
+    public MemorySegmentVectorFloat(MemorySegment ms) {
+        this.segment = ms;
+    }
+
 
     MemorySegmentVectorFloat(float[] data) {
         this.segment = MemorySegment.ofArray(data);
@@ -60,14 +66,14 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     public float get(int n)
     {
         // this is (unfortunately) meaningfully better performing than getting at an offset in the memory segment
-        return ((float[])segment.heapBase().get())[n];
+        return segment.getAtIndex(ValueLayout.JAVA_FLOAT, n);
     }
 
     @Override
     public void set(int n, float value)
     {
         // this is (unfortunately) meaningfully better performing than setting at an offset in the memory segment
-        ((float[])segment.heapBase().get())[n] = value;
+        segment.setAtIndex(ValueLayout.JAVA_FLOAT, n, value);
     }
 
     @Override

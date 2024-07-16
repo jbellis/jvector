@@ -275,6 +275,23 @@
                                 </configuration>
                             </execution>
                             <execution>
+                                <id>cagra</id>
+                                <configuration>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>--enable-preview</argument>
+                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                                        <argument>--add-modules=jdk.incubator.vector</argument>
+                                        <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
+                                        <argument>-Xmx1G</argument>
+                                        <argument>-ea</argument>
+                                        <argument>-Djvector.experimental.enable_native_vectorization=true</argument>
+                                        <argument>io.github.jbellis.jvector.example.CagraBench</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
                                 <id>ipcserve</id>
                                 <configuration>
                                     <arguments>

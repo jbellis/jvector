@@ -20,8 +20,10 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -61,7 +63,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
     final VectorFloat<?>[] codebooks; // array of codebooks, where each codebook is a VectorFloat consisting of k contiguous subvectors each of length M
     final int M; // codebooks.length, redundantly reproduced for convenience
     private final int clusterCount; // codebooks[0].length, redundantly reproduced for convenience
-    final int originalDimension;
+    public final int originalDimension;
     final VectorFloat<?> globalCentroid;
     final int[][] subvectorSizesAndOffsets;
     final float anisotropicThreshold; // parallel cost multiplier
@@ -319,6 +321,61 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
         }
 
         return new CoordinateDescentResult(bestIndex, bestParallelResidualSum);
+    }
+
+    public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction vsf, EncodedSource source) {
+        VectorFloat<?> centeredQuery = globalCentroid == null ? q : VectorUtil.sub(q, globalCentroid);
+        switch (vsf) {
+            case DOT_PRODUCT:
+                return (node2) -> {
+                    var encoded = source.get(node2);
+                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
+                    float dp = 0;
+                    for (int m = 0; m < getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = subvectorSizesAndOffsets[m][1];
+                        dp += VectorUtil.dotProduct(codebooks[m], centroidIndex * centroidLength, centeredQuery, centroidOffset, centroidLength);
+                    }
+                    // scale to [0, 1]
+                    return (1 + dp) / 2;
+                };
+            case COSINE:
+                float norm1 = VectorUtil.dotProduct(centeredQuery, centeredQuery);
+                return (node2) -> {
+                    var encoded = source.get(node2);
+                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
+                    float sum = 0;
+                    float norm2 = 0;
+                    for (int m = 0; m < getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = subvectorSizesAndOffsets[m][1];
+                        var codebookOffset = centroidIndex * centroidLength;
+                        sum += VectorUtil.dotProduct(codebooks[m], codebookOffset, centeredQuery, centroidOffset, centroidLength);
+                        norm2 += VectorUtil.dotProduct(codebooks[m], codebookOffset, codebooks[m], codebookOffset, centroidLength);
+                    }
+                    float cosine = sum / (float) Math.sqrt(norm1 * norm2);
+                    // scale to [0, 1]
+                    return (1 + cosine) / 2;
+                };
+            case EUCLIDEAN:
+                return (node2) -> {
+                    var encoded = source.get(node2);
+                    // compute the euclidean distance between the query and the codebook centroids corresponding to the encoded points
+                    float sum = 0;
+                    for (int m = 0; m < getSubspaceCount(); m++) {
+                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+                        int centroidLength = subvectorSizesAndOffsets[m][0];
+                        int centroidOffset = subvectorSizesAndOffsets[m][1];
+                        sum += VectorUtil.squareL2Distance(codebooks[m], centroidIndex * centroidLength, centeredQuery, centroidOffset, centroidLength);
+                    }
+                    // scale to [0, 1]
+                    return 1 / (1 + sum);
+                };
+            default:
+                throw new IllegalArgumentException("Unsupported similarity function " + vsf);
+        }
     }
 
     /**
@@ -716,5 +773,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
                              clusterCount,
                              anisotropicThreshold,
                              KMeansPlusPlusClusterer.computeParallelCostMultiplier(anisotropicThreshold, originalDimension));
+    }
+
+    @FunctionalInterface
+    public interface EncodedSource {
+        ByteSequence<?> get(int i);
     }
 }

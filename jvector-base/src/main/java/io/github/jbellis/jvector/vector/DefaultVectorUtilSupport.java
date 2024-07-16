@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -352,5 +353,42 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
         min = Math.min(min, v.get(i));
       }
       return min;
+  }
+
+  @Override
+  public float lvqDotProduct(VectorFloat<?> vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, float vectorSum) {
+    float sum = 0;
+    for (int i = 0; i < vector.length(); i++) {
+      sum += vector.get(i) * packedVector.getQuantized(i);
+    }
+    sum *= packedVector.scale;
+    sum += packedVector.bias * vectorSum;
+    return sum;
+  }
+
+  @Override
+  public float lvqSquareL2Distance(VectorFloat<?> vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector) {
+    float sum = 0;
+    for (int i = 0; i < vector.length(); i++) {
+      var diff = vector.get(i) - packedVector.getDequantized(i);
+      sum += diff * diff;
+    }
+    return sum;
+  }
+
+  @Override
+  public float lvqCosine(VectorFloat<?> vector, LocallyAdaptiveVectorQuantization.PackedVector packedVector, VectorFloat<?> centroid) {
+    float sum = 0.0f;
+    float norm1 = 0.0f;
+    float norm2 = 0.0f;
+    for (int i = 0; i < vector.length(); i++) {
+      float elem1 = vector.get(i);
+      float elem2 = packedVector.getDequantized(i) + centroid.get(i);
+      sum += elem1 * elem2;
+      norm1 += elem1 * elem1;
+      norm2 += elem2 * elem2;
+    }
+
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
   }
 }

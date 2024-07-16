@@ -16,8 +16,7 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -52,9 +51,23 @@ public interface ScoreFunction {
     }
 
     /**
+     * Return similarity to array of node ids provided.
+     */
+    default VectorFloat<?> similarityTo(NodesIterator nodeIds) {
+        throw new UnsupportedOperationException("bulk similarity not supported");
+    }
+
+    /**
      * @return true if `edgeLoadingSimilarityTo` is supported
      */
     default boolean supportsEdgeLoadingSimilarity() {
+        return false;
+    }
+
+    /**
+     * @return true if `similarityTo(int[])` is supported
+     */
+    default boolean supportsMultinodeSimilarity() {
         return false;
     }
 

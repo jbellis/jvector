@@ -20,7 +20,6 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -33,7 +32,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class PQVectors implements CompressedVectors {
+public class PQVectors implements CompressedVectors, ProductQuantization.EncodedSource {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ProductQuantization pq;
     private final List<ByteSequence<?>> compressedVectors;
@@ -133,58 +132,7 @@ public class PQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        VectorFloat<?> centeredQuery = pq.globalCentroid == null ? q : VectorUtil.sub(q, pq.globalCentroid);
-        switch (similarityFunction) {
-            case DOT_PRODUCT:
-                return (node2) -> {
-                    var encoded = get(node2);
-                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
-                    float dp = 0;
-                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
-                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
-                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
-                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
-                        dp += VectorUtil.dotProduct(pq.codebooks[m], centroidIndex * centroidLength, centeredQuery, centroidOffset, centroidLength);
-                    }
-                    // scale to [0, 1]
-                    return (1 + dp) / 2;
-                };
-            case COSINE:
-                float norm1 = VectorUtil.dotProduct(centeredQuery, centeredQuery);
-                return (node2) -> {
-                    var encoded = get(node2);
-                    // compute the dot product of the query and the codebook centroids corresponding to the encoded points
-                    float sum = 0;
-                    float norm2 = 0;
-                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
-                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
-                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
-                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
-                        var codebookOffset = centroidIndex * centroidLength;
-                        sum += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, centeredQuery, centroidOffset, centroidLength);
-                        norm2 += VectorUtil.dotProduct(pq.codebooks[m], codebookOffset, pq.codebooks[m], codebookOffset, centroidLength);
-                    }
-                    float cosine = sum / (float) Math.sqrt(norm1 * norm2);
-                    // scale to [0, 1]
-                    return (1 + cosine) / 2;
-                };
-            case EUCLIDEAN:
-                return (node2) -> {
-                    var encoded = get(node2);
-                    // compute the euclidean distance between the query and the codebook centroids corresponding to the encoded points
-                    float sum = 0;
-                    for (int m = 0; m < pq.getSubspaceCount(); m++) {
-                        int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
-                        int centroidLength = pq.subvectorSizesAndOffsets[m][0];
-                        int centroidOffset = pq.subvectorSizesAndOffsets[m][1];
-                        sum += VectorUtil.squareL2Distance(pq.codebooks[m], centroidIndex * centroidLength, centeredQuery, centroidOffset, centroidLength);
-                    }
-                    // scale to [0, 1]
-                    return 1 / (1 + sum);
-                };
-            default:
-                throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
-        }
+        return pq.scoreFunctionFor(q, similarityFunction, this);
     }
 
     public ByteSequence<?> get(int ordinal) {

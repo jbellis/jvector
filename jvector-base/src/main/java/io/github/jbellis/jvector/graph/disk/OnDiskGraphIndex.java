@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -260,12 +261,22 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             reader.close();
         }
 
+        // TODO permissibleFeatures is never anything but "all features"?
+        public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, Set<FeatureId> permissibleFeatures) {
+            if (permissibleFeatures.contains(FeatureId.LVQ) && features.containsKey(FeatureId.LVQ)) {
+                return ((LVQ) features.get(FeatureId.LVQ)).rerankerFor(queryVector, vsf, this);
+            } else if (permissibleFeatures.contains(FeatureId.INLINE_VECTORS) && features.containsKey(FeatureId.INLINE_VECTORS)) {
+                return RandomAccessVectorValues.super.rerankerFor(queryVector, vsf);
+            } else if (permissibleFeatures.contains(FeatureId.INLINE_PQ) && features.containsKey(FeatureId.INLINE_PQ)) {
+                return ((InlinePQ) features.get(FeatureId.INLINE_PQ)).rerankerFor(queryVector, vsf, this);
+            } else {
+                throw new UnsupportedOperationException("No reranker available for this graph");
+            }
+        }
+
         @Override
         public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
-            if (!features.containsKey(FeatureId.INLINE_VECTORS)) {
-                throw new UnsupportedOperationException("No inline vectors in this graph");
-            }
-            return RandomAccessVectorValues.super.rerankerFor(queryVector, vsf);
+            return rerankerFor(queryVector, vsf, EnumSet.allOf(FeatureId.class));
         }
 
         @Override

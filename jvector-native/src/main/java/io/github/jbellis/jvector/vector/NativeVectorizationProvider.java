@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.vector.cnative.LibraryLoader;
-import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /**
@@ -35,9 +34,9 @@ public class NativeVectorizationProvider extends VectorizationProvider {
         if (!libraryLoaded) {
             throw new UnsupportedOperationException("Failed to load supporting native library.");
         }
-        if (!NativeSimdOps.check_compatibility()) {
+        /*if (!NativeSimdOps.check_compatibility()) {
             throw new UnsupportedOperationException("Native SIMD operations are not supported on this platform due to missing CPU support.");
-        }
+        }*/
         this.vectorUtilSupport = new NativeVectorUtilSupport();
         this.vectorTypeSupport = new MemorySegmentVectorProvider();
     }

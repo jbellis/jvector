@@ -16,10 +16,14 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
+import io.github.jbellis.jvector.graph.AcceleratedIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.pq.CompressedVectors;
+import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -97,7 +101,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
-        return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat)data).get(), dataBase, ((MemorySegmentByteSequence)baseOffsets).get(), baseOffsets.length());
+        float sum = 0f;
+        for (int i = 0; i < baseOffsets.length(); i++) {
+            sum += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i)));
+        }
+        return sum;
     }
 
     @Override
@@ -116,21 +124,59 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
-        switch (vsf) {
-            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get());
-            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get());
-            case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
+    public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+        int codebookBase = codebookIndex * clusterCount;
+        for (int i = 0; i < clusterCount; i++) {
+            switch (vsf) {
+                case DOT_PRODUCT:
+                    partialSums.set(codebookBase + i, dotProduct(codebook, i * size, query, queryOffset, size));
+                    break;
+                case EUCLIDEAN:
+                    partialSums.set(codebookBase + i, squareDistance(codebook, i * size, query, queryOffset, size));
+                    break;
+                default:
+                    throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+            }
         }
     }
 
     @Override
-    public void calculatePartialSums(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBestDistances) {
-        switch (vsf) {
-            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_best_dot_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get(), ((MemorySegmentVectorFloat)partialBestDistances).get());
-            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_best_euclidean_f32_512(((MemorySegmentVectorFloat)codebook).get(), codebookBase, size, clusterCount, ((MemorySegmentVectorFloat)query).get(), queryOffset, ((MemorySegmentVectorFloat)partialSums).get(), ((MemorySegmentVectorFloat)partialBestDistances).get());
-            case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for calculatePartialSums");
+    public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums, VectorFloat<?> partialBest) {
+        float best = vsf == VectorSimilarityFunction.EUCLIDEAN ? Float.MAX_VALUE : -Float.MAX_VALUE;
+        float val;
+        int codebookBase = codebookIndex * clusterCount;
+        for (int i = 0; i < clusterCount; i++) {
+            switch (vsf) {
+                case DOT_PRODUCT:
+                    val = dotProduct(codebook, i * size, query, queryOffset, size);
+                    partialSums.set(codebookBase + i, val);
+                    best = Math.max(best, val);
+                    break;
+                case EUCLIDEAN:
+                    val = squareDistance(codebook, i * size, query, queryOffset, size);
+                    partialSums.set(codebookBase + i, val);
+                    best = Math.min(best, val);
+                    break;
+                default:
+                    throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+            }
         }
+        partialBest.set(codebookIndex, best);
+    }
+
+    @Override
+    public float lvqDotProduct(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, float querySum) {
+        return VectorSimdOps.lvqDotProduct((MemorySegmentVectorFloat) query, vector, querySum);
+    }
+
+    @Override
+    public float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector) {
+        return VectorSimdOps.lvqSquareL2Distance((MemorySegmentVectorFloat) query, vector);
+    }
+
+    @Override
+    public float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid) {
+        return VectorSimdOps.lvqCosine((MemorySegmentVectorFloat) query, vector, (MemorySegmentVectorFloat) centroid);
     }
 
     @Override
@@ -139,20 +185,17 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void bulkShuffleQuantizedSimilarity(ByteSequence<?> shuffles, int codebookCount, ByteSequence<?> quantizedPartials, float delta, float bestDistance, VectorSimilarityFunction vsf, VectorFloat<?> results) {
-        switch (vsf) {
-            case DOT_PRODUCT -> NativeSimdOps.bulk_quantized_shuffle_dot_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartials).get(), delta, bestDistance, ((MemorySegmentVectorFloat) results).get());
-            case EUCLIDEAN -> NativeSimdOps.bulk_quantized_shuffle_euclidean_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartials).get(), delta, bestDistance, ((MemorySegmentVectorFloat) results).get());
-            case COSINE -> throw new UnsupportedOperationException("Cosine similarity not supported for bulkShuffleQuantizedSimilarity");
-        }
+    public CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath, int degree) {
+        return GPUPQVectors.load(pqVectorsPath, degree);
     }
 
     @Override
-    public void bulkShuffleQuantizedSimilarityCosine(ByteSequence<?> shuffles, int codebookCount,
-                                                     ByteSequence<?> quantizedPartialSums, float sumDelta, float minDistance,
-                                                     ByteSequence<?> quantizedPartialSquaredMagnitudes, float magnitudeDelta, float minMagnitude,
-                                                     float queryMagnitudeSquared, VectorFloat<?> results) {
-        NativeSimdOps.bulk_quantized_shuffle_cosine_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartialSums).get(), sumDelta, minDistance,
-                ((MemorySegmentByteSequence) quantizedPartialSquaredMagnitudes).get(), magnitudeDelta, minMagnitude, queryMagnitudeSquared, ((MemorySegmentVectorFloat) results).get());
+    public AcceleratedIndex.ExternalIndex buildCagraIndex(RandomAccessVectorValues ravv) {
+        return GPUCagraIndex.build(ravv);
+    }
+
+    @Override
+    public AcceleratedIndex.ExternalIndex loadCagraIndex(String filename) {
+        return GPUCagraIndex.load(filename);
     }
 }

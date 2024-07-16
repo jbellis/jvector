@@ -72,6 +72,18 @@
                                     <workingDirectory>${project.basedir}/src/main/c/</workingDirectory>
                                 </configuration>
                             </execution>
+                            <execution>
+                                <id>execute-build-jextract-gpu-script</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>./build.sh</executable>
+                                    <skip>false</skip>
+                                    <workingDirectory>${project.basedir}/src/main/cpp/</workingDirectory>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                 </plugins>

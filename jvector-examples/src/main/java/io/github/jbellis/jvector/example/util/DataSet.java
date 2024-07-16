@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class DataSet {
     public final String name;
@@ -74,26 +75,38 @@ public class DataSet {
      * Return a dataset containing the given vectors, scrubbed free from zero vectors and normalized to unit length.
      * Note: This only scrubs and normalizes for dot product similarity.
      */
-    public static DataSet getScrubbedDataSet(String pathStr, VectorSimilarityFunction similarityFunction,
-                                             List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<Set<Integer>> groundTruth) {
-        if (similarityFunction == VectorSimilarityFunction.EUCLIDEAN) {
-            // Euclidean comparisons are not sensitive to zero vectors or normalization
-            return new DataSet(pathStr, similarityFunction, baseVectors, queryVectors, groundTruth);
-        }
-
-        // remove zero vectors, noting that this will change the indexes of the ground truth answers
+    public static DataSet getScrubbedDataSet(String pathStr,
+                                             VectorSimilarityFunction vsf,
+                                             List<VectorFloat<?>> baseVectors,
+                                             List<VectorFloat<?>> queryVectors,
+                                             List<Set<Integer>> groundTruth)
+    {
+        // remove zero vectors and duplicates, noting that this will change the indexes of the ground truth answers
         List<VectorFloat<?>> scrubbedBaseVectors;
         List<VectorFloat<?>> scrubbedQueryVectors;
         List<HashSet<Integer>> gtSet;
         scrubbedBaseVectors = new ArrayList<>(baseVectors.size());
         scrubbedQueryVectors = new ArrayList<>(queryVectors.size());
         gtSet = new ArrayList<>(groundTruth.size());
+        var uniqueVectors = new TreeSet<VectorFloat<?>>((a, b) -> {
+            assert a.length() == b.length();
+            for (int i = 0; i < a.length(); i++) {
+                if (a.get(i) < b.get(i)) {
+                    return -1;
+                }
+                if (a.get(i) > b.get(i)) {
+                    return 1;
+                }
+            }
+            return 0;
+        });
         Map<Integer, Integer> rawToScrubbed = new HashMap<>();
         {
             int j = 0;
             for (int i = 0; i < baseVectors.size(); i++) {
                 VectorFloat<?> v = baseVectors.get(i);
-                if (Math.abs(normOf(v)) > 1e-5) {
+                var valid = (vsf == VectorSimilarityFunction.EUCLIDEAN) || Math.abs(normOf(v)) > 1e-5;
+                if (valid && uniqueVectors.add(v)) {
                     scrubbedBaseVectors.add(v);
                     rawToScrubbed.put(i, j++);
                 }
@@ -102,7 +115,8 @@ public class DataSet {
         // also remove zero query vectors
         for (int i = 0; i < queryVectors.size(); i++) {
             VectorFloat<?> v = queryVectors.get(i);
-            if (Math.abs(normOf(v)) > 1e-5) {
+            var valid = (vsf == VectorSimilarityFunction.EUCLIDEAN) || Math.abs(normOf(v)) > 1e-5;
+            if (valid) {
                 scrubbedQueryVectors.add(v);
                 var gt = new HashSet<Integer>();
                 for (int j : groundTruth.get(i)) {
@@ -113,7 +127,7 @@ public class DataSet {
         }
 
         // now that the zero vectors are removed, we can normalize if it looks like they aren't already
-        if (similarityFunction == VectorSimilarityFunction.DOT_PRODUCT) {
+        if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
             if (Math.abs(normOf(baseVectors.get(0)) - 1.0) > 1e-5) {
                 normalizeAll(scrubbedBaseVectors);
                 normalizeAll(scrubbedQueryVectors);
@@ -121,7 +135,7 @@ public class DataSet {
         }
 
         assert scrubbedQueryVectors.size() == gtSet.size();
-        return new DataSet(pathStr, similarityFunction, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
+        return new DataSet(pathStr, vsf, scrubbedBaseVectors, scrubbedQueryVectors, gtSet);
     }
 
     private static void normalizeAll(Iterable<VectorFloat<?>> vectors) {
