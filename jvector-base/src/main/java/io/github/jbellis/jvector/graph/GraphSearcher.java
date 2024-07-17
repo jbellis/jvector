@@ -331,6 +331,17 @@ public class GraphSearcher implements Closeable {
                     similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
                 }
 
+                var useMultinode = scoreFunction.supportsMultinodeSimilarity();
+                // DEMOFIXME: hack, don't get iterator twice
+                if (useMultinode) {
+                    var it = view.getNeighborsIterator(topCandidateNode);
+                    var nodeIds = new int[it.size()];
+                    for (int i = 0; i < nodeIds.length; i++) {
+                        nodeIds[i] = it.nextInt();
+                    }
+                    similarities = scoreFunction.similarityTo(nodeIds);
+                }
+
                 var it = view.getNeighborsIterator(topCandidateNode);
                 for (int i = 0; i < it.size(); i++) {
                     var friendOrd = it.nextInt();
@@ -339,7 +350,7 @@ public class GraphSearcher implements Closeable {
                     }
                     numVisited++;
 
-                    float friendSimilarity = useEdgeLoading
+                    float friendSimilarity = useEdgeLoading || useMultinode
                             ? similarities.get(i)
                             : scoreFunction.similarityTo(friendOrd);
                     scoreTracker.track(friendSimilarity);

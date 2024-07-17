@@ -24,10 +24,12 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -205,4 +207,9 @@ public interface VectorUtilSupport {
   float lvqSquareL2Distance(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector);
 
   float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid);
+
+  // DEMOFIXME: hack, we probably want a way to load from memory too
+  default CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath) {
+    throw new UnsupportedOperationException("This VectorUtilSupport implementation does not support accelerated PQ vectors");
+  }
 }

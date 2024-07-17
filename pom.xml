@@ -122,6 +122,8 @@
                                 <additionalJOption>--enable-preview</additionalJOption>
                             </additionalJOptions>
                             <release>22</release>
+                            <!-- DEMOFIXME: jextract generates invalid docs, fix -->
+                            <failOnError>false</failOnError>
                         </configuration>
                     </execution>
                 </executions>

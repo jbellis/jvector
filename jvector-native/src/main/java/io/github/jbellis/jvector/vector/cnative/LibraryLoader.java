@@ -26,8 +26,10 @@ import java.nio.file.Files;
 public class LibraryLoader {
     private LibraryLoader() {}
     public static boolean loadJvector() {
+        boolean loadedJvector = false;
         try {
             System.loadLibrary("jvector");
+            System.loadLibrary("jvectorgpu");
             return true;
         } catch (UnsatisfiedLinkError e) {
             // ignore
@@ -47,7 +49,27 @@ public class LibraryLoader {
                 }
             }
             System.load(tmpLibFile.getAbsolutePath());
-            return true;
+            loadedJvector = true;
+        } catch (Exception | UnsatisfiedLinkError e) {
+            // ignore
+        }
+        try {
+            // reinventing the wheel instead of picking up deps, so we'll just use the classloader to load the library
+            // as a resource and then copy it to a tmp directory and load it from there
+            String libName = System.mapLibraryName("jvectorgpu");
+            File tmpLibFile = File.createTempFile(libName.substring(0, libName.lastIndexOf('.')), libName.substring(libName.lastIndexOf('.')));
+            try (var in = LibraryLoader.class.getResourceAsStream(STR."/\{libName}");
+                 var out = Files.newOutputStream(tmpLibFile.toPath())) {
+                if (in != null) {
+                    in.transferTo(out);
+                    out.flush();
+                } else {
+                    return false; // couldn't find library
+                }
+            }
+            System.load(tmpLibFile.getAbsolutePath());
+            NativeGpuOps.initialize();
+            return loadedJvector;
         } catch (Exception | UnsatisfiedLinkError e) {
             // ignore
         }

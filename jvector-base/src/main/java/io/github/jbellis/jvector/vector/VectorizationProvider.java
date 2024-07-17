@@ -99,7 +99,8 @@ public abstract class VectorizationProvider {
 
       // check for jvector.experimental.enable_native_vectorization
       // this is an experimental feature subject to change
-      if (Boolean.getBoolean("jvector.experimental.enable_native_vectorization")) {
+      // DEMOFIXME: force this to be enabled if possible
+      if (true) { //Boolean.getBoolean("jvector.experimental.enable_native_vectorization")) {
         try {
           var provider = (VectorizationProvider) Class.forName("io.github.jbellis.jvector.vector.NativeVectorizationProvider").getConstructor().newInstance();
           LOG.info("Native Vector API enabled. Using NativeVectorizationProvider.");

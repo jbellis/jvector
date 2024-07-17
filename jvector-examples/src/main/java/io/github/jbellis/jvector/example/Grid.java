@@ -46,6 +46,8 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtilSupport;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.BufferedOutputStream;
@@ -76,6 +78,7 @@ import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
  * Tests a grid of configurations against a dataset
  */
 public class Grid {
+    private static final VectorUtilSupport vectorUtilSupport = VectorizationProvider.getInstance().getVectorUtilSupport();
 
     private static final String pqCacheDir = "pq_cache";
 
@@ -429,6 +432,7 @@ public class Grid {
         GraphIndex index;
         CompressedVectors cv;
         Set<FeatureId> features;
+        CompressedVectors acceleratedPQV;
 
         private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
             return new GraphSearcher(index);
@@ -439,6 +443,20 @@ public class Grid {
             this.index = index;
             this.cv = cv;
             this.features = features;
+            // DEMOFIXME: forces accelerated PQVectors for GPU demo, this should have better configurability
+            if (cv instanceof PQVectors) {
+                Path pqVectorsPath;
+                // write PQVectors to a temp path
+                try {
+                    pqVectorsPath = Files.createTempFile("pq", ".bin");
+                    try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqVectorsPath)))) {
+                        ((PQVectors) cv).write(out, OnDiskGraphIndex.CURRENT_VERSION);
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath);
+            }
         }
 
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
@@ -451,6 +469,8 @@ public class Grid {
             ScoreFunction.ApproximateScoreFunction asf;
             if (features.contains(FeatureId.FUSED_ADC)) {
                 asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+            } else if (acceleratedPQV != null) {
+                asf = acceleratedPQV.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }

@@ -30,3 +30,13 @@ hdf5/
 
 ### asdf (or other version managers)
 .tool-versions
+
+
+## Hacked together CPP builds
+jvector-native/src/main/cpp/build/
+
+## PQ Vectors for testing
+*.pqv
+
+## Profilers
+*.nsys-rep

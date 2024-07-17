@@ -16,11 +16,13 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -170,5 +172,10 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
                                                      float queryMagnitudeSquared, VectorFloat<?> results) {
         NativeSimdOps.bulk_quantized_shuffle_cosine_f32_512(((MemorySegmentByteSequence) shuffles).get(), codebookCount, ((MemorySegmentByteSequence) quantizedPartialSums).get(), sumDelta, minDistance,
                 ((MemorySegmentByteSequence) quantizedPartialSquaredMagnitudes).get(), magnitudeDelta, minMagnitude, queryMagnitudeSquared, ((MemorySegmentVectorFloat) results).get());
+    }
+
+    @Override
+    public CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath) {
+        return GPUPQVectors.load(pqVectorsPath);
     }
 }
