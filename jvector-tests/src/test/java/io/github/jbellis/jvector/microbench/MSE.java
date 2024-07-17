@@ -33,7 +33,7 @@ public class MSE {
         var mfd = DownloadHelper.maybeDownloadFvecs("cohere-english-v3-100k");
         var dataset = mfd.load();
 
-        // two stage PQ
+        // three stage PQ
         var pq8 = ProductQuantization.compute(dataset.getBaseRavv(), dataset.getDimension() / 2, 256, false);
         var pq8Encoded = pq8.encodeAll(dataset.getBaseRavv());
         List<VectorFloat<?>> residuals = IntStream.range(0, dataset.baseVectors.size()).parallel().mapToObj(i -> {
@@ -42,8 +42,19 @@ public class MSE {
             return VectorUtil.sub(dataset.baseVectors.get(i), decoded);
         }).collect(Collectors.toList());
         var residualVV = new ListRandomAccessVectorValues(residuals, dataset.getDimension());
-        var pqR = ProductQuantization.compute(residualVV, dataset.getDimension() / 4, 256, false);
+        var pqR = ProductQuantization.compute(residualVV, dataset.getDimension() / 8, 256, false);
         var pqREncoded = pqR.encodeAll(residualVV);
+        List<VectorFloat<?>> residuals2 = IntStream.range(0, dataset.baseVectors.size()).parallel().mapToObj(i -> {
+            var decoded = vts.createFloatVector(dataset.getDimension());
+            pq8.decode(pq8Encoded[i], decoded);
+            var residual = vts.createFloatVector(dataset.getDimension());
+            pqR.decode(pqREncoded[i], residual);
+            VectorUtil.addInPlace(decoded, residual);
+            return VectorUtil.sub(dataset.baseVectors.get(i), decoded);
+        }).collect(Collectors.toList());
+        var residualVV2 = new ListRandomAccessVectorValues(residuals2, dataset.getDimension());
+        var pqR2 = ProductQuantization.compute(residualVV2, dataset.getDimension() / 32, 256, false);
+        var pqREncoded2 = pqR2.encodeAll(residualVV2);
 
         // compute MSE
         double pqError = IntStream.range(0, dataset.baseVectors.size()).parallel().mapToDouble(i -> {
@@ -51,6 +62,8 @@ public class MSE {
             pq8.decode(pq8Encoded[i], decoded);
             var residual = vts.createFloatVector(dataset.getDimension());
             pqR.decode(pqREncoded[i], residual);
+            VectorUtil.addInPlace(decoded, residual);
+            pqR2.decode(pqREncoded2[i], residual);
             VectorUtil.addInPlace(decoded, residual);
             return VectorUtil.squareL2Distance(dataset.baseVectors.get(i), decoded);
         }).sum();
