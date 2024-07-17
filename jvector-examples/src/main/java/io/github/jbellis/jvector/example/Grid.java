@@ -23,12 +23,12 @@ import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
+import io.github.jbellis.jvector.graph.disk.InlinePQ;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
@@ -45,6 +45,7 @@ import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.BufferedOutputStream;
@@ -57,7 +58,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -68,6 +68,9 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 
 /**
  * Tests a grid of configurations against a dataset
@@ -173,16 +176,16 @@ public class Grid {
         int n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors, pq.getProductQuantization());
+            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, ds, pq.getProductQuantization());
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
-            if (features.equals(EnumSet.of(FeatureId.LVQ))) {
+            if (Stream.of(FeatureId.INLINE_PQ, FeatureId.INLINE_VECTORS, FeatureId.LVQ).anyMatch(features::contains)) {
                 scoringWriter = writer;
             }
         }
         if (scoringWriter == null) {
-            throw new IllegalStateException("For simplicity, Bench looks for exactly {LVQ} feature set for scoring compressed builds. With minor code edits you can switch this to {INLINE_VECTORS} instead.");
+            throw new IllegalStateException("No inline vectors specified to perform scoring with");
         }
 
         // build the graph incrementally
@@ -242,10 +245,11 @@ public class Grid {
     private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features,
                                                              OnHeapGraphIndex onHeapGraph,
                                                              Path outPath,
-                                                             RandomAccessVectorValues floatVectors,
+                                                             DataSet dataset,
                                                              ProductQuantization pq)
             throws FileNotFoundException
     {
+        var floatVectors = dataset.getBaseRavv();
         var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(new OrdinalMapper.IdentityMapper());
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         for (var featureId : features) {
@@ -253,6 +257,11 @@ public class Grid {
                 case INLINE_VECTORS:
                     builder.with(new InlineVectors(floatVectors.dimension()));
                     suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
+                    break;
+                case INLINE_PQ:
+                    var pqRerank = (ProductQuantization) getCompressor(ds -> new CompressorParameters.PQParameters(ds.getDimension(), 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED), dataset);
+                    builder.with(new InlinePQ(pqRerank));
+                    suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(pqRerank.encode(floatVectors.getVector(ordinal))));
                     break;
                 case LVQ:
                     var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
@@ -310,7 +319,7 @@ public class Grid {
                 continue;
             }
             var graphPath = Path.of("/tmp/cohere.ann");
-            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors, null);
+            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, ds, null);
             try (var writer = bws.builder.build()) {
                 start = System.nanoTime();
                 writer.write(bws.suppliers);

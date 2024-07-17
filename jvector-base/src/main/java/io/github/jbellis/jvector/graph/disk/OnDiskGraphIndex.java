@@ -267,6 +267,8 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 return ((LVQ) features.get(FeatureId.LVQ)).rerankerFor(queryVector, vsf, this);
             } else if (permissibleFeatures.contains(FeatureId.INLINE_VECTORS) && features.containsKey(FeatureId.INLINE_VECTORS)) {
                 return RandomAccessVectorValues.super.rerankerFor(queryVector, vsf);
+            } else if (permissibleFeatures.contains(FeatureId.INLINE_PQ) && features.containsKey(FeatureId.INLINE_PQ)) {
+                return ((InlinePQ) features.get(FeatureId.INLINE_PQ)).rerankerFor(queryVector, vsf, this);
             } else {
                 throw new UnsupportedOperationException("No reranker available for this graph");
             }
