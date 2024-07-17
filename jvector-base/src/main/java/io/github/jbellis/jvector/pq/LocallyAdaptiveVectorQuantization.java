@@ -250,6 +250,14 @@ public class LocallyAdaptiveVectorQuantization implements VectorCompressor<Local
                 }
             }
         }
+
+        public VectorFloat<?> decode() {
+            var v = vectorTypeSupport.createFloatVector(bytes.length());
+            for (int i = 0; i < bytes.length(); i++) {
+                v.set(i, (Byte.toUnsignedInt(bytes.get(i)) * scale) + bias);
+            }
+            return v;
+        }
     }
 
     /**
