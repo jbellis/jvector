@@ -3,6 +3,7 @@ package io.github.jbellis.jvector.microbench;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.pq.PQVectors;
@@ -17,6 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -31,26 +33,28 @@ public class MSE {
         var mfd = DownloadHelper.maybeDownloadFvecs("cohere-english-v3-100k");
         var dataset = mfd.load();
 
-        var pq = ProductQuantization.compute(dataset.getBaseRavv(), (dataset.getDimension() * 2) / 3, 256, false);
-        var pqEncoded = pq.encodeAll(dataset.getBaseRavv());
+        // two stage PQ
+        var pq8 = ProductQuantization.compute(dataset.getBaseRavv(), dataset.getDimension() / 2, 256, false);
+        var pq8Encoded = pq8.encodeAll(dataset.getBaseRavv());
+        List<VectorFloat<?>> residuals = IntStream.range(0, dataset.baseVectors.size()).parallel().mapToObj(i -> {
+            var decoded = vts.createFloatVector(dataset.getDimension());
+            pq8.decode(pq8Encoded[i], decoded);
+            return VectorUtil.sub(dataset.baseVectors.get(i), decoded);
+        }).collect(Collectors.toList());
+        var residualVV = new ListRandomAccessVectorValues(residuals, dataset.getDimension());
+        var pqR = ProductQuantization.compute(residualVV, dataset.getDimension() / 4, 256, false);
+        var pqREncoded = pqR.encodeAll(residualVV);
 
-        // encode LVQ
-        var lvq = LocallyAdaptiveVectorQuantization.compute(dataset.getBaseRavv());
-        var lvqEncoded = lvq.encodeAll(dataset.getBaseRavv());
-
-        // compute MSE vs uncompressed for both
+        // compute MSE
         double pqError = IntStream.range(0, dataset.baseVectors.size()).parallel().mapToDouble(i -> {
             var decoded = vts.createFloatVector(dataset.getDimension());
-            pq.decode(pqEncoded[i], decoded);
+            pq8.decode(pq8Encoded[i], decoded);
+            var residual = vts.createFloatVector(dataset.getDimension());
+            pqR.decode(pqREncoded[i], residual);
+            VectorUtil.addInPlace(decoded, residual);
             return VectorUtil.squareL2Distance(dataset.baseVectors.get(i), decoded);
-        }).sum();
-        double lvqError = IntStream.range(0, dataset.baseVectors.size()).parallel().mapToDouble(i -> {
-            var v = dataset.baseVectors.get(i).copy();
-            VectorUtil.subInPlace(v, lvq.globalMean);
-            return VectorUtil.squareL2Distance(v, lvqEncoded[i].decode());
         }).sum();
 
         System.out.println("PQ error: " + pqError);
-        System.out.println("LVQ error: " + lvqError);
     }
 }
