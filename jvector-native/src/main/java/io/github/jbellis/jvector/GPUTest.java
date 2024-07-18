@@ -67,13 +67,14 @@ public class GPUTest {
                                              ((MemorySegmentVectorFloat) similarities).get(),
                                              nodeIds.length);
         NativeGpuOps.free_query(query);
-        System.out.println("Similarity with ones:");
+        System.out.println("Similarity with ones (raw):");
         for (int i = 0; i < similarities.length(); i++) {
             System.out.println(similarities.get(i));
         }
 
         // Compute similarities with ADC
         MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get());
+        similarities = vts.createFloatVector(nodeIds.length);
         NativeGpuOps.compute_dp_similarities_adc(prepared,
                                                  MemorySegment.ofArray(nodeIds),
                                                  ((MemorySegmentVectorFloat) similarities).get(),
