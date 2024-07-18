@@ -36,11 +36,9 @@ jpq_query_t* load_query(jpq_dataset_t* dataset, const float* query);
 void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes);
 
 // Function to free jpq_dataset
-// DEMOFIXME: this needs an implementation
 void free_jpq_dataset(jpq_dataset_t* dataset);
 
 // Function to free jpq_query
-// DEMOFIXME: this needs an implementation, to free the lookup table
 void free_jpq_query(jpq_query_t* query_handle);
 
 void run_jpq_test_cohere(void);

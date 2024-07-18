@@ -511,6 +511,15 @@ extern "C" {
         return query_handle;
     }
 
+    void free_jpq_query(jpq_query_t* query_handle) {
+        if (query_handle == nullptr) {
+            return;
+        }
+        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+        RAFT_CUDA_TRY(cudaFree(query_handle->lut));
+        delete query_handle;
+    }
+
     void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
         if (query_handle == nullptr) {
             // print early return

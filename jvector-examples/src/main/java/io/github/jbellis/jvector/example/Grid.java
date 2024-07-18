@@ -45,6 +45,7 @@ import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.vector.GPUPQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtilSupport;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -422,6 +423,9 @@ public class Grid {
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
                 sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+                if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
+                    ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
+                }
 
                 // process search result
                 var gt = cs.ds.groundTruth.get(i);

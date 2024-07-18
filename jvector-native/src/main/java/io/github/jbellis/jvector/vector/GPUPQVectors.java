@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.vector.cnative.NativeGpuOps;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
+import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -72,7 +73,7 @@ public class GPUPQVectors implements CompressedVectors {
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         MemorySegment loadedQuery = NativeGpuOps.load_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get());
-        return new ScoreFunction.ApproximateScoreFunction() {
+        return new GPUApproximateScoreFunction() {
             private final VectorFloat<?> results = reusableResults.get();
             @Override
             public float similarityTo(int node2) {
@@ -89,6 +90,11 @@ public class GPUPQVectors implements CompressedVectors {
                 NativeGpuOps.compute_dp_similarities(loadedQuery, MemorySegment.ofArray(nodeIds), ((MemorySegmentVectorFloat) results).get(), nodeIds.length);
                 return results;
             }
+
+            @Override
+            public void close() {
+                NativeGpuOps.free_jpq_query(loadedQuery);
+            }
         };
     }
 
@@ -100,5 +106,10 @@ public class GPUPQVectors implements CompressedVectors {
     @Override
     public long ramBytesUsed() {
         return 0;
+    }
+
+    // DEMOFIXME is there a better way to expose this?
+    public interface GPUApproximateScoreFunction extends ScoreFunction.ApproximateScoreFunction {
+        void close();
     }
 }
