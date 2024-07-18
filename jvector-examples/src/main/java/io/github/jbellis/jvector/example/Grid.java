@@ -264,7 +264,13 @@ public class Grid {
                 case INLINE_PQ:
                     var pqRerank = (ProductQuantization) getCompressor(ds -> new CompressorParameters.PQParameters(ds.getDimension(), 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED), dataset);
                     builder.with(new InlinePQ(pqRerank));
-                    suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(pqRerank.encode(floatVectors.getVector(ordinal))));
+                    if (pq == null) {
+                        // building in memory -- pre-encode the vectors up front so we don't get bottlenecked on single-threaded encode
+                        var allEncoded = pqRerank.encodeAll(floatVectors);
+                        suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(allEncoded[ordinal]));
+                    } else {
+                        suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(pqRerank.encode(floatVectors.getVector(ordinal))));
+                    }
                     break;
                 case LVQ:
                     var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
