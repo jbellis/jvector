@@ -32,7 +32,7 @@ jpq_dataset_t* load_pq_vectors(const char* filename);
 // Function to load query
 jpq_query_t* load_query(jpq_dataset_t* dataset, const float* query);
 
-// Function to compute L2 similarities
+// Function to compute dot product similarities
 void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes);
 
 // Function to free jpq_dataset
