@@ -165,8 +165,10 @@ float* compute_dp_adc_setup(
     int64_t dim = jpq_data.dim();
 
     // Allocate device memory for ADC lookup table
-    float* d_adc_lut;
-    RAFT_CUDA_TRY(cudaMalloc(&d_adc_lut, pq_dim * 256 * sizeof(float)));
+    size_t adc_lut_size = pq_dim * 256 * sizeof(float);
+    float* d_adc_lut = static_cast<float*>(
+        raft::resource::get_workspace_resource(res)->allocate(adc_lut_size)
+    );
 
     // Launch kernel to compute ADC lookup table
     int block_size = std::min(MAX_BLOCK_SIZE, static_cast<int>(pq_dim));
@@ -562,7 +564,10 @@ extern "C" {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        RAFT_CUDA_TRY(cudaFree(adc_handle->lut));
+        raft::resource::get_workspace_resource(res)->deallocate(
+            adc_handle->lut,
+            adc_handle->dataset->dataset.pq_dim() * 256 * sizeof(float)
+        );
         delete adc_handle;
     }
 
@@ -573,8 +578,11 @@ extern "C" {
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
 
         int dim = dataset->dataset.dim();
-        float* d_query;
-        RAFT_CUDA_TRY(cudaMalloc(&d_query, dim * sizeof(float)));
+        // Allocate device memory
+        float* d_query = static_cast<float*>(
+            raft::resource::get_workspace_resource(res)->allocate(dim * sizeof(float))
+        );
+
         raft::copy(d_query, query, dim, res.get_stream());
         res.sync_stream();
         return new jpq_query_t{d_query, dataset};
@@ -585,7 +593,10 @@ extern "C" {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        RAFT_CUDA_TRY(cudaFree(query_handle->d_query));
+        raft::resource::get_workspace_resource(res)->deallocate(
+            query_handle->d_query,
+            query_handle->dataset->dataset.dim() * sizeof(float)
+        );
         delete query_handle;
     }
 
