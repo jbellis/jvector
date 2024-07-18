@@ -25,7 +25,8 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.IntStream;
 
 public class GPUTest {
     private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
@@ -85,7 +86,7 @@ public class GPUTest {
     }
 
     private static void benchmarkRaw(MemorySegment dataset) {
-        Random random = new Random();
+        var R = ThreadLocalRandom.current();
         int[] nodeIds = new int[200];
         MemorySegmentVectorFloat similarities = (MemorySegmentVectorFloat) vts.createFloatVector(nodeIds.length);
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
@@ -94,12 +95,12 @@ public class GPUTest {
         for (int i = 0; i < 1000_000; i++) {
             // Generate random query vector
             for (int j = 0; j < DIM; j++) {
-                q.set(j, random.nextFloat() * 2 - 1);
+                q.set(j, R.nextFloat() * 2 - 1);
             }
 
             // Generate random node IDs
             for (int j = 0; j < nodeIds.length; j++) {
-                nodeIds[j] = random.nextInt(100_000);
+                nodeIds[j] = R.nextInt(100_000);
             }
 
             MemorySegment query = NativeGpuOps.prepare_query(dataset, q.get());
@@ -114,7 +115,7 @@ public class GPUTest {
     }
 
     private static void benchmarkADC(MemorySegment dataset) {
-        Random random = new Random();
+        var R = ThreadLocalRandom.current();
         int[] nodeIds = new int[32];  // Changed to 32 as per the ADC benchmark in C++
         MemorySegmentVectorFloat similarities = (MemorySegmentVectorFloat) vts.createFloatVector(nodeIds.length);
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
@@ -123,7 +124,7 @@ public class GPUTest {
         for (int i = 0; i < 100_000; i++) {
             // Generate random query vector
             for (int j = 0; j < DIM; j++) {
-                q.set(j, random.nextFloat() * 2 - 1);
+                q.set(j, R.nextFloat() * 2 - 1);
             }
 
             MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get());
@@ -131,7 +132,7 @@ public class GPUTest {
             for (int j = 0; j < 50; j++) {
                 // Generate random node IDs
                 for (int k = 0; k < nodeIds.length; k++) {
-                    nodeIds[k] = random.nextInt(100_000);
+                    nodeIds[k] = R.nextInt(100_000);
                 }
 
                 NativeGpuOps.compute_dp_similarities_adc(prepared,
