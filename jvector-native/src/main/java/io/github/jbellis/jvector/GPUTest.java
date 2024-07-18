@@ -52,7 +52,7 @@ public class GPUTest {
     }
 
     private static void testWithVector(MemorySegment dataset, MemorySegmentVectorFloat q) {
-        MemorySegment loaded = NativeGpuOps.load_query(dataset, q.get());
+        MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get());
 
         int[] nodeIds = new int[10];
         for (int i = 0; i < nodeIds.length; i++) {
@@ -60,17 +60,17 @@ public class GPUTest {
         }
 
         var similarities = vts.createFloatVector(nodeIds.length);
-        NativeGpuOps.compute_dp_similarities(loaded,
-                                             MemorySegment.ofArray(nodeIds),
-                                             ((MemorySegmentVectorFloat) similarities).get(),
-                                             nodeIds.length);
+        NativeGpuOps.compute_dp_similarities_adc(prepared,
+                                                 MemorySegment.ofArray(nodeIds),
+                                                 ((MemorySegmentVectorFloat) similarities).get(),
+                                                 nodeIds.length);
 
         System.out.println("Similarities with ones");
         for (int i = 0; i < similarities.length(); i++) {
             System.out.println(similarities.get(i));
         }
 
-        NativeGpuOps.free_jpq_query(loaded);
+        NativeGpuOps.free_adc_query(prepared);
     }
 
     private static void benchmarkRandomVectors(MemorySegment dataset, int dim) {
@@ -95,12 +95,12 @@ public class GPUTest {
                 nodeIds[j] = random.nextInt(100000);
             }
 
-            MemorySegment loaded = NativeGpuOps.load_query(dataset, ((MemorySegmentVectorFloat) queryVector).get());
-            NativeGpuOps.compute_dp_similarities(loaded,
-                                                 MemorySegment.ofArray(nodeIds),
-                                                 ((MemorySegmentVectorFloat) similarities).get(),
-                                                 numNodes);
-            NativeGpuOps.free_jpq_query(loaded);
+            MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, ((MemorySegmentVectorFloat) queryVector).get());
+            NativeGpuOps.compute_dp_similarities_adc(prepared,
+                                                     MemorySegment.ofArray(nodeIds),
+                                                     ((MemorySegmentVectorFloat) similarities).get(),
+                                                     numNodes);
+            NativeGpuOps.free_adc_query(prepared);
         }
 
         long endTime = System.nanoTime();

@@ -24,22 +24,22 @@ extern "C" {
 #endif
 
 typedef struct jpq_dataset_t jpq_dataset_t;
-typedef struct jpq_query_t jpq_query_t;
+typedef struct jpq_adc_t jpq_adc_t;
 
 // Function to load jpq_dataset
 jpq_dataset_t* load_pq_vectors(const char* filename);
 
-// Function to load query
-jpq_query_t* load_query(jpq_dataset_t* dataset, const float* query);
-
-// Function to compute dot product similarities
-void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes);
-
 // Function to free jpq_dataset
 void free_jpq_dataset(jpq_dataset_t* dataset);
 
-// Function to free jpq_query
-void free_jpq_query(jpq_query_t* query_handle);
+// Function to prepare adc query
+jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* query);
+
+// Function to compute dot product similarities
+void compute_dp_similarities_adc(jpq_adc_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes);
+
+// Function to free adc query
+void free_adc_query(jpq_adc_t* query_handle);
 
 void run_jpq_test_cohere(void);
 

@@ -72,7 +72,7 @@ public class GPUPQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        MemorySegment loadedQuery = NativeGpuOps.load_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get());
+        MemorySegment loadedQuery = NativeGpuOps.prepare_adc_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get());
         return new GPUApproximateScoreFunction() {
             private final VectorFloat<?> results = reusableResults.get();
             @Override
@@ -87,13 +87,13 @@ public class GPUPQVectors implements CompressedVectors {
 
             @Override
             public VectorFloat<?> similarityTo(int[] nodeIds) {
-                NativeGpuOps.compute_dp_similarities(loadedQuery, MemorySegment.ofArray(nodeIds), ((MemorySegmentVectorFloat) results).get(), nodeIds.length);
+                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, MemorySegment.ofArray(nodeIds), ((MemorySegmentVectorFloat) results).get(), nodeIds.length);
                 return results;
             }
 
             @Override
             public void close() {
-                NativeGpuOps.free_jpq_query(loadedQuery);
+                NativeGpuOps.free_adc_query(loadedQuery);
             }
         };
     }

@@ -212,33 +212,6 @@ public class NativeGpuOps {
     public static int _ATFILE_SOURCE() {
         return _ATFILE_SOURCE;
     }
-    private static final int __WORDSIZE = (int)64L;
-    /**
-     * {@snippet lang=c :
-     * #define __WORDSIZE 64
-     * }
-     */
-    public static int __WORDSIZE() {
-        return __WORDSIZE;
-    }
-    private static final int __WORDSIZE_TIME64_COMPAT32 = (int)1L;
-    /**
-     * {@snippet lang=c :
-     * #define __WORDSIZE_TIME64_COMPAT32 1
-     * }
-     */
-    public static int __WORDSIZE_TIME64_COMPAT32() {
-        return __WORDSIZE_TIME64_COMPAT32;
-    }
-    private static final int __SYSCALL_WORDSIZE = (int)64L;
-    /**
-     * {@snippet lang=c :
-     * #define __SYSCALL_WORDSIZE 64
-     * }
-     */
-    public static int __SYSCALL_WORDSIZE() {
-        return __SYSCALL_WORDSIZE;
-    }
     private static final int __USE_MISC = (int)1L;
     /**
      * {@snippet lang=c :
@@ -329,10 +302,10 @@ public class NativeGpuOps {
     public static int __GLIBC__() {
         return __GLIBC__;
     }
-    private static final int __GLIBC_MINOR__ = (int)35L;
+    private static final int __GLIBC_MINOR__ = (int)31L;
     /**
      * {@snippet lang=c :
-     * #define __GLIBC_MINOR__ 35
+     * #define __GLIBC_MINOR__ 31
      * }
      */
     public static int __GLIBC_MINOR__() {
@@ -356,14 +329,41 @@ public class NativeGpuOps {
     public static int __glibc_c99_flexarr_available() {
         return __glibc_c99_flexarr_available;
     }
-    private static final int __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI = (int)0L;
+    private static final int __WORDSIZE = (int)64L;
     /**
      * {@snippet lang=c :
-     * #define __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI 0
+     * #define __WORDSIZE 64
      * }
      */
-    public static int __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI() {
-        return __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI;
+    public static int __WORDSIZE() {
+        return __WORDSIZE;
+    }
+    private static final int __WORDSIZE_TIME64_COMPAT32 = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * #define __WORDSIZE_TIME64_COMPAT32 1
+     * }
+     */
+    public static int __WORDSIZE_TIME64_COMPAT32() {
+        return __WORDSIZE_TIME64_COMPAT32;
+    }
+    private static final int __SYSCALL_WORDSIZE = (int)64L;
+    /**
+     * {@snippet lang=c :
+     * #define __SYSCALL_WORDSIZE 64
+     * }
+     */
+    public static int __SYSCALL_WORDSIZE() {
+        return __SYSCALL_WORDSIZE;
+    }
+    private static final int __LONG_DOUBLE_USES_FLOAT128 = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * #define __LONG_DOUBLE_USES_FLOAT128 0
+     * }
+     */
+    public static int __LONG_DOUBLE_USES_FLOAT128() {
+        return __LONG_DOUBLE_USES_FLOAT128;
     }
     private static final int __HAVE_GENERIC_SELECTION = (int)1L;
     /**
@@ -400,15 +400,6 @@ public class NativeGpuOps {
      */
     public static int __GLIBC_USE_IEC_60559_BFP_EXT_C2X() {
         return __GLIBC_USE_IEC_60559_BFP_EXT_C2X;
-    }
-    private static final int __GLIBC_USE_IEC_60559_EXT = (int)0L;
-    /**
-     * {@snippet lang=c :
-     * #define __GLIBC_USE_IEC_60559_EXT 0
-     * }
-     */
-    public static int __GLIBC_USE_IEC_60559_EXT() {
-        return __GLIBC_USE_IEC_60559_EXT;
     }
     private static final int __GLIBC_USE_IEC_60559_FUNCS_EXT = (int)0L;
     /**
@@ -490,15 +481,6 @@ public class NativeGpuOps {
      */
     public static int __STATFS_MATCHES_STATFS64() {
         return __STATFS_MATCHES_STATFS64;
-    }
-    private static final int __KERNEL_OLD_TIMEVAL_MATCHES_TIMEVAL64 = (int)1L;
-    /**
-     * {@snippet lang=c :
-     * #define __KERNEL_OLD_TIMEVAL_MATCHES_TIMEVAL64 1
-     * }
-     */
-    public static int __KERNEL_OLD_TIMEVAL_MATCHES_TIMEVAL64() {
-        return __KERNEL_OLD_TIMEVAL_MATCHES_TIMEVAL64;
     }
     private static final int __FD_SETSIZE = (int)1024L;
     /**
@@ -791,12 +773,6 @@ public class NativeGpuOps {
      * }
      */
     public static final OfLong __suseconds_t = NativeGpuOps.C_LONG;
-    /**
-     * {@snippet lang=c :
-     * typedef long __suseconds64_t
-     * }
-     */
-    public static final OfLong __suseconds64_t = NativeGpuOps.C_LONG;
     /**
      * {@snippet lang=c :
      * typedef int __daddr_t
@@ -1092,9 +1068,9 @@ public class NativeGpuOps {
             NativeGpuOps.C_POINTER
         );
 
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("load_pq_vectors"),
-                    DESC, Linker.Option.critical(true));
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("load_pq_vectors");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -1116,6 +1092,17 @@ public class NativeGpuOps {
     public static MethodHandle load_pq_vectors$handle() {
         return load_pq_vectors.HANDLE;
     }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * jpq_dataset_t *load_pq_vectors(const char *filename)
+     * }
+     */
+    public static MemorySegment load_pq_vectors$address() {
+        return load_pq_vectors.ADDR;
+    }
+
     /**
      * {@snippet lang=c :
      * jpq_dataset_t *load_pq_vectors(const char *filename)
@@ -1133,111 +1120,14 @@ public class NativeGpuOps {
         }
     }
 
-    private static class load_query {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
-            NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_POINTER
-        );
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("load_query"),
-                    DESC, Linker.Option.critical(true));
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * jpq_query_t *load_query(jpq_dataset_t *dataset, const float *query)
-     * }
-     */
-    public static FunctionDescriptor load_query$descriptor() {
-        return load_query.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * jpq_query_t *load_query(jpq_dataset_t *dataset, const float *query)
-     * }
-     */
-    public static MethodHandle load_query$handle() {
-        return load_query.HANDLE;
-    }
-    /**
-     * {@snippet lang=c :
-     * jpq_query_t *load_query(jpq_dataset_t *dataset, const float *query)
-     * }
-     */
-    public static MemorySegment load_query(MemorySegment dataset, MemorySegment query) {
-        var mh$ = load_query.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("load_query", dataset, query);
-            }
-            return (MemorySegment)mh$.invokeExact(dataset, query);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
-    private static class compute_dp_similarities {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_LONG
-        );
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("compute_dp_similarities"),
-                    DESC, Linker.Option.critical(true));
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
-     * }
-     */
-    public static FunctionDescriptor compute_dp_similarities$descriptor() {
-        return compute_dp_similarities.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
-     * }
-     */
-    public static MethodHandle compute_dp_similarities$handle() {
-        return compute_dp_similarities.HANDLE;
-    }
-    /**
-     * {@snippet lang=c :
-     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
-     * }
-     */
-    public static void compute_dp_similarities(MemorySegment query_handle, MemorySegment node_ids, MemorySegment similarities, long n_nodes) {
-        var mh$ = compute_dp_similarities.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("compute_dp_similarities", query_handle, node_ids, similarities, n_nodes);
-            }
-            mh$.invokeExact(query_handle, node_ids, similarities, n_nodes);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
     private static class free_jpq_dataset {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeGpuOps.C_POINTER
         );
 
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("free_jpq_dataset"),
-                    DESC, Linker.Option.critical(true));
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("free_jpq_dataset");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -1259,6 +1149,17 @@ public class NativeGpuOps {
     public static MethodHandle free_jpq_dataset$handle() {
         return free_jpq_dataset.HANDLE;
     }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void free_jpq_dataset(jpq_dataset_t *dataset)
+     * }
+     */
+    public static MemorySegment free_jpq_dataset$address() {
+        return free_jpq_dataset.ADDR;
+    }
+
     /**
      * {@snippet lang=c :
      * void free_jpq_dataset(jpq_dataset_t *dataset)
@@ -1276,45 +1177,175 @@ public class NativeGpuOps {
         }
     }
 
-    private static class free_jpq_query {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+    private static class prepare_adc_query {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
             NativeGpuOps.C_POINTER
         );
 
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("free_jpq_query"),
-                    DESC, Linker.Option.critical(true));
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("prepare_adc_query");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
 
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void free_jpq_query(jpq_query_t *query_handle)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
      * }
      */
-    public static FunctionDescriptor free_jpq_query$descriptor() {
-        return free_jpq_query.DESC;
+    public static FunctionDescriptor prepare_adc_query$descriptor() {
+        return prepare_adc_query.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void free_jpq_query(jpq_query_t *query_handle)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
      * }
      */
-    public static MethodHandle free_jpq_query$handle() {
-        return free_jpq_query.HANDLE;
+    public static MethodHandle prepare_adc_query$handle() {
+        return prepare_adc_query.HANDLE;
     }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
+     * }
+     */
+    public static MemorySegment prepare_adc_query$address() {
+        return prepare_adc_query.ADDR;
+    }
+
     /**
      * {@snippet lang=c :
-     * void free_jpq_query(jpq_query_t *query_handle)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
      * }
      */
-    public static void free_jpq_query(MemorySegment query_handle) {
-        var mh$ = free_jpq_query.HANDLE;
+    public static MemorySegment prepare_adc_query(MemorySegment dataset, MemorySegment query) {
+        var mh$ = prepare_adc_query.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("free_jpq_query", query_handle);
+                traceDowncall("prepare_adc_query", dataset, query);
+            }
+            return (MemorySegment)mh$.invokeExact(dataset, query);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class compute_dp_similarities_adc {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("compute_dp_similarities_adc");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static FunctionDescriptor compute_dp_similarities_adc$descriptor() {
+        return compute_dp_similarities_adc.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static MethodHandle compute_dp_similarities_adc$handle() {
+        return compute_dp_similarities_adc.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static MemorySegment compute_dp_similarities_adc$address() {
+        return compute_dp_similarities_adc.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static void compute_dp_similarities_adc(MemorySegment query_handle, MemorySegment node_ids, MemorySegment similarities, long n_nodes) {
+        var mh$ = compute_dp_similarities_adc.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("compute_dp_similarities_adc", query_handle, node_ids, similarities, n_nodes);
+            }
+            mh$.invokeExact(query_handle, node_ids, similarities, n_nodes);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class free_adc_query {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeGpuOps.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("free_adc_query");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void free_adc_query(jpq_adc_t *query_handle)
+     * }
+     */
+    public static FunctionDescriptor free_adc_query$descriptor() {
+        return free_adc_query.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void free_adc_query(jpq_adc_t *query_handle)
+     * }
+     */
+    public static MethodHandle free_adc_query$handle() {
+        return free_adc_query.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void free_adc_query(jpq_adc_t *query_handle)
+     * }
+     */
+    public static MemorySegment free_adc_query$address() {
+        return free_adc_query.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void free_adc_query(jpq_adc_t *query_handle)
+     * }
+     */
+    public static void free_adc_query(MemorySegment query_handle) {
+        var mh$ = free_adc_query.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("free_adc_query", query_handle);
             }
             mh$.invokeExact(query_handle);
         } catch (Throwable ex$) {
@@ -1325,9 +1356,9 @@ public class NativeGpuOps {
     private static class run_jpq_test_cohere {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
 
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("run_jpq_test_cohere"),
-                    DESC, Linker.Option.critical(true));
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("run_jpq_test_cohere");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -1349,6 +1380,17 @@ public class NativeGpuOps {
     public static MethodHandle run_jpq_test_cohere$handle() {
         return run_jpq_test_cohere.HANDLE;
     }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void run_jpq_test_cohere()
+     * }
+     */
+    public static MemorySegment run_jpq_test_cohere$address() {
+        return run_jpq_test_cohere.ADDR;
+    }
+
     /**
      * {@snippet lang=c :
      * void run_jpq_test_cohere()
@@ -1369,9 +1411,9 @@ public class NativeGpuOps {
     private static class initialize {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
 
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("initialize"),
-                    DESC, Linker.Option.critical(true));
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("initialize");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -1393,6 +1435,17 @@ public class NativeGpuOps {
     public static MethodHandle initialize$handle() {
         return initialize.HANDLE;
     }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void initialize()
+     * }
+     */
+    public static MemorySegment initialize$address() {
+        return initialize.ADDR;
+    }
+
     /**
      * {@snippet lang=c :
      * void initialize()
@@ -1418,33 +1471,6 @@ public class NativeGpuOps {
     public static long _POSIX_C_SOURCE() {
         return _POSIX_C_SOURCE;
     }
-    private static final int __TIMESIZE = (int)64L;
-    /**
-     * {@snippet lang=c :
-     * #define __TIMESIZE 64
-     * }
-     */
-    public static int __TIMESIZE() {
-        return __TIMESIZE;
-    }
-    private static final long __STDC_IEC_60559_BFP__ = 201404L;
-    /**
-     * {@snippet lang=c :
-     * #define __STDC_IEC_60559_BFP__ 201404
-     * }
-     */
-    public static long __STDC_IEC_60559_BFP__() {
-        return __STDC_IEC_60559_BFP__;
-    }
-    private static final long __STDC_IEC_60559_COMPLEX__ = 201404L;
-    /**
-     * {@snippet lang=c :
-     * #define __STDC_IEC_60559_COMPLEX__ 201404
-     * }
-     */
-    public static long __STDC_IEC_60559_COMPLEX__() {
-        return __STDC_IEC_60559_COMPLEX__;
-    }
     private static final long __STDC_ISO_10646__ = 201706L;
     /**
      * {@snippet lang=c :
@@ -1453,6 +1479,15 @@ public class NativeGpuOps {
      */
     public static long __STDC_ISO_10646__() {
         return __STDC_ISO_10646__;
+    }
+    private static final int __TIMESIZE = (int)64L;
+    /**
+     * {@snippet lang=c :
+     * #define __TIMESIZE 64
+     * }
+     */
+    public static int __TIMESIZE() {
+        return __TIMESIZE;
     }
     private static final int __WCHAR_MAX = (int)2147483647L;
     /**

@@ -35,10 +35,10 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-//#include <cuvs/neighbors/common.hpp>
-
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
+
+constexpr int MAX_BLOCK_SIZE = 128; // the largest SM on contemporary hardware has 128 cuda cores
 
 // based on cuvs::neighbors::vpq_dataset, but with only a single global centroid instead of a vq codebook
 template <typename MathT, typename IdxT>
@@ -112,7 +112,7 @@ struct jpq_dataset_t {
     jpq_dataset<float, int64_t> dataset;
 };
 
-struct jpq_query_t {
+struct jpq_adc_t {
     float* lut;
     int64_t dim;
     jpq_dataset_t* dataset;
@@ -145,11 +145,11 @@ __global__ void compute_adc_lut_kernel(
             partial_distance += q_val * (vq_val + pq_val);
         }
 
-        adc_lut[subspace_idx * 256 + centroid_idx] = partial_distance;
+        adc_lut[centroid_idx * pq_dim + subspace_idx] = partial_distance;
     }
 }
 
-float* compute_dp_setup(
+float* compute_dp_adc_setup(
         raft::device_resources const& res,
         const raft::device_vector<float, int64_t>& d_query,
         const jpq_dataset<float, int64_t>& jpq_data)
@@ -164,7 +164,7 @@ float* compute_dp_setup(
     RAFT_CUDA_TRY(cudaMalloc(&d_adc_lut, pq_dim * 256 * sizeof(float)));
 
     // Launch kernel to compute ADC lookup table
-    int block_size = std::min(256, static_cast<int>(pq_dim));
+    int block_size = std::min(MAX_BLOCK_SIZE, static_cast<int>(pq_dim));
     dim3 block_dim(block_size);
     dim3 grid_dim(256);  // always 256 subspaces
     compute_adc_lut_kernel<<<grid_dim, block_dim, 0, stream>>>(
@@ -183,7 +183,7 @@ float* compute_dp_setup(
     return d_adc_lut;
 }
 
-__global__ void compute_dp_similarities_kernel(
+__global__ void compute_dp_similarities_adc_kernel(
         const float* adc_lut,
         const uint8_t* codepoints,
         const int32_t* node_ids,
@@ -195,7 +195,7 @@ __global__ void compute_dp_similarities_kernel(
     int tid = threadIdx.x;
     int threads_per_block = blockDim.x;
 
-    __shared__ float shared_distance[256];
+    __shared__ float shared_distance[MAX_BLOCK_SIZE];
 
     float thread_distance = 0.0f;
     const uint8_t* pq_codes = codepoints + node_ids[node_idx] * pq_dim;
@@ -203,7 +203,7 @@ __global__ void compute_dp_similarities_kernel(
     // Each thread processes multiple subspaces if needed
     for (int subspace_idx = tid; subspace_idx < pq_dim; subspace_idx += threads_per_block) {
         uint8_t pq_code = pq_codes[subspace_idx];
-        thread_distance += adc_lut[subspace_idx * 256 + pq_code];
+        thread_distance += adc_lut[pq_code * pq_dim + subspace_idx];
     }
     shared_distance[tid] = thread_distance;
     __syncthreads();
@@ -223,7 +223,7 @@ __global__ void compute_dp_similarities_kernel(
     }
 }
 
-void compute_dp_similarities(
+void compute_dp_similarities_adc(
         raft::device_resources const& res,
         float* adc_lut,
         const jpq_dataset<float, int64_t>& jpq_data,
@@ -242,10 +242,10 @@ void compute_dp_similarities(
 
     // Launch kernel to compute similarities
     int64_t pq_dim = jpq_data.pq_dim();
-    int block_size = std::min(256, static_cast<int>(pq_dim));
+    int block_size = std::min(MAX_BLOCK_SIZE, static_cast<int>(pq_dim));
     dim3 block_dim(block_size);
     dim3 grid_size(n_nodes);
-    compute_dp_similarities_kernel<<<grid_size, block_size, 0, stream>>>(
+    compute_dp_similarities_adc_kernel<<<grid_size, block_size, 0, stream>>>(
             adc_lut,
             jpq_data.codepoints.data_handle(),
             d_node_ids.data_handle(),
@@ -412,63 +412,6 @@ jpq_dataset<MathT, IdxT> load_pq_vectors(raft::device_resources const &res, cons
     return jpq_data;
 }
 
-void jpq_test_cohere(raft::device_resources const &res) {
-     auto jpq_data = load_pq_vectors<float, int64_t>(res, "cohere.pqv");
-     int dim = jpq_data.dim();
-     std::array<int32_t, 200> node_ids{};
-     std::array<float, 200> similarities{};
-     std::array<float, 1024> host_q;
-     auto d_q = raft::make_device_vector<float, int64_t>(res, dim);
-
-     // fixed vector of ones
-     std::vector<float> host_ones(dim, 1.0f);
-     auto d_ones = raft::make_device_vector<float, int64_t>(res, dim);
-     raft::copy(d_ones.data_handle(), host_ones.data(), dim, res.get_stream());
-     res.sync_stream();
-
-     // compare ones with the first 10 vectors in the dataset
-     int n_nodes = 10;
-     std::iota(node_ids.begin(), node_ids.begin() + n_nodes, 0);
-     float* adc_lut_ones = compute_dp_setup(res, d_ones, jpq_data);
-     compute_dp_similarities(res, adc_lut_ones, jpq_data, node_ids.data(), similarities.data(), n_nodes);
-     for (int i = 0; i < n_nodes; ++i) {
-         std::cout << "Similarity with ones: " << similarities[i] << std::endl;
-     }
-     RAFT_CUDA_TRY(cudaFree(adc_lut_ones));
-
-     // Benchmark random queries
-     std::random_device rd;
-     std::mt19937 gen(rd());
-     // Query vector elements from -1 .. 1
-     std::uniform_real_distribution<> dis(-1.0, 1.0);
-     // Node IDs from 0 .. 99999
-     std::uniform_int_distribution<> node_dis(0, 99999);
-
-     std::chrono::duration<double> elapsed = std::chrono::duration<double>::zero();
-     for (int i = 0; i < 10000; ++i) {
-         // query vector
-         std::generate(host_q.begin(), host_q.end(), [&]() { return dis(gen); });
-         raft::copy(d_q.data_handle(), host_q.data(), 1024, res.get_stream());
-         res.sync_stream();
-
-         auto start = std::chrono::high_resolution_clock::now();
-
-         // Compute ADC lookup table for the query
-         float* adc_lut = compute_dp_setup(res, d_q, jpq_data);
-
-         // node IDs
-         std::generate(node_ids.begin(), node_ids.end(), [&]() { return node_dis(gen); });
-         // compute similarities
-         compute_dp_similarities(res, adc_lut, jpq_data, node_ids.data(), similarities.data(), node_ids.size());
-
-         RAFT_CUDA_TRY(cudaFree(adc_lut));
-
-         elapsed += std::chrono::high_resolution_clock::now() - start;
-     }
-
-     std::cout << "Time elapsed: " << elapsed.count() << " seconds" << std::endl;
-}
-
 extern "C" {
     void initialize(void) {
         std::cout << "Initializing" << std::endl;
@@ -496,7 +439,14 @@ extern "C" {
         }
     }
 
-    jpq_query_t* load_query(jpq_dataset_t* dataset, const float* query) {
+    void free_jpq_dataset(jpq_dataset_t* dataset) {
+        if (dataset == nullptr) {
+            return;
+        }
+        delete dataset;
+    }
+
+    jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* query) {
         if (dataset == nullptr) {
             return nullptr;
         }
@@ -505,36 +455,30 @@ extern "C" {
         int dim = dataset->dataset.dim();
         auto d_query = raft::make_device_vector<float, int64_t>(res, dim);
         raft::copy(d_query.data_handle(), query, dim, res.get_stream());
-        float* lut = compute_dp_setup(res, d_query, dataset->dataset);
+        float* lut = compute_dp_adc_setup(res, d_query, dataset->dataset);
         res.sync_stream();
-        jpq_query_t* query_handle = new jpq_query_t{lut, dim, dataset};
-        return query_handle;
+        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset};
+        return adc_handle;
     }
 
-    void free_jpq_query(jpq_query_t* query_handle) {
-        if (query_handle == nullptr) {
+    void free_adc_query(jpq_adc_t* adc_handle) {
+        if (adc_handle == nullptr) {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        RAFT_CUDA_TRY(cudaFree(query_handle->lut));
-        delete query_handle;
+        RAFT_CUDA_TRY(cudaFree(adc_handle->lut));
+        delete adc_handle;
     }
 
-    void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
-        if (query_handle == nullptr) {
+    void compute_dp_similarities_adc(jpq_adc_t* adc_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
+        if (adc_handle == nullptr) {
             // print early return
-            std::cout << "query_handle is null" << std::endl;
+            std::cout << "adc_handle is null" << std::endl;
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        compute_dp_similarities(res, query_handle->lut, query_handle->dataset->dataset, node_ids, similarities, n_nodes);
+        compute_dp_similarities_adc(res, adc_handle->lut, adc_handle->dataset->dataset, node_ids, similarities, n_nodes);
 
         res.sync_stream();
-    }
-
-    void run_jpq_test_cohere(void) {
-        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-
-        jpq_test_cohere(res);
     }
 }
