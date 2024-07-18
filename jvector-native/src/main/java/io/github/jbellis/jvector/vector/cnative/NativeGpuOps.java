@@ -1353,6 +1353,182 @@ public class NativeGpuOps {
         }
     }
 
+    private static class prepare_query {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("prepare_query");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * jpq_query_t *prepare_query(jpq_dataset_t *dataset, const float *query)
+     * }
+     */
+    public static FunctionDescriptor prepare_query$descriptor() {
+        return prepare_query.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * jpq_query_t *prepare_query(jpq_dataset_t *dataset, const float *query)
+     * }
+     */
+    public static MethodHandle prepare_query$handle() {
+        return prepare_query.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * jpq_query_t *prepare_query(jpq_dataset_t *dataset, const float *query)
+     * }
+     */
+    public static MemorySegment prepare_query$address() {
+        return prepare_query.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * jpq_query_t *prepare_query(jpq_dataset_t *dataset, const float *query)
+     * }
+     */
+    public static MemorySegment prepare_query(MemorySegment dataset, MemorySegment query) {
+        var mh$ = prepare_query.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("prepare_query", dataset, query);
+            }
+            return (MemorySegment)mh$.invokeExact(dataset, query);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class free_query {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeGpuOps.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("free_query");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void free_query(jpq_query_t *query_handle)
+     * }
+     */
+    public static FunctionDescriptor free_query$descriptor() {
+        return free_query.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void free_query(jpq_query_t *query_handle)
+     * }
+     */
+    public static MethodHandle free_query$handle() {
+        return free_query.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void free_query(jpq_query_t *query_handle)
+     * }
+     */
+    public static MemorySegment free_query$address() {
+        return free_query.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void free_query(jpq_query_t *query_handle)
+     * }
+     */
+    public static void free_query(MemorySegment query_handle) {
+        var mh$ = free_query.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("free_query", query_handle);
+            }
+            mh$.invokeExact(query_handle);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class compute_dp_similarities {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("compute_dp_similarities");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static FunctionDescriptor compute_dp_similarities$descriptor() {
+        return compute_dp_similarities.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static MethodHandle compute_dp_similarities$handle() {
+        return compute_dp_similarities.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static MemorySegment compute_dp_similarities$address() {
+        return compute_dp_similarities.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void compute_dp_similarities(jpq_query_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * }
+     */
+    public static void compute_dp_similarities(MemorySegment query_handle, MemorySegment node_ids, MemorySegment similarities, long n_nodes) {
+        var mh$ = compute_dp_similarities.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("compute_dp_similarities", query_handle, node_ids, similarities, n_nodes);
+            }
+            mh$.invokeExact(query_handle, node_ids, similarities, n_nodes);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class run_jpq_test_cohere {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
 

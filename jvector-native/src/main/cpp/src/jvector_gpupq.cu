@@ -118,6 +118,11 @@ struct jpq_adc_t {
     jpq_dataset_t* dataset;
 };
 
+struct jpq_query_t {
+    float* d_query;
+    jpq_dataset_t* dataset;
+};
+
 __global__ void compute_adc_lut_kernel(
         const float* query,
         const float* vq_center,
@@ -252,6 +257,97 @@ void compute_dp_similarities_adc(
             d_similarities.data_handle(),
             pq_dim,
             n_nodes
+    );
+
+    // Copy results back to host
+    raft::copy(host_similarities, d_similarities.data_handle(), n_nodes, stream);
+    res.sync_stream();
+}
+
+__global__ void compute_dp_similarities_kernel(
+        const float* query,
+        const float* vq_center,
+        const float* pq_codebook,
+        const uint8_t* codepoints,
+        const int32_t* node_ids,
+        float* similarities,
+        int64_t pq_dim,
+        int64_t pq_len,
+        int n_nodes,
+        int dim
+) {
+    int node_idx = blockIdx.x;
+    int tid = threadIdx.x;
+    int threads_per_block = blockDim.x;
+
+    if (node_idx >= n_nodes) return;
+
+    __shared__ float shared_distance[MAX_BLOCK_SIZE];
+    shared_distance[tid] = 0.0f;
+
+    const uint8_t* pq_codes = codepoints + node_ids[node_idx] * pq_dim;
+    float thread_distance = 0.0f;
+
+    for (int i = tid; i < dim; i += threads_per_block) {
+        int subspace_idx = i / pq_len;
+        int subvec_idx = i % pq_len;
+
+        uint8_t pq_code = pq_codes[subspace_idx];
+        float pq_val = pq_codebook[subspace_idx * (pq_len * 256) + pq_code * pq_len + subvec_idx];
+
+        float query_val = query[i];
+        float vq_val = vq_center[i];
+        thread_distance += query_val * (vq_val + pq_val);
+    }
+
+    shared_distance[tid] = thread_distance;
+    __syncthreads();
+
+    // Reduce within block
+    for (int s = threads_per_block / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            shared_distance[tid] += shared_distance[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // Compute final similarity
+    if (tid == 0) {
+        float total_distance = shared_distance[0];
+        similarities[node_idx] = (1 + total_distance) / 2;
+    }
+}
+
+void compute_dp_similarities(
+        raft::device_resources const& res,
+        const float* d_query,
+        const jpq_dataset<float, int64_t>& jpq_data,
+        const int32_t* host_node_ids,
+        float* host_similarities,
+        int64_t n_nodes)
+{
+    cudaStream_t stream = res.get_stream();
+
+    // Copy node ids to device
+    auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, n_nodes);
+    raft::copy(d_node_ids.data_handle(), host_node_ids, n_nodes, stream);
+
+    // Allocate device memory for similarities
+    auto d_similarities = raft::make_device_vector<float, int64_t>(res, n_nodes);
+
+    // Launch kernel to compute similarities
+    int block_size = MAX_BLOCK_SIZE;
+    compute_dp_similarities_kernel<<<n_nodes, block_size, 0, stream>>>(
+            d_query,
+            jpq_data.vq_center.data_handle(),
+            jpq_data.pq_codebook.data_handle(),
+            jpq_data.codepoints.data_handle(),
+            d_node_ids.data_handle(),
+            d_similarities.data_handle(),
+            jpq_data.pq_dim(),
+            jpq_data.pq_len,
+            n_nodes,
+            jpq_data.dim()
     );
 
     // Copy results back to host
@@ -470,6 +566,29 @@ extern "C" {
         delete adc_handle;
     }
 
+    jpq_query_t* prepare_query(jpq_dataset_t* dataset, const float* query) {
+        if (dataset == nullptr) {
+            return nullptr;
+        }
+        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+
+        int dim = dataset->dataset.dim();
+        float* d_query;
+        RAFT_CUDA_TRY(cudaMalloc(&d_query, dim * sizeof(float)));
+        raft::copy(d_query, query, dim, res.get_stream());
+        res.sync_stream();
+        return new jpq_query_t{d_query, dataset};
+    }
+
+    void free_query(jpq_query_t* query_handle) {
+        if (query_handle == nullptr) {
+            return;
+        }
+        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+        RAFT_CUDA_TRY(cudaFree(query_handle->d_query));
+        delete query_handle;
+    }
+
     void compute_dp_similarities_adc(jpq_adc_t* adc_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
         if (adc_handle == nullptr) {
             // print early return
@@ -480,5 +599,15 @@ extern "C" {
         compute_dp_similarities_adc(res, adc_handle->lut, adc_handle->dataset->dataset, node_ids, similarities, n_nodes);
 
         res.sync_stream();
+    }
+
+    void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
+        if (query_handle == nullptr) {
+            // print early return
+            std::cout << "query_handle is null" << std::endl;
+            return;
+        }
+        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+        compute_dp_similarities(res, query_handle->d_query, query_handle->dataset->dataset, node_ids, similarities, n_nodes);
     }
 }
