@@ -183,7 +183,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath) {
-        return GPUPQVectors.load(pqVectorsPath);
+    public CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath, int degree) {
+        return GPUPQVectors.load(pqVectorsPath, degree);
     }
 }

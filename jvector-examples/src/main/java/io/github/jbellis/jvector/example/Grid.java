@@ -477,7 +477,7 @@ public class Grid {
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
-                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath);
+                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, index.maxDegree());
             }
         }
 

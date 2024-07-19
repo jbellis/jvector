@@ -1181,7 +1181,8 @@ public class NativeGpuOps {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeGpuOps.C_POINTER,
             NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_POINTER
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_LONG
         );
 
         public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("prepare_adc_query");
@@ -1192,7 +1193,7 @@ public class NativeGpuOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
      * }
      */
     public static FunctionDescriptor prepare_adc_query$descriptor() {
@@ -1202,7 +1203,7 @@ public class NativeGpuOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
      * }
      */
     public static MethodHandle prepare_adc_query$handle() {
@@ -1212,7 +1213,7 @@ public class NativeGpuOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
      * }
      */
     public static MemorySegment prepare_adc_query$address() {
@@ -1221,16 +1222,16 @@ public class NativeGpuOps {
 
     /**
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
      * }
      */
-    public static MemorySegment prepare_adc_query(MemorySegment dataset, MemorySegment query) {
+    public static MemorySegment prepare_adc_query(MemorySegment dataset, MemorySegment query, long max_nodes) {
         var mh$ = prepare_adc_query.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("prepare_adc_query", dataset, query);
+                traceDowncall("prepare_adc_query", dataset, query, max_nodes);
             }
-            return (MemorySegment)mh$.invokeExact(dataset, query);
+            return (MemorySegment)mh$.invokeExact(dataset, query, max_nodes);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

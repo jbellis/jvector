@@ -23,7 +23,6 @@ import io.github.jbellis.jvector.vector.cnative.NativeGpuOps;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
-import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -33,16 +32,18 @@ public class GPUPQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ThreadLocal<VectorFloat<?>> reusableResults;
 
-    private MemorySegment pqVectorStruct;
+    private final MemorySegment pqVectorStruct;
+    private final int degree;
 
-    private GPUPQVectors(MemorySegment pqVectorStruct) {
+    private GPUPQVectors(MemorySegment pqVectorStruct, int degree) {
         this.pqVectorStruct = pqVectorStruct;
+        this.degree = degree;
         this.reusableResults = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(128)); // DEMOFIXME: use real degree
     }
 
-    public static GPUPQVectors load(Path pqVectorsPath) {
+    public static GPUPQVectors load(Path pqVectorsPath, int degree) {
         MemorySegment pqVectorStruct = NativeGpuOps.load_pq_vectors(MemorySegment.ofArray(pqVectorsPath.toString().getBytes()));
-        return new GPUPQVectors(pqVectorStruct);
+        return new GPUPQVectors(pqVectorStruct, degree);
     }
 
     @Override
@@ -72,7 +73,7 @@ public class GPUPQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        MemorySegment loadedQuery = NativeGpuOps.prepare_adc_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get());
+        MemorySegment loadedQuery = NativeGpuOps.prepare_adc_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get(), degree);
         return new GPUApproximateScoreFunction() {
             private final VectorFloat<?> results = reusableResults.get();
             @Override

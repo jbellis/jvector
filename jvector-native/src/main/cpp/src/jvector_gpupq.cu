@@ -116,6 +116,9 @@ struct jpq_adc_t {
     float* lut;
     int64_t dim;
     jpq_dataset_t* dataset;
+    // scratch space for kernel
+    raft::device_vector<int32_t, int64_t> d_node_ids;
+    raft::device_vector<float, int64_t> d_similarities;
 };
 
 struct jpq_query_t {
@@ -234,18 +237,11 @@ void compute_dp_similarities_adc(
         raft::device_resources const& res,
         float* adc_lut,
         const jpq_dataset<float, int64_t>& jpq_data,
-        const int32_t* host_node_ids,
-        float* host_similarities,
+        const int32_t* d_node_ids,
+        float* d_similarities,
         int64_t n_nodes)
 {
     cudaStream_t stream = res.get_stream();
-
-    // Copy node ids to device
-    auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, n_nodes);
-    raft::copy(d_node_ids.data_handle(), host_node_ids, n_nodes, stream);
-
-    // Allocate device memory for similarities
-    auto d_similarities = raft::make_device_vector<float, int64_t>(res, n_nodes);
 
     // Launch kernel to compute similarities
     int64_t pq_dim = jpq_data.pq_dim();
@@ -255,15 +251,11 @@ void compute_dp_similarities_adc(
     compute_dp_similarities_adc_kernel<<<grid_size, block_size, 0, stream>>>(
             adc_lut,
             jpq_data.codepoints.data_handle(),
-            d_node_ids.data_handle(),
-            d_similarities.data_handle(),
+            d_node_ids,
+            d_similarities,
             pq_dim,
             n_nodes
     );
-
-    // Copy results back to host
-    raft::copy(host_similarities, d_similarities.data_handle(), n_nodes, stream);
-    res.sync_stream();
 }
 
 __global__ void compute_dp_similarities_kernel(
@@ -544,7 +536,7 @@ extern "C" {
         delete dataset;
     }
 
-    jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* query) {
+    jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* query, int64_t max_nodes) {
         if (dataset == nullptr) {
             return nullptr;
         }
@@ -554,8 +546,11 @@ extern "C" {
         auto d_query = raft::make_device_vector<float, int64_t>(res, dim);
         raft::copy(d_query.data_handle(), query, dim, res.get_stream());
         float* lut = compute_dp_adc_setup(res, d_query, dataset->dataset);
+        auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, max_nodes);
+        auto d_similarities = raft::make_device_vector<float, int64_t>(res, max_nodes);
+
         res.sync_stream();
-        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset};
+        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset, std::move(d_node_ids), std::move(d_similarities)};
         return adc_handle;
     }
 
@@ -602,19 +597,26 @@ extern "C" {
 
     void compute_dp_similarities_adc(jpq_adc_t* adc_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
         if (adc_handle == nullptr) {
-            // print early return
             std::cout << "adc_handle is null" << std::endl;
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        compute_dp_similarities_adc(res, adc_handle->lut, adc_handle->dataset->dataset, node_ids, similarities, n_nodes);
 
+        raft::copy(adc_handle->d_node_ids.data_handle(), node_ids, n_nodes, res.get_stream());
+        compute_dp_similarities_adc(res,
+                                    adc_handle->lut,
+                                    adc_handle->dataset->dataset,
+                                    adc_handle->d_node_ids.data_handle(),
+                                    adc_handle->d_similarities.data_handle(),
+                                    n_nodes);
+
+        // Copy results back to host
+        raft::copy(similarities, adc_handle->d_similarities.data_handle(), n_nodes, res.get_stream());
         res.sync_stream();
     }
 
     void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
         if (query_handle == nullptr) {
-            // print early return
             std::cout << "query_handle is null" << std::endl;
             return;
         }

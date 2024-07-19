@@ -41,7 +41,7 @@ public class GPUTest {
         testWithOnes(dataset);
 
         // Benchmark random queries
-        benchmarkRaw(dataset);
+//        benchmarkRaw(dataset);
         benchmarkADC(dataset);
 
         NativeGpuOps.free_jpq_dataset(dataset);
@@ -72,7 +72,7 @@ public class GPUTest {
         }
 
         // Compute similarities with ADC
-        MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get());
+        MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIds.length);
         similarities = vts.createFloatVector(nodeIds.length);
         NativeGpuOps.compute_dp_similarities_adc(prepared,
                                                  MemorySegment.ofArray(nodeIds),
@@ -127,7 +127,7 @@ public class GPUTest {
                 q.set(j, R.nextFloat() * 2 - 1);
             }
 
-            MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get());
+            MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIds.length);
 
             for (int j = 0; j < 50; j++) {
                 // Generate random node IDs
