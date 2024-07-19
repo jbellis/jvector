@@ -16,16 +16,16 @@
 
 package io.github.jbellis.jvector.example;
 
-import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
@@ -35,7 +35,6 @@ import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
-import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
@@ -45,12 +44,12 @@ import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.GPUPQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtilSupport;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.Int2ObjectHashMap;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -60,19 +59,20 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 
@@ -86,6 +86,10 @@ public class Grid {
 
     private static final String dirPrefix = "BenchGraphDir";
 
+    private static final double centroidFraction = 0.16; // TODO tune this for GPU
+    private static final int nCentroidsPerVector = 4; // TODO replace with closure assignment
+    private static final int searchCentroids = 8; // TODO query pruning
+
     static void runAll(DataSet ds,
                        List<Integer> mGrid,
                        List<Integer> efConstructionGrid,
@@ -96,280 +100,131 @@ public class Grid {
     {
         var testDirectory = Files.createTempDirectory(dirPrefix);
         try {
-            for (int M : mGrid) {
-                for (int efC : efConstructionGrid) {
-                    for (var bc : buildCompressors) {
-                        var compressor = getCompressor(bc, ds);
-                        runOneGraph(featureSets, M, efC, compressor, compressionGrid, efSearchFactor, ds, testDirectory);
-                    }
-                }
-            }
+            runOne(ds, testDirectory);
         } finally {
             Files.delete(testDirectory);
             cachedCompressors.clear();
         }
     }
 
-    static void runOneGraph(List<? extends Set<FeatureId>> featureSets,
-                            int M,
-                            int efConstruction,
-                            VectorCompressor<?> buildCompressor,
-                            List<Function<DataSet, CompressorParameters>> compressionGrid,
-                            List<Double> efSearchOptions,
-                            DataSet ds,
-                            Path testDirectory) throws IOException
+    static void runOne(DataSet ds, Path testDirectory) throws IOException
     {
-        Map<Set<FeatureId>, GraphIndex> indexes;
-        if (buildCompressor == null) {
-            indexes = buildInMemory(featureSets, M, efConstruction, ds, testDirectory);
-        } else {
-            indexes = buildOnDisk(featureSets, M, efConstruction, ds, testDirectory, buildCompressor);
-        }
-
-        try {
-            for (var cpSupplier : compressionGrid) {
-                var compressor = getCompressor(cpSupplier, ds);
-                CompressedVectors cv;
-                if (compressor == null) {
-                    cv = null;
-                    System.out.format("Uncompressed vectors%n");
-                } else {
-                    long start = System.nanoTime();
-                    var quantizedVectors = compressor.encodeAll(ds.getBaseRavv());
-                    cv = compressor.createCompressedVectors(quantizedVectors);
-                    System.out.format("%s encoded %d vectors [%.2f MB] in %.2fs%n", compressor, ds.baseVectors.size(), (cv.ramBytesUsed() / 1024f / 1024f), (System.nanoTime() - start) / 1_000_000_000.0);
-                }
-
-                indexes.forEach((features, index) -> {
-                    try (var cs = new ConfiguredSystem(ds, index instanceof OnDiskGraphIndex ? new CachingGraphIndex((OnDiskGraphIndex) index) : index, cv,
-                                                       index instanceof OnDiskGraphIndex ? ((OnDiskGraphIndex) index).getFeatureSet() : Set.of())) {
-                        testConfiguration(cs, efSearchOptions);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-            }
-            for (var index : indexes.values()) {
-                index.close();
-            }
-        } finally {
-            for (int n = 0; n < featureSets.size(); n++) {
-                Files.deleteIfExists(testDirectory.resolve("graph" + n));
-            }
-        }
+        var ivf = IVFIndex.build(ds);
+        long start = System.nanoTime();
+        var topK = ds.groundTruth.get(0).size();
+        var pqr = performQueries(ivf, ds, topK, 2);
+        var recall = ((double) pqr.topKFound) / (2 * ds.queryVectors.size() * topK);
+        System.out.format(" Query top %d recall %.4f in %.2fs after %,d nodes visited%n",
+                          topK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
     }
 
-    private static Map<Set<FeatureId>, GraphIndex> buildOnDisk(List<? extends Set<FeatureId>> featureSets,
-                                                               int M,
-                                                               int efConstruction,
-                                                               DataSet ds,
-                                                               Path testDirectory,
-                                                               VectorCompressor<?> buildCompressor)
-            throws IOException
-    {
-        var floatVectors = ds.getBaseRavv();
+    static class IVFIndex {
+        private final GraphIndex index;
+        private final RandomAccessVectorValues ravv;
+        private final Int2ObjectHashMap<int[]> postings;
+        private final ExplicitThreadLocal<GraphSearcher> searchers;
+        private final VectorSimilarityFunction vsf;
 
-        var quantized = buildCompressor.encodeAll(floatVectors);
-        var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
-        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
-
-        // use the inline vectors index as the score provider for graph construction
-        Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
-        Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers = new HashMap<>();
-        OnDiskGraphIndexWriter scoringWriter = null;
-        int n = 0;
-        for (var features : featureSets) {
-            var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, ds, pq.getProductQuantization());
-            var writer = bws.builder.build();
-            writers.put(features, writer);
-            suppliers.put(features, bws.suppliers);
-            if (Stream.of(FeatureId.INLINE_PQ, FeatureId.INLINE_VECTORS, FeatureId.LVQ).anyMatch(features::contains)) {
-                scoringWriter = writer;
-            }
-        }
-        if (scoringWriter == null) {
-            throw new IllegalStateException("No inline vectors specified to perform scoring with");
+        public IVFIndex(GraphIndex index, RandomAccessVectorValues ravv, Int2ObjectHashMap<int[]> postings, VectorSimilarityFunction vsf) {
+            this.index = index;
+            this.ravv = ravv;
+            this.postings = postings;
+            searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(index));
+            this.vsf = vsf;
         }
 
-        // build the graph incrementally
-        long start = System.nanoTime();
-        var vv = floatVectors.threadLocalSupplier();
-        PhysicalCoreExecutor.pool().submit(() -> {
-            IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
-                writers.forEach((features, writer) -> {
-                    try {
-                        var stateMap = new EnumMap<FeatureId, Feature.State>(FeatureId.class);
-                        suppliers.get(features).forEach((featureId, supplier) -> {
-                            stateMap.put(featureId, supplier.apply(node));
-                        });
-                        writer.writeInline(node, stateMap);
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                });
-                builder.addGraphNode(node, vv.get().getVector(node));
-            });
-        }).join();
-        builder.cleanup();
-        // write the edge lists and close the writers
-        // if our feature set contains Fused ADC, we need a Fused ADC write-time supplier (as we don't have neighbor information during writeInline)
-        writers.entrySet().stream().parallel().forEach(entry -> {
-            var writer = entry.getValue();
-            var features = entry.getKey();
-            Map<FeatureId, IntFunction<Feature.State>> writeSuppliers;
-            if (features.contains(FeatureId.FUSED_ADC)) {
-                writeSuppliers = new EnumMap<>(FeatureId.class);
-                var view = builder.getGraph().getView();
-                writeSuppliers.put(FeatureId.FUSED_ADC, ordinal -> new FusedADC.State(view, pq, ordinal));
-            } else {
-                writeSuppliers = Map.of();
-            }
-            try {
-                writer.write(writeSuppliers);
-                writer.close();
+        public static IVFIndex build(DataSet ds) {
+            // build the graph index
+            long start = System.nanoTime();
+            var centroids = selectCentroids(ds.getBaseRavv(), centroidFraction);
+            OnHeapGraphIndex index;
+            try (var builder = new GraphIndexBuilder(ds.getBaseRavv(), ds.similarityFunction, 32, 100, 1.2f, 1.2f)) {
+                index = builder.build(centroids);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-        });
-        builder.close();
-        System.out.format("Build and write %s in %ss%n", featureSets, (System.nanoTime() - start) / 1_000_000_000.0);
+            System.out.printf("Graph index built in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        // open indexes
-        Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
-        n = 0;
-        for (var features : featureSets) {
-            var graphPath = testDirectory.resolve("graph" + n++);
-            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
-            indexes.put(features, index);
+            // assign vectors to centroids
+            start = System.nanoTime();
+            var postings = new ConcurrentHashMap<Integer, Set<Integer>>();
+
+            ThreadLocal<GraphSearcher> searchers = ThreadLocal.withInitial(() -> new GraphSearcher(index));
+            IntStream.range(0, ds.getBaseRavv().size()).parallel().forEach(i -> {
+                var v = ds.getBaseRavv().getVector(i);
+                var ssp = SearchScoreProvider.exact(v, ds.similarityFunction, ds.getBaseRavv());
+                var sr = searchers.get().search(ssp, nCentroidsPerVector, Bits.ALL);
+                for (var ns : sr.getNodes()) {
+                    postings.computeIfAbsent(ns.node, __ -> ConcurrentHashMap.newKeySet()).add(i);
+                }
+            });
+            var optimizedPostings = new Int2ObjectHashMap<int[]>();
+            postings.forEach((k, v) -> optimizedPostings.put(k, v.stream().mapToInt(Integer::intValue).toArray()));
+            System.out.printf("Assigned vectors to centroids in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
+
+            return new IVFIndex(index, ds.getBaseRavv(), optimizedPostings, ds.similarityFunction);
         }
-        return indexes;
-    }
 
-    private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features,
-                                                             OnHeapGraphIndex onHeapGraph,
-                                                             Path outPath,
-                                                             DataSet dataset,
-                                                             ProductQuantization pq)
-            throws FileNotFoundException
-    {
-        var floatVectors = dataset.getBaseRavv();
-        var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(new OrdinalMapper.IdentityMapper());
-        Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
-        for (var featureId : features) {
-            switch (featureId) {
-                case INLINE_VECTORS:
-                    builder.with(new InlineVectors(floatVectors.dimension()));
-                    suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
-                    break;
-                case INLINE_PQ:
-                    var pqRerank = (ProductQuantization) getCompressor(ds -> new CompressorParameters.PQParameters(ds.getDimension(), 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED), dataset);
-                    builder.with(new InlinePQ(pqRerank));
-                    if (pq == null) {
-                        // building in memory -- pre-encode the vectors up front so we don't get bottlenecked on single-threaded encode
-                        var allEncoded = pqRerank.encodeAll(floatVectors);
-                        suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(allEncoded[ordinal]));
-                    } else {
-                        suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(pqRerank.encode(floatVectors.getVector(ordinal))));
-                    }
-                    break;
-                case LVQ:
-                    var lvq = LocallyAdaptiveVectorQuantization.compute(floatVectors);
-                    builder.with(new LVQ(lvq));
-                    suppliers.put(FeatureId.LVQ, ordinal -> new LVQ.State(lvq.encode(floatVectors.getVector(ordinal))));
-                    break;
-                case FUSED_ADC:
-                    if (pq == null) {
-                        System.out.println("Skipping Fused ADC feature due to null ProductQuantization");
+        public SearchResult search(VectorFloat<?> queryVector, int topK, int nCentroids) {
+            var searcher = searchers.get();
+            var ssp = SearchScoreProvider.exact(queryVector, vsf, ravv);
+            Set<Integer> allPostings = ConcurrentHashMap.newKeySet();
+            SearchResult centroidsResult = null;
+            // search until we find a non-empty centroid
+            while (true)
+            {
+                if (centroidsResult == null) {
+                    centroidsResult = searcher.search(ssp, nCentroids, Bits.ALL);
+                } else {
+                    centroidsResult = searcher.resume(nCentroids, nCentroids);
+                }
+                // combine results from all centroids
+                for (var ns : centroidsResult.getNodes()) {
+                    var subPostings = postings.get(ns.node);
+                    if (subPostings == null) {
                         continue;
                     }
-                    // no supplier as these will be used for writeInline, when we don't have enough information to fuse neighbors
-                    builder.with(new FusedADC(onHeapGraph.maxDegree(), pq));
+                    allPostings.addAll(Arrays.stream(subPostings).boxed().collect(Collectors.toSet()));
+                }
+                if (!allPostings.isEmpty()) {
                     break;
+                }
             }
+            // sort postings by score
+            var scoredPostings = allPostings.parallelStream()
+                    .map(i -> new SearchResult.NodeScore(i, vsf.compare(queryVector, ravv.getVector(i))))
+                    .sorted((a, b) -> Float.compare(b.score, a.score))
+                    .limit(topK)
+                    .toArray(SearchResult.NodeScore[]::new);
+            Arrays.sort(scoredPostings, (a, b) -> Float.compare(b.score, a.score));
+            return new SearchResult(Arrays.stream(scoredPostings).limit(topK).toArray(SearchResult.NodeScore[]::new),
+                                    centroidsResult.getVisitedCount() + allPostings.size(),
+                                    allPostings.size(),
+                                    Float.POSITIVE_INFINITY);
         }
-        return new BuilderWithSuppliers(builder, suppliers);
     }
 
-    private static class BuilderWithSuppliers {
-        public final OnDiskGraphIndexWriter.Builder builder;
-        public final Map<FeatureId, IntFunction<Feature.State>> suppliers;
-
-        public BuilderWithSuppliers(OnDiskGraphIndexWriter.Builder builder, Map<FeatureId, IntFunction<Feature.State>> suppliers) {
-            this.builder = builder;
-            this.suppliers = suppliers;
+    /**
+     * @return the centroids to which we will assign the rest of the vectors
+     */
+    private static RandomAccessVectorValues selectCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
+        // this creates redundant indexes (since we are using source vectors as centroids, each will also
+        // end up assigned to itself in the posting lists)
+        // we will fix this by switching to HBC centroid selection
+        //
+        // in the meantime: this is worse than i thought, only about 20% of the centroids get all of the vectors mapped to them
+        int nCentroids = (int) (baseRavv.size() * centroidFraction);
+        Set<VectorFloat<?>> selected = ConcurrentHashMap.newKeySet();
+        var R = new Random();
+        while (selected.size() < nCentroids) {
+            selected.add(baseRavv.getVector(R.nextInt(baseRavv.size())));
         }
-    }
-
-    private static Map<Set<FeatureId>, GraphIndex> buildInMemory(List<? extends Set<FeatureId>> featureSets,
-                                                                 int M,
-                                                                 int efConstruction,
-                                                                 DataSet ds,
-                                                                 Path testDirectory)
-            throws IOException
-    {
-        var floatVectors = ds.getBaseRavv();
-        Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
-        long start;
-        var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
-        OnHeapGraphIndex onHeapGraph;
-        start = System.nanoTime();
-        var cachedEdgesPath = Path.of("/tmp", ds.name + ".edges");
-        if (Files.exists(cachedEdgesPath)) {
-            builder.load(new SimpleReader(cachedEdgesPath));
-            onHeapGraph = builder.getGraph();
-            System.out.format("Loaded %s in %.2fs%n", cachedEdgesPath, (System.nanoTime() - start) / 1_000_000_000.0);
-        } else {
-            onHeapGraph = builder.build(floatVectors);
-            System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
-                              "full res",
-                              M,
-                              efConstruction,
-                              (System.nanoTime() - start) / 1_000_000_000.0,
-                              onHeapGraph.getAverageDegree(),
-                              builder.getAverageShortEdges());
-            try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(cachedEdgesPath)))) {
-                onHeapGraph.save(out);
-            }
-        }
-        int n = 0;
-        for (var features : featureSets) {
-            if (features.contains(FeatureId.FUSED_ADC)) {
-                System.out.println("Skipping Fused ADC feature when building in memory");
-                continue;
-            }
-            var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, ds, null);
-            try (var writer = bws.builder.build()) {
-                start = System.nanoTime();
-                writer.write(bws.suppliers);
-                System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
-            }
-
-            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
-            indexes.put(features, index);
-        }
-        return indexes;
+        List<VectorFloat<?>> L = new ArrayList<>(selected);
+        return new ListRandomAccessVectorValues(L, baseRavv.dimension());
     }
 
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
     static final Map<String, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
-
-    private static void testConfiguration(ConfiguredSystem cs, List<Double> efSearchOptions) {
-        var topK = cs.ds.groundTruth.get(0).size();
-        System.out.format("Using %s:%n", cs.index);
-        for (var overquery : efSearchOptions) {
-            var start = System.nanoTime();
-            int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 2);
-            var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
-            System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                              topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-
-        }
-    }
 
     private static VectorCompressor<?> getCompressor(Function<DataSet, CompressorParameters> cpSupplier, DataSet ds) {
         var cp = cpSupplier.apply(ds);
@@ -425,22 +280,17 @@ public class Grid {
         return topKCorrect(topK, a, gt);
     }
 
-    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
+    private static ResultSummary performQueries(IVFIndex ivf, DataSet ds, int topK, int queryRuns) {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
-            IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
-                var queryVector = cs.ds.queryVectors.get(i);
+            IntStream.range(0, ds.queryVectors.size()).parallel().forEach(i -> {
+                var queryVector = ds.queryVectors.get(i);
                 SearchResult sr;
-                var searcher = cs.getSearcher();
-                var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
-                if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
-                    ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
-                }
+                sr = ivf.search(queryVector, topK, searchCentroids);
 
                 // process search result
-                var gt = cs.ds.groundTruth.get(i);
+                var gt = ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
                 nodesVisited.add(sr.getVisitedCount());
