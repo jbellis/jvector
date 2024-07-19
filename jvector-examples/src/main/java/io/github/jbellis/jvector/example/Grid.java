@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.example;
 
+import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
@@ -285,15 +286,26 @@ public class Grid {
         long start;
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
+        OnHeapGraphIndex onHeapGraph;
         start = System.nanoTime();
-        var onHeapGraph = builder.build(floatVectors);
-        System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
-                          "full res",
-                          M,
-                          efConstruction,
-                          (System.nanoTime() - start) / 1_000_000_000.0,
-                          onHeapGraph.getAverageDegree(),
-                          builder.getAverageShortEdges());
+        var cachedEdgesPath = Path.of("/tmp", ds.name + ".edges");
+        if (Files.exists(cachedEdgesPath)) {
+            builder.load(new SimpleReader(cachedEdgesPath));
+            onHeapGraph = builder.getGraph();
+            System.out.format("Loaded %s in %.2fs%n", cachedEdgesPath, (System.nanoTime() - start) / 1_000_000_000.0);
+        } else {
+            onHeapGraph = builder.build(floatVectors);
+            System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+                              "full res",
+                              M,
+                              efConstruction,
+                              (System.nanoTime() - start) / 1_000_000_000.0,
+                              onHeapGraph.getAverageDegree(),
+                              builder.getAverageShortEdges());
+            try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(cachedEdgesPath)))) {
+                onHeapGraph.save(out);
+            }
+        }
         int n = 0;
         for (var features : featureSets) {
             if (features.contains(FeatureId.FUSED_ADC)) {
