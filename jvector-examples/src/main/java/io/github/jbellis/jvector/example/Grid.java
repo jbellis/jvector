@@ -64,7 +64,6 @@ public class Grid {
     private static final String dirPrefix = "BenchGraphDir";
 
     private static final double centroidFraction = 0.16; // TODO tune this for GPU
-    private static final int nCentroidsPerVector = 4; // TODO replace with closure assignment
     private static final int searchCentroids = 8; // TODO query pruning
 
     static void runAll(DataSet ds,
@@ -148,12 +147,26 @@ public class Grid {
 
         private static void assignVectorToClusters(int vectorId, SearchResult sr, ConcurrentHashMap<Integer, Set<Integer>> postings) {
             float baseScore = sr.getNodes()[0].score;
+            List<SearchResult.NodeScore> assignedCentroids = new ArrayList<>();
+
+            outer:
             for (int i = 0; i < sr.getNodes().length && i < MAX_ASSIGNMENTS; i++) {
                 SearchResult.NodeScore ns = sr.getNodes()[i];
                 if (ns.score >= baseScore * (1 + CLOSURE_THRESHOLD)) {
                     break;
                 }
+
+                // RNG rule is like HNSW diversity:
+                // Before assigning a vector to a centroid, we check if there's any previously assigned centroid
+                // that's closer to both the vector and the candidate centroid.  If so, we skip the assignment.
+                for (SearchResult.NodeScore assigned : assignedCentroids) {
+                    if (assigned.score <= ns.score && assigned.score <= baseScore) {
+                        continue outer;
+                    }
+                }
+
                 postings.computeIfAbsent(ns.node, __ -> ConcurrentHashMap.newKeySet()).add(vectorId);
+                assignedCentroids.add(ns);
             }
         }
 
