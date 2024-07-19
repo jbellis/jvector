@@ -55,6 +55,8 @@ void run_jpq_test_cohere(void);
 
 void initialize(void);
 
+float* allocate_results(int32_t length);
+
 #ifdef __cplusplus
 }
 #endif
