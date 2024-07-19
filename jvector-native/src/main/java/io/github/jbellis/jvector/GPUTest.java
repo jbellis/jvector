@@ -18,7 +18,6 @@ package io.github.jbellis.jvector;
 
 import io.github.jbellis.jvector.vector.MemorySegmentVectorFloat;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.cnative.LibraryLoader;
 import io.github.jbellis.jvector.vector.cnative.NativeGpuOps;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
@@ -33,8 +32,8 @@ public class GPUTest {
     private static final int DIM = 1024;
 
     public static void main(String[] args) throws IOException {
-        LibraryLoader.loadJvector();
-        NativeGpuOps.initialize();
+        // unnecessary since VTS calls it
+        // LibraryLoader.loadJvector();
 
         MemorySegment dataset = NativeGpuOps.load_pq_vectors(MemorySegment.ofArray("cohere.pqv".getBytes()));
 
