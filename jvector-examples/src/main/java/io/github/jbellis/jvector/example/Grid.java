@@ -26,25 +26,16 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.FusedADC;
-import io.github.jbellis.jvector.graph.disk.InlinePQ;
-import io.github.jbellis.jvector.graph.disk.InlineVectors;
-import io.github.jbellis.jvector.graph.disk.LVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
-import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
-import io.github.jbellis.jvector.vector.GPUPQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtilSupport;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -53,7 +44,6 @@ import org.agrona.collections.Int2ObjectHashMap;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -61,7 +51,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,11 +59,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
-import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 
 /**
  * Tests a grid of configurations against a dataset
@@ -226,46 +212,6 @@ public class Grid {
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
     static final Map<String, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
 
-    private static VectorCompressor<?> getCompressor(Function<DataSet, CompressorParameters> cpSupplier, DataSet ds) {
-        var cp = cpSupplier.apply(ds);
-        if (!cp.supportsCaching()) {
-            return cp.computeCompressor(ds);
-        }
-
-        var fname = cp.idStringFor(ds);
-        return cachedCompressors.computeIfAbsent(fname, __ -> {
-            var path = Paths.get(pqCacheDir).resolve(fname);
-            if (path.toFile().exists()) {
-                try {
-                    try (var readerSupplier = ReaderSupplierFactory.open(path)) {
-                        try (var rar = readerSupplier.get()) {
-                            var pq = ProductQuantization.load(rar);
-                            System.out.format("%s loaded from %s%n", pq, fname);
-                            return pq;
-                        }
-                    }
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            }
-
-            var start = System.nanoTime();
-            var compressor = cp.computeCompressor(ds);
-            System.out.format("%s build in %.2fs,%n", compressor, (System.nanoTime() - start) / 1_000_000_000.0);
-            if (cp.supportsCaching()) {
-                try {
-                    Files.createDirectories(path.getParent());
-                    try (var writer = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
-                        compressor.write(writer, OnDiskGraphIndex.CURRENT_VERSION);
-                    }
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            }
-            return compressor;
-        });
-    }
-
     private static long topKCorrect(int topK, int[] resultNodes, Set<Integer> gt) {
         int count = Math.min(resultNodes.length, topK);
         var resultSet = Arrays.stream(resultNodes, 0, count)
@@ -297,67 +243,6 @@ public class Grid {
             });
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
-    }
-
-    static class ConfiguredSystem implements AutoCloseable {
-        DataSet ds;
-        GraphIndex index;
-        CompressedVectors cv;
-        Set<FeatureId> features;
-        CompressedVectors acceleratedPQV;
-
-        private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
-            return new GraphSearcher(index);
-        });
-
-        ConfiguredSystem(DataSet ds, GraphIndex index, CompressedVectors cv, Set<FeatureId> features) {
-            this.ds = ds;
-            this.index = index;
-            this.cv = cv;
-            this.features = features;
-            // DEMOFIXME: forces accelerated PQVectors for GPU demo, this should have better configurability
-            if (cv instanceof PQVectors) {
-                Path pqVectorsPath;
-                // write PQVectors to a temp path
-                try {
-                    pqVectorsPath = Files.createTempFile("pq", ".bin");
-                    try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqVectorsPath)))) {
-                        ((PQVectors) cv).write(out, OnDiskGraphIndex.CURRENT_VERSION);
-                    }
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, index.maxDegree());
-            }
-        }
-
-        public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
-            // if we're not compressing then just use the exact score function
-            if (cv == null) {
-                return SearchScoreProvider.exact(queryVector, ds.similarityFunction, ds.getBaseRavv());
-            }
-
-            var scoringView = (GraphIndex.ScoringView) view;
-            ScoreFunction.ApproximateScoreFunction asf;
-            if (features.contains(FeatureId.FUSED_ADC)) {
-                asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-            } else if (acceleratedPQV != null) {
-                asf = acceleratedPQV.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
-            } else {
-                asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
-            }
-            var rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
-            return new SearchScoreProvider(asf, rr);
-        }
-
-        public GraphSearcher getSearcher() {
-            return searchers.get();
-        }
-
-        @Override
-        public void close() throws Exception {
-            searchers.close();
-        }
     }
 
     static class ResultSummary {
