@@ -429,27 +429,26 @@ public class Grid {
     private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
-        try (var pool = new ForkJoinPool(4 * Runtime.getRuntime().availableProcessors() - 1)) {
-            for (int k = 0; k < queryRuns; k++) {
-                pool.submit(() -> {
-                    IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
-                        var queryVector = cs.ds.queryVectors.get(i);
-                        SearchResult sr;
-                        var searcher = cs.getSearcher();
-                        var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                        sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
-                        if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
-                            ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
-                        }
+        var pool = new ForkJoinPool(4 * Runtime.getRuntime().availableProcessors() - 1);
+        for (int k = 0; k < queryRuns; k++) {
+            pool.submit(() -> {
+                IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
+                    var queryVector = cs.ds.queryVectors.get(i);
+                    SearchResult sr;
+                    var searcher = cs.getSearcher();
+                    var sf = cs.scoreProviderFor(queryVector, searcher.getView());
+                    sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+                    if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
+                        ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
+                    }
 
-                        // process search result
-                        var gt = cs.ds.groundTruth.get(i);
-                        var n = topKCorrect(topK, sr.getNodes(), gt);
-                        topKfound.add(n);
-                        nodesVisited.add(sr.getVisitedCount());
-                    });
+                    // process search result
+                    var gt = cs.ds.groundTruth.get(i);
+                    var n = topKCorrect(topK, sr.getNodes(), gt);
+                    topKfound.add(n);
+                    nodesVisited.add(sr.getVisitedCount());
                 });
-            }
+            });
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
