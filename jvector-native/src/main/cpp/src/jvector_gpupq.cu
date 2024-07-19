@@ -639,12 +639,10 @@ extern "C" {
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
         compute_dp_similarities(res, query_handle->d_query, query_handle->dataset->dataset, node_ids, similarities, n_nodes);
     }
-}
 
-extern "C" {
     float* allocate_results(int32_t length) {
         float* h_ptr = nullptr;  // Host pointer
-        cudaError_t err = cudaMallocHost((void**)&h_ptr, length * sizeof(float));  // Allocate pinned memory
+        cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(float));  // Allocate managed memory
         if (err != cudaSuccess) {
             std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
             return nullptr;
