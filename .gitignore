@@ -40,3 +40,4 @@ jvector-native/src/main/cpp/build/
 
 ## Profilers
 *.nsys-rep
+.aider*
