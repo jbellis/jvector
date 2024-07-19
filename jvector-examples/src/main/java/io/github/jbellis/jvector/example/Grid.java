@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.DataSet;
-import io.github.jbellis.jvector.example.util.ReaderSupplierFactory;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
@@ -27,12 +26,7 @@ import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
-import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.PQVectors;
-import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
@@ -42,13 +36,10 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
@@ -111,6 +102,11 @@ public class Grid {
         private final ExplicitThreadLocal<GraphSearcher> searchers;
         private final VectorSimilarityFunction vsf;
 
+        // Assign vector to the lists of all centroids within this factor of the closest
+        private static final float CLOSURE_THRESHOLD = 10.0f;
+        // Maximum number of assignments for each vector
+        private static final int MAX_ASSIGNMENTS = 8;
+
         public IVFIndex(GraphIndex index, RandomAccessVectorValues ravv, Int2ObjectHashMap<int[]> postings, VectorSimilarityFunction vsf) {
             this.index = index;
             this.ravv = ravv;
@@ -131,7 +127,7 @@ public class Grid {
             }
             System.out.printf("Graph index built in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-            // assign vectors to centroids
+            // assign vectors to centroids with closure
             start = System.nanoTime();
             var postings = new ConcurrentHashMap<Integer, Set<Integer>>();
 
@@ -139,16 +135,26 @@ public class Grid {
             IntStream.range(0, ds.getBaseRavv().size()).parallel().forEach(i -> {
                 var v = ds.getBaseRavv().getVector(i);
                 var ssp = SearchScoreProvider.exact(v, ds.similarityFunction, ds.getBaseRavv());
-                var sr = searchers.get().search(ssp, nCentroidsPerVector, Bits.ALL);
-                for (var ns : sr.getNodes()) {
-                    postings.computeIfAbsent(ns.node, __ -> ConcurrentHashMap.newKeySet()).add(i);
-                }
+                // double MAX_ASSIGNMENTS to push search a bit deeper in the graph
+                var sr = searchers.get().search(ssp, 2 * MAX_ASSIGNMENTS, Bits.ALL);
+                assignVectorToClusters(i, sr, postings);
             });
             var optimizedPostings = new Int2ObjectHashMap<int[]>();
             postings.forEach((k, v) -> optimizedPostings.put(k, v.stream().mapToInt(Integer::intValue).toArray()));
-            System.out.printf("Assigned vectors to centroids in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
+            System.out.printf("Assigned vectors to centroids with closure in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
             return new IVFIndex(index, ds.getBaseRavv(), optimizedPostings, ds.similarityFunction);
+        }
+
+        private static void assignVectorToClusters(int vectorId, SearchResult sr, ConcurrentHashMap<Integer, Set<Integer>> postings) {
+            float baseScore = sr.getNodes()[0].score;
+            for (int i = 0; i < sr.getNodes().length && i < MAX_ASSIGNMENTS; i++) {
+                SearchResult.NodeScore ns = sr.getNodes()[i];
+                if (ns.score >= baseScore * (1 + CLOSURE_THRESHOLD)) {
+                    break;
+                }
+                postings.computeIfAbsent(ns.node, __ -> ConcurrentHashMap.newKeySet()).add(vectorId);
+            }
         }
 
         public SearchResult search(VectorFloat<?> queryVector, int topK, int nCentroids) {
