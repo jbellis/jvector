@@ -448,7 +448,7 @@ public class Grid {
                     topKfound.add(n);
                     nodesVisited.add(sr.getVisitedCount());
                 });
-            });
+            }).join();
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
