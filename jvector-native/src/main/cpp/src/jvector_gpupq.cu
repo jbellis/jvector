@@ -119,7 +119,7 @@ struct jpq_adc_t {
     int64_t dim;
     jpq_dataset_t* dataset;
     // scratch space for kernel
-    raft::device_vector<int32_t, int64_t> d_node_ids;
+    int32_t* d_node_ids;
 };
 
 struct jpq_query_t {
@@ -565,10 +565,10 @@ extern "C" {
         auto d_query = raft::make_device_vector<float, int64_t>(res, dim);
         raft::copy(d_query.data_handle(), query, dim, res.get_stream());
         float* lut = compute_dp_adc_setup(res, d_query, dataset->dataset);
-        auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, max_nodes);
+        int32_t* d_node_ids = nullptr;
+        cudaMallocManaged((void**)&d_node_ids, max_nodes * sizeof(int32_t));  // Allocate managed memory
 
-        res.sync_stream();
-        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset, std::move(d_node_ids)};
+        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset, d_node_ids};
         return adc_handle;
     }
 
@@ -577,6 +577,7 @@ extern "C" {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+        cudaFree(adc_handle->d_node_ids);
         raft::resource::get_workspace_resource(res)->deallocate(
             adc_handle->lut,
             adc_handle->dataset->dataset.pq_dim() * 256 * sizeof(float)
@@ -619,12 +620,12 @@ extern "C" {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-
-        raft::copy(adc_handle->d_node_ids.data_handle(), node_ids, n_nodes, res.get_stream());
+        // memcpy from node_ids to d_node_ids
+        memcpy(adc_handle->d_node_ids, node_ids, n_nodes * sizeof(int32_t));
         compute_dp_similarities_adc(res,
                                     adc_handle->lut,
                                     adc_handle->dataset->dataset,
-                                    adc_handle->d_node_ids.data_handle(),
+                                    adc_handle->d_node_ids,
                                     similarities,
                                     n_nodes);
 
