@@ -100,9 +100,9 @@ public class NativeSimdOps {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_BOOL    );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("check_compatibility");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("check_compatibility"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -124,17 +124,6 @@ public class NativeSimdOps {
     public static MethodHandle check_compatibility$handle() {
         return check_compatibility.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * _Bool check_compatibility()
-     * }
-     */
-    public static MemorySegment check_compatibility$address() {
-        return check_compatibility.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * _Bool check_compatibility()
@@ -163,9 +152,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_INT
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("dot_product_f32");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("dot_product_f32"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -187,17 +176,6 @@ public class NativeSimdOps {
     public static MethodHandle dot_product_f32$handle() {
         return dot_product_f32.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * float dot_product_f32(int preferred_size, const float *a, int aoffset, const float *b, int boffset, int length)
-     * }
-     */
-    public static MemorySegment dot_product_f32$address() {
-        return dot_product_f32.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * float dot_product_f32(int preferred_size, const float *a, int aoffset, const float *b, int boffset, int length)
@@ -226,9 +204,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_INT
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("euclidean_f32");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("euclidean_f32"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -250,17 +228,6 @@ public class NativeSimdOps {
     public static MethodHandle euclidean_f32$handle() {
         return euclidean_f32.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * float euclidean_f32(int preferred_size, const float *a, int aoffset, const float *b, int boffset, int length)
-     * }
-     */
-    public static MemorySegment euclidean_f32$address() {
-        return euclidean_f32.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * float euclidean_f32(int preferred_size, const float *a, int aoffset, const float *b, int boffset, int length)
@@ -288,9 +255,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("bulk_quantized_shuffle_dot_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("bulk_quantized_shuffle_dot_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -312,17 +279,6 @@ public class NativeSimdOps {
     public static MethodHandle bulk_quantized_shuffle_dot_f32_512$handle() {
         return bulk_quantized_shuffle_dot_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void bulk_quantized_shuffle_dot_f32_512(const unsigned char *shuffles, int codebookCount, const char *quantizedPartials, float delta, float minDistance, float *results)
-     * }
-     */
-    public static MemorySegment bulk_quantized_shuffle_dot_f32_512$address() {
-        return bulk_quantized_shuffle_dot_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void bulk_quantized_shuffle_dot_f32_512(const unsigned char *shuffles, int codebookCount, const char *quantizedPartials, float delta, float minDistance, float *results)
@@ -350,9 +306,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("bulk_quantized_shuffle_euclidean_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("bulk_quantized_shuffle_euclidean_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -374,17 +330,6 @@ public class NativeSimdOps {
     public static MethodHandle bulk_quantized_shuffle_euclidean_f32_512$handle() {
         return bulk_quantized_shuffle_euclidean_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void bulk_quantized_shuffle_euclidean_f32_512(const unsigned char *shuffles, int codebookCount, const char *quantizedPartials, float delta, float minDistance, float *results)
-     * }
-     */
-    public static MemorySegment bulk_quantized_shuffle_euclidean_f32_512$address() {
-        return bulk_quantized_shuffle_euclidean_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void bulk_quantized_shuffle_euclidean_f32_512(const unsigned char *shuffles, int codebookCount, const char *quantizedPartials, float delta, float minDistance, float *results)
@@ -416,9 +361,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("bulk_quantized_shuffle_cosine_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("bulk_quantized_shuffle_cosine_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -440,17 +385,6 @@ public class NativeSimdOps {
     public static MethodHandle bulk_quantized_shuffle_cosine_f32_512$handle() {
         return bulk_quantized_shuffle_cosine_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void bulk_quantized_shuffle_cosine_f32_512(const unsigned char *shuffles, int codebookCount, const char *quantizedPartialSums, float sumDelta, float minDistance, const char *quantizedPartialMagnitudes, float magnitudeDelta, float minMagnitude, float queryMagnitudeSquared, float *results)
-     * }
-     */
-    public static MemorySegment bulk_quantized_shuffle_cosine_f32_512$address() {
-        return bulk_quantized_shuffle_cosine_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void bulk_quantized_shuffle_cosine_f32_512(const unsigned char *shuffles, int codebookCount, const char *quantizedPartialSums, float sumDelta, float minDistance, const char *quantizedPartialMagnitudes, float magnitudeDelta, float minMagnitude, float queryMagnitudeSquared, float *results)
@@ -477,9 +411,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_INT
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("assemble_and_sum_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("assemble_and_sum_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -501,17 +435,6 @@ public class NativeSimdOps {
     public static MethodHandle assemble_and_sum_f32_512$handle() {
         return assemble_and_sum_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * float assemble_and_sum_f32_512(const float *data, int dataBase, const unsigned char *baseOffsets, int baseOffsetsLength)
-     * }
-     */
-    public static MemorySegment assemble_and_sum_f32_512$address() {
-        return assemble_and_sum_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * float assemble_and_sum_f32_512(const float *data, int dataBase, const unsigned char *baseOffsets, int baseOffsetsLength)
@@ -540,9 +463,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("calculate_partial_sums_dot_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("calculate_partial_sums_dot_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -564,17 +487,6 @@ public class NativeSimdOps {
     public static MethodHandle calculate_partial_sums_dot_f32_512$handle() {
         return calculate_partial_sums_dot_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void calculate_partial_sums_dot_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
-     * }
-     */
-    public static MemorySegment calculate_partial_sums_dot_f32_512$address() {
-        return calculate_partial_sums_dot_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void calculate_partial_sums_dot_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
@@ -603,9 +515,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("calculate_partial_sums_euclidean_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("calculate_partial_sums_euclidean_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -627,17 +539,6 @@ public class NativeSimdOps {
     public static MethodHandle calculate_partial_sums_euclidean_f32_512$handle() {
         return calculate_partial_sums_euclidean_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void calculate_partial_sums_euclidean_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
-     * }
-     */
-    public static MemorySegment calculate_partial_sums_euclidean_f32_512$address() {
-        return calculate_partial_sums_euclidean_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void calculate_partial_sums_euclidean_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
@@ -667,9 +568,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("calculate_partial_sums_best_dot_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("calculate_partial_sums_best_dot_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -691,17 +592,6 @@ public class NativeSimdOps {
     public static MethodHandle calculate_partial_sums_best_dot_f32_512$handle() {
         return calculate_partial_sums_best_dot_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void calculate_partial_sums_best_dot_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums, float *partialBestDistances)
-     * }
-     */
-    public static MemorySegment calculate_partial_sums_best_dot_f32_512$address() {
-        return calculate_partial_sums_best_dot_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void calculate_partial_sums_best_dot_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums, float *partialBestDistances)
@@ -731,9 +621,9 @@ public class NativeSimdOps {
             NativeSimdOps.C_POINTER
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("calculate_partial_sums_best_euclidean_f32_512");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeSimdOps.findOrThrow("calculate_partial_sums_best_euclidean_f32_512"),
+                    DESC, Linker.Option.critical(true));
     }
 
     /**
@@ -755,17 +645,6 @@ public class NativeSimdOps {
     public static MethodHandle calculate_partial_sums_best_euclidean_f32_512$handle() {
         return calculate_partial_sums_best_euclidean_f32_512.HANDLE;
     }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void calculate_partial_sums_best_euclidean_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums, float *partialBestDistances)
-     * }
-     */
-    public static MemorySegment calculate_partial_sums_best_euclidean_f32_512$address() {
-        return calculate_partial_sums_best_euclidean_f32_512.ADDR;
-    }
-
     /**
      * {@snippet lang=c :
      * void calculate_partial_sums_best_euclidean_f32_512(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums, float *partialBestDistances)

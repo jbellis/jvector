@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.IntStream;
 
 public class GPUTest {
     private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
@@ -41,7 +40,7 @@ public class GPUTest {
         testWithOnes(dataset);
 
         // Benchmark random queries
-//        benchmarkRaw(dataset);
+        // benchmarkRaw(dataset);
         benchmarkADC(dataset);
 
         NativeGpuOps.free_jpq_dataset(dataset);
@@ -57,13 +56,13 @@ public class GPUTest {
             nodeIds[i] = i;
         }
 
-        var similarities = vts.createFloatVector(nodeIds.length);
+        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
 
         // Compute similarities without ADC
         MemorySegment query = NativeGpuOps.prepare_query(dataset, q.get());
         NativeGpuOps.compute_dp_similarities(query,
                                              MemorySegment.ofArray(nodeIds),
-                                             ((MemorySegmentVectorFloat) similarities).get(),
+                                             similarities.get(),
                                              nodeIds.length);
         NativeGpuOps.free_query(query);
         System.out.println("Similarity with ones (raw):");
@@ -73,7 +72,7 @@ public class GPUTest {
 
         // Compute similarities with ADC
         MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIds.length);
-        similarities = vts.createFloatVector(nodeIds.length);
+        similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
         NativeGpuOps.compute_dp_similarities_adc(prepared,
                                                  MemorySegment.ofArray(nodeIds),
                                                  ((MemorySegmentVectorFloat) similarities).get(),
@@ -88,7 +87,7 @@ public class GPUTest {
     private static void benchmarkRaw(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
         int[] nodeIds = new int[200];
-        MemorySegmentVectorFloat similarities = (MemorySegmentVectorFloat) vts.createFloatVector(nodeIds.length);
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
 
         long startTime = System.nanoTime();
@@ -117,7 +116,7 @@ public class GPUTest {
     private static void benchmarkADC(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
         int[] nodeIds = new int[32];  // Changed to 32 as per the ADC benchmark in C++
-        MemorySegmentVectorFloat similarities = (MemorySegmentVectorFloat) vts.createFloatVector(nodeIds.length);
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
 
         long startTime = System.nanoTime();

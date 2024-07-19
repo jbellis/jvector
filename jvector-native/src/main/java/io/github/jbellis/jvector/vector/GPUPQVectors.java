@@ -38,7 +38,7 @@ public class GPUPQVectors implements CompressedVectors {
     private GPUPQVectors(MemorySegment pqVectorStruct, int degree) {
         this.pqVectorStruct = pqVectorStruct;
         this.degree = degree;
-        this.reusableResults = ThreadLocal.withInitial(() -> vectorTypeSupport.createFloatVector(128)); // DEMOFIXME: use real degree
+        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(128).reinterpret(4 * 128))); // DEMOFIXME: use real degree
     }
 
     public static GPUPQVectors load(Path pqVectorsPath, int degree) {

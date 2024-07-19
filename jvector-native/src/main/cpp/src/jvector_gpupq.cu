@@ -120,7 +120,6 @@ struct jpq_adc_t {
     jpq_dataset_t* dataset;
     // scratch space for kernel
     raft::device_vector<int32_t, int64_t> d_node_ids;
-    raft::device_vector<float, int64_t> d_similarities;
 };
 
 struct jpq_query_t {
@@ -328,9 +327,6 @@ void compute_dp_similarities(
     auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, n_nodes);
     raft::copy(d_node_ids.data_handle(), host_node_ids, n_nodes, stream);
 
-    // Allocate device memory for similarities
-    auto d_similarities = raft::make_device_vector<float, int64_t>(res, n_nodes);
-
     // Launch kernel to compute similarities
     int block_size = MAX_BLOCK_SIZE;
     compute_dp_similarities_kernel<<<n_nodes, block_size, 0, stream>>>(
@@ -339,15 +335,13 @@ void compute_dp_similarities(
             jpq_data.pq_codebook.data_handle(),
             jpq_data.codepoints.data_handle(),
             d_node_ids.data_handle(),
-            d_similarities.data_handle(),
+            host_similarities,
             jpq_data.pq_dim(),
             jpq_data.pq_len,
             n_nodes,
             jpq_data.dim()
     );
 
-    // Copy results back to host
-    raft::copy(host_similarities, d_similarities.data_handle(), n_nodes, stream);
     res.sync_stream();
 }
 
@@ -572,10 +566,9 @@ extern "C" {
         raft::copy(d_query.data_handle(), query, dim, res.get_stream());
         float* lut = compute_dp_adc_setup(res, d_query, dataset->dataset);
         auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, max_nodes);
-        auto d_similarities = raft::make_device_vector<float, int64_t>(res, max_nodes);
 
         res.sync_stream();
-        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset, std::move(d_node_ids), std::move(d_similarities)};
+        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset, std::move(d_node_ids)};
         return adc_handle;
     }
 
@@ -632,11 +625,9 @@ extern "C" {
                                     adc_handle->lut,
                                     adc_handle->dataset->dataset,
                                     adc_handle->d_node_ids.data_handle(),
-                                    adc_handle->d_similarities.data_handle(),
+                                    similarities,
                                     n_nodes);
 
-        // Copy results back to host
-        raft::copy(similarities, adc_handle->d_similarities.data_handle(), n_nodes, res.get_stream());
         res.sync_stream();
     }
 
@@ -647,5 +638,17 @@ extern "C" {
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
         compute_dp_similarities(res, query_handle->d_query, query_handle->dataset->dataset, node_ids, similarities, n_nodes);
+    }
+}
+
+extern "C" {
+    float* allocate_results(int32_t length) {
+        float* h_ptr = nullptr;  // Host pointer
+        cudaError_t err = cudaMallocHost((void**)&h_ptr, length * sizeof(float));  // Allocate pinned memory
+        if (err != cudaSuccess) {
+            std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
+            return nullptr;
+        }
+        return h_ptr;
     }
 }
