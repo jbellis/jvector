@@ -119,7 +119,6 @@ struct jpq_adc_t {
     int64_t dim;
     jpq_dataset_t* dataset;
     // scratch space for kernel
-    int32_t* d_node_ids;
 };
 
 struct jpq_query_t {
@@ -323,10 +322,6 @@ void compute_dp_similarities(
 {
     cudaStream_t stream = res.get_stream();
 
-    // Copy node ids to device
-    auto d_node_ids = raft::make_device_vector<int32_t, int64_t>(res, n_nodes);
-    raft::copy(d_node_ids.data_handle(), host_node_ids, n_nodes, stream);
-
     // Launch kernel to compute similarities
     int block_size = MAX_BLOCK_SIZE;
     compute_dp_similarities_kernel<<<n_nodes, block_size, 0, stream>>>(
@@ -334,7 +329,7 @@ void compute_dp_similarities(
             jpq_data.vq_center.data_handle(),
             jpq_data.pq_codebook.data_handle(),
             jpq_data.codepoints.data_handle(),
-            d_node_ids.data_handle(),
+            host_node_ids,
             host_similarities,
             jpq_data.pq_dim(),
             jpq_data.pq_len,
@@ -565,10 +560,8 @@ extern "C" {
         auto d_query = raft::make_device_vector<float, int64_t>(res, dim);
         raft::copy(d_query.data_handle(), query, dim, res.get_stream());
         float* lut = compute_dp_adc_setup(res, d_query, dataset->dataset);
-        int32_t* d_node_ids = nullptr;
-        cudaMallocManaged((void**)&d_node_ids, max_nodes * sizeof(int32_t));  // Allocate managed memory
 
-        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset, d_node_ids};
+        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset};
         return adc_handle;
     }
 
@@ -577,7 +570,6 @@ extern "C" {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        cudaFree(adc_handle->d_node_ids);
         raft::resource::get_workspace_resource(res)->deallocate(
             adc_handle->lut,
             adc_handle->dataset->dataset.pq_dim() * 256 * sizeof(float)
@@ -620,12 +612,10 @@ extern "C" {
             return;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        // memcpy from node_ids to d_node_ids
-        memcpy(adc_handle->d_node_ids, node_ids, n_nodes * sizeof(int32_t));
         compute_dp_similarities_adc(res,
                                     adc_handle->lut,
                                     adc_handle->dataset->dataset,
-                                    adc_handle->d_node_ids,
+                                    node_ids,
                                     similarities,
                                     n_nodes);
 
@@ -644,6 +634,16 @@ extern "C" {
     float* allocate_results(int32_t length) {
         float* h_ptr = nullptr;  // Host pointer
         cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(float));  // Allocate managed memory
+        if (err != cudaSuccess) {
+            std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
+            return nullptr;
+        }
+        return h_ptr;
+    }
+
+    int32_t* allocate_node_ids(int32_t length) {
+        int32_t* h_ptr = nullptr;  // Host pointer
+        cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(int32_t));  // Allocate managed memory
         if (err != cudaSuccess) {
             std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
             return nullptr;

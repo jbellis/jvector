@@ -335,11 +335,7 @@ public class GraphSearcher implements Closeable {
                 // DEMOFIXME: hack, don't get iterator twice
                 if (useMultinode) {
                     var it = view.getNeighborsIterator(topCandidateNode);
-                    var nodeIds = new int[it.size()];
-                    for (int i = 0; i < nodeIds.length; i++) {
-                        nodeIds[i] = it.nextInt();
-                    }
-                    similarities = scoreFunction.similarityTo(nodeIds);
+                    similarities = scoreFunction.similarityTo(it);
                 }
 
                 var it = view.getNeighborsIterator(topCandidateNode);

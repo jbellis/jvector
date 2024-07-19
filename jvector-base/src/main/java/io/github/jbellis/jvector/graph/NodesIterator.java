@@ -49,6 +49,13 @@ public abstract class NodesIterator implements PrimitiveIterator.OfInt {
         return size;
     }
 
+    /**
+     * Create a copy of this iterator
+     */
+    public NodesIterator copy() {
+        throw new UnsupportedOperationException();
+    }
+
     public static NodesIterator fromPrimitiveIterator(PrimitiveIterator.OfInt iterator, int size) {
         return new NodesIterator(size) {
             @Override

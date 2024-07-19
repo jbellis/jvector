@@ -57,6 +57,8 @@ void initialize(void);
 
 float* allocate_results(int32_t length);
 
+int32_t* allocate_node_ids(int32_t length);
+
 #ifdef __cplusplus
 }
 #endif

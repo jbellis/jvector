@@ -1600,6 +1600,53 @@ public class NativeGpuOps {
            throw new AssertionError("should not reach here", ex$);
         }
     }
+
+    private static class allocate_node_ids {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_INT
+        );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("allocate_node_ids"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * int32_t *allocate_node_ids(int32_t length)
+     * }
+     */
+    public static FunctionDescriptor allocate_node_ids$descriptor() {
+        return allocate_node_ids.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * int32_t *allocate_node_ids(int32_t length)
+     * }
+     */
+    public static MethodHandle allocate_node_ids$handle() {
+        return allocate_node_ids.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * int32_t *allocate_node_ids(int32_t length)
+     * }
+     */
+    public static MemorySegment allocate_node_ids(int length) {
+        var mh$ = allocate_node_ids.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("allocate_node_ids", length);
+            }
+            return (MemorySegment)mh$.invokeExact(length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
     private static final long _POSIX_C_SOURCE = 200809L;
     /**
      * {@snippet lang=c :

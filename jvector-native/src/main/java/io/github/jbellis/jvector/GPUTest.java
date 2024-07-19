@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector;
 
+import io.github.jbellis.jvector.vector.MemorySegmentByteSequence;
 import io.github.jbellis.jvector.vector.MemorySegmentVectorFloat;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.cnative.NativeGpuOps;
@@ -51,19 +52,19 @@ public class GPUTest {
         Arrays.fill(ones, 1.0f);
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(ones);
 
-        int[] nodeIds = new int[10];
-        for (int i = 0; i < nodeIds.length; i++) {
-            nodeIds[i] = i;
+        int nodeIdCount = 10;
+        var nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
+        for (int i = 0; i < nodeIdCount; i++) {
+            nodeIds.setLittleEndianInt(i, i);
         }
 
-        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
-
+        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         // Compute similarities without ADC
         MemorySegment query = NativeGpuOps.prepare_query(dataset, q.get());
         NativeGpuOps.compute_dp_similarities(query,
-                                             MemorySegment.ofArray(nodeIds),
+                                             nodeIds.get(),
                                              similarities.get(),
-                                             nodeIds.length);
+                                             nodeIdCount);
         NativeGpuOps.free_query(query);
         System.out.println("Similarity with ones (raw):");
         for (int i = 0; i < similarities.length(); i++) {
@@ -71,12 +72,11 @@ public class GPUTest {
         }
 
         // Compute similarities with ADC
-        MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIds.length);
-        similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
+        MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIdCount);
         NativeGpuOps.compute_dp_similarities_adc(prepared,
-                                                 MemorySegment.ofArray(nodeIds),
-                                                 ((MemorySegmentVectorFloat) similarities).get(),
-                                                 nodeIds.length);
+                                                 nodeIds.get(),
+                                                 similarities.get(),
+                                                 nodeIdCount);
         NativeGpuOps.free_adc_query(prepared);
         System.out.println("Similarity with ones (ADC):");
         for (int i = 0; i < similarities.length(); i++) {
@@ -86,9 +86,10 @@ public class GPUTest {
 
     private static void benchmarkRaw(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
-        int[] nodeIds = new int[200];
-        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
+        int nodeIdCount = 200;
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
+        MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
 
         long startTime = System.nanoTime();
         for (int i = 0; i < 1000_000; i++) {
@@ -98,15 +99,15 @@ public class GPUTest {
             }
 
             // Generate random node IDs
-            for (int j = 0; j < nodeIds.length; j++) {
-                nodeIds[j] = R.nextInt(100_000);
+            for (int j = 0; j < nodeIdCount; j++) {
+                nodeIds.setLittleEndianInt(j, R.nextInt(100_000));
             }
 
             MemorySegment query = NativeGpuOps.prepare_query(dataset, q.get());
             NativeGpuOps.compute_dp_similarities(query,
-                                                 MemorySegment.ofArray(nodeIds),
+                                                 nodeIds.get(),
                                                  similarities.get(),
-                                                 nodeIds.length);
+                                                 nodeIdCount);
             NativeGpuOps.free_query(query);
         }
         long endTime = System.nanoTime();
@@ -115,9 +116,10 @@ public class GPUTest {
 
     private static void benchmarkADC(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
-        int[] nodeIds = new int[32];  // Changed to 32 as per the ADC benchmark in C++
-        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIds.length).reinterpret(nodeIds.length * Float.BYTES));
+        int nodeIdCount = 32; // Changed to 32 as per the ADC benchmark in C++
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
+        MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
 
         long startTime = System.nanoTime();
         for (int i = 0; i < 100_000; i++) {
@@ -126,18 +128,18 @@ public class GPUTest {
                 q.set(j, R.nextFloat() * 2 - 1);
             }
 
-            MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIds.length);
+            MemorySegment prepared = NativeGpuOps.prepare_adc_query(dataset, q.get(), nodeIdCount);
 
             for (int j = 0; j < 50; j++) {
                 // Generate random node IDs
-                for (int k = 0; k < nodeIds.length; k++) {
-                    nodeIds[k] = R.nextInt(100_000);
+                for (int k = 0; k < nodeIdCount; k++) {
+                    nodeIds.setLittleEndianInt(k, R.nextInt(100_000));
                 }
 
                 NativeGpuOps.compute_dp_similarities_adc(prepared,
-                                                         MemorySegment.ofArray(nodeIds),
+                                                         nodeIds.get(),
                                                          similarities.get(),
-                                                         nodeIds.length);
+                                                         nodeIdCount);
             }
 
             NativeGpuOps.free_adc_query(prepared);

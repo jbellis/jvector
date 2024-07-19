@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -30,7 +31,8 @@ import java.nio.file.Path;
 
 public class GPUPQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    private final ThreadLocal<VectorFloat<?>> reusableResults;
+    private final ThreadLocal<MemorySegmentVectorFloat> reusableResults;
+    private final ThreadLocal<MemorySegmentByteSequence> reusableIds;
 
     private final MemorySegment pqVectorStruct;
     private final int degree;
@@ -38,7 +40,8 @@ public class GPUPQVectors implements CompressedVectors {
     private GPUPQVectors(MemorySegment pqVectorStruct, int degree) {
         this.pqVectorStruct = pqVectorStruct;
         this.degree = degree;
-        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(128).reinterpret(4 * 128))); // DEMOFIXME: use real degree
+        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(degree).reinterpret(degree * 4))); // DEMOFIXME: use real degree
+        this.reusableIds = ThreadLocal.withInitial(() -> new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(degree).reinterpret(degree * 4)));
     }
 
     public static GPUPQVectors load(Path pqVectorsPath, int degree) {
@@ -75,10 +78,14 @@ public class GPUPQVectors implements CompressedVectors {
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         MemorySegment loadedQuery = NativeGpuOps.prepare_adc_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get(), degree);
         return new GPUApproximateScoreFunction() {
-            private final VectorFloat<?> results = reusableResults.get();
+            private final MemorySegmentVectorFloat results = reusableResults.get();
+            private final MemorySegmentByteSequence ids = reusableIds.get(); // HACK
+
             @Override
             public float similarityTo(int node2) {
-                return similarityTo(new int[]{node2}).get(0);
+                ids.setLittleEndianInt(0, node2);
+                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, ids.get(), results.get(), 1);
+                return results.get(0);
             }
 
             @Override
@@ -87,8 +94,12 @@ public class GPUPQVectors implements CompressedVectors {
             }
 
             @Override
-            public VectorFloat<?> similarityTo(int[] nodeIds) {
-                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, MemorySegment.ofArray(nodeIds), ((MemorySegmentVectorFloat) results).get(), nodeIds.length);
+            public VectorFloat<?> similarityTo(NodesIterator nodeIds) {
+                int length = nodeIds.size();
+                for (int i = 0; i < length; i++) {
+                    ids.setLittleEndianInt(i, nodeIds.nextInt());
+                }
+                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, ids.get(), results.get(), length);
                 return results;
             }
 

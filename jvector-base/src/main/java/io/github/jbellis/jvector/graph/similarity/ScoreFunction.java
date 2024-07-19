@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -52,12 +53,8 @@ public interface ScoreFunction {
     /**
      * Return similarity to array of node ids provided.
      */
-    default VectorFloat<?> similarityTo(int[] nodeIds) {
-        VectorFloat<?> result = vts.createFloatVector(nodeIds.length);
-        for (int i = 0; i < nodeIds.length; i++) {
-            result.set(i, similarityTo(nodeIds[i]));
-        }
-        return result;
+    default VectorFloat<?> similarityTo(NodesIterator nodeIds) {
+        throw new UnsupportedOperationException("bulk similarity not supported");
     }
 
     /**
