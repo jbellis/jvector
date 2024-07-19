@@ -27,6 +27,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
+
 #include <raft/core/device_mdarray.hpp>
 #include <raft/core/device_resources.hpp>
 #include <raft/core/device_resources_manager.hpp>
@@ -502,14 +504,37 @@ jpq_dataset<MathT, IdxT> load_pq_vectors(raft::device_resources const &res, cons
     return jpq_data;
 }
 
+bool check_cuda_drivers() {
+    int deviceCount = 0;
+    cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
+
+    if (error_id != cudaSuccess) {
+        std::cerr << "cudaGetDeviceCount returned " << static_cast<int>(error_id)
+                  << ": " << cudaGetErrorString(error_id) << std::endl;
+        return false;
+    }
+
+    if (deviceCount == 0) {
+        std::cout << "There are no available CUDA devices." << std::endl;
+        return false;
+    }
+
+    std::cout << "Detected " << deviceCount << " CUDA Capable device(s)" << std::endl;
+    return true;
+}
+
 extern "C" {
     void initialize(void) {
         std::cout << "Initializing" << std::endl;
+        if (!check_cuda_drivers()) {
+            std::cerr << "CUDA drivers are not installed or not working properly. Exiting." << std::endl;
+            std::exit(1);
+        }
+
+        std::cout << "Creating pool memory resource" << std::endl;
         // FIXME: can we use this instead of manually setting?
         // We get the error [W] [14:08:16.077836] Pool allocation requested, but other memory resource has already been set and will not be overwritten
         //raft::device_resources_manager::set_max_mem_pool_size(1024 * 1024 * 1024ull);
-
-        std::cout << "Creating pool memory resource" << std::endl;
         static rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource> pool_mr(
             rmm::mr::get_current_device_resource(), 1024 * 1024 * 1024ull);
         std::cout << "Setting current device resource" << std::endl;
