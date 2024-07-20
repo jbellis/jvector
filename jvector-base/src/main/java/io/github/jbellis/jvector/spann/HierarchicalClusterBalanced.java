@@ -8,11 +8,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.IntArrayList;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -27,7 +23,7 @@ import static java.lang.Math.max;
 public class HierarchicalClusterBalanced {
     private static final int MAX_BRANCHING_FACTOR = 32;
     private static final int K_MEANS_ITERATIONS = ProductQuantization.K_MEANS_ITERATIONS;
-    private final float INITIAL_LAMBDA = 100.0f;
+    private final float INITIAL_LAMBDA = 1.0f;
 
     private final RandomAccessVectorValues ravv;
     private final VectorSimilarityFunction vsf;
@@ -35,7 +31,7 @@ public class HierarchicalClusterBalanced {
     /**
      * Represents a node in the Hierarchical Cluster-Balanced tree.
      */
-    private static class HCBNode {
+    public static class HCBNode {
         private final VectorFloat<?> centroid;
         private final List<HCBNode> children;
         private final IntArrayList pointIndexes;
@@ -50,6 +46,24 @@ public class HierarchicalClusterBalanced {
             this.centroid = centroid;
             this.pointIndexes = pointIndexes;
             this.children = null;
+        }
+
+        public List<VectorFloat<?>> flatten() {
+            var centroids = new ArrayList<VectorFloat<?>>();
+            this.flatten(centroids);
+            return centroids;
+        }
+
+        private void flatten(ArrayList<VectorFloat<?>> centroids) {
+            if (children == null) {
+                assert pointIndexes != null;
+                centroids.add(centroid);
+                return;
+            }
+
+            for (HCBNode child : children) {
+                child.flatten(centroids);
+            }
         }
     }
 
@@ -72,48 +86,27 @@ public class HierarchicalClusterBalanced {
      * @return IdentityHashMap of centroids to ConcurrentSet of assigned point indexes
      * (intended for further updates by caller)
      */
-    public Map<VectorFloat<?>, Set<Integer>> computeInitialAssignments(int nCentroids) {
+    public List<VectorFloat<?>> computeInitialAssignments(int nCentroids) {
         var allIndices = IntStream.range(0, ravv.size()).collect(IntArrayList::new, IntArrayList::add, IntArrayList::addAll);
         HCBNode root = buildHCBTree(allIndices, max(1, ravv.size() / nCentroids));
-
-        var results = new IdentityHashMap<VectorFloat<?>, Set<Integer>>();
-        flatten(root, results);
-
-        return results;
-    }
-
-    /**
-     * Flattens the HCB tree into a map of centroids to assigned point indices.
-     */
-    private void flatten(HCBNode node, Map<VectorFloat<?>, Set<Integer>> assignments) {
-        if (node.children == null) {
-            assert node.pointIndexes != null;
-            var s = ConcurrentHashMap.<Integer>newKeySet(node.pointIndexes.size());
-            s.addAll(node.pointIndexes);
-            assignments.put(node.centroid, s);
-            return;
-        }
-
-        for (HCBNode child : node.children) {
-            flatten(child, assignments);
-        }
+        return root.flatten();
     }
 
     /**
      * Recursively builds the Hierarchical Cluster-Balanced tree.
      */
-    private HCBNode buildHCBTree(IntArrayList pointIndices, int idealPointsPerCentroid) {
+    public HCBNode buildHCBTree(IntArrayList pointIndices, int idealPointsPerCentroid) {
         if (pointIndices.size() <= idealPointsPerCentroid * 1.5) {
             var centroid = KMeansPlusPlusClusterer.centroidOf(pointIndices.stream().map(ravv::getVector).collect(Collectors.toList()));
             return new HCBNode(centroid, pointIndices);
         }
 
-        return tryClustering(pointIndices, idealPointsPerCentroid);
+        return createClusteredTree(ravv, pointIndices, idealPointsPerCentroid, INITIAL_LAMBDA);
     }
 
-    private HCBNode tryClustering(IntArrayList pointIndices, int idealPointsPerCentroid) {
+    public static HCBNode createClusteredTree(RandomAccessVectorValues ravv, IntArrayList pointIndices, int idealPointsPerCentroid, float lambda) {
         int k = Math.min(MAX_BRANCHING_FACTOR, pointIndices.size() / idealPointsPerCentroid);
-        var clusterer = new KMeansPlusPlusBalancedClusterer(pointIndices.toIntArray(), ravv, k, vsf, INITIAL_LAMBDA);
+        var clusterer = new KMeansPlusPlusBalancedClusterer(pointIndices.toIntArray(), ravv, k, lambda);
         clusterer.cluster(K_MEANS_ITERATIONS);
 
         var children = new ArrayList<HCBNode>();
