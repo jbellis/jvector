@@ -95,14 +95,26 @@ public class IVFIndex {
     private static void printHistogram(Map<Integer, Set<Integer>> postings) {
         var histogram = new int[postings.values().stream().mapToInt(s -> s.size() / 200).max().orElse(0) + 1];
         postings.values().forEach(s -> histogram[s.size() / 200]++);
+        // crop off zeros at the end
+        int lastNonZero = histogram.length - 1;
+        while (lastNonZero > 0 && histogram[lastNonZero] == 0) {
+            lastNonZero--;
+        }
+        var cropped = Arrays.copyOf(histogram, lastNonZero + 1);
         System.out.println("Histogram of postings lengths, visualized:");
-        for (int i = 0; i < histogram.length; i++) {
-            if (histogram[i] > 0) {
-                System.out.printf("%3d: %s%n", i * 200, "*".repeat((int) Math.ceil(Math.log(histogram[i]))));
+        for (int i = 0; i < cropped.length; i++) {
+            if (cropped[i] > 1) {
+                System.out.printf("%3d: %s %d%n", i * 200, "*".repeat((int) Math.ceil(log2(cropped[i]))), cropped[i]);
+            } else if (cropped[i] == 1) {
+                System.out.printf("%3d: 1%n", i * 200);
             } else {
                 System.out.printf("%3d: %n", i * 200);
             }
         }
+    }
+
+    private static double log2(double a) {
+        return Math.log(a) / Math.log(2);
     }
 
     private static RandomAccessVectorValues selectRandomCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
