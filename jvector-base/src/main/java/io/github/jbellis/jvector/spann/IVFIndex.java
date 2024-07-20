@@ -19,7 +19,6 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -48,26 +47,34 @@ public class IVFIndex {
     }
 
     public static IVFIndex build(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf) {
-        // build the graph index
         long start = System.nanoTime();
-        var centroids = selectCentroids(ravv, centroidFraction);
+        // Select centroids using HCB
+        float balanceFactor = 100.0f; // TODO
+        HierarchicalClusterBalanced hcb = new HierarchicalClusterBalanced(ravv,
+                                                                          vsf,
+                                                                          8,
+                                                                          32,
+                                                                          balanceFactor);
+        var centroids = hcb.computeCentroids((int) (ravv.size() * centroidFraction));
+        System.out.printf("Centroids computed in %fs%n", (System.nanoTime() - start) / 1_000_000_000.0);
+
+        start = System.nanoTime();
+        // Build the graph index using these centroids
         OnHeapGraphIndex index;
         try (var builder = new GraphIndexBuilder(ravv, vsf, 32, 100, 1.2f, 1.2f)) {
-            index = builder.build(centroids);
+            index = builder.build(new ListRandomAccessVectorValues(centroids, ravv.dimension()));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        System.out.printf("Graph index built in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
+        System.out.printf("Graph index built in %fs%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        // assign vectors to centroids with closure
         start = System.nanoTime();
+        // Assign vectors to centroids
         var postings = new ConcurrentHashMap<Integer, Set<Integer>>();
-
         ThreadLocal<GraphSearcher> searchers = ThreadLocal.withInitial(() -> new GraphSearcher(index));
         IntStream.range(0, ravv.size()).parallel().forEach(i -> {
             var v = ravv.getVector(i);
             var ssp = SearchScoreProvider.exact(v, vsf, ravv);
-            // double MAX_ASSIGNMENTS to push search a bit deeper in the graph
             var sr = searchers.get().search(ssp, 2 * MAX_ASSIGNMENTS, Bits.ALL);
             assignVectorToClusters(i, sr, postings);
         });
@@ -76,25 +83,6 @@ public class IVFIndex {
         System.out.printf("Assigned vectors to centroids with closure in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         return new IVFIndex(index, ravv, optimizedPostings, vsf);
-    }
-
-    /**
-     * @return the centroids to which we will assign the rest of the vectors
-     */
-    private static RandomAccessVectorValues selectCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
-        // this creates redundant indexes (since we are using source vectors as centroids, each will also
-        // end up assigned to itself in the posting lists)
-        // we will fix this by switching to HBC centroid selection
-        //
-        // in the meantime: this is worse than i thought, only about 20% of the centroids get all of the vectors mapped to them
-        int nCentroids = (int) (baseRavv.size() * centroidFraction);
-        Set<VectorFloat<?>> selected = ConcurrentHashMap.newKeySet();
-        var R = new Random();
-        while (selected.size() < nCentroids) {
-            selected.add(baseRavv.getVector(R.nextInt(baseRavv.size())));
-        }
-        List<VectorFloat<?>> L = new ArrayList<>(selected);
-        return new ListRandomAccessVectorValues(L, baseRavv.dimension());
     }
 
     private static void assignVectorToClusters(int vectorId, SearchResult sr, ConcurrentHashMap<Integer, Set<Integer>> postings) {
