@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class IVFIndex {
-    private static final double centroidFraction = 0.01; // TODO tune this for GPU
+    private static final double centroidFraction = 0.16; // TODO tune this for GPU
 
     private final GraphIndex index;
     private final RandomAccessVectorValues ravv;
@@ -63,7 +63,6 @@ public class IVFIndex {
 
         int pass = 0;
         var eliminatedCentroids = new ConcurrentSkipListSet<Integer>();
-        while (true) {
             postingsMap.clear();
 
             start = System.nanoTime();
@@ -107,12 +106,12 @@ public class IVFIndex {
                 return 0;
             });
             IntStream.range(0, centroids.size()).parallel().forEach(i -> {
-                if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.5 * idealExpandedAssignments) {
+                if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.25 * idealExpandedAssignments) {
                     tooSmall.incrementAndGet();
                     eliminatedCentroids.add(i);
                     return;
                 }
-                if (postingsMap.get(i).size() > 2 * idealExpandedAssignments) {
+                if (postingsMap.get(i).size() > 10 * idealExpandedAssignments) {
                     tooLarge.incrementAndGet();
                     eliminatedCentroids.add(i);
                     var subTree = new HierarchicalClusterBalanced(ravv, toIntArrayList(postingsMap.get(i)));
@@ -122,15 +121,12 @@ public class IVFIndex {
             System.out.printf("After pass %d, %d centroids too small and %d too large. adding %d new ones%n",
                               pass, tooSmall.get(), tooLarge.get(), newCentroids.size());
             pass++;
-            if (eliminatedCentroids.size() + newCentroids.size() < 0.01 * centroids.size()) {
-                break;
-            }
             centroids.addAll(newCentroids);
-        }
 
         var optimizedPostings = new Int2ObjectHashMap<int[]>();
         for (int i = 0; i < centroids.size(); i++) {
-            optimizedPostings.put(i, postingsMap.get(i).stream().mapToInt(Integer::intValue).toArray());
+            var a = postingsMap.containsKey(i) ? postingsMap.get(i).stream().mapToInt(Integer::intValue).toArray() : new int[0];
+            optimizedPostings.put(i, a);
         }
 
         return new IVFIndex(index, ravv, optimizedPostings, vsf);
