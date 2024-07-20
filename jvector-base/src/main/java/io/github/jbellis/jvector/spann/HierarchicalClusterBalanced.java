@@ -104,8 +104,8 @@ public class HierarchicalClusterBalanced {
         clusterer.cluster(K_MEANS_ITERATIONS);
 
         var children = new ArrayList<HCBNode>();
-        clusterer.getClusters().forEach((cluster, points1) -> {
-            children.add(buildHCBTree(points1, idealPointsPerCentroid, depth + 1));
+        clusterer.getClusters().forEach((cluster, clusterPoints) -> {
+            children.add(buildHCBTree(clusterPoints, idealPointsPerCentroid, depth + 1));
         });
         return new HCBNode(children);
     }
