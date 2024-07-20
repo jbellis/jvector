@@ -52,7 +52,7 @@ public class IVFIndex {
     public static IVFIndex build(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf) {
         // build the graph index
         long start = System.nanoTime();
-        var centroids = selectRandomCentroids(ravv, centroidFraction);
+        var centroids = selectKmeansCentroids(ravv, centroidFraction);
         System.out.printf("Centroids computed in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();
@@ -86,12 +86,6 @@ public class IVFIndex {
         return new IVFIndex(index, ravv, optimizedPostings, vsf);
     }
 
-    private static IntArrayList toIntArrayList(Set<Integer> integers) {
-        var ial = new IntArrayList(integers.size(), Integer.MIN_VALUE);
-        ial.addAll(integers);
-        return ial;
-    }
-
     private static void printHistogram(Map<Integer, Set<Integer>> postings) {
         var histogram = new int[postings.values().stream().mapToInt(s -> s.size() / 200).max().orElse(0) + 1];
         postings.values().forEach(s -> histogram[s.size() / 200]++);
@@ -104,11 +98,11 @@ public class IVFIndex {
         System.out.println("Histogram of postings lengths, visualized:");
         for (int i = 0; i < cropped.length; i++) {
             if (cropped[i] > 1) {
-                System.out.printf("%3d: %s %d%n", i * 200, "*".repeat((int) Math.ceil(log2(cropped[i]))), cropped[i]);
+                System.out.printf("%4d: %s %d%n", i * 200, "*".repeat((int) Math.ceil(log2(cropped[i]))), cropped[i]);
             } else if (cropped[i] == 1) {
-                System.out.printf("%3d: 1%n", i * 200);
+                System.out.printf("%4d: 1%n", i * 200);
             } else {
-                System.out.printf("%3d: %n", i * 200);
+                System.out.printf("%4d: %n", i * 200);
             }
         }
     }
@@ -136,7 +130,7 @@ public class IVFIndex {
     /**
      * @return the centroids to which we will assign the rest of the vectors
      */
-    private static RandomAccessVectorValues selectCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
+    private static RandomAccessVectorValues selectKmeansCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
         // use a zero-round KMPPPC
         int[] allPoints = IntStream.range(0, baseRavv.size()).toArray();
         var clusterer = new KMeansPlusPlusPointsClusterer(allPoints, baseRavv, (int) (baseRavv.size() * centroidFraction));
@@ -150,7 +144,7 @@ public class IVFIndex {
         outer:
         for (int i = 0; i < sr.getNodes().length && assignedCentroids.size() < MAX_ASSIGNMENTS; i++) {
             SearchResult.NodeScore ns = sr.getNodes()[i];
-            if (ns.score >= baseScore * (1 + CLOSURE_THRESHOLD)) {
+            if (ns.score >= baseScore * (1 + CLOSURE_THRESHOLD)) { // TODO make this dynamic
                 break;
             }
 
