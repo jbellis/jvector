@@ -48,7 +48,7 @@ public class Grid {
 
     private static final String dirPrefix = "BenchGraphDir";
 
-    private static final int searchCentroids = 8; // TODO query pruning
+    private static final int searchCentroids = 32; // TODO query pruning
 
     static void runAll(DataSet ds,
                        List<Integer> mGrid,
