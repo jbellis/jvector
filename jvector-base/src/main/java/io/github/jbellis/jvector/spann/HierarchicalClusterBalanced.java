@@ -100,7 +100,7 @@ public class HierarchicalClusterBalanced {
         }
 
         int k = min(MAX_BRANCHING_FACTOR, max(2, pointIndices.size() / idealPointsPerCentroid));
-        var clusterer = new KMeansPlusPlusBalancedClusterer(pointIndices.toIntArray(), ravv, k, INITIAL_LAMBDA);
+        var clusterer = new KMeansPlusPlusPointsClusterer(pointIndices.toIntArray(), ravv, k);
         clusterer.cluster(K_MEANS_ITERATIONS);
 
         var children = new ArrayList<HCBNode>();

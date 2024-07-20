@@ -16,7 +16,7 @@ import static io.github.jbellis.jvector.vector.VectorUtil.scale;
 import static io.github.jbellis.jvector.vector.VectorUtil.squareL2Distance;
 import static io.github.jbellis.jvector.vector.VectorUtil.subInPlace;
 
-public class KMeansPlusPlusBalancedClusterer {
+public class KMeansPlusPlusPointsClusterer {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     // number of centroids to compute
@@ -40,9 +40,8 @@ public class KMeansPlusPlusBalancedClusterer {
      *
      * @param points the indexes of points to cluster
      * @param ravv   the source of vectors corresponding to points
-     * @param lambda parameter for balanced clustering
      */
-    public KMeansPlusPlusBalancedClusterer(int[] points, RandomAccessVectorValues ravv, int k, float lambda) {
+    public KMeansPlusPlusPointsClusterer(int[] points, RandomAccessVectorValues ravv, int k) {
         this.ravv = ravv;
         this.points = points;
         this.k = k;
@@ -98,7 +97,7 @@ public class KMeansPlusPlusBalancedClusterer {
         centroids[0] = ravv.getVector(points[random.nextInt(points.length)]).copy();
         for (int i = 0; i < points.length; i++) {
             float distance1 = squareL2Distance(ravv.getVector(points[i]), centroids[0]);
-            distances[i] = Math.min(distances[i], distance1);
+            distances[i] = distance1;
         }
 
         // For each subsequent centroid
