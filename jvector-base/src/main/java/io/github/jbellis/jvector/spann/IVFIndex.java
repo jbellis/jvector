@@ -56,7 +56,7 @@ public class IVFIndex {
                                                                           32,
                                                                           balanceFactor);
         var centroids = hcb.computeCentroids((int) (ravv.size() * centroidFraction));
-        System.out.printf("Centroids computed in %fs%n", (System.nanoTime() - start) / 1_000_000_000.0);
+        System.out.printf("%d centroids computed in %fs%n", centroids.size(), (System.nanoTime() - start) / 1_000_000_000.0);
 
         start = System.nanoTime();
         // Build the graph index using these centroids
@@ -81,6 +81,17 @@ public class IVFIndex {
         var optimizedPostings = new Int2ObjectHashMap<int[]>();
         postings.forEach((k, v) -> optimizedPostings.put(k, v.stream().mapToInt(Integer::intValue).toArray()));
         System.out.printf("Assigned vectors to centroids with closure in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
+        // print histogram of postings lengths
+        var histogram = new int[postings.values().stream().mapToInt(s -> s.size() / 200).max().orElse(0) + 1];
+        postings.values().forEach(s -> histogram[s.size() / 200]++);
+        System.out.println("Histogram of postings lengths, visualized:");
+        for (int i = 0; i < histogram.length; i++) {
+            if (histogram[i] > 0) {
+                System.out.printf("%3d: %s%n", i * 200, "*".repeat((int) Math.ceil(Math.log(histogram[i]))));
+            } else {
+                System.out.printf("%3d: %n", i * 200);
+            }
+        }
 
         return new IVFIndex(index, ravv, optimizedPostings, vsf);
     }
