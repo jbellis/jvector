@@ -2,14 +2,12 @@ package io.github.jbellis.jvector.spann;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer;
-import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -20,7 +18,7 @@ public class HierarchicalClusterBalanced {
     private final RandomAccessVectorValues ravv;
     private final VectorSimilarityFunction vsf;
     private final int maxDepth;
-    private final int branchingFactor;
+    private final int maxBranchingFactor;
     private final float balanceFactor;
 
     /**
@@ -38,15 +36,15 @@ public class HierarchicalClusterBalanced {
      * @param ravv The RandomAccessVectorValues containing the vectors to cluster
      * @param vsf The VectorSimilarityFunction used to compute distances between vectors
      * @param maxDepth The maximum depth of the hierarchical clustering tree
-     * @param branchingFactor The maximum number of children for each node in the tree
+     * @param maxBranchingFactor The maximum number of children for each node in the tree
      * @param balanceFactor The factor used to balance cluster sizes
      */
     public HierarchicalClusterBalanced(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf,
-                                       int maxDepth, int branchingFactor, float balanceFactor) {
+                                       int maxDepth, int maxBranchingFactor, float balanceFactor) {
         this.ravv = ravv;
         this.vsf = vsf;
         this.maxDepth = maxDepth;
-        this.branchingFactor = branchingFactor;
+        this.maxBranchingFactor = maxBranchingFactor;
         this.balanceFactor = balanceFactor;
     }
 
@@ -66,8 +64,10 @@ public class HierarchicalClusterBalanced {
         List<Integer> centroids = new ArrayList<>();
         collectCentroids(root, centroids);
 
-        var L = centroids.subList(0, Math.min(centroids.size(), nCentroids));
-        return L.stream().map(ravv::getVector).collect(Collectors.toList());
+        return centroids.subList(0, Math.min(centroids.size(), nCentroids))
+                .stream()
+                .map(ravv::getVector)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -80,36 +80,19 @@ public class HierarchicalClusterBalanced {
     private HCBNode buildHCBTree(List<Integer> pointIndices, int depth) {
         HCBNode node = new HCBNode();
 
-        if (depth == maxDepth || pointIndices.size() <= branchingFactor) {
+        if (depth == maxDepth || pointIndices.size() <= maxBranchingFactor) {
             node.dataPointIndices = pointIndices;
             node.centroidIndex = computeCentroidIndex(pointIndices);
             return node;
         }
 
-        VectorFloat<?>[] points = pointIndices.stream()
-                .map(ravv::getVector)
-                .toArray(VectorFloat<?>[]::new);
-
-        KMeansPlusPlusClusterer clusterer = new KMeansPlusPlusClusterer(points, branchingFactor);
-        clusterer.cluster(ProductQuantization.K_MEANS_ITERATIONS, 0); // TODO is this the right number?
+        int k = Math.min(maxBranchingFactor, pointIndices.size() / 2);
+        List<List<Integer>> clusters = balancedKMeansClustering(pointIndices, k);
 
         node.centroidIndex = computeCentroidIndex(pointIndices);
-        node.children = new ArrayList<>(branchingFactor);
+        node.children = new ArrayList<>(k);
 
-        // Assign points to clusters
-        int[] assignments = new int[points.length];
-        for (int i = 0; i < points.length; i++) {
-            assignments[i] = clusterer.getNearestCluster(points[i]);
-        }
-
-        // Group points by cluster
-        Map<Integer, List<Integer>> clusters = new HashMap<>();
-        for (int i = 0; i < assignments.length; i++) {
-            clusters.computeIfAbsent(assignments[i], k -> new ArrayList<>()).add(pointIndices.get(i));
-        }
-
-        // Recursively build child nodes
-        for (List<Integer> cluster : clusters.values()) {
+        for (List<Integer> cluster : clusters) {
             if (!cluster.isEmpty()) {
                 node.children.add(buildHCBTree(cluster, depth + 1));
             }
@@ -165,5 +148,121 @@ public class HierarchicalClusterBalanced {
             }
         }
         return nearestIndex;
+    }
+
+    private List<List<Integer>> balancedKMeansClustering(List<Integer> pointIndices, int k) {
+        List<VectorFloat<?>> points = pointIndices.stream()
+                .map(ravv::getVector)
+                .collect(Collectors.toList());
+
+        // Initialize centroids using k-means++
+        List<VectorFloat<?>> centroids = initializeCentroids(points, k);
+
+        // Perform balanced k-means clustering
+        List<List<Integer>> clusters = new ArrayList<>(k);
+        for (int i = 0; i < k; i++) {
+            clusters.add(new ArrayList<>());
+        }
+
+        int maxIterations = 100;
+        double prevObjective = Double.MAX_VALUE;
+
+        for (int iter = 0; iter < maxIterations; iter++) {
+            // Assign points to clusters
+            clusters.forEach(List::clear);
+            for (int i = 0; i < points.size(); i++) {
+                int bestCluster = findBestCluster(points.get(i), centroids, clusters);
+                clusters.get(bestCluster).add(pointIndices.get(i));
+            }
+
+            // Update centroids
+            for (int i = 0; i < k; i++) {
+                if (!clusters.get(i).isEmpty()) {
+                    centroids.set(i, computeCentroid(clusters.get(i)));
+                }
+            }
+
+            // Calculate objective function
+            double objective = calculateObjective(clusters, centroids);
+            if (Math.abs(objective - prevObjective) < 1e-6) {
+                break;
+            }
+            prevObjective = objective;
+        }
+
+        return clusters;
+    }
+
+    private List<VectorFloat<?>> initializeCentroids(List<VectorFloat<?>> points, int k) {
+        List<VectorFloat<?>> centroids = new ArrayList<>(k);
+        var random = new Random();
+
+        // Choose first centroid randomly
+        centroids.add(points.get(random.nextInt(points.size())));
+
+        // Choose remaining centroids
+        for (int i = 1; i < k; i++) {
+            double[] distances = new double[points.size()];
+            double totalDistance = 0;
+
+            for (int j = 0; j < points.size(); j++) {
+                double minDistance = Double.MAX_VALUE;
+                for (VectorFloat<?> centroid : centroids) {
+                    double distance = 1 - vsf.compare(points.get(j), centroid);
+                    minDistance = Math.min(minDistance, distance);
+                }
+                distances[j] = minDistance * minDistance;
+                totalDistance += distances[j];
+            }
+
+            double target = random.nextDouble() * totalDistance;
+            int centroidIndex = 0;
+            for (double distance : distances) {
+                target -= distance;
+                if (target <= 0) break;
+                centroidIndex++;
+            }
+
+            centroids.add(points.get(centroidIndex));
+        }
+
+        return centroids;
+    }
+
+    private int findBestCluster(VectorFloat<?> point, List<VectorFloat<?>> centroids, List<List<Integer>> clusters) {
+        int bestCluster = 0;
+        double bestScore = Double.MAX_VALUE;
+
+        for (int i = 0; i < centroids.size(); i++) {
+            double distance = 1 - vsf.compare(point, centroids.get(i));
+            double balancePenalty = balanceFactor * clusters.get(i).size() / ravv.size();
+            double score = distance + balancePenalty;
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestCluster = i;
+            }
+        }
+
+        return bestCluster;
+    }
+
+    private VectorFloat<?> computeCentroid(List<Integer> clusterIndices) {
+        List<VectorFloat<?>> clusterPoints = clusterIndices.stream()
+                .map(ravv::getVector)
+                .collect(Collectors.toList());
+        return KMeansPlusPlusClusterer.centroidOf(clusterPoints);
+    }
+
+    private double calculateObjective(List<List<Integer>> clusters, List<VectorFloat<?>> centroids) {
+        double objective = 0;
+        for (int i = 0; i < clusters.size(); i++) {
+            for (int pointIndex : clusters.get(i)) {
+                VectorFloat<?> point = ravv.getVector(pointIndex);
+                objective += 1 - vsf.compare(point, centroids.get(i));
+            }
+            objective += balanceFactor * Math.pow(clusters.get(i).size() - ravv.size() / clusters.size(), 2);
+        }
+        return objective;
     }
 }
