@@ -10,7 +10,6 @@ import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
-import io.github.jbellis.jvector.vector.ArrayVectorFloat;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
@@ -54,8 +53,9 @@ public class IVFIndex {
     public static IVFIndex build(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf) {
         long start = System.nanoTime();
         // Select centroids using HCB
-        HierarchicalClusterBalanced hcb = new HierarchicalClusterBalanced(ravv, vsf);
-        var centroids = hcb.computeInitialAssignments((int) (ravv.size() * centroidFraction));
+        HierarchicalClusterBalanced hcb = new HierarchicalClusterBalanced(ravv);
+        int idealAssignments = (int) Math.round(1 / centroidFraction);
+        var centroids = hcb.computeCentroids(idealAssignments);
         System.out.printf("%d initial centroids computed in %fs%n", centroids.size(), (System.nanoTime() - start) / 1_000_000_000.0);
 
         var postingsMap = new ConcurrentHashMap<Integer, Set<Integer>>(); // centroid indexes -> point indexes
@@ -103,18 +103,17 @@ public class IVFIndex {
                 }
                 return 0;
             });
-            var idealAssignments = 1 / centroidFraction;
             IntStream.range(0, centroids.size()).parallel().forEach(i -> {
                 if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.5 * idealAssignments) {
                     tooSmall.incrementAndGet();
                     eliminatedCentroids.add(i);
                     return;
                 }
-                if (postingsMap.get(i).size() > 1.5 * idealAssignments) {
+                if (postingsMap.get(i).size() > 2 * idealAssignments) {
                     tooLarge.incrementAndGet();
                     eliminatedCentroids.add(i);
-                    var subTree = HierarchicalClusterBalanced.createClusteredTree(ravv, toIntArrayList(postingsMap.get(i)));
-                    newCentroids.addAll(subTree.flatten());
+                    var subTree = new HierarchicalClusterBalanced(ravv, toIntArrayList(postingsMap.get(i)));
+                    newCentroids.addAll(subTree.computeCentroids(idealAssignments));
                 }
             });
             printHistogram(postingsMap);
