@@ -26,7 +26,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.util.MathUtil.square;
 import static io.github.jbellis.jvector.vector.VectorUtil.*;
@@ -41,7 +44,7 @@ public class KMeansPlusPlusClusterer {
     public static final float UNWEIGHTED = -1.0f;
 
     // number of centroids to compute
-    private final int k;
+    public final int k;
 
     // the points to train on
     private final VectorFloat<?>[] points;
@@ -158,70 +161,47 @@ public class KMeansPlusPlusClusterer {
         return updateAssignedPointsAnisotropic();
     }
 
-    /**
-     * Chooses the initial centroids for clustering.
-     * The first centroid is chosen randomly from the data points. Subsequent centroids
-     * are selected with a probability proportional to the square of their distance
-     * to the nearest existing centroid. This ensures that the centroids are spread out
-     * across the data and not initialized too closely to each other, leading to better
-     * convergence and potentially improved final clusterings.
-     *
-     * @return an array of initial centroids.
-     */
-    private static VectorFloat<?> chooseInitialCentroids(VectorFloat<?>[] points, int k) {
-        if (k <= 0) {
-            throw new IllegalArgumentException("Number of clusters must be positive.");
-        }
-        if (k > points.length) {
-            throw new IllegalArgumentException(String.format("Number of clusters %d cannot exceed number of points %d", k, points.length));
+    public static VectorFloat<?> chooseInitialCentroids(VectorFloat<?>[] points, int k) {
+        int samples = Math.min(1000, points.length); // number of samples to take from points
+        int tryIters = 3; // Number of iterations to try
+
+        VectorFloat<?> bestCentroids = null;
+        double minTotalDistance = Double.MAX_VALUE;
+
+        for (int iter = 0; iter < tryIters; iter++) {
+            VectorFloat<?> centroids = randomSelectCentroids(points, k);
+            double totalDistance = assignPointsAndCalculateDistance(points, centroids, samples);
+
+            if (totalDistance < minTotalDistance) {
+                minTotalDistance = totalDistance;
+                bestCentroids = centroids;
+            }
         }
 
-        var random = ThreadLocalRandom.current();
+        return bestCentroids;
+    }
+
+    private static VectorFloat<?> randomSelectCentroids(VectorFloat<?>[] points, int k) {
         VectorFloat<?> centroids = vectorTypeSupport.createFloatVector(k * points[0].length());
-
-        float[] distances = new float[points.length];
-        Arrays.fill(distances, Float.MAX_VALUE);
-
-        // Choose the first centroid randomly
-        VectorFloat<?> firstCentroid = points[random.nextInt(points.length)];
-        centroids.copyFrom(firstCentroid, 0, 0, firstCentroid.length());
-        for (int i = 0; i < points.length; i++) {
-            float distance1 = squareL2Distance(points[i], firstCentroid);
-            distances[i] = Math.min(distances[i], distance1);
-        }
-
-        // For each subsequent centroid
-        for (int i = 1; i < k; i++) {
-            float totalDistance = 0;
-            for (float distance : distances) {
-                totalDistance += distance;
-            }
-
-            float r = random.nextFloat() * totalDistance;
-            int selectedIdx = -1;
-            for (int j = 0; j < distances.length; j++) {
-                r -= distances[j];
-                if (r < 1e-6) {
-                    selectedIdx = j;
-                    break;
-                }
-            }
-
-            if (selectedIdx == -1) {
-                selectedIdx = random.nextInt(points.length);
-            }
-
-            VectorFloat<?> nextCentroid = points[selectedIdx];
-            centroids.copyFrom(nextCentroid, 0, i * nextCentroid.length(), nextCentroid.length());
-
-            // Update distances, but only if the new centroid provides a closer distance
-            for (int j = 0; j < points.length; j++) {
-                float newDistance = squareL2Distance(points[j], nextCentroid);
-                distances[j] = Math.min(distances[j], newDistance);
-            }
-        }
-        assertFinite(centroids);
+        var R = ThreadLocalRandom.current();
+        IntStream.range(0, k).forEach(i -> {
+            VectorFloat<?> randomPoint = points[R.nextInt(points.length)];
+            centroids.copyFrom(randomPoint, 0, i * randomPoint.length(), randomPoint.length());
+        });
         return centroids;
+    }
+
+    private static double assignPointsAndCalculateDistance(VectorFloat<?>[] points, VectorFloat<?> centroids, int samples) {
+        var R = ThreadLocalRandom.current();
+        return IntStream.range(0, samples).parallel().mapToDouble(i -> {
+            int pointIndex = R.nextInt(points.length);
+            float minDistance = Float.MAX_VALUE;
+            for (int j = 0; j < centroids.length() / points[0].length(); j++) {
+                float distance = squareL2Distance(points[pointIndex], 0, centroids, j * points[0].length(), points[0].length());
+                minDistance = Math.min(minDistance, distance);
+            }
+            return minDistance;
+        }).sum();
     }
 
     /**
@@ -229,13 +209,13 @@ public class KMeansPlusPlusClusterer {
      * This method should only be called once after initial centroids are chosen.
      */
     private void initializeAssignedPoints() {
-        for (int i = 0; i < points.length; i++) {
+        IntStream.range(0, points.length).parallel().forEach(i -> {
             VectorFloat<?> point = points[i];
             var newAssignment = getNearestCluster(point);
             centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
             addInPlace(centroidNums[newAssignment], point);
             assignments[i] = newAssignment;
-        }
+        });
     }
 
     /**
@@ -248,9 +228,9 @@ public class KMeansPlusPlusClusterer {
      * @return the number of points that changed clusters
      */
     private int updateAssignedPointsUnweighted() {
-        int changedCount = 0;
+        var changedCount = new AtomicInteger();
 
-        for (int i = 0; i < points.length; i++) {
+        IntStream.range(0, points.length).parallel().forEach(i -> {
             VectorFloat<?> point = points[i];
             var oldAssignment = assignments[i];
             var newAssignment = getNearestCluster(point);
@@ -261,11 +241,11 @@ public class KMeansPlusPlusClusterer {
                 centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
                 addInPlace(centroidNums[newAssignment], point);
                 assignments[i] = newAssignment;
-                changedCount++;
+                changedCount.incrementAndGet();
             }
-        }
+        });
 
-        return changedCount;
+        return changedCount.get();
     }
 
     /**
@@ -356,7 +336,7 @@ public class KMeansPlusPlusClusterer {
      * Calculates centroids from centroidNums/centroidDenoms updated during point assignment
      */
     private void updateCentroidsUnweighted() {
-        for (int i = 0; i < k; i++) {
+        IntStream.range(0, k).parallel().forEach(i -> {
             var denom = centroidDenoms[i];
             if (denom == 0) {
                 // no points assigned to this cluster
@@ -366,7 +346,7 @@ public class KMeansPlusPlusClusterer {
                 scale(centroid, 1.0f / centroidDenoms[i]);
                 centroids.copyFrom(centroid, 0, i * centroid.length(), centroid.length());
             }
-        }
+        });
     }
 
     private void initializeCentroidToRandomPoint(int i) {
@@ -445,5 +425,23 @@ public class KMeansPlusPlusClusterer {
 
     public VectorFloat<?> getCentroids() {
         return centroids;
+    }
+
+    public int getClusterSize(int cluster) {
+        return centroidDenoms[cluster];
+    }
+
+    /**
+     * @return the largest distance between any point and its assigned cluster centroid
+     */
+    public float getMaxClusterDist(int cluster) {
+        float maxDist = 0;
+        for (int i = 0; i < points.length; i++) {
+            if (assignments[i] == cluster) {
+                float dist = squareL2Distance(points[i], 0, centroids, cluster * points[0].length(), points[0].length());
+                maxDist = Math.max(maxDist, dist);
+            }
+        }
+        return maxDist;
     }
 }
