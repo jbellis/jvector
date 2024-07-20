@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class IVFIndex {
-    private static final double centroidFraction = 0.16; // TODO tune this for GPU
+    private static final double centroidFraction = 0.01; // TODO tune this for GPU
 
     private final GraphIndex index;
     private final RandomAccessVectorValues ravv;
@@ -89,36 +89,29 @@ public class IVFIndex {
             });
             var totalAssignments = IntStream.range(0, centroids.size()).mapToLong(i -> postingsMap.getOrDefault(i, Set.of()).size()).sum();
             System.out.printf("Pass %d with %d total vector assignments in %fs%n", pass, totalAssignments, (System.nanoTime() - start) / 1_000_000_000.0);
+            printHistogram(postingsMap);
 
+            float ratio = (float) totalAssignments / ravv.size();
+            int idealExpandedAssignments = (int) Math.round(ratio / centroidFraction);
             AtomicInteger tooSmall = new AtomicInteger();
             AtomicInteger tooLarge = new AtomicInteger();
             eliminatedCentroids.clear();
-            var newCentroids = new ConcurrentSkipListSet<VectorFloat<?>>((a, b) -> {
-                for (int i = 0; i < a.length(); i++) {
-                    if (a.get(i) < b.get(i)) {
-                        return -1;
-                    } else if (a.get(i) > b.get(i)) {
-                        return 1;
-                    }
-                }
-                return 0;
-            });
+            var newSourcePoints = new ConcurrentSkipListSet<Integer>();
             IntStream.range(0, centroids.size()).parallel().forEach(i -> {
-                if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.5 * idealAssignments) {
+                if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.5 * idealExpandedAssignments) {
                     tooSmall.incrementAndGet();
                     eliminatedCentroids.add(i);
                     return;
                 }
-                if (postingsMap.get(i).size() > 2 * idealAssignments) {
+                if (postingsMap.get(i).size() > 2.0 * idealExpandedAssignments) {
                     tooLarge.incrementAndGet();
                     eliminatedCentroids.add(i);
-                    var subTree = new HierarchicalClusterBalanced(ravv, toIntArrayList(postingsMap.get(i)));
-                    newCentroids.addAll(subTree.computeCentroids(idealAssignments));
+                    newSourcePoints.addAll(postingsMap.get(i));
                 }
             });
-            printHistogram(postingsMap);
-            System.out.printf("After pass %d, %d centroids too small and %d too large. adding %d new ones%n",
-                              pass, tooSmall.get(), tooLarge.get(), newCentroids.size());
+            var newCentroids = new HierarchicalClusterBalanced(ravv, toIntArrayList(newSourcePoints)).computeCentroids(idealAssignments);
+            System.out.printf("After pass %d, %d centroids too small and %d too large. adding %d new ones from %d points%n",
+                              pass, tooSmall.get(), tooLarge.get(), newCentroids.size(), newSourcePoints.size());
             pass++;
             if (eliminatedCentroids.size() + newCentroids.size() < 0.01 * centroids.size()) {
                 break;
