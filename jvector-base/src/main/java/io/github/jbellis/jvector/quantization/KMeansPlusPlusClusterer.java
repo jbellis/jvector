@@ -27,6 +27,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.DoubleAdder;
+import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.util.MathUtil.square;
 import static io.github.jbellis.jvector.vector.VectorUtil.*;
@@ -56,6 +59,9 @@ public class KMeansPlusPlusClusterer {
     // used to accelerate updating clusters by unweighted L2 distance.  (not used for anisotropic clustering)
     private final int[] centroidDenoms; // the number of points assigned to each cluster
     private final VectorFloat<?>[] centroidNums; // the sum of all points assigned to each cluster
+
+    // Lambda parameter for balanced clustering
+    private float lambda;
 
     /**
      * Constructs a KMeansPlusPlusFloatClusterer with the specified points and number of clusters.
@@ -95,6 +101,7 @@ public class KMeansPlusPlusClusterer {
         this.k = centroids.length() / points[0].length();
         this.centroids = centroids.copy();
         this.anisotropicThreshold = anisotropicThreshold;
+        this.lambda = 0;
 
         centroidDenoms = new int[k];
         // initialize with empty vectors
@@ -105,6 +112,36 @@ public class KMeansPlusPlusClusterer {
         assignments = new int[points.length];
 
         initializeAssignedPoints();
+    }
+
+    public void setLambda(float lamba) {
+        this.lambda = lamba;
+    }
+
+    /**
+     * Refines the lambda value based on the current clustering results.
+     */
+    public float getRefinedLambda() {
+        int maxCluster = IntStream.range(0, k).reduce((a, b) -> centroidDenoms[a] > centroidDenoms[b] ? a : b).orElse(-1);
+        if (maxCluster == -1) {
+            return lambda;
+        }
+
+        int dimension = points[0].length();
+        VectorFloat<?> maxCenter = vectorTypeSupport.createFloatVector(dimension);
+        maxCenter.copyFrom(centroids, maxCluster * dimension, 0, dimension);
+        DoubleAdder totalDist = new DoubleAdder();
+        AtomicInteger count = new AtomicInteger();
+        Arrays.stream(points).parallel().forEach(point -> {
+            if (getNearestCluster(point) == maxCluster) {
+                totalDist.add(squareL2Distance(maxCenter, point));
+                count.incrementAndGet();
+            }
+        });
+        double avgDist = totalDist.doubleValue() / count.get();
+
+        // Adjust lambda based on the average distance in the largest cluster
+        return (float) ((getMaxClusterDist(maxCluster) - avgDist) / points.length);
     }
 
     /**
@@ -325,12 +362,13 @@ public class KMeansPlusPlusClusterer {
     /**
      * Return the index of the closest centroid to the given point
      */
-    public int getNearestCluster(VectorFloat<?> point) {
+    private int getNearestCluster(VectorFloat<?> point) {
         float minDistance = Float.MAX_VALUE;
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            float distance = squareL2Distance(point, 0, centroids, i * point.length(), point.length());
+            float distance = squareL2Distance(point, 0, centroids, i * point.length(), point.length())
+                    + lambda * centroidDenoms[i];
             if (distance < minDistance) {
                 minDistance = distance;
                 nearestCluster = i;
@@ -445,5 +483,19 @@ public class KMeansPlusPlusClusterer {
 
     public VectorFloat<?> getCentroids() {
         return centroids;
+    }
+
+    /**
+     * @return the largest distance between any point and the centroid, for the given cluster
+     */
+    private float getMaxClusterDist(int cluster) {
+        float maxDist = 0;
+        for (int i = 0; i < points.length; i++) {
+            if (assignments[i] == cluster) {
+                float dist = squareL2Distance(points[i], 0, centroids, cluster * points[0].length(), points[0].length());
+                maxDist = Math.max(maxDist, dist);
+            }
+        }
+        return maxDist;
     }
 }
