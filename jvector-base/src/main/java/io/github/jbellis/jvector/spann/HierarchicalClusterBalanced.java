@@ -18,6 +18,9 @@ import java.util.stream.IntStream;
 
 import static java.lang.Math.max;
 
+// Make this the source of truth for postings lists (add methods to mutate)
+//      How does C++ add closure assignments?
+
 /**
  * Implements a Hierarchical Cluster-Balanced (HCB) algorithm for centroid selection.
  */
