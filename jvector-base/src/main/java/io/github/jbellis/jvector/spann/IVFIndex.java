@@ -96,22 +96,31 @@ public class IVFIndex {
             AtomicInteger tooSmall = new AtomicInteger();
             AtomicInteger tooLarge = new AtomicInteger();
             eliminatedCentroids.clear();
-            var newSourcePoints = new ConcurrentSkipListSet<Integer>();
+            var newCentroids = new ConcurrentSkipListSet<VectorFloat<?>>((a, b) -> {
+                for (int i = 0; i < a.length(); i++) {
+                    if (a.get(i) < b.get(i)) {
+                        return -1;
+                    } else if (a.get(i) > b.get(i)) {
+                        return 1;
+                    }
+                }
+                return 0;
+            });
             IntStream.range(0, centroids.size()).parallel().forEach(i -> {
                 if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.5 * idealExpandedAssignments) {
                     tooSmall.incrementAndGet();
                     eliminatedCentroids.add(i);
                     return;
                 }
-                if (postingsMap.get(i).size() > 2.0 * idealExpandedAssignments) {
+                if (postingsMap.get(i).size() > 2 * idealExpandedAssignments) {
                     tooLarge.incrementAndGet();
                     eliminatedCentroids.add(i);
-                    newSourcePoints.addAll(postingsMap.get(i));
+                    var subTree = new HierarchicalClusterBalanced(ravv, toIntArrayList(postingsMap.get(i)));
+                    newCentroids.addAll(subTree.computeCentroids(idealAssignments));
                 }
             });
-            var newCentroids = new HierarchicalClusterBalanced(ravv, toIntArrayList(newSourcePoints)).computeCentroids(idealAssignments);
-            System.out.printf("After pass %d, %d centroids too small and %d too large. adding %d new ones from %d points%n",
-                              pass, tooSmall.get(), tooLarge.get(), newCentroids.size(), newSourcePoints.size());
+            System.out.printf("After pass %d, %d centroids too small and %d too large. adding %d new ones%n",
+                              pass, tooSmall.get(), tooLarge.get(), newCentroids.size());
             pass++;
             if (eliminatedCentroids.size() + newCentroids.size() < 0.01 * centroids.size()) {
                 break;
