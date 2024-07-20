@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.vector.VectorUtil.addInPlace;
 import static io.github.jbellis.jvector.vector.VectorUtil.scale;
@@ -53,8 +54,6 @@ public class KMeansPlusPlusPointsClusterer {
             centroidNums[i] = vectorTypeSupport.createFloatVector(ravv.dimension());
         }
         assignments = new int[points.length];
-
-        initializeAssignedPoints();
     }
 
     /**
@@ -63,6 +62,8 @@ public class KMeansPlusPlusPointsClusterer {
      * @param iterations number of iterations to perform
      */
     public void cluster(int iterations) {
+        initializeAssignedPoints();
+
         for (int i = 0; i < iterations; i++) {
             int changedCount = clusterOnce();
             if (changedCount <= 0.01 * points.length) {
@@ -95,10 +96,10 @@ public class KMeansPlusPlusPointsClusterer {
 
         // Choose the first centroid randomly
         centroids[0] = ravv.getVector(points[random.nextInt(points.length)]).copy();
-        for (int i = 0; i < points.length; i++) {
+        IntStream.range(0, points.length).parallel().forEach(i -> {
             float distance1 = squareL2Distance(ravv.getVector(points[i]), centroids[0]);
             distances[i] = distance1;
-        }
+        });
 
         // For each subsequent centroid
         for (int i = 1; i < k; i++) {
@@ -121,13 +122,14 @@ public class KMeansPlusPlusPointsClusterer {
                 selectedIdx = random.nextInt(points.length);
             }
 
-            centroids[i] = ravv.getVector(points[selectedIdx]).copy();
+            VectorFloat<?> newCentroid = ravv.getVector(points[selectedIdx]);
+            centroids[i] = newCentroid;
 
             // Update distances, but only if the new centroid provides a closer distance
-            for (int j = 0; j < points.length; j++) {
-                float newDistance = squareL2Distance(ravv.getVector(points[j]), centroids[i]);
+            IntStream.range(0, points.length).parallel().forEach(j -> {
+                float newDistance = squareL2Distance(ravv.getVector(points[j]), newCentroid);
                 distances[j] = Math.min(distances[j], newDistance);
-            }
+            });
         }
         return centroids;
     }
@@ -219,6 +221,10 @@ public class KMeansPlusPlusPointsClusterer {
             clusters.computeIfAbsent(centroids[assignments[i]], __ -> new IntArrayList()).add(points[i]);
         }
         return clusters;
+    }
+
+    public VectorFloat<?>[] getCentroids() {
+        return this.centroids;
     }
 }
 

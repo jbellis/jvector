@@ -21,15 +21,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class IVFIndex {
-    private static final double centroidFraction = 0.01; // TODO tune this for GPU
+    private static final double centroidFraction = 0.16; // TODO tune this for GPU
 
     private final GraphIndex index;
     private final RandomAccessVectorValues ravv;
@@ -51,87 +50,38 @@ public class IVFIndex {
     }
 
     public static IVFIndex build(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf) {
+        // build the graph index
         long start = System.nanoTime();
-        // Select centroids using HCB
-        HierarchicalClusterBalanced hcb = new HierarchicalClusterBalanced(ravv);
-        int idealAssignments = (int) Math.round(1 / centroidFraction);
-        var centroids = hcb.computeCentroids(idealAssignments);
-        System.out.printf("%d initial centroids computed in %fs%n", centroids.size(), (System.nanoTime() - start) / 1_000_000_000.0);
+        var centroids = selectRandomCentroids(ravv, centroidFraction);
+        System.out.printf("Centroids computed in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
-        var postingsMap = new ConcurrentHashMap<Integer, Set<Integer>>(); // centroid indexes -> point indexes
+        start = System.nanoTime();
         OnHeapGraphIndex index;
-
-        int pass = 0;
-        var eliminatedCentroids = new ConcurrentSkipListSet<Integer>();
-        while (true) {
-            postingsMap.clear();
-
-            start = System.nanoTime();
-            // Build the graph index using these centroids
-            centroids = IntStream.range(0, centroids.size()).filter(i1 -> !eliminatedCentroids.contains(i1)).mapToObj(centroids::get).collect(Collectors.toList());
-            try (var builder = new GraphIndexBuilder(ravv, vsf, 32, 100, 1.2f, 1.2f)) {
-                index = builder.build(new ListRandomAccessVectorValues(centroids, ravv.dimension()));
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-            System.out.printf("Pass %d graph index with %d centroids built in %fs%n", pass, centroids.size(), (System.nanoTime() - start) / 1_000_000_000.0);
-
-            start = System.nanoTime();
-            // Assign vectors to centroids using the index
-            var finalIndex = index;
-            var finalCentroids = centroids;
-            ThreadLocal<GraphSearcher> searchers = ThreadLocal.withInitial(() -> new GraphSearcher(finalIndex));
-            IntStream.range(0, ravv.size()).parallel().forEach(i -> {
-                var v = ravv.getVector(i);
-                var ssp = SearchScoreProvider.exact(v, vsf, ravv);
-                var sr = searchers.get().search(ssp, 2 * MAX_ASSIGNMENTS, Bits.ALL);
-                assignVectorToClusters(ravv, vsf, i, sr, finalCentroids, postingsMap);
-            });
-            var totalAssignments = IntStream.range(0, centroids.size()).mapToLong(i -> postingsMap.getOrDefault(i, Set.of()).size()).sum();
-            System.out.printf("Pass %d with %d total vector assignments in %fs%n", pass, totalAssignments, (System.nanoTime() - start) / 1_000_000_000.0);
-            printHistogram(postingsMap);
-
-            float ratio = (float) totalAssignments / ravv.size();
-            int idealExpandedAssignments = (int) Math.round(ratio / centroidFraction);
-            AtomicInteger tooSmall = new AtomicInteger();
-            AtomicInteger tooLarge = new AtomicInteger();
-            eliminatedCentroids.clear();
-            var newCentroids = new ConcurrentSkipListSet<VectorFloat<?>>((a, b) -> {
-                for (int i = 0; i < a.length(); i++) {
-                    if (a.get(i) < b.get(i)) {
-                        return -1;
-                    } else if (a.get(i) > b.get(i)) {
-                        return 1;
-                    }
-                }
-                return 0;
-            });
-            IntStream.range(0, centroids.size()).parallel().forEach(i -> {
-                if (!postingsMap.containsKey(i) || postingsMap.get(i).size() < 0.5 * idealExpandedAssignments) {
-                    tooSmall.incrementAndGet();
-                    eliminatedCentroids.add(i);
-                    return;
-                }
-                if (postingsMap.get(i).size() > 2 * idealExpandedAssignments) {
-                    tooLarge.incrementAndGet();
-                    eliminatedCentroids.add(i);
-                    var subTree = new HierarchicalClusterBalanced(ravv, toIntArrayList(postingsMap.get(i)));
-                    newCentroids.addAll(subTree.computeCentroids(idealAssignments));
-                }
-            });
-            System.out.printf("After pass %d, %d centroids too small and %d too large. adding %d new ones%n",
-                              pass, tooSmall.get(), tooLarge.get(), newCentroids.size());
-            pass++;
-            if (eliminatedCentroids.size() + newCentroids.size() < 0.01 * centroids.size()) {
-                break;
-            }
-            centroids.addAll(newCentroids);
+        try (var builder = new GraphIndexBuilder(ravv, vsf, 32, 100, 1.2f, 1.2f)) {
+            index = builder.build(centroids);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
+        System.out.printf("Graph index built in %ss%n", (System.nanoTime() - start) / 1_000_000_000.0);
+
+        // assign vectors to centroids with closure
+        start = System.nanoTime();
+        var postings = new ConcurrentHashMap<Integer, Set<Integer>>();
+
+        ThreadLocal<GraphSearcher> searchers = ThreadLocal.withInitial(() -> new GraphSearcher(index));
+        IntStream.range(0, ravv.size()).parallel().forEach(i -> {
+            var v = ravv.getVector(i);
+            var ssp = SearchScoreProvider.exact(v, vsf, ravv);
+            // double MAX_ASSIGNMENTS to push search a bit deeper in the graph
+            var sr = searchers.get().search(ssp, 2 * MAX_ASSIGNMENTS, Bits.ALL);
+            assignVectorToClusters(ravv, vsf, i, sr, centroids, postings);
+        });
+        var totalAssignments = IntStream.range(0, centroids.size()).mapToLong(i -> postings.getOrDefault(i, Set.of()).size()).sum();
+        System.out.printf("%d total vector assignments in %fs%n", totalAssignments, (System.nanoTime() - start) / 1_000_000_000.0);
+        printHistogram(postings);
 
         var optimizedPostings = new Int2ObjectHashMap<int[]>();
-        for (int i = 0; i < centroids.size(); i++) {
-            optimizedPostings.put(i, postingsMap.get(i).stream().mapToInt(Integer::intValue).toArray());
-        }
+        postings.forEach((k, v) -> optimizedPostings.put(k, v.stream().mapToInt(Integer::intValue).toArray()));
 
         return new IVFIndex(index, ravv, optimizedPostings, vsf);
     }
@@ -155,7 +105,33 @@ public class IVFIndex {
         }
     }
 
-    private static void assignVectorToClusters(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf, int vectorId, SearchResult sr, List<VectorFloat<?>> centroidsList, Map<Integer, Set<Integer>> postings) {
+    private static RandomAccessVectorValues selectRandomCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
+        // this creates redundant indexes (since we are using source vectors as centroids, each will also
+        // end up assigned to itself in the posting lists)
+        // we will fix this by switching to HBC centroid selection
+        //
+        // in the meantime: this is worse than i thought, only about 20% of the centroids get all of the vectors mapped to them
+        int nCentroids = (int) (baseRavv.size() * centroidFraction);
+        Set<VectorFloat<?>> selected = ConcurrentHashMap.newKeySet();
+        var R = new Random();
+        while (selected.size() < nCentroids) {
+            selected.add(baseRavv.getVector(R.nextInt(baseRavv.size())));
+        }
+        List<VectorFloat<?>> L = new ArrayList<>(selected);
+        return new ListRandomAccessVectorValues(L, baseRavv.dimension());
+    }
+
+    /**
+     * @return the centroids to which we will assign the rest of the vectors
+     */
+    private static RandomAccessVectorValues selectCentroids(RandomAccessVectorValues baseRavv, double centroidFraction) {
+        // use a zero-round KMPPPC
+        int[] allPoints = IntStream.range(0, baseRavv.size()).toArray();
+        var clusterer = new KMeansPlusPlusPointsClusterer(allPoints, baseRavv, (int) (baseRavv.size() * centroidFraction));
+        return new ListRandomAccessVectorValues(List.of(clusterer.getCentroids()), baseRavv.dimension());
+    }
+
+    private static void assignVectorToClusters(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf, int vectorId, SearchResult sr, RandomAccessVectorValues centroidsList, Map<Integer, Set<Integer>> postings) {
         float baseScore = sr.getNodes()[0].score;
         List<SearchResult.NodeScore> assignedCentroids = new ArrayList<>();
 
@@ -170,14 +146,14 @@ public class IVFIndex {
             // Before assigning a vector to a centroid, we check if there's any previously assigned centroid
             // that's closer to both the vector and the candidate centroid.  If so, we skip the assignment.
             for (SearchResult.NodeScore assigned : assignedCentroids) {
-                float distanceToVector = vsf.compare(centroidsList.get(assigned.node), ravv.getVector(vectorId));
-                float distanceToCandidate = vsf.compare(centroidsList.get(ns.node), ravv.getVector(vectorId));
+                float distanceToVector = vsf.compare(centroidsList.getVector(assigned.node), ravv.getVector(vectorId));
+                float distanceToCandidate = vsf.compare(centroidsList.getVector(ns.node), ravv.getVector(vectorId));
                 if (distanceToVector < distanceToCandidate && distanceToVector < ns.score) {
                     continue outer;
                 }
             }
 
-            postings.computeIfAbsent(ns.node, __ -> new ConcurrentSkipListSet<>()).add(vectorId);
+            postings.computeIfAbsent(ns.node, __ -> ConcurrentHashMap.newKeySet()).add(vectorId);
             assignedCentroids.add(ns);
         }
     }
@@ -212,8 +188,7 @@ public class IVFIndex {
                 .sorted((a, b) -> Float.compare(b.score, a.score))
                 .limit(topK)
                 .toArray(SearchResult.NodeScore[]::new);
-        Arrays.sort(scoredPostings, (a, b) -> Float.compare(b.score, a.score));
-        return new SearchResult(Arrays.stream(scoredPostings).limit(topK).toArray(SearchResult.NodeScore[]::new),
+        return new SearchResult(scoredPostings,
                                 centroidsResult.getVisitedCount() + allPostings.size(),
                                 allPostings.size(),
                                 Float.POSITIVE_INFINITY);
