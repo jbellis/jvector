@@ -1,7 +1,6 @@
 package io.github.jbellis.jvector.spann;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -17,6 +16,7 @@ import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.vector.VectorUtil.addInPlace;
 import static io.github.jbellis.jvector.vector.VectorUtil.scale;
+import static io.github.jbellis.jvector.vector.VectorUtil.squareL2Distance;
 import static io.github.jbellis.jvector.vector.VectorUtil.subInPlace;
 
 public class KMeansPlusPlusBalancedClusterer {
@@ -38,9 +38,6 @@ public class KMeansPlusPlusBalancedClusterer {
     private final int[] centroidDenoms; // the number of points assigned to each cluster
     private final VectorFloat<?>[] centroidNums; // the sum of all points assigned to each cluster
 
-    // comparison function
-    private final VectorSimilarityFunction vsf;
-
     // Lambda parameter for balanced clustering
     private final float lambda;
 
@@ -49,15 +46,13 @@ public class KMeansPlusPlusBalancedClusterer {
      *
      * @param points the indexes of points to cluster
      * @param ravv   the source of vectors corresponding to points
-     * @param vsf    vector similarity function
      * @param lambda parameter for balanced clustering
      */
-    public KMeansPlusPlusBalancedClusterer(int[] points, RandomAccessVectorValues ravv, int k, VectorSimilarityFunction vsf, float lambda) {
+    public KMeansPlusPlusBalancedClusterer(int[] points, RandomAccessVectorValues ravv, int k, float lambda) {
         this.ravv = ravv;
         this.points = points;
         this.k = k;
-        this.centroids = chooseInitialCentroids(points, ravv, k, vsf);
-        this.vsf = vsf;
+        this.centroids = chooseInitialCentroids(points, ravv, k);
         this.lambda = lambda;
 
         centroidDenoms = new int[k];
@@ -86,7 +81,7 @@ public class KMeansPlusPlusBalancedClusterer {
         IntStream.range(0, points.length).parallel().forEach(i -> {
             VectorFloat<?> point = ravv.getVector(points[i]);
             if (getNearestCluster(point) == maxCluster) {
-                totalDist.add(vsf.compare(maxCenter, point));
+                totalDist.add(squareL2Distance(maxCenter, point));
                 count.incrementAndGet();
             }
         });
@@ -100,16 +95,14 @@ public class KMeansPlusPlusBalancedClusterer {
      * Performs clustering on the provided set of points.
      *
      * @param iterations number of iterations to perform
-     * @return an array of VectorFloat representing the final cluster centroids.
      */
-    public VectorFloat<?>[] cluster(int iterations) {
+    public void cluster(int iterations) {
         for (int i = 0; i < iterations; i++) {
             int changedCount = clusterOnce();
             if (changedCount <= 0.01 * points.length) {
                 break;
             }
         }
-        return centroids;
     }
 
     public int clusterOnce() {
@@ -120,7 +113,7 @@ public class KMeansPlusPlusBalancedClusterer {
     /**
      * Chooses the initial centroids for clustering.
      */
-    private static VectorFloat<?>[] chooseInitialCentroids(int[] points, RandomAccessVectorValues ravv, int k, VectorSimilarityFunction vsf) {
+    private static VectorFloat<?>[] chooseInitialCentroids(int[] points, RandomAccessVectorValues ravv, int k) {
         if (k <= 0) {
             throw new IllegalArgumentException("Number of clusters must be positive.");
         }
@@ -137,7 +130,7 @@ public class KMeansPlusPlusBalancedClusterer {
         // Choose the first centroid randomly
         centroids[0] = ravv.getVector(points[random.nextInt(points.length)]).copy();
         for (int i = 0; i < points.length; i++) {
-            float distance1 = vsf.compare(ravv.getVector(points[i]), centroids[0]);
+            float distance1 = squareL2Distance(ravv.getVector(points[i]), centroids[0]);
             distances[i] = Math.min(distances[i], distance1);
         }
 
@@ -166,7 +159,7 @@ public class KMeansPlusPlusBalancedClusterer {
 
             // Update distances, but only if the new centroid provides a closer distance
             for (int j = 0; j < points.length; j++) {
-                float newDistance = vsf.compare(ravv.getVector(points[j]), centroids[i]);
+                float newDistance = squareL2Distance(ravv.getVector(points[j]), centroids[i]);
                 distances[j] = Math.min(distances[j], newDistance);
             }
         }
@@ -222,7 +215,7 @@ public class KMeansPlusPlusBalancedClusterer {
         int nearestCluster = 0;
 
         for (int i = 0; i < k; i++) {
-            float distance = vsf.compare(point, centroids[i]) + lambda * centroidDenoms[i];
+            float distance = squareL2Distance(point, centroids[i]) + lambda * centroidDenoms[i];
             if (distance < minDistance) {
                 minDistance = distance;
                 nearestCluster = i;
@@ -269,7 +262,7 @@ public class KMeansPlusPlusBalancedClusterer {
         float maxDist = 0;
         for (int i = 0; i < points.length; i++) {
             if (assignments[i] == cluster) {
-                float dist = vsf.compare(ravv.getVector(points[i]), centroids[cluster]);
+                float dist = squareL2Distance(ravv.getVector(points[i]), centroids[cluster]);
                 maxDist = Math.max(maxDist, dist);
             }
         }
