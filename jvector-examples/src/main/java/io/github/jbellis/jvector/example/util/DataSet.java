@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class DataSet {
     public final String name;
@@ -81,19 +82,31 @@ public class DataSet {
             return new DataSet(pathStr, similarityFunction, baseVectors, queryVectors, groundTruth);
         }
 
-        // remove zero vectors, noting that this will change the indexes of the ground truth answers
+        // remove zero vectors and duplicates, noting that this will change the indexes of the ground truth answers
         List<VectorFloat<?>> scrubbedBaseVectors;
         List<VectorFloat<?>> scrubbedQueryVectors;
         List<HashSet<Integer>> gtSet;
         scrubbedBaseVectors = new ArrayList<>(baseVectors.size());
         scrubbedQueryVectors = new ArrayList<>(queryVectors.size());
         gtSet = new ArrayList<>(groundTruth.size());
+        var uniqueVectors = new TreeSet<VectorFloat<?>>((a, b) -> {
+            assert a.length() == b.length();
+            for (int i = 0; i < a.length(); i++) {
+                if (a.get(i) < b.get(i)) {
+                    return -1;
+                }
+                if (a.get(i) > b.get(i)) {
+                    return 1;
+                }
+            }
+            return 0;
+        });
         Map<Integer, Integer> rawToScrubbed = new HashMap<>();
         {
             int j = 0;
             for (int i = 0; i < baseVectors.size(); i++) {
                 VectorFloat<?> v = baseVectors.get(i);
-                if (Math.abs(normOf(v)) > 1e-5) {
+                if (Math.abs(normOf(v)) > 1e-5 && uniqueVectors.add(v)) {
                     scrubbedBaseVectors.add(v);
                     rawToScrubbed.put(i, j++);
                 }
