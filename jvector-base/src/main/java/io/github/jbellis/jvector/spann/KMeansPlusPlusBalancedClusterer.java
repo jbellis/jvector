@@ -17,12 +17,10 @@ import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.vector.VectorUtil.addInPlace;
 import static io.github.jbellis.jvector.vector.VectorUtil.scale;
+import static io.github.jbellis.jvector.vector.VectorUtil.subInPlace;
 
 public class KMeansPlusPlusBalancedClusterer {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
-    // Maximum number of assignments for each vector
-    private static final int MAX_ASSIGNMENTS = 8;
 
     // number of centroids to compute
     private final int k;
@@ -31,24 +29,28 @@ public class KMeansPlusPlusBalancedClusterer {
     private final int[] points;
     // source of vectors corresponding to points
     private final RandomAccessVectorValues ravv;
-    // the clusters each point is assigned to
-    private final IntArrayList[] assignments;
+    // the cluster each point is assigned to
+    private final int[] assignments;
     // the centroids of each cluster
     private final VectorFloat<?>[] centroids;
 
-    // used to accelerate updating clusters
-    private final float[] centroidDenoms; // the fractional number of points assigned to each cluster
-    private final VectorFloat<?>[] centroidNums; // the weighted sum of all points assigned to each cluster
+    // used to accelerate updating clusters by unweighted L2 distance.
+    private final int[] centroidDenoms; // the number of points assigned to each cluster
+    private final VectorFloat<?>[] centroidNums; // the sum of all points assigned to each cluster
 
     // comparison function
     private final VectorSimilarityFunction vsf;
 
     // Lambda parameter for balanced clustering
     private final float lambda;
-    private int closureThreshold;
 
     /**
      * Constructs a KMeansPlusPlusBalancedClusterer with the specified points and initial centroids.
+     *
+     * @param points the indexes of points to cluster
+     * @param ravv   the source of vectors corresponding to points
+     * @param vsf    vector similarity function
+     * @param lambda parameter for balanced clustering
      */
     public KMeansPlusPlusBalancedClusterer(int[] points, RandomAccessVectorValues ravv, int k, VectorSimilarityFunction vsf, float lambda) {
         this.ravv = ravv;
@@ -58,24 +60,14 @@ public class KMeansPlusPlusBalancedClusterer {
         this.vsf = vsf;
         this.lambda = lambda;
 
-        centroidDenoms = new float[k];
+        centroidDenoms = new int[k];
         centroidNums = new VectorFloat<?>[k];
         for (int i = 0; i < k; i++) {
             centroidNums[i] = vectorTypeSupport.createFloatVector(ravv.dimension());
         }
-        assignments = new IntArrayList[k];
-        for (int i = 0; i < k; i++) {
-            assignments[i] = new IntArrayList();
-        }
+        assignments = new int[points.length];
 
-        closureThreshold = computeClosureThreshold();
         initializeAssignedPoints();
-    }
-
-    /** compute a threshold such that on average each point will have MAX_ASSIGNMENTS/2 assignments */
-    private int computeClosureThreshold() {
-        // nearest is broken, needs to sort
-        // should we dynamically adjust threshold as we compute or do it once up front for the entire HCB?
     }
 
     /**
@@ -106,16 +98,23 @@ public class KMeansPlusPlusBalancedClusterer {
 
     /**
      * Performs clustering on the provided set of points.
+     *
+     * @param iterations number of iterations to perform
+     * @return an array of VectorFloat representing the final cluster centroids.
      */
-    public void cluster(int iterations) {
+    public VectorFloat<?>[] cluster(int iterations) {
         for (int i = 0; i < iterations; i++) {
-            updateCentroids();
-            int changedCount = updateAssignedPoints();
+            int changedCount = clusterOnce();
             if (changedCount <= 0.01 * points.length) {
-                System.out.println("Converged after " + i + " iterations");
                 break;
             }
         }
+        return centroids;
+    }
+
+    public int clusterOnce() {
+        updateCentroids();
+        return updateAssignedPoints();
     }
 
     /**
@@ -175,88 +174,48 @@ public class KMeansPlusPlusBalancedClusterer {
     }
 
     /**
-     * Assigns points to the nearest clusters. This method should only be called once after initial centroids are chosen.
+     * Assigns points to the nearest cluster. The results are stored as ordinals in `assignments`.
+     * This method should only be called once after initial centroids are chosen.
      */
     private void initializeAssignedPoints() {
         for (int i = 0; i < points.length; i++) {
             VectorFloat<?> point = ravv.getVector(points[i]);
-            var nearestClusters = getNearestClusters(point);
-            float weight = 1.0f / nearestClusters.size();
-            for (int cluster : nearestClusters) {
-                assignments[cluster].add(i);
-                centroidDenoms[cluster] += weight;
-                var scaled = point.copy();
-                scale(scaled, weight);
-                addInPlace(centroidNums[cluster], scaled);
-            }
+            var newAssignment = getNearestCluster(point);
+            centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
+            addInPlace(centroidNums[newAssignment], point);
+            assignments[i] = newAssignment;
         }
     }
 
     /**
-     * Assigns points to the nearest clusters.
+     * Assigns points to the nearest cluster. The results are stored as ordinals in `assignments`,
+     * and `centroidNums` and `centroidDenoms` are updated to accelerate centroid recomputation.
+     *
      * @return the number of points that changed clusters
      */
     private int updateAssignedPoints() {
-        var oldAssignments = new IntArrayList[k];
-        for (int i = 0; i < k; i++) {
-            var a = new IntArrayList(assignments[i].size(), Integer.MIN_VALUE);
-            a.addAll(assignments[i]);
-            oldAssignments[i] = a;
-            assignments[i].clear();
-        }
+        int changedCount = 0;
 
         for (int i = 0; i < points.length; i++) {
             VectorFloat<?> point = ravv.getVector(points[i]);
-            var newAssignments = getNearestClusters(point);
+            var oldAssignment = assignments[i];
+            var newAssignment = getNearestCluster(point);
 
-            float weight = 1.0f / newAssignments.size();
-            for (int cluster : newAssignments) {
-                assignments[cluster].add(i);
-                centroidDenoms[cluster] += weight;
-                var scaled = point.copy();
-                scale(scaled, weight);
-                addInPlace(centroidNums[cluster], scaled);
+            if (newAssignment != oldAssignment) {
+                centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
+                subInPlace(centroidNums[oldAssignment], point);
+                centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
+                addInPlace(centroidNums[newAssignment], point);
+                assignments[i] = newAssignment;
+                changedCount++;
             }
         }
 
-        return IntStream.range(0, k).map(i -> {
-            var old = oldAssignments[i];
-            var current = assignments[i];
-            return old.equals(current) ? 0 : 1;
-        }).sum();
+        return changedCount;
     }
 
     /**
-     * Return the indices of the closest centroids to the given point
-     */
-    private IntArrayList getNearestClusters(VectorFloat<?> point) {
-        float[] distances = new float[k];
-        for (int i = 0; i < k; i++) {
-            distances[i] = vsf.compare(point, centroids[i]) + lambda * centroidDenoms[i];
-        }
-
-        float minDistance = Float.MAX_VALUE;
-        for (float distance : distances) {
-            if (distance < minDistance) {
-                minDistance = distance;
-            }
-        }
-
-        IntArrayList nearestClusters = new IntArrayList(MAX_ASSIGNMENTS, Integer.MIN_VALUE);
-        for (int i = 0; i < k; i++) {
-            if (distances[i] <= minDistance * (1 + closureThreshold)) {
-                nearestClusters.add(i);
-                if (nearestClusters.size() >= MAX_ASSIGNMENTS) {
-                    break;
-                }
-            }
-        }
-
-        return nearestClusters;
-    }
-
-    /**
-     * Return the index of the single closest centroid to the given point
+     * Return the index of the closest centroid to the given point
      */
     private int getNearestCluster(VectorFloat<?> point) {
         float minDistance = Float.MAX_VALUE;
@@ -278,7 +237,8 @@ public class KMeansPlusPlusBalancedClusterer {
      */
     private void updateCentroids() {
         for (int i = 0; i < k; i++) {
-            if (centroidDenoms[i] == 0) {
+            var denom = centroidDenoms[i];
+            if (denom == 0) {
                 // no points assigned to this cluster
                 initializeCentroidToRandomPoint(i);
             } else {
@@ -286,9 +246,6 @@ public class KMeansPlusPlusBalancedClusterer {
                 scale(centroid, 1.0f / centroidDenoms[i]);
                 centroids[i] = centroid;
             }
-            // Reset for next iteration
-            centroidDenoms[i] = 0;
-            centroidNums[i] = vectorTypeSupport.createFloatVector(ravv.dimension());
         }
     }
 
@@ -299,8 +256,8 @@ public class KMeansPlusPlusBalancedClusterer {
 
     public Map<VectorFloat<?>, IntArrayList> getClusters() {
         var clusters = new IdentityHashMap<VectorFloat<?>, IntArrayList>();
-        for (int i = 0; i < k; i++) {
-            clusters.put(centroids[i], assignments[i]);
+        for (int i = 0; i < points.length; i++) {
+            clusters.computeIfAbsent(centroids[assignments[i]], __ -> new IntArrayList()).add(points[i]);
         }
         return clusters;
     }
@@ -310,10 +267,11 @@ public class KMeansPlusPlusBalancedClusterer {
      */
     private float getMaxClusterDist(int cluster) {
         float maxDist = 0;
-        for (int i = 0; i < assignments[cluster].size(); i++) {
-            int pointIndex = assignments[cluster].get(i);
-            float dist = vsf.compare(ravv.getVector(points[pointIndex]), centroids[cluster]);
-            maxDist = Math.max(maxDist, dist);
+        for (int i = 0; i < points.length; i++) {
+            if (assignments[i] == cluster) {
+                float dist = vsf.compare(ravv.getVector(points[i]), centroids[cluster]);
+                maxDist = Math.max(maxDist, dist);
+            }
         }
         return maxDist;
     }

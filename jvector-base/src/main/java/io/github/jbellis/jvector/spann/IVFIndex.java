@@ -34,6 +34,11 @@ public class IVFIndex {
     private final ExplicitThreadLocal<GraphSearcher> searchers;
     private final VectorSimilarityFunction vsf;
 
+    // Assign vector to the lists of all centroids within this factor of the closest
+    private static final float CLOSURE_THRESHOLD = 10.0f;
+    // Maximum number of assignments for each vector
+    private static final int MAX_ASSIGNMENTS = 8;
+
     public IVFIndex(GraphIndex index, RandomAccessVectorValues ravv, Int2ObjectHashMap<int[]> postings, VectorSimilarityFunction vsf) {
         this.index = index;
         this.ravv = ravv;
@@ -62,6 +67,15 @@ public class IVFIndex {
         }
         System.out.printf("Graph index built in %fs%n", (System.nanoTime() - start) / 1_000_000_000.0);
 
+        start = System.nanoTime();
+        // Assign vectors to centroids
+        ThreadLocal<GraphSearcher> searchers = ThreadLocal.withInitial(() -> new GraphSearcher(index));
+        IntStream.range(0, ravv.size()).parallel().forEach(i -> {
+            var v = ravv.getVector(i);
+            var ssp = SearchScoreProvider.exact(v, vsf, ravv);
+            var sr = searchers.get().search(ssp, 2 * MAX_ASSIGNMENTS, Bits.ALL);
+            assignVectorToClusters(ravv, vsf, i, sr, centroidsList, postings);
+        });
         var optimizedPostings = new Int2ObjectHashMap<int[]>();
         for (int i = 0; i < centroidsList.size(); i++) {
             var centroid = centroidsList.get(i);
@@ -83,6 +97,33 @@ public class IVFIndex {
             } else {
                 System.out.printf("%3d: %n", i * 200);
             }
+        }
+    }
+
+    private static void assignVectorToClusters(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf, int vectorId, SearchResult sr, List<VectorFloat<?>> centroidsList, Map<VectorFloat<?>, Set<Integer>> postings) {
+        float baseScore = sr.getNodes()[0].score;
+        List<SearchResult.NodeScore> assignedCentroids = new ArrayList<>();
+
+        outer:
+        for (int i = 0; i < sr.getNodes().length && i < MAX_ASSIGNMENTS; i++) {
+            SearchResult.NodeScore ns = sr.getNodes()[i];
+            if (ns.score >= baseScore * (1 + CLOSURE_THRESHOLD)) {
+                break;
+            }
+
+            // RNG rule is like HNSW diversity:
+            // Before assigning a vector to a centroid, we check if there's any previously assigned centroid
+            // that's closer to both the vector and the candidate centroid.  If so, we skip the assignment.
+            for (SearchResult.NodeScore assigned : assignedCentroids) {
+                float distanceToVector = vsf.compare(centroidsList.get(assigned.node), ravv.getVector(vectorId));
+                float distanceToCandidate = vsf.compare(centroidsList.get(ns.node), ravv.getVector(vectorId));
+                if (distanceToVector < distanceToCandidate && distanceToVector < ns.score) {
+                    continue outer;
+                }
+            }
+
+            postings.get(centroidsList.get(ns.node)).add(vectorId);
+            assignedCentroids.add(ns);
         }
     }
 
