@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.graph.NodesIterator;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -32,21 +33,33 @@ import java.nio.file.Path;
 public class GPUPQVectors implements CompressedVectors {
     private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ThreadLocal<MemorySegmentVectorFloat> reusableResults;
-    private final ThreadLocal<MemorySegmentByteSequence> reusableIds;
+    private final ThreadLocal<MemorySegmentVectorFloat> reusableVectors;
 
     private final MemorySegment pqVectorStruct;
-    private final int degree;
+    private final RandomAccessVectorValues ravv;
+    private final int batchSize;
 
-    private GPUPQVectors(MemorySegment pqVectorStruct, int degree) {
-        this.pqVectorStruct = pqVectorStruct;
-        this.degree = degree;
-        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(degree).reinterpret(degree * 4))); // DEMOFIXME: use real degree
-        this.reusableIds = ThreadLocal.withInitial(() -> new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(degree).reinterpret(degree * 4)));
+    private GPUPQVectors(MemorySegment pqVectorStruct, int batchSize, int dimension) {
+        this(pqVectorStruct, null, batchSize, dimension);
     }
 
-    public static GPUPQVectors load(Path pqVectorsPath, int degree) {
+    public GPUPQVectors(RandomAccessVectorValues ravv, int batchSize) {
+        this(null, ravv, batchSize, ravv.dimension());
+    }
+
+    private GPUPQVectors(MemorySegment pqVectorStruct, RandomAccessVectorValues ravv, int batchSize, int dimension) {
+        this.pqVectorStruct = pqVectorStruct;
+        this.ravv = ravv;
+        this.batchSize = batchSize;
+        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(batchSize * Float.BYTES)
+                                                                                                  .reinterpret(batchSize * Float.BYTES)));
+        this.reusableVectors = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(batchSize * dimension * Float.BYTES)
+                                                                                                   .reinterpret(batchSize * dimension * Float.BYTES)));
+    }
+
+    public static GPUPQVectors load(Path pqVectorsPath, int batchSize, int dimension) {
         MemorySegment pqVectorStruct = NativeGpuOps.load_pq_vectors(MemorySegment.ofArray(pqVectorsPath.toString().getBytes()));
-        return new GPUPQVectors(pqVectorStruct, degree);
+        return new GPUPQVectors(pqVectorStruct, batchSize, dimension); // DEMOFIXME
     }
 
     @Override
@@ -71,20 +84,24 @@ public class GPUPQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        return scoreFunctionFor(q, similarityFunction);
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        MemorySegment loadedQuery = NativeGpuOps.prepare_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get());
-        return new GPUApproximateScoreFunction() {
-            private final MemorySegmentVectorFloat results = reusableResults.get();
-            private final MemorySegmentByteSequence ids = reusableIds.get(); // DEMOFIXME HACK
+        throw new UnsupportedOperationException();
+    }
 
+    public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        return new GPUExactScoreFunction() {
+            private final MemorySegmentVectorFloat results = reusableResults.get();
+            private final MemorySegmentVectorFloat vectors = reusableVectors.get(); // DEMOFIXME HACK
+
+            /** slow!  do not use!  implemented for tests */
             @Override
             public float similarityTo(int node2) {
-                ids.setLittleEndianInt(0, node2);
-                NativeGpuOps.compute_dp_similarities(loadedQuery, ids.get(), results.get(), 1);
+                vectors.copyFrom(ravv.getVector(node2), 0, 0, q.length());
+                NativeGpuOps.compute_dp_similarities_raw(((MemorySegmentVectorFloat) q).get(), vectors.get(), q.length(), results.get(), 1);
                 return results.get(0);
             }
 
@@ -97,40 +114,15 @@ public class GPUPQVectors implements CompressedVectors {
             public VectorFloat<?> similarityTo(NodesIterator nodeIds) {
                 int length = nodeIds.size();
                 for (int i = 0; i < length; i++) {
-                    ids.setLittleEndianInt(i, nodeIds.nextInt());
+                    var id = nodeIds.next();
+                    vectors.copyFrom(ravv.getVector(id), 0, i * q.length(), q.length());
                 }
-                NativeGpuOps.compute_dp_similarities(loadedQuery, ids.get(), results.get(), length);
+                NativeGpuOps.compute_dp_similarities_raw(((MemorySegmentVectorFloat) q).get(), vectors.get(), q.length(), results.get(), length);
                 return results;
             }
 
             @Override
             public void close() {
-                NativeGpuOps.free_query(loadedQuery);
-            }
-        };
-    }
-
-    public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        var sf = (GPUApproximateScoreFunction) scoreFunctionFor(q, similarityFunction);
-        return new GPUExactScoreFunction() {
-            @Override
-            public float similarityTo(int node2) {
-                return sf.similarityTo(node2);
-            }
-
-            @Override
-            public void close() {
-                sf.close();
-            }
-
-            @Override
-            public VectorFloat<?> similarityTo(NodesIterator nodeIds) {
-                return sf.similarityTo(nodeIds);
-            }
-
-            @Override
-            public boolean supportsMultinodeSimilarity() {
-                return true;
             }
         };
     }

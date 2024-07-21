@@ -53,7 +53,7 @@ public class Bench {
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
-                EnumSet.of(FeatureId.INLINE_PQ),
+//                EnumSet.of(FeatureId.INLINE_PQ),
                 EnumSet.of(FeatureId.INLINE_VECTORS) // baseline
         );
 

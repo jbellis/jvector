@@ -51,13 +51,13 @@ void free_query(jpq_query_t* query_handle);
 // Function to compute dot product similarities
 void compute_dp_similarities(jpq_query_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes);
 
+void compute_dp_similarities_raw(const float* query, const float* vectors, int32_t dim, float* similarities, int64_t n_nodes);
+
 void run_jpq_test_cohere(void);
 
 void initialize(void);
 
-float* allocate_results(int32_t length);
-
-int32_t* allocate_node_ids(int32_t length);
+void* cuda_allocate(int32_t bytes);
 
 #ifdef __cplusplus
 }
