@@ -474,7 +474,7 @@ public class Grid {
             // DEMOFIXME: forces accelerated PQVectors for GPU demo, this should have better configurability
             if (features.contains(FeatureId.INLINE_PQ)) {
                 var pqVectorsPath = Path.of("/tmp/rerank.pqv");
-                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, index.maxDegree());
+                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, 200);
                 System.out.println("Loaded accelerated PQVectors");
             }
         }

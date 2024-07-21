@@ -76,15 +76,15 @@ public class GPUPQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        MemorySegment loadedQuery = NativeGpuOps.prepare_adc_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get(), degree);
+        MemorySegment loadedQuery = NativeGpuOps.prepare_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get());
         return new GPUApproximateScoreFunction() {
             private final MemorySegmentVectorFloat results = reusableResults.get();
-            private final MemorySegmentByteSequence ids = reusableIds.get(); // HACK
+            private final MemorySegmentByteSequence ids = reusableIds.get(); // DEMOFIXME HACK
 
             @Override
             public float similarityTo(int node2) {
                 ids.setLittleEndianInt(0, node2);
-                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, ids.get(), results.get(), 1);
+                NativeGpuOps.compute_dp_similarities(loadedQuery, ids.get(), results.get(), 1);
                 return results.get(0);
             }
 
@@ -99,13 +99,13 @@ public class GPUPQVectors implements CompressedVectors {
                 for (int i = 0; i < length; i++) {
                     ids.setLittleEndianInt(i, nodeIds.nextInt());
                 }
-                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, ids.get(), results.get(), length);
+                NativeGpuOps.compute_dp_similarities(loadedQuery, ids.get(), results.get(), length);
                 return results;
             }
 
             @Override
             public void close() {
-                NativeGpuOps.free_adc_query(loadedQuery);
+                NativeGpuOps.free_query(loadedQuery);
             }
         };
     }
