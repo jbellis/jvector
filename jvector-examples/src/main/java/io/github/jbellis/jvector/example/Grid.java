@@ -472,7 +472,7 @@ public class Grid {
             this.cv = cv;
             this.features = features;
             // DEMOFIXME: forces accelerated PQVectors for GPU demo, this should have better configurability
-            if (false && features.contains(FeatureId.INLINE_PQ)) {
+            if (features.contains(FeatureId.INLINE_PQ)) {
                 var pqVectorsPath = Path.of("/tmp/rerank.pqv");
                 acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, index.maxDegree());
                 System.out.println("Loaded accelerated PQVectors");
@@ -494,7 +494,7 @@ public class Grid {
             }
             // DEMOFIXME
             ScoreFunction.ExactScoreFunction rr;
-            if (false && features.contains(FeatureId.INLINE_PQ)) {
+            if (features.contains(FeatureId.INLINE_PQ)) {
                 rr = ((GPUPQVectors) acceleratedPQV).rerankerFor(queryVector, ds.similarityFunction);
             } else {
                 rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
