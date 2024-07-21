@@ -30,7 +30,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 
 public class GPUPQVectors implements CompressedVectors {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ThreadLocal<MemorySegmentVectorFloat> reusableResults;
     private final ThreadLocal<MemorySegmentByteSequence> reusableIds;
 
@@ -121,6 +121,16 @@ public class GPUPQVectors implements CompressedVectors {
             @Override
             public void close() {
                 sf.close();
+            }
+
+            @Override
+            public VectorFloat<?> similarityTo(NodesIterator nodeIds) {
+                return sf.similarityTo(nodeIds);
+            }
+
+            @Override
+            public boolean supportsMultinodeSimilarity() {
+                return true;
             }
         };
     }
