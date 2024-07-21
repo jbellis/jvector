@@ -50,7 +50,7 @@ public class IVFIndex {
     public static IVFIndex build(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf, float centroidFraction) {
         long start = System.nanoTime();
         // Select centroids using HCB
-        var centroids = selectKmeansCentroids(ravv, centroidFraction);
+        var centroids = selectRandomCentroids(ravv, centroidFraction);
         System.out.printf("%d initial centroids computed in %fs%n", centroids.size(), (System.nanoTime() - start) / 1_000_000_000.0);
 
         var postingsMap = new ConcurrentHashMap<Integer, Set<Integer>>(); // centroid indexes -> point indexes
