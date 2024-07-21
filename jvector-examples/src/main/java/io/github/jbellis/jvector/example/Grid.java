@@ -252,7 +252,7 @@ public class Grid {
                                                              Path outPath,
                                                              DataSet dataset,
                                                              ProductQuantization pq)
-            throws FileNotFoundException
+            throws IOException
     {
         var floatVectors = dataset.getBaseRavv();
         var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(new OrdinalMapper.IdentityMapper());
@@ -269,6 +269,11 @@ public class Grid {
                     if (pq == null) {
                         // building in memory -- pre-encode the vectors up front so we don't get bottlenecked on single-threaded encode
                         var allEncoded = pqRerank.encodeAll(floatVectors);
+                        var pqv = new PQVectors(pqRerank, allEncoded);
+                        // save to disk
+                        try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Path.of("/tmp/rerank.pqv"))))) {
+                            pqv.write(out, OnDiskGraphIndex.CURRENT_VERSION);
+                        }
                         suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(allEncoded[ordinal]));
                     } else {
                         suppliers.put(FeatureId.INLINE_PQ, ordinal -> new InlinePQ.State(pqRerank.encode(floatVectors.getVector(ordinal))));
@@ -435,8 +440,9 @@ public class Grid {
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
                 sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
-                if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
-                    ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
+                // DEMOFIXME
+                if (cs.acceleratedPQV != null) {
+                    ((GPUPQVectors.GPUExactScoreFunction) sf.reranker()).close();
                 }
 
                 // process search result
@@ -466,18 +472,10 @@ public class Grid {
             this.cv = cv;
             this.features = features;
             // DEMOFIXME: forces accelerated PQVectors for GPU demo, this should have better configurability
-            if (cv instanceof PQVectors) {
-                Path pqVectorsPath;
-                // write PQVectors to a temp path
-                try {
-                    pqVectorsPath = Files.createTempFile("pq", ".bin");
-                    try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqVectorsPath)))) {
-                        ((PQVectors) cv).write(out, OnDiskGraphIndex.CURRENT_VERSION);
-                    }
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
+            if (features.contains(FeatureId.INLINE_PQ)) {
+                var pqVectorsPath = Path.of("/tmp/rerank.pqv");
                 acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, index.maxDegree());
+                System.out.println("Loaded accelerated PQVectors");
             }
         }
 
@@ -491,12 +489,16 @@ public class Grid {
             ScoreFunction.ApproximateScoreFunction asf;
             if (features.contains(FeatureId.FUSED_ADC)) {
                 asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-            } else if (acceleratedPQV != null) {
-                asf = acceleratedPQV.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
-            var rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
+            // DEMOFIXME
+            ScoreFunction.ExactScoreFunction rr;
+            if (features.contains(FeatureId.INLINE_PQ)) {
+                rr = ((GPUPQVectors) acceleratedPQV).rerankerFor(queryVector, ds.similarityFunction);
+            } else {
+                rr = scoringView.rerankerFor(queryVector, ds.similarityFunction);
+            }
             return new SearchScoreProvider(asf, rr);
         }
 

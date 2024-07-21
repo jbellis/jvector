@@ -110,6 +110,21 @@ public class GPUPQVectors implements CompressedVectors {
         };
     }
 
+    public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+        var sf = (GPUApproximateScoreFunction) scoreFunctionFor(q, similarityFunction);
+        return new GPUExactScoreFunction() {
+            @Override
+            public float similarityTo(int node2) {
+                return sf.similarityTo(node2);
+            }
+
+            @Override
+            public void close() {
+                sf.close();
+            }
+        };
+    }
+
     @Override
     public int count() {
         throw new UnsupportedOperationException("Not implemented");
@@ -122,6 +137,11 @@ public class GPUPQVectors implements CompressedVectors {
 
     // DEMOFIXME is there a better way to expose this?
     public interface GPUApproximateScoreFunction extends ScoreFunction.ApproximateScoreFunction {
+        void close();
+    }
+
+    // DEMOFIXME is there a better way to expose this?
+    public interface GPUExactScoreFunction extends ScoreFunction.ExactScoreFunction {
         void close();
     }
 }
