@@ -48,8 +48,6 @@ public class Grid {
 
     private static final String dirPrefix = "BenchGraphDir";
 
-    private static final int searchCentroids = 32; // TODO query pruning
-
     static void runAll(DataSet ds,
                        List<Integer> mGrid,
                        List<Integer> efConstructionGrid,
@@ -60,22 +58,27 @@ public class Grid {
     {
         var testDirectory = Files.createTempDirectory(dirPrefix);
         try {
-            runOne(ds, testDirectory);
+            for (var centroidsFraction : List.of(0.01f, 0.04f, 0.08f, 0.12f)) {
+                runOne(ds, testDirectory, centroidsFraction);
+            }
         } finally {
             Files.delete(testDirectory);
             cachedCompressors.clear();
         }
     }
 
-    static void runOne(DataSet ds, Path testDirectory) throws IOException
+    static void runOne(DataSet ds, Path testDirectory, float centroidsFraction) throws IOException
     {
-        var ivf = IVFIndex.build(ds.getBaseRavv(), ds.similarityFunction);
+        var ivf = IVFIndex.build(ds.getBaseRavv(), ds.similarityFunction, centroidsFraction);
         long start = System.nanoTime();
         var topK = ds.groundTruth.get(0).size();
-        var pqr = performQueries(ivf, ds, topK, 2);
-        var recall = ((double) pqr.topKFound) / (2 * ds.queryVectors.size() * topK);
-        System.out.format(" Query top %d recall %.4f in %.2fs after %,d nodes visited%n",
-                          topK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+        for (var searchCentroids : List.of(8, 16, 32, 64)) {
+            System.out.printf("Searching %d centroids%n", searchCentroids);
+            var pqr = performQueries(ivf, ds, topK, searchCentroids, 1);
+            var recall = ((double) pqr.topKFound) / (2 * ds.queryVectors.size() * topK);
+            System.out.format(" Query top %d recall %.4f in %.2fs after %,d nodes visited%n",
+                              topK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+        }
     }
 
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
@@ -95,7 +98,7 @@ public class Grid {
         return topKCorrect(topK, a, gt);
     }
 
-    private static ResultSummary performQueries(IVFIndex ivf, DataSet ds, int topK, int queryRuns) {
+    private static ResultSummary performQueries(IVFIndex ivf, DataSet ds, int topK, int searchCentroids, int queryRuns) {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
