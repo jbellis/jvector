@@ -28,9 +28,6 @@ import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.AbstractLongHeap;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.agrona.collections.Int2ObjectHashMap;
 
 import static java.lang.Math.min;
@@ -42,8 +39,6 @@ import static java.lang.Math.min;
  * or unbounded operations, depending on the implementation subclasses, and either maxheap or minheap behavior.
  */
 public class NodeQueue {
-    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
-
     public enum Order {
         /** Smallest values at the top of the heap */
         MIN_HEAP {
@@ -152,17 +147,7 @@ public class NodeQueue {
     public float rerank(int topK, ScoreFunction.ExactScoreFunction reranker, float rerankFloor, NodeQueue reranked, NodesUnsorted unused) {
         // Rescore the nodes whose approximate score meets the floor.  Nodes that do not will be marked as -1
         int[] ids = new int[size()];
-        VectorFloat<?> exactScores;
-        if (reranker.supportsMultinodeSimilarity()) {
-            // TODO pull the full logic into this branch, including rerankFloor
-            for (int i = 0; i < size(); i++) {
-                long heapValue = heap.get(i + 1);
-                ids[i] = decodeNodeId(heapValue);
-            }
-            exactScores = reranker.similarityTo(new NodesIterator.ArrayNodesIterator(ids));
-        } else {
-            exactScores = vts.createFloatVector(size());
-        }
+        float[] exactScores = new float[size()];
         var approximateScoresById = new Int2ObjectHashMap<Float>();
         float bestScore = Float.NEGATIVE_INFINITY;
         int bestIndex = -1;
@@ -179,10 +164,8 @@ public class NodeQueue {
 
             if (score >= rerankFloor) {
                 // rerank this one
-                if (!reranker.supportsMultinodeSimilarity()) {
-                    ids[i] = nodeId;
-                    exactScores.set(i, reranker.similarityTo(ids[i]));
-                }
+                ids[i] = nodeId;
+                exactScores[i] = reranker.similarityTo(ids[i]);
                 approximateScoresById.put(ids[i], Float.valueOf(score));
                 scoresAboveFloor++;
             } else {
@@ -193,10 +176,8 @@ public class NodeQueue {
 
         if (scoresAboveFloor == 0 && bestIndex >= 0) {
             // if nothing was above the floor, then rerank the best one found
-            if (!reranker.supportsMultinodeSimilarity()) {
-                ids[bestIndex] = decodeNodeId(heap.get(bestIndex + 1));
-                exactScores.set(bestIndex, reranker.similarityTo(ids[bestIndex]));
-            }
+            ids[bestIndex] = decodeNodeId(heap.get(bestIndex + 1));
+            exactScores[bestIndex] = reranker.similarityTo(ids[bestIndex]);
             approximateScoresById.put(ids[bestIndex], Float.valueOf(bestScore));
         }
 
@@ -211,11 +192,11 @@ public class NodeQueue {
             // to the unused pile, but push() can't tell us what node was evicted when the queue was already full, so
             // we examine that manually
             if (reranked.size() < topK) {
-                reranked.push(ids[i], exactScores.get(i));
-            } else if (exactScores.get(i) > reranked.topScore()) {
+                reranked.push(ids[i], exactScores[i]);
+            } else if (exactScores[i] > reranked.topScore()) {
                 int evictedNode = reranked.topNode();
                 unused.add(evictedNode, approximateScoresById.get(evictedNode));
-                reranked.push(ids[i], exactScores.get(i));
+                reranked.push(ids[i], exactScores[i]);
             } else {
                 unused.add(ids[i], decodeScore(heap.get(i + 1)));
             }

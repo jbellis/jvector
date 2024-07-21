@@ -53,12 +53,12 @@ public class GPUTest {
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(ones);
 
         int nodeIdCount = 10;
-        var nodeIds = new MemorySegmentByteSequence(NativeGpuOps.cuda_allocate(nodeIdCount * Integer.BYTES).reinterpret(nodeIdCount * Integer.BYTES));
+        var nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
         for (int i = 0; i < nodeIdCount; i++) {
             nodeIds.setLittleEndianInt(i, i);
         }
 
-        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(nodeIdCount * Float.BYTES).reinterpret(nodeIdCount * Float.BYTES));
+        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         // Compute similarities without ADC
         MemorySegment query = NativeGpuOps.prepare_query(dataset, q.get());
         NativeGpuOps.compute_dp_similarities(query,
@@ -87,9 +87,9 @@ public class GPUTest {
     private static void benchmarkRaw(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
         int nodeIdCount = 200;
-        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(nodeIdCount * Integer.BYTES).reinterpret(nodeIdCount * Float.BYTES));
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
-        MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.cuda_allocate(nodeIdCount * Integer.BYTES).reinterpret(nodeIdCount * Integer.BYTES));
+        MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
 
         long startTime = System.nanoTime();
         for (int i = 0; i < 1000_000; i++) {
@@ -117,9 +117,9 @@ public class GPUTest {
     private static void benchmarkADC(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
         int nodeIdCount = 32; // Changed to 32 as per the ADC benchmark in C++
-        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(nodeIdCount * Integer.BYTES).reinterpret(nodeIdCount * Float.BYTES));
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
-        MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.cuda_allocate(nodeIdCount * Integer.BYTES).reinterpret(nodeIdCount * Integer.BYTES));
+        MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
 
         long startTime = System.nanoTime();
         for (int i = 0; i < 100_000; i++) {

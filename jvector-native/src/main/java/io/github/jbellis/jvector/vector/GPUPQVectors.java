@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.graph.NodesIterator;
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.VectorCompressor;
@@ -31,35 +30,23 @@ import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 
 public class GPUPQVectors implements CompressedVectors {
-    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ThreadLocal<MemorySegmentVectorFloat> reusableResults;
-    private final ThreadLocal<MemorySegmentVectorFloat> reusableVectors;
+    private final ThreadLocal<MemorySegmentByteSequence> reusableIds;
 
     private final MemorySegment pqVectorStruct;
-    private final RandomAccessVectorValues ravv;
-    private final int batchSize;
+    private final int degree;
 
-    private GPUPQVectors(MemorySegment pqVectorStruct, int batchSize, int dimension) {
-        this(pqVectorStruct, null, batchSize, dimension);
-    }
-
-    public GPUPQVectors(RandomAccessVectorValues ravv, int batchSize) {
-        this(null, ravv, batchSize, ravv.dimension());
-    }
-
-    private GPUPQVectors(MemorySegment pqVectorStruct, RandomAccessVectorValues ravv, int batchSize, int dimension) {
+    private GPUPQVectors(MemorySegment pqVectorStruct, int degree) {
         this.pqVectorStruct = pqVectorStruct;
-        this.ravv = ravv;
-        this.batchSize = batchSize;
-        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(batchSize * Float.BYTES)
-                                                                                                  .reinterpret(batchSize * Float.BYTES)));
-        this.reusableVectors = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.cuda_allocate(batchSize * dimension * Float.BYTES)
-                                                                                                   .reinterpret(batchSize * dimension * Float.BYTES)));
+        this.degree = degree;
+        this.reusableResults = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(degree).reinterpret(degree * 4))); // DEMOFIXME: use real degree
+        this.reusableIds = ThreadLocal.withInitial(() -> new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(degree).reinterpret(degree * 4)));
     }
 
-    public static GPUPQVectors load(Path pqVectorsPath, int batchSize, int dimension) {
+    public static GPUPQVectors load(Path pqVectorsPath, int degree) {
         MemorySegment pqVectorStruct = NativeGpuOps.load_pq_vectors(MemorySegment.ofArray(pqVectorsPath.toString().getBytes()));
-        return new GPUPQVectors(pqVectorStruct, batchSize, dimension); // DEMOFIXME
+        return new GPUPQVectors(pqVectorStruct, degree);
     }
 
     @Override
@@ -84,24 +71,20 @@ public class GPUPQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        throw new UnsupportedOperationException("Not implemented");
+        return scoreFunctionFor(q, similarityFunction);
     }
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        throw new UnsupportedOperationException();
-    }
-
-    public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        return new GPUExactScoreFunction() {
+        MemorySegment loadedQuery = NativeGpuOps.prepare_adc_query(pqVectorStruct, ((MemorySegmentVectorFloat) q).get(), degree);
+        return new GPUApproximateScoreFunction() {
             private final MemorySegmentVectorFloat results = reusableResults.get();
-            private final MemorySegmentVectorFloat vectors = reusableVectors.get(); // DEMOFIXME HACK
+            private final MemorySegmentByteSequence ids = reusableIds.get(); // HACK
 
-            /** slow!  do not use!  implemented for tests */
             @Override
             public float similarityTo(int node2) {
-                vectors.copyFrom(ravv.getVector(node2), 0, 0, q.length());
-                NativeGpuOps.compute_dp_similarities_raw(((MemorySegmentVectorFloat) q).get(), vectors.get(), q.length(), results.get(), 1);
+                ids.setLittleEndianInt(0, node2);
+                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, ids.get(), results.get(), 1);
                 return results.get(0);
             }
 
@@ -114,15 +97,15 @@ public class GPUPQVectors implements CompressedVectors {
             public VectorFloat<?> similarityTo(NodesIterator nodeIds) {
                 int length = nodeIds.size();
                 for (int i = 0; i < length; i++) {
-                    var id = nodeIds.next();
-                    vectors.copyFrom(ravv.getVector(id), 0, i * q.length(), q.length());
+                    ids.setLittleEndianInt(i, nodeIds.nextInt());
                 }
-                NativeGpuOps.compute_dp_similarities_raw(((MemorySegmentVectorFloat) q).get(), vectors.get(), q.length(), results.get(), length);
+                NativeGpuOps.compute_dp_similarities_adc(loadedQuery, ids.get(), results.get(), length);
                 return results;
             }
 
             @Override
             public void close() {
+                NativeGpuOps.free_adc_query(loadedQuery);
             }
         };
     }
@@ -139,11 +122,6 @@ public class GPUPQVectors implements CompressedVectors {
 
     // DEMOFIXME is there a better way to expose this?
     public interface GPUApproximateScoreFunction extends ScoreFunction.ApproximateScoreFunction {
-        void close();
-    }
-
-    // DEMOFIXME is there a better way to expose this?
-    public interface GPUExactScoreFunction extends ScoreFunction.ExactScoreFunction {
         void close();
     }
 }

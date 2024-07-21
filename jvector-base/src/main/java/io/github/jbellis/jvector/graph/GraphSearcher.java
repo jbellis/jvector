@@ -440,17 +440,6 @@ public class GraphSearcher implements Closeable {
             return score;
         }
 
-        @Override
-        public VectorFloat<?> similarityTo(NodesIterator nodeIds) {
-            // DEMOFIXME filter the input and cache the results
-            return scoreProvider.reranker().similarityTo(nodeIds);
-        }
-
-        @Override
-        public boolean supportsMultinodeSimilarity() {
-            return scoreProvider.reranker().supportsMultinodeSimilarity();
-        }
-
         public int getRerankCalls() {
             return rerankCalls;
         }

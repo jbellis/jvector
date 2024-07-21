@@ -340,17 +340,6 @@ void compute_dp_similarities(
     res.sync_stream();
 }
 
-__global__ void compute_dp_similarities_raw_kernel(const float* d_query, const float* vectors, int32_t dim, float* similarities, int64_t n_nodes) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n_nodes) {
-        float dot_product = 0.0f;
-        for (int i = 0; i < dim; ++i) {
-            dot_product += d_query[i] * vectors[idx * dim + i];
-        }
-        similarities[idx] = dot_product;
-    }
-}
-
 int32_t readIntBE(std::ifstream& file) {
     uint32_t value;
     file.read(reinterpret_cast<char*>(&value), sizeof(int32_t));
@@ -642,28 +631,19 @@ extern "C" {
         compute_dp_similarities(res, query_handle->d_query, query_handle->dataset->dataset, node_ids, similarities, n_nodes);
     }
 
-    void compute_dp_similarities_raw(const float* query, const float* vectors, int32_t dim, float* similarities, int64_t n_nodes) {
-        if (query == nullptr) {
-            std::cout << "query is null" << std::endl;
-            return;
+    float* allocate_results(int32_t length) {
+        float* h_ptr = nullptr;  // Host pointer
+        cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(float));  // Allocate managed memory
+        if (err != cudaSuccess) {
+            std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
+            return nullptr;
         }
-        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
-        cudaStream_t stream = res.get_stream();
-
-        // copy query to device memory (this also fixes alignment)
-        auto d_query = raft::make_device_vector<float, int64_t>(res, dim);
-        raft::copy(d_query.data_handle(), query, dim, res.get_stream());
-
-        // Launch kernel
-        int block_size = std::min(MAX_BLOCK_SIZE, static_cast<int>(n_nodes));;
-        int grid_size = (n_nodes + block_size - 1) / block_size;
-        compute_dp_similarities_raw_kernel<<<grid_size, block_size, 0, stream>>>(d_query.data_handle(), vectors, dim, similarities, n_nodes);
-        res.sync_stream();
+        return h_ptr;
     }
 
-    void* cuda_allocate(int32_t bytes) {
-        void* h_ptr;  // Host pointer
-        cudaError_t err = cudaMallocManaged((void**)&h_ptr, bytes);  // Allocate managed memory
+    int32_t* allocate_node_ids(int32_t length) {
+        int32_t* h_ptr = nullptr;  // Host pointer
+        cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(int32_t));  // Allocate managed memory
         if (err != cudaSuccess) {
             std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
             return nullptr;
