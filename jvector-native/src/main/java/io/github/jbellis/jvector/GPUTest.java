@@ -45,6 +45,9 @@ public class GPUTest {
         benchmarkADC(dataset);
 
         NativeGpuOps.free_jpq_dataset(dataset);
+
+        // Run CAGRA benchmark
+        NativeGpuOps.call_cagra_demo();
     }
 
     private static void testWithOnes(MemorySegment dataset) {
@@ -58,7 +61,7 @@ public class GPUTest {
             nodeIds.setLittleEndianInt(i, i);
         }
 
-        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
+        var similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_float_vector(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         // Compute similarities without ADC
         MemorySegment query = NativeGpuOps.prepare_query(dataset, q.get());
         NativeGpuOps.compute_dp_similarities(query,
@@ -87,7 +90,7 @@ public class GPUTest {
     private static void benchmarkRaw(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
         int nodeIdCount = 200;
-        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_float_vector(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
         MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
 
@@ -117,7 +120,7 @@ public class GPUTest {
     private static void benchmarkADC(MemorySegment dataset) {
         var R = ThreadLocalRandom.current();
         int nodeIdCount = 32; // Changed to 32 as per the ADC benchmark in C++
-        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_results(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
+        MemorySegmentVectorFloat similarities = new MemorySegmentVectorFloat(NativeGpuOps.allocate_float_vector(nodeIdCount).reinterpret(nodeIdCount * Float.BYTES));
         MemorySegmentVectorFloat q = (MemorySegmentVectorFloat) vts.createFloatVector(DIM);
         MemorySegmentByteSequence nodeIds = new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(nodeIdCount).reinterpret(nodeIdCount * Integer.BYTES));
 

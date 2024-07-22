@@ -24,8 +24,9 @@
 #include <random>
 #include <chrono>
 #include <iostream>
+#include <vector>
+#include <mutex>
 
-#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 
@@ -39,6 +40,8 @@
 
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
+
+#include <cuvs/neighbors/cagra.hpp>
 
 constexpr int MAX_BLOCK_SIZE = 128; // the largest SM on contemporary hardware has 128 cuda cores
 
@@ -631,7 +634,7 @@ extern "C" {
         compute_dp_similarities(res, query_handle->d_query, query_handle->dataset->dataset, node_ids, similarities, n_nodes);
     }
 
-    float* allocate_results(int32_t length) {
+    float* allocate_float_vector(int32_t length) {
         float* h_ptr = nullptr;  // Host pointer
         cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(float));  // Allocate managed memory
         if (err != cudaSuccess) {

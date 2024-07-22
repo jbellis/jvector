@@ -26,6 +26,8 @@ extern "C" {
 typedef struct jpq_dataset_t jpq_dataset_t;
 typedef struct jpq_adc_t jpq_adc_t;
 typedef struct jpq_query_t jpq_query_t;
+typedef struct jv_cagra_builder_t jv_cagra_builder_t;
+typedef struct jv_cagra_index_t jv_cagra_index_t;
 
 // Function to load jpq_dataset
 jpq_dataset_t* load_pq_vectors(const char* filename);
@@ -55,9 +57,21 @@ void run_jpq_test_cohere(void);
 
 void initialize(void);
 
-float* allocate_results(int32_t length);
+float* allocate_float_vector(int32_t length);
 
 int32_t* allocate_node_ids(int32_t length);
+
+jv_cagra_builder_t* create_cagra_builder(int32_t n_nodes, int64_t dim);
+
+void add_node(jv_cagra_builder_t* builder, float* vector);
+
+jv_cagra_index_t* build_cagra_index(jv_cagra_builder_t* builder);
+
+int32_t* search_cagra_index(jv_cagra_index_t* index, float* query, int32_t topk);
+
+void free_cagra_index(jv_cagra_index_t* index);
+
+int call_cagra_demo(void);
 
 #ifdef __cplusplus
 }

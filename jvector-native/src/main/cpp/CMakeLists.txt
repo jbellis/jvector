@@ -31,15 +31,17 @@ include(rapids-find)
 
 # ------------- configure project --------------#
 
-rapids_cuda_init_architectures(test_raft)
+rapids_cuda_init_architectures(test_cuvs)
 
-project(test_raft LANGUAGES CXX CUDA)
+project(test_cuvs LANGUAGES CXX CUDA)
 
-# ------------- configure raft -----------------#
+# ------------- configure cuvs -----------------#
 
 rapids_cpm_init()
-include(cmake/thirdparty/get_raft.cmake)
+set(BUILD_CUVS_C_LIBRARY OFF)
+#include(cmake/thirdparty/get_cuvs.cmake)
+find_package(cuvs REQUIRED)
 
 # -------------- compile tasks ----------------- #
-add_library(jvectorgpu SHARED src/jvector_gpupq.cu)
-target_link_libraries(jvectorgpu PRIVATE raft::raft raft::compiled)
+add_library(jvectorgpu SHARED src/jvector_gpupq.cu src/cagra_example.cu src/jvector_cagra.cu)
+target_link_libraries(jvectorgpu PRIVATE cuvs::cuvs $<TARGET_NAME_IF_EXISTS:conda_env>)

@@ -1554,46 +1554,46 @@ public class NativeGpuOps {
         }
     }
 
-    private static class allocate_results {
+    private static class allocate_float_vector {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeGpuOps.C_POINTER,
             NativeGpuOps.C_INT
         );
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeGpuOps.findOrThrow("allocate_results"),
+                    NativeGpuOps.findOrThrow("allocate_float_vector"),
                     DESC, Linker.Option.critical(true));
     }
 
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float *allocate_results(int32_t length)
+     * float *allocate_float_vector(int32_t length)
      * }
      */
-    public static FunctionDescriptor allocate_results$descriptor() {
-        return allocate_results.DESC;
+    public static FunctionDescriptor allocate_float_vector$descriptor() {
+        return allocate_float_vector.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float *allocate_results(int32_t length)
+     * float *allocate_float_vector(int32_t length)
      * }
      */
-    public static MethodHandle allocate_results$handle() {
-        return allocate_results.HANDLE;
+    public static MethodHandle allocate_float_vector$handle() {
+        return allocate_float_vector.HANDLE;
     }
     /**
      * {@snippet lang=c :
-     * float *allocate_results(int32_t length)
+     * float *allocate_float_vector(int32_t length)
      * }
      */
-    public static MemorySegment allocate_results(int length) {
-        var mh$ = allocate_results.HANDLE;
+    public static MemorySegment allocate_float_vector(int length) {
+        var mh$ = allocate_float_vector.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("allocate_results", length);
+                traceDowncall("allocate_float_vector", length);
             }
             return (MemorySegment)mh$.invokeExact(length);
         } catch (Throwable ex$) {
@@ -1643,6 +1643,288 @@ public class NativeGpuOps {
                 traceDowncall("allocate_node_ids", length);
             }
             return (MemorySegment)mh$.invokeExact(length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class create_cagra_builder {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_INT,
+            NativeGpuOps.C_LONG
+        );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("create_cagra_builder"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * jv_cagra_builder_t *create_cagra_builder(int32_t n_nodes, int64_t dim)
+     * }
+     */
+    public static FunctionDescriptor create_cagra_builder$descriptor() {
+        return create_cagra_builder.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * jv_cagra_builder_t *create_cagra_builder(int32_t n_nodes, int64_t dim)
+     * }
+     */
+    public static MethodHandle create_cagra_builder$handle() {
+        return create_cagra_builder.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * jv_cagra_builder_t *create_cagra_builder(int32_t n_nodes, int64_t dim)
+     * }
+     */
+    public static MemorySegment create_cagra_builder(int n_nodes, long dim) {
+        var mh$ = create_cagra_builder.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("create_cagra_builder", n_nodes, dim);
+            }
+            return (MemorySegment)mh$.invokeExact(n_nodes, dim);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class add_node {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER
+        );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("add_node"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void add_node(jv_cagra_builder_t *builder, float *vector)
+     * }
+     */
+    public static FunctionDescriptor add_node$descriptor() {
+        return add_node.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void add_node(jv_cagra_builder_t *builder, float *vector)
+     * }
+     */
+    public static MethodHandle add_node$handle() {
+        return add_node.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * void add_node(jv_cagra_builder_t *builder, float *vector)
+     * }
+     */
+    public static void add_node(MemorySegment builder, MemorySegment vector) {
+        var mh$ = add_node.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("add_node", builder, vector);
+            }
+            mh$.invokeExact(builder, vector);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class build_cagra_index {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER
+        );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("build_cagra_index"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * jv_cagra_index_t *build_cagra_index(jv_cagra_builder_t *builder)
+     * }
+     */
+    public static FunctionDescriptor build_cagra_index$descriptor() {
+        return build_cagra_index.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * jv_cagra_index_t *build_cagra_index(jv_cagra_builder_t *builder)
+     * }
+     */
+    public static MethodHandle build_cagra_index$handle() {
+        return build_cagra_index.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * jv_cagra_index_t *build_cagra_index(jv_cagra_builder_t *builder)
+     * }
+     */
+    public static MemorySegment build_cagra_index(MemorySegment builder) {
+        var mh$ = build_cagra_index.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("build_cagra_index", builder);
+            }
+            return (MemorySegment)mh$.invokeExact(builder);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class search_cagra_index {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_POINTER,
+            NativeGpuOps.C_INT
+        );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("search_cagra_index"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * int32_t *search_cagra_index(jv_cagra_index_t *index, float *query, int32_t topk)
+     * }
+     */
+    public static FunctionDescriptor search_cagra_index$descriptor() {
+        return search_cagra_index.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * int32_t *search_cagra_index(jv_cagra_index_t *index, float *query, int32_t topk)
+     * }
+     */
+    public static MethodHandle search_cagra_index$handle() {
+        return search_cagra_index.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * int32_t *search_cagra_index(jv_cagra_index_t *index, float *query, int32_t topk)
+     * }
+     */
+    public static MemorySegment search_cagra_index(MemorySegment index, MemorySegment query, int topk) {
+        var mh$ = search_cagra_index.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("search_cagra_index", index, query, topk);
+            }
+            return (MemorySegment)mh$.invokeExact(index, query, topk);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class free_cagra_index {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeGpuOps.C_POINTER
+        );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("free_cagra_index"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void free_cagra_index(jv_cagra_index_t *index)
+     * }
+     */
+    public static FunctionDescriptor free_cagra_index$descriptor() {
+        return free_cagra_index.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void free_cagra_index(jv_cagra_index_t *index)
+     * }
+     */
+    public static MethodHandle free_cagra_index$handle() {
+        return free_cagra_index.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * void free_cagra_index(jv_cagra_index_t *index)
+     * }
+     */
+    public static void free_cagra_index(MemorySegment index) {
+        var mh$ = free_cagra_index.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("free_cagra_index", index);
+            }
+            mh$.invokeExact(index);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class call_cagra_demo {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeGpuOps.C_INT    );
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
+                    NativeGpuOps.findOrThrow("call_cagra_demo"),
+                    DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * int call_cagra_demo()
+     * }
+     */
+    public static FunctionDescriptor call_cagra_demo$descriptor() {
+        return call_cagra_demo.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * int call_cagra_demo()
+     * }
+     */
+    public static MethodHandle call_cagra_demo$handle() {
+        return call_cagra_demo.HANDLE;
+    }
+    /**
+     * {@snippet lang=c :
+     * int call_cagra_demo()
+     * }
+     */
+    public static int call_cagra_demo() {
+        var mh$ = call_cagra_demo.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("call_cagra_demo");
+            }
+            return (int)mh$.invokeExact();
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

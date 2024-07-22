@@ -24,6 +24,8 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.graph.AcceleratedIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -211,5 +213,10 @@ public interface VectorUtilSupport {
   // DEMOFIXME: hack, we probably want a way to load from memory too
   default CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath, int i) {
     throw new UnsupportedOperationException("This VectorUtilSupport implementation does not support accelerated PQ vectors");
+  }
+
+  // DEMOFIXME: hack, probably the wrong API
+  default AcceleratedIndex.ExternalIndex getCagraIndex(RandomAccessVectorValues ravv) {
+    throw new UnsupportedOperationException("This VectorUtilSupport implementation does not support CAGRA indexes");
   }
 }

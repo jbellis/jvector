@@ -93,6 +93,10 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
         segment.set(LITTLE_ENDIAN_INT_LAYOUT_UNALIGNED, intIndex * 4, value);
     }
 
+    public int getLittleEndianInt(int intIndex) {
+        return segment.get(LITTLE_ENDIAN_INT_LAYOUT_UNALIGNED, intIndex * 4);
+    }
+
     @Override
     public void zero() {
         segment.fill((byte) 0);

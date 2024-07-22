@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.graph.AcceleratedIndex;
+import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.LocallyAdaptiveVectorQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
@@ -185,5 +187,10 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath, int degree) {
         return GPUPQVectors.load(pqVectorsPath, degree);
+    }
+
+    @Override
+    public AcceleratedIndex.ExternalIndex getCagraIndex(RandomAccessVectorValues ravv) {
+        return new GPUCagraIndex(ravv);
     }
 }

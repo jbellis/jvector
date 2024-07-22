@@ -3,14 +3,10 @@ package io.github.jbellis.jvector.example;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.graph.AcceleratedIndex;
-import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
-import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
-import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.VectorUtilSupport;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -20,12 +16,13 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class CagraBench {
+    private static final VectorUtilSupport vectorUtilSupport = VectorizationProvider.getInstance().getVectorUtilSupport();
 
     public static void main(String[] args) throws IOException {
         var mfd = DownloadHelper.maybeDownloadFvecs("cohere-english-v3-100k");
         var dataset = mfd.load();
 
-        var index = new AcceleratedIndex(new CagraIndex(dataset),
+        var index = new AcceleratedIndex(vectorUtilSupport.getCagraIndex(dataset.getBaseRavv()),
                                          q -> dataset.getBaseRavv().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN));
         System.out.printf("Created index of %d nodes%n", index.size());
 
@@ -57,7 +54,9 @@ public class CagraBench {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
 
+        // run queryRuns on a new thread
         for (int k = 0; k < queryRuns; k++) {
+            // DEMOFIXME: parallel searches don't work quite yet for actual GPU CAGRA yet. Reenable parallel once working
             IntStream.range(0, dataset.queryVectors.size()).parallel().forEach(i -> {
                 var sr = index.search(dataset.queryVectors.get(i), topK, rerankK);
 
