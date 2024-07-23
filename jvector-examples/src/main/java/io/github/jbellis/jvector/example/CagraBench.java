@@ -24,14 +24,15 @@ public class CagraBench {
         var mfd = DownloadHelper.maybeDownloadFvecs("cohere-english-v3-100k");
         var dataset = mfd.load();
 
+        long start = System.nanoTime();
         AcceleratedIndex.ExternalIndex cagra;
         if (Files.exists(Path.of("cohere.cagra"))) {
             cagra = vectorUtilSupport.loadCagraIndex("cohere.cagra");
-            System.out.printf("Loaded index of %d nodes%n", cagra.size());
+            System.out.printf("Loaded index of %d nodes in %ss%n", cagra.size(), (System.nanoTime() - start) / 1e9);
         } else {
             cagra = vectorUtilSupport.buildCagraIndex(dataset.getBaseRavv());
             cagra.save("cohere.cagra");
-            System.out.printf("Created index of %d nodes%n", cagra.size());
+            System.out.printf("Created index of %d nodes in %ss%n", cagra.size(), (System.nanoTime() - start) / 1e9);
         }
         var index = new AcceleratedIndex(cagra, q -> dataset.getBaseRavv().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN));
 
@@ -42,7 +43,7 @@ public class CagraBench {
 
         ResultSummary results = null;
         for (int i = 0; i < 10; i++) {
-            long start = System.nanoTime();
+            start = System.nanoTime();
             results = performQueries(dataset, index, topK, rerankK, queryRuns);
             long end = System.nanoTime();
             System.out.printf("Took %.3f seconds%n", (end - start) / 1e9);
