@@ -216,7 +216,11 @@ public interface VectorUtilSupport {
   }
 
   // DEMOFIXME: hack, probably the wrong API
-  default AcceleratedIndex.ExternalIndex getCagraIndex(RandomAccessVectorValues ravv) {
+  default AcceleratedIndex.ExternalIndex buildCagraIndex(RandomAccessVectorValues ravv) {
+    throw new UnsupportedOperationException("This VectorUtilSupport implementation does not support CAGRA indexes");
+  }
+
+  default AcceleratedIndex.ExternalIndex loadCagraIndex(String filename) {
     throw new UnsupportedOperationException("This VectorUtilSupport implementation does not support CAGRA indexes");
   }
 }

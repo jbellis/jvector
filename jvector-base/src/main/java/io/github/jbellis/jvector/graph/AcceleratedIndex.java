@@ -49,5 +49,7 @@ public class AcceleratedIndex {
 
         // useful for sanity checks
         int size();
+
+        void save(String filename);
     }
 }

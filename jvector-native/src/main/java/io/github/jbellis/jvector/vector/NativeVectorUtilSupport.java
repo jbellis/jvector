@@ -190,7 +190,12 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public AcceleratedIndex.ExternalIndex getCagraIndex(RandomAccessVectorValues ravv) {
-        return new GPUCagraIndex(ravv);
+    public AcceleratedIndex.ExternalIndex buildCagraIndex(RandomAccessVectorValues ravv) {
+        return GPUCagraIndex.build(ravv);
+    }
+
+    @Override
+    public AcceleratedIndex.ExternalIndex loadCagraIndex(String filename) {
+        return GPUCagraIndex.load(filename);
     }
 }

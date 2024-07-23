@@ -145,4 +145,42 @@ extern "C" {
         }
         delete index;
     }
-}
+
+    void save_cagra_index(jv_cagra_index_t* index, const char* filename) {
+        if (index == nullptr || filename == nullptr) {
+            return;
+        }
+
+        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+
+        try {
+            cuvs::neighbors::cagra::serialize(res, filename, index->index);
+        } catch (const std::exception& e) {
+            // Handle or log the error
+            std::cerr << "Error saving CAGRA index: " << e.what() << std::endl;
+        }
+    }
+
+    jv_cagra_index_t* load_cagra_index(const char* filename) {
+        if (filename == nullptr) {
+            return nullptr;
+        }
+
+        raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
+
+        try {
+            // Create an index with default metric (L2Expanded)
+            auto loaded_index = std::make_unique<cuvs::neighbors::cagra::index<float, uint32_t>>(res);
+
+            // Deserialize into the created index
+            cuvs::neighbors::cagra::deserialize(res, filename, loaded_index.get());
+
+            // Create and return a new jv_cagra_index_t with the loaded index
+            return new jv_cagra_index_t(std::move(*loaded_index));
+        } catch (const std::exception& e) {
+            // Handle or log the error
+            std::cerr << "Error loading CAGRA index: " << e.what() << std::endl;
+            return nullptr;
+        }
+    }
+    }

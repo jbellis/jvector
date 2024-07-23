@@ -71,6 +71,10 @@ int32_t* search_cagra_index(jv_cagra_index_t* index, float* query, int32_t topk)
 
 void free_cagra_index(jv_cagra_index_t* index);
 
+void save_cagra_index(jv_cagra_index_t* index, const char* filename);
+
+jv_cagra_index_t* load_cagra_index(const char* filename);
+
 int call_cagra_demo(void);
 
 #ifdef __cplusplus

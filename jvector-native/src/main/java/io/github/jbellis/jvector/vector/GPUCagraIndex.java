@@ -26,23 +26,30 @@ import java.lang.foreign.MemorySegment;
 
 public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
     private final MemorySegment index;
-    private final int size;
     private final ThreadLocal<MemorySegmentVectorFloat> reusableQuery;
     private final ThreadLocal<MemorySegmentByteSequence> reusableIds;
+    private final int TOP_K_MAX = 1000;
 
-    public GPUCagraIndex(RandomAccessVectorValues ravv) {
+    public GPUCagraIndex(MemorySegment index, int dimension) {
+        this.index = index;
+        this.reusableQuery = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_float_vector(dimension).reinterpret(dimension * 4)));
+        this.reusableIds = ThreadLocal.withInitial(() -> new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(TOP_K_MAX).reinterpret(TOP_K_MAX * 4)));
+    }
+
+    public static GPUCagraIndex build(RandomAccessVectorValues ravv) {
         MemorySegment builder = NativeGpuOps.create_cagra_builder(ravv.size(), ravv.dimension());
         for (int i = 0; i < ravv.size(); i++) {
             NativeGpuOps.add_node(builder, ((MemorySegmentVectorFloat) ravv.getVector(i)).get());
         }
-        index = NativeGpuOps.build_cagra_index(builder);
-        size = ravv.size();
-        this.reusableQuery = ThreadLocal.withInitial(() -> new MemorySegmentVectorFloat(NativeGpuOps.allocate_float_vector(ravv.dimension()).reinterpret(ravv.dimension() * 4)));
-        this.reusableIds = ThreadLocal.withInitial(() -> new MemorySegmentByteSequence(NativeGpuOps.allocate_node_ids(ravv.size()).reinterpret(ravv.size() * 4)));
+        var index = NativeGpuOps.build_cagra_index(builder);
+        return new GPUCagraIndex(index, ravv.dimension());
     }
 
     @Override
     public NodesIterator search(VectorFloat<?> query, int rerankK) {
+        if (rerankK > TOP_K_MAX) {
+            throw new IllegalArgumentException("rerankK must be <= " + TOP_K_MAX);
+        }
         // DEMOFIXME: use actual size? Can Cagra return too few results?
         MemorySegmentVectorFloat unifiedQuery = reusableQuery.get();
         unifiedQuery.copyFrom(query, 0, 0, query.length());
@@ -82,6 +89,16 @@ public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
     @Override
     public int size() {
         // DEMOFIXME: should probably call in to native size
-        return size;
+        return 99740;
+    }
+
+    @Override
+    public void save(String filename) {
+        NativeGpuOps.save_cagra_index(index, MemorySegment.ofArray(filename.getBytes()));
+    }
+
+    public static AcceleratedIndex.ExternalIndex load(String filename) {
+        // DEMOFIXME can we derive dimension from the index?
+        return new GPUCagraIndex(NativeGpuOps.load_cagra_index(MemorySegment.ofArray(filename.getBytes())), 1024);
     }
 }

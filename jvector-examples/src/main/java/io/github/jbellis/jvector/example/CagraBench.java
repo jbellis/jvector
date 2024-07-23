@@ -9,6 +9,8 @@ import io.github.jbellis.jvector.vector.VectorUtilSupport;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
@@ -22,9 +24,16 @@ public class CagraBench {
         var mfd = DownloadHelper.maybeDownloadFvecs("cohere-english-v3-100k");
         var dataset = mfd.load();
 
-        var index = new AcceleratedIndex(vectorUtilSupport.getCagraIndex(dataset.getBaseRavv()),
-                                         q -> dataset.getBaseRavv().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN));
-        System.out.printf("Created index of %d nodes%n", index.size());
+        AcceleratedIndex.ExternalIndex cagra;
+        if (Files.exists(Path.of("cohere.cagra"))) {
+            cagra = vectorUtilSupport.loadCagraIndex("cohere.cagra");
+            System.out.printf("Loaded index of %d nodes%n", cagra.size());
+        } else {
+            cagra = vectorUtilSupport.buildCagraIndex(dataset.getBaseRavv());
+            cagra.save("cohere.cagra");
+            System.out.printf("Created index of %d nodes%n", cagra.size());
+        }
+        var index = new AcceleratedIndex(cagra, q -> dataset.getBaseRavv().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN));
 
         // Test for recall
         int topK = 100; // Adjust as needed
@@ -32,7 +41,7 @@ public class CagraBench {
         int queryRuns = 1; // Adjust as needed
 
         ResultSummary results = null;
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 1; i++) {
             long start = System.nanoTime();
             results = performQueries(dataset, index, topK, rerankK, queryRuns);
             long end = System.nanoTime();
@@ -57,7 +66,7 @@ public class CagraBench {
         // run queryRuns on a new thread
         for (int k = 0; k < queryRuns; k++) {
             // DEMOFIXME: parallel searches don't work quite yet for actual GPU CAGRA yet. Reenable parallel once working
-            IntStream.range(0, dataset.queryVectors.size()).parallel().forEach(i -> {
+            IntStream.range(0, dataset.queryVectors.size()).forEach(i -> {
                 var sr = index.search(dataset.queryVectors.get(i), topK, rerankK);
 
                 // Process search result
