@@ -210,7 +210,7 @@ public interface VectorUtilSupport {
 
   float lvqCosine(VectorFloat<?> query, LocallyAdaptiveVectorQuantization.PackedVector vector, VectorFloat<?> centroid);
 
-  // DEMOFIXME: hack, we probably want a way to load from memory too
+  // DEMOFIXME: hack, probably the wrong API
   default CompressedVectors getAcceleratedPQVectors(Path pqVectorsPath, int i) {
     throw new UnsupportedOperationException("This VectorUtilSupport implementation does not support accelerated PQ vectors");
   }

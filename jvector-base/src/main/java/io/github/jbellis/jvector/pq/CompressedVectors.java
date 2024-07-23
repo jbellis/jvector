@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.graph.MultiAdcQuery;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
@@ -58,6 +59,10 @@ public interface CompressedVectors extends Accountable {
     @Deprecated
     default ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
         return precomputedScoreFunctionFor(q, similarityFunction);
+    }
+
+    default MultiAdcQuery prepareMultiAdcQuery(VectorFloat<?> queries, int length) {
+        throw new UnsupportedOperationException();
     }
 
     /** the number of vectors */

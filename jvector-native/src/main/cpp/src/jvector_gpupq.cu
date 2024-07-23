@@ -120,8 +120,8 @@ struct jpq_dataset_t {
 struct jpq_adc_t {
     float* lut;
     int64_t dim;
+    int32_t n_queries;
     jpq_dataset_t* dataset;
-    // scratch space for kernel
 };
 
 struct jpq_query_t {
@@ -129,18 +129,25 @@ struct jpq_query_t {
     jpq_dataset_t* dataset;
 };
 
-__global__ void compute_adc_lut_kernel(
-        const float* query,
+__global__ void compute_adc_lut_kernel_multi(
+        const float* queries,
         const float* vq_center,
         const float* pq_codebook,
         float* adc_lut,
-        int64_t pq_dim,
-        int64_t pq_len,
-        int dim
-) {
+        int32_t pq_dim,
+        int32_t pq_len,
+        int32_t dim,
+        int32_t n_queries)
+{
+    int query_idx = blockIdx.y;
     int centroid_idx = blockIdx.x;
     int thread_idx = threadIdx.x;
     int threads_per_block = blockDim.x;
+
+    if (query_idx >= n_queries) return;
+
+    const float* query = queries + query_idx * dim;
+    float* query_lut = adc_lut + query_idx * pq_dim * 256;
 
     // Each thread processes multiple subspaces if needed
     for (int subspace_idx = thread_idx; subspace_idx < pq_dim; subspace_idx += threads_per_block) {
@@ -156,38 +163,40 @@ __global__ void compute_adc_lut_kernel(
             partial_distance += q_val * (vq_val + pq_val);
         }
 
-        adc_lut[centroid_idx * pq_dim + subspace_idx] = partial_distance;
+        query_lut[centroid_idx * pq_dim + subspace_idx] = partial_distance;
     }
 }
 
 float* compute_dp_adc_setup(
         raft::device_resources const& res,
-        const raft::device_vector<float, int64_t>& d_query,
+        const raft::device_matrix<float, int64_t>& d_queries,
         const jpq_dataset<float, int64_t>& jpq_data)
 {
     cudaStream_t stream = res.get_stream();
     int64_t pq_dim = jpq_data.pq_dim();
     int64_t pq_len = jpq_data.pq_len;
     int64_t dim = jpq_data.dim();
+    int64_t n_queries = d_queries.extent(0);
 
-    // Allocate device memory for ADC lookup table
-    size_t adc_lut_size = pq_dim * 256 * sizeof(float);
+    // Allocate device memory for ADC lookup table for all queries
+    size_t adc_lut_size = n_queries * pq_dim * 256 * sizeof(float);
     float* d_adc_lut = static_cast<float*>(
         raft::resource::get_workspace_resource(res)->allocate(adc_lut_size)
     );
 
-    // Launch kernel to compute ADC lookup table
+    // Launch kernel to compute ADC lookup table for all queries
     int block_size = std::min(MAX_BLOCK_SIZE, static_cast<int>(pq_dim));
     dim3 block_dim(block_size);
-    dim3 grid_dim(256);  // always 256 subspaces
-    compute_adc_lut_kernel<<<grid_dim, block_dim, 0, stream>>>(
-            d_query.data_handle(),
+    dim3 grid_dim(256, n_queries);  // 256 centroids, n_queries
+    compute_adc_lut_kernel_multi<<<grid_dim, block_dim, 0, stream>>>(
+            d_queries.data_handle(),
             jpq_data.vq_center.data_handle(),
             jpq_data.pq_codebook.data_handle(),
             d_adc_lut,
             pq_dim,
             pq_len,
-            dim
+            dim,
+            n_queries
     );
 
     // Synchronize to ensure computation is complete
@@ -201,22 +210,29 @@ __global__ void compute_dp_similarities_adc_kernel(
         const uint8_t* codepoints,
         const int32_t* node_ids,
         float* similarities,
-        int64_t pq_dim,
-        int n_nodes
-) {
+        int32_t pq_dim,
+        int32_t nodes_per_query,
+        int32_t n_queries)
+{
+    int query_idx = blockIdx.y;
     int node_idx = blockIdx.x;
     int tid = threadIdx.x;
     int threads_per_block = blockDim.x;
 
+    if (query_idx >= n_queries || node_idx >= nodes_per_query) return;
+    int32_t node_id = node_ids[query_idx * nodes_per_query + node_idx];
+    if (node_id < 0) return;
+
     __shared__ float shared_distance[MAX_BLOCK_SIZE];
 
     float thread_distance = 0.0f;
-    const uint8_t* pq_codes = codepoints + node_ids[node_idx] * pq_dim;
+    const uint8_t* pq_codes = codepoints + node_id * pq_dim;
+    const float* query_lut = adc_lut + query_idx * pq_dim * 256;
 
     // Each thread processes multiple subspaces if needed
     for (int subspace_idx = tid; subspace_idx < pq_dim; subspace_idx += threads_per_block) {
         uint8_t pq_code = pq_codes[subspace_idx];
-        thread_distance += adc_lut[pq_code * pq_dim + subspace_idx];
+        thread_distance += query_lut[pq_code * pq_dim + subspace_idx];
     }
     shared_distance[tid] = thread_distance;
     __syncthreads();
@@ -232,7 +248,7 @@ __global__ void compute_dp_similarities_adc_kernel(
     // Compute final similarity
     if (tid == 0) {
         float total_distance = shared_distance[0];
-        similarities[node_idx] = (1 + total_distance) / 2;
+        similarities[query_idx * nodes_per_query + node_idx] = (1 + total_distance) / 2;
     }
 }
 
@@ -242,7 +258,8 @@ void compute_dp_similarities_adc(
         const jpq_dataset<float, int64_t>& jpq_data,
         const int32_t* d_node_ids,
         float* d_similarities,
-        int64_t n_nodes)
+        int32_t nodes_per_query,
+        int32_t n_queries)
 {
     cudaStream_t stream = res.get_stream();
 
@@ -250,14 +267,15 @@ void compute_dp_similarities_adc(
     int64_t pq_dim = jpq_data.pq_dim();
     int block_size = std::min(MAX_BLOCK_SIZE, static_cast<int>(pq_dim));
     dim3 block_dim(block_size);
-    dim3 grid_size(n_nodes);
-    compute_dp_similarities_adc_kernel<<<grid_size, block_size, 0, stream>>>(
+    dim3 grid_dim(nodes_per_query, n_queries);
+    compute_dp_similarities_adc_kernel<<<grid_dim, block_size, 0, stream>>>(
             adc_lut,
             jpq_data.codepoints.data_handle(),
             d_node_ids,
             d_similarities,
             pq_dim,
-            n_nodes
+            nodes_per_query,
+            n_queries
     );
 }
 
@@ -553,18 +571,20 @@ extern "C" {
         delete dataset;
     }
 
-    jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* query, int64_t max_nodes) {
+    jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* queries, int32_t n_queries) {
         if (dataset == nullptr) {
             return nullptr;
         }
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
 
         int dim = dataset->dataset.dim();
-        auto d_query = raft::make_device_vector<float, int64_t>(res, dim);
-        raft::copy(d_query.data_handle(), query, dim, res.get_stream());
-        float* lut = compute_dp_adc_setup(res, d_query, dataset->dataset);
+        auto d_queries = raft::make_device_matrix<float, int64_t>(res, n_queries, dim);
+        raft::copy(d_queries.data_handle(), queries, n_queries * dim, res.get_stream());
 
-        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, dataset};
+        // Compute LUTs for all queries in a single call
+        float* lut = compute_dp_adc_setup(res, d_queries, dataset->dataset);
+
+        jpq_adc_t* adc_handle = new jpq_adc_t{lut, dim, n_queries, dataset};
         return adc_handle;
     }
 
@@ -575,7 +595,7 @@ extern "C" {
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
         raft::resource::get_workspace_resource(res)->deallocate(
             adc_handle->lut,
-            adc_handle->dataset->dataset.pq_dim() * 256 * sizeof(float)
+            adc_handle->n_queries * adc_handle->dataset->dataset.pq_dim() * 256 * sizeof(float)
         );
         delete adc_handle;
     }
@@ -609,7 +629,7 @@ extern "C" {
         delete query_handle;
     }
 
-    void compute_dp_similarities_adc(jpq_adc_t* adc_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes) {
+    void compute_dp_similarities_adc(jpq_adc_t* adc_handle, const int32_t* node_ids, float* similarities, int32_t nodes_per_query) {
         if (adc_handle == nullptr) {
             std::cout << "adc_handle is null" << std::endl;
             return;
@@ -620,7 +640,8 @@ extern "C" {
                                     adc_handle->dataset->dataset,
                                     node_ids,
                                     similarities,
-                                    n_nodes);
+                                    nodes_per_query,
+                                    adc_handle->n_queries);
 
         res.sync_stream();
     }

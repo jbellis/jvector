@@ -27,17 +27,26 @@ package io.github.jbellis.jvector.graph;
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
+import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.GrowableLongHeap;
 import io.github.jbellis.jvector.util.SparseBits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtilSupport;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Phaser;
+import java.util.function.BiConsumer;
 
 
 /**
@@ -45,6 +54,9 @@ import java.io.IOException;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements Closeable {
+    private static VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+    private static final VectorUtilSupport vus = VectorizationProvider.getInstance().getVectorUtilSupport();
+
     private final GraphIndex.View view;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
@@ -60,6 +72,8 @@ public class GraphSearcher implements Closeable {
     private SearchScoreProvider scoreProvider;
     private CachingReranker cachingReranker;
 
+    private volatile Batch batch;
+
     /**
      * Creates a new graph searcher from the given GraphIndex
      */
@@ -67,13 +81,110 @@ public class GraphSearcher implements Closeable {
         this(graph.getView());
     }
 
-    private GraphSearcher(GraphIndex.View view) {
+    public GraphSearcher(GraphIndex.View view) {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodesUnsorted(100);
         this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.rerankedResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
+    }
+
+    public void register(Batch batch, VectorFloat<?> queryVector) {
+        this.batch = batch;
+        batch.register(this, queryVector);
+    }
+
+    /**
+     * Design:
+     * - register multiple GraphSearchers with the batch
+     * - start a thread for each searcher
+     * - master thread calls process()
+     * - searcher thread must call either await() or complete() for each cycle
+     * - processing continues until all searchers are complete
+     */
+    public static class Batch {
+        private final CompressedVectors acceleratedPQV;
+        private final int degree;
+        private final ConcurrentMap<GraphSearcher, Integer> participants;
+        private final VectorFloat<?> queries;
+
+        private final Phaser submitPhaser;
+        private final Phaser resultPhaser;
+        private volatile MultiAdcQuery multiQuery;
+
+        public Batch(CompressedVectors acceleratedPQV, int threads, int degree, int dimension) {
+            this.acceleratedPQV = acceleratedPQV;
+            this.degree = degree;
+            this.submitPhaser = new Phaser(1); // Register the processing thread
+            this.resultPhaser = new Phaser(1); // Register the processing thread
+            participants = new ConcurrentHashMap<>();
+            queries = vts.createFloatVector(threads * dimension);
+        }
+
+        public synchronized void register(GraphSearcher gs, VectorFloat<?> queryVector) {
+            var idx = participants.size();
+            participants.put(gs, idx);
+            queries.copyFrom(queryVector, 0, idx * queryVector.length(), queryVector.length());
+            submitPhaser.register();
+            resultPhaser.register();
+        }
+
+        // runs on a single thread
+        public void process() {
+            multiQuery = acceleratedPQV.prepareMultiAdcQuery(queries, participants.size());
+
+            while (submitPhaser.getRegisteredParties() > 1) {
+                submitPhaser.arriveAndAwaitAdvance();
+
+                // compute!
+                multiQuery.computeSimilarities();
+
+                // Signal completion of processing
+                resultPhaser.arriveAndAwaitAdvance();
+            }
+        }
+
+        public void submit(GraphSearcher gs, int[] edges) {
+            assert edges.length <= degree;
+            int queryIdx = participants.get(gs);
+            while (multiQuery == null) ; // busywait
+
+            // copy the edges into the multiQuery, and fill any unused slots with -1
+            int edgeIdx = 0;
+            for (; edgeIdx < edges.length; edgeIdx++) {
+                multiQuery.setNodeId(queryIdx, edgeIdx, edges[edgeIdx]);
+            }
+            for (; edgeIdx < degree; edgeIdx++) {
+                multiQuery.setNodeId(queryIdx, edgeIdx, -1);
+            }
+
+            // save a reference to the current latch, otherwise process() may change it before we await on it
+            submitPhaser.arriveAndAwaitAdvance();
+            resultPhaser.arriveAndAwaitAdvance();
+        }
+
+        // runs in the searcher threads
+        public void complete(GraphSearcher gs) {
+            participants.remove(gs);
+            submitPhaser.arriveAndDeregister();
+            resultPhaser.arriveAndDeregister();
+        }
+
+        // runs in the searcher threads
+        public void foreachResult(GraphSearcher gs, BiConsumer<Integer, Float> consumer) {
+            int queryIdx = participants.get(gs);
+            for (int i = 0; i < degree; i++) {
+                var nodeId = multiQuery.getNodeId(queryIdx, i);
+                if (nodeId >= 0) {
+                    consumer.accept(nodeId, multiQuery.getScore(queryIdx, i));
+                }
+            }
+        }
+
+        public void close() {
+            multiQuery.close();
+        }
     }
 
     private void initializeScoreProvider(SearchScoreProvider scoreProvider) {
@@ -326,31 +437,46 @@ public class GraphSearcher implements Closeable {
 
                 // score the neighbors of the top candidate and add them to the queue
                 var scoreFunction = scoreProvider.scoreFunction();
-                var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
-                if (useEdgeLoading) {
-                    similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
-                }
-
                 var useMultinode = scoreFunction.supportsMultinodeSimilarity();
-                // DEMOFIXME: hack, don't get iterator twice
-                if (useMultinode) {
-                    var it = view.getNeighborsIterator(topCandidateNode);
-                    similarities = scoreFunction.similarityTo(it);
-                }
+                // DEMOFIXME temporarily unsupported
+                assert !scoreFunction.supportsEdgeLoadingSimilarity();
 
+                // DEMOFIXME: not even pretending to write good code here
                 var it = view.getNeighborsIterator(topCandidateNode);
-                for (int i = 0; i < it.size(); i++) {
-                    var friendOrd = it.nextInt();
-                    if (!visited.add(friendOrd)) {
+                if (useMultinode) {
+                    int[] edges = new int[it.size];
+                    int toVisit = 0;
+                    int edgeIdx = 0;
+                    for ( ; edgeIdx < it.size(); edgeIdx++) {
+                        var friendOrd = it.nextInt();
+                        if (!visited.add(friendOrd)) {
+                            edges[edgeIdx] = -1;
+                            continue;
+                        }
+                        edges[edgeIdx] = friendOrd;
+                        toVisit++;
+                    }
+                    if (toVisit == 0) {
                         continue;
                     }
-                    numVisited++;
+                    batch.submit(this, edges);
+                    batch.foreachResult(this, (friendOrd, friendSimilarity) -> {
+                        scoreTracker.track(friendSimilarity);
+                        candidates.push(friendOrd, friendSimilarity);
+                    });
+                    numVisited += toVisit;
+                } else {
+                    for (int i = 0; i < it.size(); i++) {
+                        var friendOrd = it.nextInt();
+                        if (!visited.add(friendOrd)) {
+                            continue;
+                        }
+                        numVisited++;
 
-                    float friendSimilarity = useEdgeLoading || useMultinode
-                            ? similarities.get(i)
-                            : scoreFunction.similarityTo(friendOrd);
-                    scoreTracker.track(friendSimilarity);
-                    candidates.push(friendOrd, friendSimilarity);
+                        float friendSimilarity = scoreFunction.similarityTo(friendOrd);
+                        scoreTracker.track(friendSimilarity);
+                        candidates.push(friendOrd, friendSimilarity);
+                    }
                 }
             }
 
@@ -388,6 +514,7 @@ public class GraphSearcher implements Closeable {
             // that should be everything
             assert popFromQueue.size() == 0;
 
+            batch.complete(this);
             return new SearchResult(nodes, numVisited, reranked, worstApproximateInTopK);
         } catch (Throwable t) {
             // clear scratch structures if terminated via throwable, as they may not have been drained

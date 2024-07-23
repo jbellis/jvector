@@ -1182,7 +1182,7 @@ public class NativeGpuOps {
             NativeGpuOps.C_POINTER,
             NativeGpuOps.C_POINTER,
             NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_LONG
+            NativeGpuOps.C_INT
         );
 
         public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("prepare_adc_query");
@@ -1193,7 +1193,7 @@ public class NativeGpuOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *queries, int32_t n_queries)
      * }
      */
     public static FunctionDescriptor prepare_adc_query$descriptor() {
@@ -1203,7 +1203,7 @@ public class NativeGpuOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *queries, int32_t n_queries)
      * }
      */
     public static MethodHandle prepare_adc_query$handle() {
@@ -1213,7 +1213,7 @@ public class NativeGpuOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *queries, int32_t n_queries)
      * }
      */
     public static MemorySegment prepare_adc_query$address() {
@@ -1222,16 +1222,16 @@ public class NativeGpuOps {
 
     /**
      * {@snippet lang=c :
-     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *query, int64_t max_nodes)
+     * jpq_adc_t *prepare_adc_query(jpq_dataset_t *dataset, const float *queries, int32_t n_queries)
      * }
      */
-    public static MemorySegment prepare_adc_query(MemorySegment dataset, MemorySegment query, long max_nodes) {
+    public static MemorySegment prepare_adc_query(MemorySegment dataset, MemorySegment queries, int n_queries) {
         var mh$ = prepare_adc_query.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("prepare_adc_query", dataset, query, max_nodes);
+                traceDowncall("prepare_adc_query", dataset, queries, n_queries);
             }
-            return (MemorySegment)mh$.invokeExact(dataset, query, max_nodes);
+            return (MemorySegment)mh$.invokeExact(dataset, queries, n_queries);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -1242,7 +1242,7 @@ public class NativeGpuOps {
             NativeGpuOps.C_POINTER,
             NativeGpuOps.C_POINTER,
             NativeGpuOps.C_POINTER,
-            NativeGpuOps.C_LONG
+            NativeGpuOps.C_INT
         );
 
         public static final MemorySegment ADDR = NativeGpuOps.findOrThrow("compute_dp_similarities_adc");
@@ -1253,7 +1253,7 @@ public class NativeGpuOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * void compute_dp_similarities_adc(jpq_adc_t *adc_handle, const int32_t *node_ids, float *similarities, int32_t nodes_per_query)
      * }
      */
     public static FunctionDescriptor compute_dp_similarities_adc$descriptor() {
@@ -1263,7 +1263,7 @@ public class NativeGpuOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * void compute_dp_similarities_adc(jpq_adc_t *adc_handle, const int32_t *node_ids, float *similarities, int32_t nodes_per_query)
      * }
      */
     public static MethodHandle compute_dp_similarities_adc$handle() {
@@ -1273,7 +1273,7 @@ public class NativeGpuOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * void compute_dp_similarities_adc(jpq_adc_t *adc_handle, const int32_t *node_ids, float *similarities, int32_t nodes_per_query)
      * }
      */
     public static MemorySegment compute_dp_similarities_adc$address() {
@@ -1282,16 +1282,16 @@ public class NativeGpuOps {
 
     /**
      * {@snippet lang=c :
-     * void compute_dp_similarities_adc(jpq_adc_t *query_handle, const int32_t *node_ids, float *similarities, int64_t n_nodes)
+     * void compute_dp_similarities_adc(jpq_adc_t *adc_handle, const int32_t *node_ids, float *similarities, int32_t nodes_per_query)
      * }
      */
-    public static void compute_dp_similarities_adc(MemorySegment query_handle, MemorySegment node_ids, MemorySegment similarities, long n_nodes) {
+    public static void compute_dp_similarities_adc(MemorySegment adc_handle, MemorySegment node_ids, MemorySegment similarities, int nodes_per_query) {
         var mh$ = compute_dp_similarities_adc.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("compute_dp_similarities_adc", query_handle, node_ids, similarities, n_nodes);
+                traceDowncall("compute_dp_similarities_adc", adc_handle, node_ids, similarities, nodes_per_query);
             }
-            mh$.invokeExact(query_handle, node_ids, similarities, n_nodes);
+            mh$.invokeExact(adc_handle, node_ids, similarities, nodes_per_query);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

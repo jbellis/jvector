@@ -46,7 +46,6 @@ import io.github.jbellis.jvector.pq.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
-import io.github.jbellis.jvector.vector.GPUPQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtilSupport;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -359,12 +358,13 @@ public class Grid {
 
     private static void testConfiguration(ConfiguredSystem cs, List<Double> efSearchOptions) {
         var topK = cs.ds.groundTruth.get(0).size();
+        int queryRuns = 1;
         System.out.format("Using %s:%n", cs.index);
         for (var overquery : efSearchOptions) {
             var start = System.nanoTime();
             int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 2);
-            var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
+            var pqr = performQueries(cs, topK, rerankK, queryRuns);
+            var recall = ((double) pqr.topKFound) / (queryRuns * cs.ds.queryVectors.size() * topK);
             System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                               topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
 
@@ -428,23 +428,46 @@ public class Grid {
     private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
+        var batchSize = 10; // Runtime.getRuntime().availableProcessors();
         for (int k = 0; k < queryRuns; k++) {
-            IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
-                var queryVector = cs.ds.queryVectors.get(i);
-                SearchResult sr;
-                var searcher = cs.getSearcher();
-                var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
-                if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
-                    ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
-                }
+            for (int i = 0; i < cs.ds.queryVectors.size(); i += batchSize) {
+                System.out.println("Begin " + i);
+                var batch = new GraphSearcher.Batch(cs.acceleratedPQV, batchSize, cs.index.maxDegree(), cs.ds.getDimension());
 
-                // process search result
-                var gt = cs.ds.groundTruth.get(i);
-                var n = topKCorrect(topK, sr.getNodes(), gt);
-                topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
-            });
+                var threads = new Thread[batchSize];
+                for (int j = 0; j < batchSize && i + j < cs.ds.queryVectors.size(); j++) {
+                    var queryIdx = i + j;
+                    // DEMOFIXME pooling is difficult since we have to register the searcher before kicking off the thread
+                    // (or it might not get registered before we call process())
+                    var searcher = new GraphSearcher(cs.index);
+                    var queryVector = cs.ds.queryVectors.get(queryIdx);
+                    searcher.register(batch, queryVector);
+                    var th = new Thread(() -> {
+                        var asf = cs.cv.scoreFunctionFor(queryVector, cs.ds.similarityFunction); // need this for entry point
+                        var rr = ((GraphIndex.ScoringView) searcher.getView()).rerankerFor(queryVector, cs.ds.similarityFunction);
+                        var sf = new SearchScoreProvider(new BatchScoreFunction(asf), rr);
+                        var sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+                        // process search result
+                        var gt = cs.ds.groundTruth.get(queryIdx);
+                        var n = topKCorrect(topK, sr.getNodes(), gt);
+                        topKfound.add(n);
+                        nodesVisited.add(sr.getVisitedCount());
+                    });
+                    th.start();
+                    threads[j] = th;
+                }
+                batch.process();
+                batch.close();
+                for (var th : threads) {
+                    if (th != null) {
+                        try {
+                            th.join();
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
+            }
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
@@ -491,8 +514,6 @@ public class Grid {
             ScoreFunction.ApproximateScoreFunction asf;
             if (features.contains(FeatureId.FUSED_ADC)) {
                 asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
-            } else if (acceleratedPQV != null) {
-                asf = acceleratedPQV.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
@@ -517,6 +538,25 @@ public class Grid {
         ResultSummary(int topKFound, long nodesVisited) {
             this.topKFound = topKFound;
             this.nodesVisited = nodesVisited;
+        }
+    }
+
+    // DEMOFIXME actual scoring is hardcoded into GraphSearcher.Batch
+    private static class BatchScoreFunction implements ScoreFunction.ApproximateScoreFunction {
+        private final ApproximateScoreFunction asf;
+
+        public BatchScoreFunction(ApproximateScoreFunction asf) {
+            this.asf = asf;
+        }
+
+        @Override
+        public float similarityTo(int node2) {
+            return asf.similarityTo(node2);
+        }
+
+        @Override
+        public boolean supportsMultinodeSimilarity() {
+            return true;
         }
     }
 }

@@ -36,10 +36,10 @@ jpq_dataset_t* load_pq_vectors(const char* filename);
 void free_jpq_dataset(jpq_dataset_t* dataset);
 
 // Function to prepare adc query
-jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* query, int64_t max_nodes);
+jpq_adc_t* prepare_adc_query(jpq_dataset_t* dataset, const float* queries, int32_t n_queries);
 
 // Function to compute dot product similarities with adc
-void compute_dp_similarities_adc(jpq_adc_t* query_handle, const int32_t* node_ids, float* similarities, int64_t n_nodes);
+void compute_dp_similarities_adc(jpq_adc_t* adc_handle, const int32_t* node_ids, float* similarities, int32_t nodes_per_query);
 
 // Function to free adc query
 void free_adc_query(jpq_adc_t* query_handle);
