@@ -41,7 +41,7 @@ public class CagraBench {
         int queryRuns = 1; // Adjust as needed
 
         ResultSummary results = null;
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < 10; i++) {
             long start = System.nanoTime();
             results = performQueries(dataset, index, topK, rerankK, queryRuns);
             long end = System.nanoTime();
@@ -65,8 +65,7 @@ public class CagraBench {
 
         // run queryRuns on a new thread
         for (int k = 0; k < queryRuns; k++) {
-            // DEMOFIXME: parallel searches don't work quite yet for actual GPU CAGRA yet. Reenable parallel once working
-            IntStream.range(0, dataset.queryVectors.size()).forEach(i -> {
+            IntStream.range(0, dataset.queryVectors.size()).parallel().forEach(i -> {
                 var sr = index.search(dataset.queryVectors.get(i), topK, rerankK);
 
                 // Process search result

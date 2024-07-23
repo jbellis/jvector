@@ -23,8 +23,15 @@ import io.github.jbellis.jvector.vector.cnative.NativeGpuOps;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.lang.foreign.MemorySegment;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
+    // DEMOFIXME workaround for CAGRA's broken concurrency
+    // (single thread executor is modestly better than using a synchronized block in my testing)
+    private final ExecutorService nativeExecutor = Executors.newSingleThreadExecutor();
+
     private final MemorySegment index;
     private final ThreadLocal<MemorySegmentVectorFloat> reusableQuery;
     private final ThreadLocal<MemorySegmentByteSequence> reusableIds;
@@ -53,7 +60,12 @@ public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
         // DEMOFIXME: use actual size? Can Cagra return too few results?
         MemorySegmentVectorFloat unifiedQuery = reusableQuery.get();
         unifiedQuery.copyFrom(query, 0, 0, query.length());
-        MemorySegment ms = NativeGpuOps.search_cagra_index(index, unifiedQuery.get(), rerankK);
+        MemorySegment ms = null;
+        try {
+            ms = nativeExecutor.submit(() -> NativeGpuOps.search_cagra_index(index, unifiedQuery.get(), rerankK)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
         ms = ms.reinterpret(rerankK * Integer.BYTES);
         MemorySegmentByteSequence ids = new MemorySegmentByteSequence(ms);
         int size = 0;
