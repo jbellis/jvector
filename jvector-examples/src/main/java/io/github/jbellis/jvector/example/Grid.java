@@ -363,7 +363,7 @@ public class Grid {
         for (var overquery : efSearchOptions) {
             var start = System.nanoTime();
             int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 2);
+            var pqr = performQueries(cs, topK, rerankK, 1);
             var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
             System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                               topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
