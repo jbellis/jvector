@@ -363,7 +363,7 @@ public class Grid {
         for (var overquery : efSearchOptions) {
             var start = System.nanoTime();
             int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 1);
+            var pqr = performQueries(cs, topK, rerankK, 2);
             var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
             System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                               topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
@@ -371,7 +371,7 @@ public class Grid {
         }
     }
 
-    static VectorCompressor<?> getCompressor(Function<DataSet, CompressorParameters> cpSupplier, DataSet ds) {
+    private static VectorCompressor<?> getCompressor(Function<DataSet, CompressorParameters> cpSupplier, DataSet ds) {
         var cp = cpSupplier.apply(ds);
         if (!cp.supportsCaching()) {
             return cp.computeCompressor(ds);
@@ -435,6 +435,9 @@ public class Grid {
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
                 sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+                if (sf.scoreFunction() instanceof GPUPQVectors.GPUApproximateScoreFunction) {
+                    ((GPUPQVectors.GPUApproximateScoreFunction) sf.scoreFunction()).close();
+                }
 
                 // process search result
                 var gt = cs.ds.groundTruth.get(i);
@@ -451,6 +454,7 @@ public class Grid {
         GraphIndex index;
         CompressedVectors cv;
         Set<FeatureId> features;
+        CompressedVectors acceleratedPQV;
 
         private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
             return new GraphSearcher(index);
@@ -461,6 +465,20 @@ public class Grid {
             this.index = index;
             this.cv = cv;
             this.features = features;
+            // DEMOFIXME: forces accelerated PQVectors for GPU demo, this should have better configurability
+            if (cv instanceof PQVectors) {
+                Path pqVectorsPath;
+                // write PQVectors to a temp path
+                try {
+                    pqVectorsPath = Files.createTempFile("pq", ".bin");
+                    try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqVectorsPath)))) {
+                        ((PQVectors) cv).write(out, OnDiskGraphIndex.CURRENT_VERSION);
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                acceleratedPQV = vectorUtilSupport.getAcceleratedPQVectors(pqVectorsPath, index.maxDegree());
+            }
         }
 
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
@@ -473,6 +491,8 @@ public class Grid {
             ScoreFunction.ApproximateScoreFunction asf;
             if (features.contains(FeatureId.FUSED_ADC)) {
                 asf = scoringView.approximateScoreFunctionFor(queryVector, ds.similarityFunction);
+            } else if (acceleratedPQV != null) {
+                asf = acceleratedPQV.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             } else {
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.similarityFunction);
             }
