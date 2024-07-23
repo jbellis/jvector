@@ -528,7 +528,7 @@ extern "C" {
         // We get the error [W] [14:08:16.077836] Pool allocation requested, but other memory resource has already been set and will not be overwritten
         //raft::device_resources_manager::set_max_mem_pool_size(1024 * 1024 * 1024ull);
         static rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource> pool_mr(
-            rmm::mr::get_current_device_resource(), 1024 * 1024 * 1024ull);
+            rmm::mr::get_current_device_resource(), 2 * 1024 * 1024 * 1024ull);
         std::cout << "Setting current device resource" << std::endl;
         rmm::mr::set_current_device_resource(&pool_mr);
         std::cout << "Done initializing" << std::endl;

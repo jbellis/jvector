@@ -95,9 +95,28 @@ extern "C" {
         raft::copy(device_vectors.data_handle(), flattened_vectors.data(), flattened_vectors.size(), raft::resource::get_cuda_stream(builder->dev_resources));
         builder->dev_resources.sync_stream();
 
-        // Build the index
-        // DEMOFIXME: tune index_params instead of using defaults
+        // Index parameters
         cagra::index_params index_params;
+        // these default to 64 and 128, respectively.  presumably nvidia tested those as good defaults
+        // index_params.graph_degree = 32;
+        // index_params.intermediate_graph_degree = 64;
+        index_params.compression = cuvs::neighbors::vpq_params{};
+        // 64x compression
+        index_params.compression->pq_bits = 8;
+        index_params.compression->pq_dim = 64;
+        // hopefully it's smart enough to use a single byte for this
+        index_params.compression->vq_n_centers = 256;
+        // half of their default, but if the comments are accurate about using kmeans++ it should be plenty
+        index_params.compression->kmeans_n_iters = 12;
+        // force using ivf-pq during construction
+        // (default is to use nn-descent unless there isn't enough memory)
+        // DEMOFIXME enabling ivf-pq runs out of memory
+        auto knn_build_params = cagra::graph_build_params::ivf_pq_params(
+            raft::matrix_extent<int64_t>{device_vectors.extent(0), device_vectors.extent(1)},
+            index_params.metric);
+        index_params.graph_build_params = knn_build_params;
+
+        // Build the index
         auto index = cagra::build(builder->dev_resources, index_params, raft::make_const_mdspan(device_vectors.view()));
         builder->dev_resources.sync_stream();
         return new jv_cagra_index_t(std::move(index));
