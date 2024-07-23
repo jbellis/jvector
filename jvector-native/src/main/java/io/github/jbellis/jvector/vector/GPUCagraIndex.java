@@ -64,11 +64,9 @@ public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
             var id = ids.getLittleEndianInt(i);
             if (id != -1 && id != Integer.MAX_VALUE) {
                 size++;
+            } else {
+                // this is how CAGRA indicates under the requested number of nodes
                 break;
-            } else if (id == -1) {
-                System.out.println("returned -1 at index " + i);
-            } else if (id == Integer.MAX_VALUE) {
-                System.out.println("returned Integer.MAX_VALUE at index " + i);
             }
         }
         // iterate over LE ints in ids
