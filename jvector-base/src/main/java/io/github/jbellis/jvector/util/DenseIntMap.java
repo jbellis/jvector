@@ -102,10 +102,15 @@ public class DenseIntMap<T> {
      * @return the value of the key, or null if not set
      */
     public T get(int key) {
+        if (key < 0) {
+            return null;
+        }
+
         var ref = objects;
         if (key >= ref.length()) {
             return null;
         }
+
         return ref.get(key);
     }
 

@@ -158,6 +158,35 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
     }
 
+    @Test
+    public void testReorderingWithHoles() throws IOException {
+        // graph of 3 vectors
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(3);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var original = TestUtil.buildSequentially(builder, ravv);
+
+        // create renumbering map
+        Map<Integer, Integer> oldToNewMap = new HashMap<>();
+        oldToNewMap.put(0, 2);
+        oldToNewMap.put(1, 10);
+        oldToNewMap.put(2, 0);
+
+        // write the graph
+        var outputPath = testDirectory.resolve("renumbered_graph");
+        OnDiskGraphIndex.write(original, ravv, oldToNewMap, outputPath);
+        // check that written graph ordinals match the new ones
+        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
+             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
+             var onDiskView = onDiskGraph.getView())
+        {
+            assertEquals(onDiskView.getVector(0), ravv.getVector(2));
+            assertEquals(onDiskView.getVector(10), ravv.getVector(1));
+            assertEquals(onDiskView.getVector(2), ravv.getVector(0));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static void validateVectors(OnDiskGraphIndex.View view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
             assertEquals("Incorrect vector at " + i, view.getVector(i), ravv.getVector(i));
