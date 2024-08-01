@@ -160,14 +160,26 @@ public class OnDiskGraphIndexWriter implements Closeable {
         writeHeader();
 
         // for each graph node, write the associated features, followed by its neighbors
-        int graphSize = graph.size();
-        for (int newOrdinal = 0; newOrdinal < graphSize; newOrdinal++) {
+        for (int newOrdinal = 0; newOrdinal <= ordinalMapper.maxOrdinal(); newOrdinal++) {
             var originalOrdinal = ordinalMapper.newToOld(newOrdinal);
+
+            // if no node exists with the given ordinal, write a placeholder
+            if (originalOrdinal == OrdinalMapper.OMITTED) {
+                out.writeInt(-1);
+                for (var feature : featureMap.values()) {
+                    out.seek(out.position() + feature.inlineSize());
+                }
+                out.writeInt(0);
+                for (int n = 0; n < graph.maxDegree(); n++) {
+                    out.writeInt(-1);
+                }
+                continue;
+            }
+
             if (!graph.containsNode(originalOrdinal)) {
                 var msg = String.format("Ordinal mapper mapped new ordinal %s to non-existing node %s", newOrdinal, originalOrdinal);
                 throw new IllegalStateException(msg);
             }
-
             out.writeInt(newOrdinal); // unnecessary, but a reasonable sanity check
             assert out.position() == featureOffsetForOrdinal(newOrdinal) : String.format("%d != %d", out.position(), featureOffsetForOrdinal(newOrdinal));
             for (var feature : featureMap.values()) {
@@ -190,8 +202,8 @@ public class OnDiskGraphIndexWriter implements Closeable {
             int n = 0;
             for (; n < neighbors.size(); n++) {
                 var newNeighborOrdinal = ordinalMapper.oldToNew(neighbors.nextInt());
-                if (newNeighborOrdinal < 0 || newNeighborOrdinal >= graphSize) {
-                    var msg = String.format("Neighbor ordinal out of bounds: %d/%d", newNeighborOrdinal, graphSize);
+                if (newNeighborOrdinal < 0 || newNeighborOrdinal > ordinalMapper.maxOrdinal()) {
+                    var msg = String.format("Neighbor ordinal out of bounds: %d/%d", newNeighborOrdinal, ordinalMapper.maxOrdinal());
                     throw new IllegalStateException(msg);
                 }
                 out.writeInt(newNeighborOrdinal);
