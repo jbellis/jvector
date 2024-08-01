@@ -102,16 +102,11 @@ public class DenseIntMap<T> {
      * @return the value of the key, or null if not set
      */
     public T get(int key) {
-        if (key < 0) {
+        if (key >= objects.length()) {
             return null;
         }
 
-        var ref = objects;
-        if (key >= ref.length()) {
-            return null;
-        }
-
-        return ref.get(key);
+        return objects.get(key);
     }
 
     private void ensureCapacity(int node) {
