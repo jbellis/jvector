@@ -226,7 +226,7 @@ public class SiftSmall {
              // explicit Writer for the first time, this is what's behind OnDiskGraphIndex.write
              OnDiskGraphIndexWriter writer = new OnDiskGraphIndexWriter.Builder(builder.getGraph(), indexPath)
                      .with(new InlineVectors(ravv.dimension()))
-                     .withMapper(new OrdinalMapper.IdentityMapper(builder.getGraph().getIdUpperBound() - 1))
+                     .withMapper(new OrdinalMapper.IdentityMapper(baseVectors.size() - 1))
                      .build();
              // output for the compressed vectors
              DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
