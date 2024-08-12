@@ -21,7 +21,7 @@ bool check_compatibility(void) {
     unsigned int eax, ebx, ecx, edx;
     bool avx512f_supported = false, avx512cd_supported = false,
          avx512bw_supported = false, avx512dq_supported = false,
-         avx512vl_supported = false, avx512vbmi_supported = false;
+         avx512vl_supported = false;
 
     // Check for AVX-512 Foundation (AVX-512F) and other AVX-512 features:
     // These are indicated by various bits of EBX from leaf 7, sub-leaf 0.
@@ -31,8 +31,7 @@ bool check_compatibility(void) {
         avx512bw_supported = ebx & (1 << 30);    // AVX-512BW
         avx512dq_supported = ebx & (1 << 17);    // AVX-512DQ
         avx512vl_supported = ebx & (1 << 31);    // AVX-512VL
-        avx512vbmi_supported = ecx & (1 << 1);         // VBMI
     }
 
-    return avx512f_supported && avx512cd_supported && avx512bw_supported && avx512dq_supported && avx512vl_supported && avx512vbmi_supported;
+    return avx512f_supported && avx512cd_supported && avx512bw_supported && avx512dq_supported && avx512vl_supported;
 }
