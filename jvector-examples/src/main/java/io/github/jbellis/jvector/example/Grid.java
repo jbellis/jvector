@@ -241,7 +241,7 @@ public class Grid {
                                                              ProductQuantization pq)
             throws FileNotFoundException
     {
-        var identityMapper = new OrdinalMapper.IdentityMapper(onHeapGraph.getIdUpperBound() - 1);
+        var identityMapper = new OrdinalMapper.IdentityMapper(floatVectors.size() - 1);
         var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(identityMapper);
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         for (var featureId : features) {
