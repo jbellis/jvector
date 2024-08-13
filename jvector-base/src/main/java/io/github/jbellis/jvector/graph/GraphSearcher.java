@@ -294,20 +294,7 @@ public class GraphSearcher implements Closeable {
                 // process the top candidate
                 int topCandidateNode = candidates.pop();
                 if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
-                    // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
-                    // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
-                    if (approximateResults.size() < rerankK) {
-                        approximateResults.push(topCandidateNode, topCandidateScore);
-                    } else if (topCandidateScore > approximateResults.topScore()) {
-                        int evictedNode = approximateResults.topNode();
-                        float evictedScore = approximateResults.topScore();
-                        evictedResults.add(evictedNode, evictedScore);
-                        approximateResults.push(topCandidateNode, topCandidateScore);
-                    } else {
-                        // score is exactly equal to the worst candidate in our results, so we don't bother
-                        // changing the results queue.  (We still want to check its neighbors to see if one of them
-                        // is better.)
-                    }
+                    addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
 
                     // update minAcceptedSimilarity if we've found K results
                     if (approximateResults.size() >= rerankK) {
@@ -383,6 +370,24 @@ public class GraphSearcher implements Closeable {
             approximateResults.clear();
             rerankedResults.clear();
             throw t;
+        }
+    }
+
+    @SuppressWarnings("StatementWithEmptyBody")
+    private void addTopCandidate(int topCandidateNode, float topCandidateScore, int rerankK) {
+        // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
+        // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
+        if (approximateResults.size() < rerankK) {
+            approximateResults.push(topCandidateNode, topCandidateScore);
+        } else if (topCandidateScore > approximateResults.topScore()) {
+            int evictedNode = approximateResults.topNode();
+            float evictedScore = approximateResults.topScore();
+            evictedResults.add(evictedNode, evictedScore);
+            approximateResults.push(topCandidateNode, topCandidateScore);
+        } else {
+            // score is exactly equal to the worst candidate in our results, so we don't bother
+            // changing the results queue.  (We still want to check its neighbors to see if one of them
+            // is better.)
         }
     }
 
