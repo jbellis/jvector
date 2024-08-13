@@ -255,10 +255,7 @@ public class GraphSearcher implements Closeable {
     // unnecessary work in the initial search, but if the caller needs to resume() then that belief was
     // incorrect and is discarded, and there is no reason to pass a rerankFloor parameter to resume().
     //
-    // Finally: in the majority of cases, the initial search() does suffice.  So while we could add the
-    // complexity of caching exact scores from candidates that were ultimately evicted from the results,
-    // we expect that to be useful only in a small minority of cases -- particularly since we are using
-    // rerankFloor to attempt to avoid doing that work in the first place.
+    // Finally: resume() also drives the use of CachingReranker.
     private SearchResult resume(int initialVisited, int topK, int rerankK, float threshold, float rerankFloor) {
         try {
             assert approximateResults.size() == 0; // should be cleared out by extractScores
@@ -310,6 +307,9 @@ public class GraphSearcher implements Closeable {
                         approximateResults.push(topCandidateNode, topCandidateScore);
                         added = true;
                     } else {
+                        // score is exactly equal to the worst candidate in our results, so we don't bother
+                        // changing the results queue.  We still want to check its neighbors to see if one of them
+                        // is better.
                         added = false;
                     }
 
