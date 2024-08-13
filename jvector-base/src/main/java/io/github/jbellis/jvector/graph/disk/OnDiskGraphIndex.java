@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
+import io.github.jbellis.jvector.disk.ByteBufferReader;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
@@ -33,6 +34,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -154,11 +156,14 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     public class View implements FeatureSource, ScoringView, RandomAccessVectorValues {
         protected final RandomAccessReader reader;
-        private final int[] neighbors;
+        // FIXME
+        private byte[] nodeData;
+        private int nodeDataOrdinal;
 
         public View(RandomAccessReader reader) {
             this.reader = reader;
-            this.neighbors = new int[maxDegree];
+            nodeData = allocateNodeData();
+            nodeDataOrdinal = -1;
         }
 
         @Override
@@ -229,16 +234,29 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             }
         }
 
+        // FIXME
         public NodesIterator getNeighborsIterator(int node) {
-            try {
-                reader.seek(neighborsOffsetFor(node));
-                int neighborCount = reader.readInt();
-                assert neighborCount <= maxDegree : String.format("Node %d neighborCount %d > M %d", node, neighborCount, maxDegree);
-                reader.read(neighbors, 0, neighborCount);
-                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
+            if (node != nodeDataOrdinal) {
+                // FIXME
+                throw new IllegalStateException();
             }
+            var reader = new ByteBufferReader(ByteBuffer.wrap(nodeData));
+            reader.seek(inlineBlockSize);
+            int neighborCount = reader.readInt();
+            return new NodesIterator(neighborCount) {
+                int i = 0;
+
+                @Override
+                public boolean hasNext() {
+                    return i < neighborCount;
+                }
+
+                @Override
+                public int nextInt() {
+                    i++;
+                    return reader.readInt();
+                }
+            };
         }
 
         @Override
@@ -259,6 +277,40 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         @Override
         public void close() throws IOException {
             reader.close();
+        }
+
+        // FIXME
+        public byte[] allocateNodeData() {
+            return new byte[inlineBlockSize + (maxDegree + 1) * Integer.BYTES];
+        }
+
+        // FIXME
+        private void readNodeData(int node, byte[] target) {
+            assert features.containsKey(FeatureId.LVQ);
+            try {
+                reader.seek(inlineOffsetFor(node, FeatureId.LVQ));
+                reader.readFully(target);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            nodeDataOrdinal = node;
+        }
+
+        // FIXME
+        public ScoreFunction.ExactScoreFunction lvqRerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            var lvq = (LVQ) features.get(FeatureId.LVQ);
+            var fs = new FeatureSource() {
+                @Override
+                public RandomAccessReader inlineReaderForNode(int node, FeatureId featureId) {
+                    readNodeData(node, nodeData);
+                    return new ByteBufferReader(ByteBuffer.wrap(nodeData));
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+            return lvq.rerankerFor(queryVector, vsf, fs);
         }
 
         // TODO permissibleFeatures is never anything but "all features"?

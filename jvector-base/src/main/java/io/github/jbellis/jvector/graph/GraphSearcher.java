@@ -300,6 +300,10 @@ public class GraphSearcher implements Closeable {
                     if (approximateResults.size() >= rerankK) {
                         minAcceptedSimilarity = approximateResults.topScore();
                     }
+                } else {
+                    // FIXME
+                    // the neighbors iterator won't be properly initialized
+                    throw new IllegalStateException();
                 }
 
                 // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
@@ -376,17 +380,17 @@ public class GraphSearcher implements Closeable {
 
     @SuppressWarnings("StatementWithEmptyBody")
     private void addTopCandidate(int topCandidateNode, float topCandidateScore, int rerankK) {
+        // FIXME always do this, it sets up the data for neighbors iterator which gets called next
+        cachingReranker.similarityTo(topCandidateNode); // FIXME check rerankFloor before computing the actual value
         // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
         // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
         if (approximateResults.size() < rerankK) {
             approximateResults.push(topCandidateNode, topCandidateScore);
-            cachingReranker.similarityTo(topCandidateNode); // TODO check rerankFloor
         } else if (topCandidateScore > approximateResults.topScore()) {
             int evictedNode = approximateResults.topNode();
             float evictedScore = approximateResults.topScore();
             evictedResults.add(evictedNode, evictedScore);
             approximateResults.push(topCandidateNode, topCandidateScore);
-            cachingReranker.similarityTo(topCandidateNode); // TODO check rerankFloor
         } else {
             // score is exactly equal to the worst candidate in our results, so we don't bother
             // changing the results queue.  (We still want to check its neighbors to see if one of them
