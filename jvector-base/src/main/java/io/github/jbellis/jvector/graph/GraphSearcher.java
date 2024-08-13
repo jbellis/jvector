@@ -296,25 +296,21 @@ public class GraphSearcher implements Closeable {
                 if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
                     // add the new node to the results queue, and any evicted node to evictedResults in case we resume later
                     // (push() can't tell us what node was evicted when the queue was already full, so we examine that manually)
-                    boolean added;
                     if (approximateResults.size() < rerankK) {
                         approximateResults.push(topCandidateNode, topCandidateScore);
-                        added = true;
                     } else if (topCandidateScore > approximateResults.topScore()) {
                         int evictedNode = approximateResults.topNode();
                         float evictedScore = approximateResults.topScore();
                         evictedResults.add(evictedNode, evictedScore);
                         approximateResults.push(topCandidateNode, topCandidateScore);
-                        added = true;
                     } else {
                         // score is exactly equal to the worst candidate in our results, so we don't bother
-                        // changing the results queue.  We still want to check its neighbors to see if one of them
-                        // is better.
-                        added = false;
+                        // changing the results queue.  (We still want to check its neighbors to see if one of them
+                        // is better.)
                     }
 
                     // update minAcceptedSimilarity if we've found K results
-                    if (added && approximateResults.size() >= rerankK) {
+                    if (approximateResults.size() >= rerankK) {
                         minAcceptedSimilarity = approximateResults.topScore();
                     }
                 }
