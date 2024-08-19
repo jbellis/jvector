@@ -44,13 +44,10 @@ public class CagraBench {
             start = System.nanoTime();
             results = performQueries(dataset, cagra, topK);
             long end = System.nanoTime();
-            System.out.printf("Took %.3f seconds%n", (end - start) / 1e9);
+            double recall = ((double) results.topKFound) / (dataset.queryVectors.size() * topK);
+            System.out.printf("Query top %d/%d recall %.4f in %.3fs%n",
+                              topK, topK, recall, (end - start) / 1e9);
         }
-
-        // Print results
-        double recall = ((double) results.topKFound) / (dataset.queryVectors.size() * topK);
-        System.out.printf("Query top %d/%d recall %.4f after %,d nodes visited%n",
-                          topK, topK, recall, results.nodesVisited);
     }
 
     private static ResultSummary performQueries(DataSet dataset,

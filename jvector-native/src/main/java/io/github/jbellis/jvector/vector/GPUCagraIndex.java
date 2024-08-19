@@ -98,7 +98,7 @@ public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
 
     @Override
     public int size() {
-        // DEMOFIXME: should probably call in to native size
+        // DEMOFIXME: should probably call in to native size, this is hardcoded to cohere dataset
         return 99740;
     }
 
