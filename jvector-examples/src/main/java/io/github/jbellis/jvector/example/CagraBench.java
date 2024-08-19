@@ -3,8 +3,7 @@ package io.github.jbellis.jvector.example;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.graph.AcceleratedIndex;
-import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.vector.VectorUtilSupport;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 
@@ -13,9 +12,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 public class CagraBench {
     private static final VectorUtilSupport vectorUtilSupport = VectorizationProvider.getInstance().getVectorUtilSupport();
@@ -34,58 +36,52 @@ public class CagraBench {
             cagra.save("cohere.cagra");
             System.out.printf("Created index of %d nodes in %ss%n", cagra.size(), (System.nanoTime() - start) / 1e9);
         }
-        var index = new AcceleratedIndex(cagra, q -> dataset.getBaseRavv().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN));
 
-        // Test for recall
-        int topK = 100; // Adjust as needed
-        int rerankK = 200; // Adjust as needed
-        int queryRuns = 1; // Adjust as needed
-
+        // Time searches + report recall
+        int topK = 100;
         ResultSummary results = null;
         for (int i = 0; i < 10; i++) {
             start = System.nanoTime();
-            results = performQueries(dataset, index, topK, rerankK, queryRuns);
+            results = performQueries(dataset, cagra, topK);
             long end = System.nanoTime();
             System.out.printf("Took %.3f seconds%n", (end - start) / 1e9);
         }
 
         // Print results
-        double recall = ((double) results.topKFound) / (queryRuns * dataset.queryVectors.size() * topK);
+        double recall = ((double) results.topKFound) / (dataset.queryVectors.size() * topK);
         System.out.printf("Query top %d/%d recall %.4f after %,d nodes visited%n",
-                          topK, rerankK, recall, results.nodesVisited);
+                          topK, topK, recall, results.nodesVisited);
     }
 
     private static ResultSummary performQueries(DataSet dataset,
-                                                AcceleratedIndex index,
-                                                int topK,
-                                                int rerankK,
-                                                int queryRuns)
+                                                AcceleratedIndex.ExternalIndex index,
+                                                int topK)
     {
         LongAdder topKfound = new LongAdder();
-        LongAdder nodesVisited = new LongAdder();
 
-        // run queryRuns on a new thread
-        for (int k = 0; k < queryRuns; k++) {
-            IntStream.range(0, dataset.queryVectors.size()).parallel().forEach(i -> {
-                var sr = index.search(dataset.queryVectors.get(i), topK, rerankK);
+        IntStream.range(0, dataset.queryVectors.size()).parallel().forEach(i -> {
+            var sr = index.search(dataset.queryVectors.get(i), topK);
 
-                // Process search result
-                var gt = dataset.groundTruth.get(i);
-                var n = topKCorrect(topK, sr.getNodes(), gt);
-                topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
-            });
-        }
-        return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
+            // Process search result
+            var gt = dataset.groundTruth.get(i);
+            var n = topKCorrect(topK, sr, gt);
+            topKfound.add(n);
+        });
+        return new ResultSummary((int) topKfound.sum(), -1);
     }
 
-    private static long topKCorrect(int topK, SearchResult.NodeScore[] resultNodes, Set<Integer> gt) {
-        var a = Arrays.stream(resultNodes).mapToInt(nodeScore -> nodeScore.node).toArray();
-        int count = Math.min(resultNodes.length, topK);
-        var resultSet = Arrays.stream(a, 0, count)
-                .boxed()
-                .collect(Collectors.toSet());
-        return resultSet.stream().filter(gt::contains).count();
+    private static long topKCorrect(int topK, NodesIterator resultNodes, Set<Integer> gt) {
+        assert resultNodes.size() <= topK;
+
+        long count = 0;
+        while (resultNodes.hasNext()) {
+            int node = resultNodes.next();
+            if (gt.contains(node)) {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     static class ResultSummary {

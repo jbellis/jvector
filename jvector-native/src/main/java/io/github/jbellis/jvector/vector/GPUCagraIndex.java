@@ -53,8 +53,8 @@ public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
     }
 
     @Override
-    public NodesIterator search(VectorFloat<?> query, int rerankK) {
-        if (rerankK > TOP_K_MAX) {
+    public NodesIterator search(VectorFloat<?> query, int topK) {
+        if (topK > TOP_K_MAX) {
             throw new IllegalArgumentException("rerankK must be <= " + TOP_K_MAX);
         }
         // DEMOFIXME: use actual size? Can Cagra return too few results?
@@ -62,11 +62,11 @@ public class GPUCagraIndex implements AcceleratedIndex.ExternalIndex {
         unifiedQuery.copyFrom(query, 0, 0, query.length());
         MemorySegment ms = null;
         try {
-            ms = nativeExecutor.submit(() -> NativeGpuOps.search_cagra_index(index, unifiedQuery.get(), rerankK)).get();
+            ms = nativeExecutor.submit(() -> NativeGpuOps.search_cagra_index(index, unifiedQuery.get(), topK)).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
-        ms = ms.reinterpret(rerankK * Integer.BYTES);
+        ms = ms.reinterpret(topK * Integer.BYTES);
         MemorySegmentByteSequence ids = new MemorySegmentByteSequence(ms);
         int size = 0;
         // DEMOFIXME: Is there a better way to tell if we didn't get the full number of results?

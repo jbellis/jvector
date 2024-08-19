@@ -45,7 +45,7 @@ public class AcceleratedIndex {
     }
 
     public interface ExternalIndex {
-        NodesIterator search(VectorFloat<?> query, int rerankK);
+        NodesIterator search(VectorFloat<?> query, int topK);
 
         // useful for sanity checks
         int size();
