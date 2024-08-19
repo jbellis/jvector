@@ -56,7 +56,7 @@ public class CagraBench {
     {
         LongAdder topKfound = new LongAdder();
 
-        IntStream.range(0, dataset.queryVectors.size()).parallel().forEach(i -> {
+        IntStream.range(0, dataset.queryVectors.size()).forEach(i -> {
             var sr = index.search(dataset.queryVectors.get(i), topK);
 
             // Process search result

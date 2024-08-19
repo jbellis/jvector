@@ -429,7 +429,7 @@ public class Grid {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
-            IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
+            IntStream.range(0, cs.ds.queryVectors.size()).forEach(i -> {
                 var queryVector = cs.ds.queryVectors.get(i);
                 SearchResult sr;
                 var searcher = cs.getSearcher();
