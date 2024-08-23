@@ -325,9 +325,8 @@ public class Grid {
             int rerankK = (int) (topK * overquery);
             var pqr = performQueries(cs, topK, rerankK, 2);
             var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
-            System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                              topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-
+            System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d edgelists loaded for %,d coarse comparisons%n",
+                              topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.edgelistsLoaded, pqr.nodesVisited);
         }
     }
 
@@ -386,8 +385,9 @@ public class Grid {
     }
 
     private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
-        LongAdder topKfound = new LongAdder();
-        LongAdder nodesVisited = new LongAdder();
+        var topKfound = new LongAdder();
+        var coarseSearches = new LongAdder();
+        var edgelistsLoaded = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
             IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = cs.ds.queryVectors.get(i);
@@ -400,10 +400,11 @@ public class Grid {
                 var gt = cs.ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
+                coarseSearches.add(sr.getCoarseSimilarityCount());
+                edgelistsLoaded.add(sr.getEdgeListLoadCount());
             });
         }
-        return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
+        return new ResultSummary((int) topKfound.sum(), coarseSearches.sum(), edgelistsLoaded.sum());
     }
 
     static class ConfiguredSystem implements AutoCloseable {
@@ -453,10 +454,12 @@ public class Grid {
     static class ResultSummary {
         final int topKFound;
         final long nodesVisited;
+        private final long edgelistsLoaded;
 
-        ResultSummary(int topKFound, long nodesVisited) {
+        ResultSummary(int topKFound, long nodesVisited, long edgelistsLoaded) {
             this.topKFound = topKFound;
             this.nodesVisited = nodesVisited;
+            this.edgelistsLoaded = edgelistsLoaded;
         }
     }
 }

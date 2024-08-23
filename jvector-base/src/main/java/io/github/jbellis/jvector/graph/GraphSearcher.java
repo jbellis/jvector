@@ -222,7 +222,7 @@ public class GraphSearcher implements Closeable {
 
         // no entry point -> empty results
         if (ep < 0) {
-            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, Float.POSITIVE_INFINITY);
+            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, 0, Float.POSITIVE_INFINITY);
         }
 
         // kick off the actual search at the entry point
@@ -264,6 +264,7 @@ public class GraphSearcher implements Closeable {
             rerankedResults.setMaxSize(topK);
 
             int numVisited = initialVisited;
+            int edgeListsLoaded = 0;
             // A bound that holds the minimum similarity to the query vector that a candidate vector must
             // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
             var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
@@ -308,6 +309,7 @@ public class GraphSearcher implements Closeable {
                 }
 
                 // score the neighbors of the top candidate and add them to the queue
+                edgeListsLoaded++;
                 var scoreFunction = scoreProvider.scoreFunction();
                 var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
                 if (useEdgeLoading) {
@@ -364,7 +366,7 @@ public class GraphSearcher implements Closeable {
             // that should be everything
             assert popFromQueue.size() == 0;
 
-            return new SearchResult(nodes, numVisited, reranked, worstApproximateInTopK);
+            return new SearchResult(nodes, edgeListsLoaded, numVisited, reranked, worstApproximateInTopK);
         } catch (Throwable t) {
             // clear scratch structures if terminated via throwable, as they may not have been drained
             approximateResults.clear();
