@@ -28,7 +28,6 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
@@ -146,7 +145,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertEquals(resumeTopK, resumed.getNodes().length);
 
         var expected = searcher.search(ssp, initialTopK + resumeTopK, acceptOrds);
-        assertEquals(expected.getVisitedCount(), initial.getVisitedCount() + resumed.getVisitedCount());
+        assertEquals(expected.getCoarseSimilarityCount(), initial.getCoarseSimilarityCount() + resumed.getCoarseSimilarityCount());
         assertEquals(expected.getNodes().length, initial.getNodes().length + resumed.getNodes().length);
         var initialResumedResults = Stream.concat(Arrays.stream(initial.getNodes()), Arrays.stream(resumed.getNodes()))
                 .sorted(Comparator.comparingDouble(ns -> -ns.score))

@@ -410,7 +410,7 @@ public class Grid {
                 var gt = cs.ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
+                nodesVisited.add(sr.getCoarseSimilarityCount());
             });
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());

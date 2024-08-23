@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.graph;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -63,7 +62,7 @@ public class Test2DThreshold extends LuceneTestCase {
             var sf = ravv.rerankerFor(tp.q, VectorSimilarityFunction.EUCLIDEAN);
             var result = searcher.search(new SearchScoreProvider(sf), vectors.length, tp.th, Bits.ALL);
 
-            assert result.getVisitedCount() < vectors.length : "visited all vectors for threshold " + tp.th;
+            assert result.getCoarseSimilarityCount() < vectors.length : "visited all vectors for threshold " + tp.th;
             assert result.getNodes().length >= 0.85 * tp.exactCount : "returned " + result.getNodes().length + " nodes for threshold " + tp.th + " out of " + tp.exactCount;
         }
 

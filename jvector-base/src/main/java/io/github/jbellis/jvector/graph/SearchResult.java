@@ -21,13 +21,15 @@ package io.github.jbellis.jvector.graph;
  */
 public final class SearchResult {
     private final NodeScore[] nodes;
-    private final int visitedCount;
+    private final int edgeListLoadCount;
+    private final int coarseSimilarityCount;
     private final int rerankedCount;
     private final float worstApproximateScoreInTopK;
 
-    public SearchResult(NodeScore[] nodes, int visitedCount, int rerankedCount, float worstApproximateScoreInTopK) {
+    public SearchResult(NodeScore[] nodes, int edgeListLoadCount, int visitedCount, int rerankedCount, float worstApproximateScoreInTopK) {
         this.nodes = nodes;
-        this.visitedCount = visitedCount;
+        this.edgeListLoadCount = edgeListLoadCount;
+        this.coarseSimilarityCount = visitedCount;
         this.rerankedCount = rerankedCount;
         this.worstApproximateScoreInTopK = worstApproximateScoreInTopK;
     }
@@ -42,8 +44,8 @@ public final class SearchResult {
     /**
      * @return the total number of graph nodes visited while performing the search
      */
-    public int getVisitedCount() {
-        return visitedCount;
+    public int getCoarseSimilarityCount() {
+        return coarseSimilarityCount;
     }
 
     /**
@@ -51,6 +53,13 @@ public final class SearchResult {
      */
     public int getRerankedCount() {
         return rerankedCount;
+    }
+
+    /**
+     * @return the number of times the search had to load an edge list from disk
+     */
+    public int getEdgeListLoadCount() {
+        return edgeListLoadCount;
     }
 
     /**
