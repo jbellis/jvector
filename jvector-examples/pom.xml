@@ -115,8 +115,9 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>-Xmx14G</argument>
+                                        <argument>-Xmx128G</argument>
                                         <argument>-ea</argument>
+                                        <argument>-Dcache_edges</argument>
                                         <argument>io.github.jbellis.jvector.example.Bench</argument>
                                         <argument>${benchArgs}</argument>
                                     </arguments>
