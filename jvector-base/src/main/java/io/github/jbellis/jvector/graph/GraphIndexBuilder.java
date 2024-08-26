@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
+import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExceptionUtils;
@@ -735,7 +736,8 @@ public class GraphIndexBuilder implements Closeable {
         for (int i = 0; i < size; i++) {
             int nodeId = in.readInt();
             int nNeighbors = in.readInt();
-            var sf = scoreProvider.searchProviderFor(nodeId).exactScoreFunction();
+            var ssp = scoreProvider.searchProviderFor(nodeId);
+            var sf = ssp.exactScoreFunction() == null ? ssp.scoreFunction() : ssp.exactScoreFunction();
             var ca = new NodeArray(nNeighbors);
             for (int j = 0; j < nNeighbors; j++) {
                 int neighbor = in.readInt();

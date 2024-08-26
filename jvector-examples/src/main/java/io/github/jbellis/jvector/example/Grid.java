@@ -96,7 +96,7 @@ public class Grid {
                 }
             }
         } finally {
-            Files.delete(testDirectory);
+//            Files.delete(testDirectory);
             cachedCompressors.clear();
         }
     }
@@ -163,7 +163,8 @@ public class Grid {
         var quantized = buildCompressor.encodeAll(floatVectors);
         var pq = (PQVectors) buildCompressor.createCompressedVectors(quantized);
         var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
+        var alpha = 1.2f;
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, alpha);
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
@@ -181,8 +182,21 @@ public class Grid {
             }
         }
 
-        // build the graph incrementally
+        // load cached edgelist if requested and present
+        OnHeapGraphIndex cachedGraph;
         long start = System.nanoTime();
+        boolean cacheEdges = System.getProperty("cache_edges") != null;
+        var cachedEdgesPath = Path.of(CACHE_DIR, String.format("%s-%s-%s-%.2f.edges", ds.name, M, efConstruction, alpha));
+        if (cacheEdges && Files.exists(cachedEdgesPath)) {
+            builder.load(new SimpleReader(cachedEdgesPath));
+            cachedGraph = builder.getGraph();
+            System.out.format("Loaded %s in %.2fs%n", cachedEdgesPath, (System.nanoTime() - start) / 1_000_000_000.0);
+        } else {
+            cachedGraph = null;
+        }
+
+        // build the index incrementally
+        start = System.nanoTime();
         var vv = floatVectors.threadLocalSupplier();
         PhysicalCoreExecutor.pool().submit(() -> {
             IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
@@ -197,10 +211,13 @@ public class Grid {
                         throw new UncheckedIOException(e);
                     }
                 });
-                builder.addGraphNode(node, vv.get().getVector(node));
+                if (cachedGraph == null) {
+                    builder.addGraphNode(node, vv.get().getVector(node));
+                }
             });
         }).join();
         builder.cleanup();
+
         // write the edge lists and close the writers
         // if our feature set contains Fused ADC, we need a Fused ADC write-time supplier (as we don't have neighbor information during writeInline)
         writers.entrySet().stream().parallel().forEach(entry -> {
@@ -221,8 +238,16 @@ public class Grid {
                 throw new UncheckedIOException(e);
             }
         });
+        if (cacheEdges && cachedGraph == null) {
+            try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(cachedEdgesPath)))) {
+                builder.getGraph().save(out);
+            }
+        }
         builder.close();
-        System.out.format("Build and write %s in %ss%n", featureSets, (System.nanoTime() - start) / 1_000_000_000.0);
+        System.out.format("%s %s in %ss%n",
+                          cachedGraph == null ? "Build and write" : "Write ",
+                          featureSets,
+                          (System.nanoTime() - start) / 1_000_000_000.0);
 
         // open indexes
         Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
@@ -291,9 +316,9 @@ public class Grid {
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, alpha);
         OnHeapGraphIndex onHeapGraph;
         start = System.nanoTime();
-        boolean cacheIndex = System.getProperty("cache_edges") != null;
+        boolean cacheEdges = System.getProperty("cache_edges") != null;
         var cachedEdgesPath = Path.of(CACHE_DIR, String.format("%s-%s-%s-%.2f.edges", ds.name, M, efConstruction, alpha));
-        if (cacheIndex && Files.exists(cachedEdgesPath)) {
+        if (cacheEdges && Files.exists(cachedEdgesPath)) {
             builder.load(new SimpleReader(cachedEdgesPath));
             onHeapGraph = builder.getGraph();
             System.out.format("Loaded %s in %.2fs%n", cachedEdgesPath, (System.nanoTime() - start) / 1_000_000_000.0);
@@ -307,7 +332,7 @@ public class Grid {
                               onHeapGraph.getAverageDegree(),
                               builder.getAverageShortEdges());
         }
-        if (cacheIndex) {
+        if (cacheEdges && !Files.exists(cachedEdgesPath)) {
             try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(cachedEdgesPath)))) {
                 onHeapGraph.save(out);
             }
