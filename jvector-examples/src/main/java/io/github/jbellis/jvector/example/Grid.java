@@ -73,7 +73,7 @@ import java.util.stream.IntStream;
  */
 public class Grid {
 
-    private static final String pqCacheDir = "pq_cache";
+    private static final String CACHE_DIR = "bench_cache";
 
     private static final String dirPrefix = "BenchGraphDir";
 
@@ -285,11 +285,15 @@ public class Grid {
         Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
         long start;
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
+
+        // load or compute the edgelist
+        var alpha = 1.2f;
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, alpha);
         OnHeapGraphIndex onHeapGraph;
         start = System.nanoTime();
-        var cachedEdgesPath = Path.of("/tmp", ds.name + ".edges");
-        if (Files.exists(cachedEdgesPath)) {
+        boolean cacheIndex = System.getProperty("cache_edges") != null;
+        var cachedEdgesPath = Path.of(CACHE_DIR, String.format("%s-%s-%s-%.2f.edges", ds.name, M, efConstruction, alpha));
+        if (cacheIndex && Files.exists(cachedEdgesPath)) {
             builder.load(new SimpleReader(cachedEdgesPath));
             onHeapGraph = builder.getGraph();
             System.out.format("Loaded %s in %.2fs%n", cachedEdgesPath, (System.nanoTime() - start) / 1_000_000_000.0);
@@ -302,10 +306,14 @@ public class Grid {
                               (System.nanoTime() - start) / 1_000_000_000.0,
                               onHeapGraph.getAverageDegree(),
                               builder.getAverageShortEdges());
+        }
+        if (cacheIndex) {
             try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(cachedEdgesPath)))) {
                 onHeapGraph.save(out);
             }
         }
+
+        // write out the full index, including non-edge features
         int n = 0;
         for (var features : featureSets) {
             if (features.contains(FeatureId.FUSED_ADC)) {
@@ -350,7 +358,7 @@ public class Grid {
 
         var fname = cp.idStringFor(ds);
         return cachedCompressors.computeIfAbsent(fname, __ -> {
-            var path = Paths.get(pqCacheDir).resolve(fname);
+            var path = Paths.get(CACHE_DIR).resolve(fname);
             if (path.toFile().exists()) {
                 try {
                     try (var readerSupplier = ReaderSupplierFactory.open(path)) {

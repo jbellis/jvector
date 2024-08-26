@@ -54,7 +54,7 @@ public abstract class CompressorParameters {
 
         @Override
         public String idStringFor(DataSet ds) {
-            return String.format("PQ_%s_%d_%d_%s_%s", ds.name, m, k, isCentered, anisotropicThreshold);
+            return String.format("%s_%d_%d_%s_%s.pq", ds.name, m, k, isCentered, anisotropicThreshold);
         }
 
         @Override
