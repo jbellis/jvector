@@ -312,7 +312,7 @@ public class Grid {
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
 
         // load or compute the edgelist
-        var alpha = 1.2f;
+        var alpha = 2.0f;
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, alpha);
         OnHeapGraphIndex onHeapGraph;
         start = System.nanoTime();
