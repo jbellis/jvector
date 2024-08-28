@@ -40,7 +40,7 @@ public final class SearchScoreProvider {
      * Generally, reranker will be null iff scoreFunction is an ExactScoreFunction.  However,
      * it is allowed, and sometimes useful, to only perform approximate scoring without reranking.
      * <p>
-     * Most often it will be convenient to get the reranker either using `ExactScoreFunction.from`
+     * Most often it will be convenient to get the reranker either using `RandomAccessVectorValues.rerankerFor`
      * or `ScoringView.rerankerFor`.
      */
     public SearchScoreProvider(ScoreFunction scoreFunction, ScoreFunction.ExactScoreFunction reranker) {
