@@ -48,6 +48,7 @@ endfunction()
 # Change pinned tag here to test a commit in CI
 # To use a different CUVS locally, set the CMake variable
 # CPM_cuvs_SOURCE=/path/to/local/cuvs
+set(CPM_cuvs_SOURCE /home/jonathan/Projects/cuvs)
 find_and_configure_cuvs(VERSION  ${CUVS_VERSION}.00
         FORK                     ${CUVS_FORK}
         PINNED_TAG               ${CUVS_PINNED_TAG}

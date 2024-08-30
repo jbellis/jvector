@@ -110,33 +110,47 @@ extern "C" {
             return nullptr;
         }
 
+        raft::common::nvtx::range fun_scope("search_cagra_index(k = %u, dim = %zu)", topk, index->index.dim());
+
+        // Neighbors are returned to host, so we keep them in the page-locked cuda-registered host memory
+        static thread_local auto neighbors_ptr = []() {
+            void* ptr;
+            cudaMallocHost(&ptr, sizeof(int32_t) * 256);
+            return reinterpret_cast<int32_t*>(ptr);
+        }();
+
+        // Distances are not returned, so we keep them in plain device memory
+        static thread_local auto distances_ptr = []() {
+            void* ptr;
+            cudaMalloc(&ptr, sizeof(float) * 256);
+            return reinterpret_cast<float*>(ptr);
+        }();
+
         raft::device_resources const& res = raft::device_resources_manager::get_device_resources();
 
         using namespace cuvs::neighbors;
 
         // Prepare output arrays
-        auto neighbors = raft::make_device_matrix<uint32_t>(res, 1, topk);
-        auto distances = raft::make_device_matrix<float>(res, 1, topk);
+        auto neighbors = raft::make_device_matrix_view<uint32_t, int64_t>(
+            reinterpret_cast<uint32_t*>(neighbors_ptr), 1, topk);
+        auto distances = raft::make_device_matrix_view<float, int64_t>(distances_ptr, 1, topk);
 
         // Create an mdspan from the raw pointer
         auto span = raft::make_device_matrix_view<float, int64_t>(query, 1, index->index.dim());
 
         // Perform the search
         cagra::search_params search_params;
-        search_params.itopk_size = topk;
-        cagra::search(res, search_params, index->index, raft::make_const_mdspan(span), neighbors.view(), distances.view());
+        search_params.itopk_size = raft::bound_by_power_of_two(topk);
+        search_params.persistent = true;
+        search_params.persistent_device_usage = 0.98;
+        search_params.algo = cagra::search_algo::SINGLE_CTA;
+        search_params.max_queries = 1000;
+        search_params.search_width = 32;
+        search_params.max_iterations = 4;
 
-        // Copy results back to host
-        std::vector<uint32_t> host_neighbors(topk);
-        raft::copy(host_neighbors.data(), neighbors.data_handle(), topk, res.get_stream());
-        raft::resource::sync_stream(res, res.get_stream());
+        cagra::search(res, search_params, index->index, raft::make_const_mdspan(span), neighbors, distances);
 
-        // DEMOFIXME: eliminate a copy
-        // Allocate result array and copy the data
-        int32_t* result = static_cast<int32_t*>(malloc(topk * sizeof(int32_t)));
-        std::copy(host_neighbors.begin(), host_neighbors.end(), result);
-
-        return result;
+        return neighbors_ptr;
     }
 
     void free_cagra_index(jv_cagra_index_t* index) {
