@@ -52,7 +52,7 @@ public class ConcurrentNeighborMap {
         neighbors = new DenseIntMap<>(1024);
     }
 
-    public void insertOne(int fromId, int toId, float score, float overflow) {
+    public void insertEdge(int fromId, int toId, float score, float overflow) {
         while (true) {
             var old = neighbors.get(fromId);
             var next = old.insert(toId, score, overflow, this);
@@ -62,7 +62,7 @@ public class ConcurrentNeighborMap {
         }
     }
 
-    public void insertNotDiverse(int fromId, int toId, float score) {
+    public void insertEdgeNotDiverse(int fromId, int toId, float score) {
         while (true) {
             var old = neighbors.get(fromId);
             var next = old.insertNotDiverse(toId, score, this);
@@ -100,10 +100,10 @@ public class ConcurrentNeighborMap {
         }
     }
 
-    public Neighbors insertDiverse(int nodeId, NodeArray natural) {
+    public Neighbors insertDiverse(int nodeId, NodeArray candidates) {
         while (true) {
             var old = neighbors.get(nodeId);
-            var next = old.insertDiverse(natural, this);
+            var next = old.insertDiverse(candidates, this);
             if (next == old || neighbors.compareAndPut(nodeId, old, next)) {
                 return next;
             }
@@ -161,7 +161,7 @@ public class ConcurrentNeighborMap {
         for (int i = 0; i < nodes.size(); i++) {
             int nbr = nodes.getNode(i);
             float nbrScore = nodes.getScore(i);
-            insertOne(nbr, toId, nbrScore, overflow);
+            insertEdge(nbr, toId, nbrScore, overflow);
         }
     }
 

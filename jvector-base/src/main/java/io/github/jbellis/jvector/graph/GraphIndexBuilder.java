@@ -309,7 +309,7 @@ public class GraphIndexBuilder implements Closeable {
             var neighborNode = neighbors.getNode(i);
             var neighborScore = neighbors.getScore(i);
             if (connectionTargets.add(neighborNode)) {
-                graph.nodes.insertNotDiverse(neighborNode, node, neighborScore);
+                graph.nodes.insertEdgeNotDiverse(neighborNode, node, neighborScore);
                 return true;
             }
         }
