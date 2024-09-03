@@ -23,6 +23,8 @@ cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 # ------------- configure rapids-cmake --------------#
 
 include(cmake/thirdparty/fetch_rapids.cmake)
+
+# Include necessary RAPIDS CMake modules
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -35,13 +37,48 @@ rapids_cuda_init_architectures(test_cuvs)
 
 project(test_cuvs LANGUAGES CXX CUDA)
 
+# ------------- configure local RAFT -----------------#
+
+# Specify the path to the RAFT library
+set(RAFT_LIBRARY_PATH "/home/jonathan/miniforge3/envs/cuvs/lib/libraft.so")
+
+# Check if the library exists
+if(NOT EXISTS ${RAFT_LIBRARY_PATH})
+    message(FATAL_ERROR "RAFT library not found at ${RAFT_LIBRARY_PATH}")
+endif()
+
+# Create an imported target for RAFT
+add_library(RAFT::RAFT SHARED IMPORTED)
+set_target_properties(RAFT::RAFT PROPERTIES
+    IMPORTED_LOCATION ${RAFT_LIBRARY_PATH}
+)
+
+# Specify the include directory for RAFT headers
+# Adjust this path if necessary
+set(RAFT_INCLUDE_DIR "/home/jonathan/miniforge3/envs/cuvs/include")
+
+if(NOT EXISTS ${RAFT_INCLUDE_DIR})
+    message(FATAL_ERROR "RAFT include directory not found at ${RAFT_INCLUDE_DIR}")
+endif()
+
+target_include_directories(RAFT::RAFT INTERFACE ${RAFT_INCLUDE_DIR})
+
+# You may need to add dependencies for RAFT here, such as CUDA
+find_package(CUDA REQUIRED)
+target_link_libraries(RAFT::RAFT INTERFACE ${CUDA_LIBRARIES})
+
 # ------------- configure cuvs -----------------#
 
 rapids_cpm_init()
 set(BUILD_CUVS_C_LIBRARY OFF)
-#include(cmake/thirdparty/get_cuvs.cmake)
+
+# Find CUVS package
 find_package(cuvs REQUIRED)
 
 # -------------- compile tasks ----------------- #
 add_library(jvectorgpu SHARED src/jvector_gpupq.cu src/cagra_example.cu src/jvector_cagra.cu)
-target_link_libraries(jvectorgpu PRIVATE cuvs::cuvs $<TARGET_NAME_IF_EXISTS:conda_env>)
+target_link_libraries(jvectorgpu PRIVATE
+    cuvs::cuvs
+    RAFT::RAFT
+    $<TARGET_NAME_IF_EXISTS:conda_env>
+)
