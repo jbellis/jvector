@@ -73,8 +73,9 @@ public interface GraphIndex extends AutoCloseable, Accountable {
     int maxDegree();
 
     /**
-     * @return the maximum node id in the graph.  May be different from size() if nodes are
-     * being added concurrently, or if nodes have been deleted (and cleaned up).
+     * @return the first ordinal greater than all node ids in the graph.  Equal to size() in simple cases;
+     * May be different from size() if nodes are being added concurrently, or if nodes have been
+     * deleted (and cleaned up).
      */
     default int getIdUpperBound() {
         return size();
