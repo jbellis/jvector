@@ -120,7 +120,10 @@ public class DataSet {
                 scrubbedQueryVectors.add(v);
                 var gt = new HashSet<Integer>();
                 for (int j : groundTruth.get(i)) {
-                    gt.add(rawToScrubbed.get(j));
+                    Integer scrubbed = rawToScrubbed.get(j);
+                    if (scrubbed != null) {
+                        gt.add(scrubbed);
+                    }
                 }
                 gtSet.add(gt);
             }
