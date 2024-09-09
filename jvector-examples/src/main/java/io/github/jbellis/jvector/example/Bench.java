@@ -26,8 +26,10 @@ import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -129,15 +131,18 @@ public class Bench {
         }
     }
 
-    private static void validateGroundTruth(DataSet ds) {
+    private static void validateGroundTruth(DataSet ds) throws IOException {
         System.out.println("Validating ground truth for " + ds.name);
-        int numQueriesToValidate = Math.min(10, ds.queryVectors.size());
+        int numQueriesToValidate = ds.queryVectors.size();
 
+        var newGt = new ArrayList<IntHashSet>(numQueriesToValidate);
         for (int i = 0; i < numQueriesToValidate; i++) {
             VectorFloat<?> queryVector = ds.queryVectors.get(i);
             List<SearchResult.NodeScore> groundTruth = createNodeScoresFromGroundTruth(ds, queryVector, ds.groundTruth.get(i));
             int topK = groundTruth.size();
             List<SearchResult.NodeScore> actualNearest = computeActualNearest(ds, queryVector, topK);
+            var newNearest = actualNearest.stream().map(ns -> ns.node).collect(Collectors.toCollection(IntHashSet::new));
+            newGt.add(newNearest);
 
             // Compare scores with ground truth
             int matchingScores = compareScores(groundTruth, actualNearest);
@@ -146,6 +151,9 @@ public class Bench {
             System.out.printf("Query %d: Score-based Accuracy = %.2f%% (%d/%d matching scores)%n", 
                               i, accuracy * 100, matchingScores, topK);
         }
+
+        var newDs = new DataSet(ds.name, ds.similarityFunction, ds.baseVectors, ds.queryVectors.subList(0, numQueriesToValidate), newGt);
+        newDs.writeGroundTruth("/tmp/" + ds.name + "-validated.ivec");
     }
 
     private static List<SearchResult.NodeScore> createNodeScoresFromGroundTruth(DataSet ds, VectorFloat<?> queryVector, Set<Integer> groundTruthIndices) {
