@@ -165,4 +165,15 @@ public class DataSet {
         }
         return baseRavv;
     }
+
+    public void writeGroundTruth(String pathStr) throws IOException {
+        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(pathStr))) {
+            for (Set<Integer> gtSet : groundTruth) {
+                dos.writeInt(Integer.reverseBytes(gtSet.size()));
+                for (Integer neighbor : gtSet) {
+                    dos.writeInt(Integer.reverseBytes(neighbor));
+                }
+            }
+        }
+    }
 }
