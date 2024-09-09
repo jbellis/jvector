@@ -26,12 +26,15 @@ import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import io.github.jbellis.jvector.graph.SearchResult;
+import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
 
@@ -68,10 +71,7 @@ public class Bench {
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var coreFiles = List.of(
                 "ada002-100k",
-                "cohere-english-v3-100k",
-                "openai-v3-small-100k",
-                "nv-qa-v4-100k",
-                "colbert-1M",
+                "colbert-10M",
                 "gecko-100k");
         executeNw(coreFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
 
@@ -116,8 +116,45 @@ public class Bench {
         for (var nwDatasetName : coreFiles) {
             if (pattern.matcher(nwDatasetName).find()) {
                 var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
-                Grid.runAll(mfd.load(), mGrid, efConstructionGrid, featureSets, buildCompression, compressionGrid, efSearchGrid);
+                DataSet ds = mfd.load();
+                validateGroundTruth(ds);
             }
         }
+    }
+
+    private static void validateGroundTruth(DataSet ds) {
+        System.out.println("Validating ground truth for " + ds.name);
+        int numQueriesToValidate = Math.min(10, ds.queryVectors.size());
+        int topK = 100;
+
+        for (int i = 0; i < numQueriesToValidate; i++) {
+            VectorFloat<?> queryVector = ds.queryVectors.get(i);
+            Set<Integer> groundTruth = ds.groundTruth.get(i);
+
+            // Compute actual nearest neighbors
+            List<SearchResult.NodeScore> actualNearest = computeActualNearest(ds.baseVectors, queryVector, topK);
+
+            // Compare with ground truth
+            Set<Integer> actualSet = actualNearest.stream().map(ns -> ns.node).collect(Collectors.toSet());
+            Set<Integer> groundTruthSet = new HashSet<>(groundTruth);
+
+            int commonCount = actualSet.stream().filter(groundTruthSet::contains).collect(Collectors.toSet()).size();
+            double accuracy = (double) commonCount / topK;
+
+            System.out.printf("Query %d: Accuracy = %.2f%% (%d/%d matching)%n", 
+                              i, accuracy * 100, commonCount, topK);
+        }
+    }
+
+    private static List<SearchResult.NodeScore> computeActualNearest(List<VectorFloat<?>> baseVectors, VectorFloat<?> queryVector, int topK) {
+        var pq = IntStream.range(0, baseVectors.size())
+                .parallel()
+                .mapToObj(i -> {
+                    VectorFloat<?> baseVector = baseVectors.get(i);
+                    float similarity = VectorUtil.dotProduct(queryVector, baseVector);
+                    return new SearchResult.NodeScore(i, similarity);
+                })
+                .collect(Collectors.toCollection(() -> new PriorityQueue<>(topK, Comparator.comparingDouble(ns -> -ns.score))));
+        return new ArrayList<>(pq);
     }
 }
