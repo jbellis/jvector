@@ -606,14 +606,9 @@ public class GraphIndexBuilder implements Closeable {
                 return result.getNodes()[0].node;
             }
 
-            // if everything was deleted, return NO_ENTRY_POINT.  (we don't check this earlier because
-            // `cardinality()` can be expensive when lots of deletes are present.)
-            if (graph.getDeletedNodes().cardinality() >= graph.size()) {
-                return NO_ENTRY_POINT;
-            }
-
-            // live nodes exist but we didn't find any in the search.  that must mean the graph is poorly
-            // connected.  we'll do our best under the circumstances by picking a random live node.
+            // No live nodes found in the search.  Either no live nodes exist, or the graph is too
+            // poorly connected to find one.  we'll do our best under the circumstances by picking
+            // a random live node, or NO_ENTRY_POINT if none exist.
             return randomLiveNode();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -667,6 +662,9 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
+    /**
+     * @return a random live node, or `NO_ENTRY_POINT` if no live nodes exist.
+     */
     @VisibleForTesting
     int randomLiveNode() {
         var R = ThreadLocalRandom.current();
