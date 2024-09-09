@@ -32,6 +32,7 @@ import org.agrona.collections.IntArrayQueue;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -599,14 +600,18 @@ public class GraphIndexBuilder implements Closeable {
         int ep = graph.entry();
         var ssp = scoreProvider.searchProviderFor(centroid);
         try (var gs = searchers.get()) {
+            // search for the centroid.  if we can find a live node nearby, return it
             var result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
-            if (result.getNodes().length == 0) {
-                // graph contains only deleted nodes
-                return NO_ENTRY_POINT;
+            if (result.getNodes().length != 0) {
+                return result.getNodes()[0].node;
             }
-            return result.getNodes()[0].node;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+
+            // No live nodes found in the search.  Either no live nodes exist, or the graph is too
+            // poorly connected to find one.  we'll do our best under the circumstances by picking
+            // a random live node, or NO_ENTRY_POINT if none exist.
+            return randomLiveNode();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -657,6 +662,9 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
+    /**
+     * @return a random live node, or `NO_ENTRY_POINT` if no live nodes exist.
+     */
     @VisibleForTesting
     int randomLiveNode() {
         var R = ThreadLocalRandom.current();
