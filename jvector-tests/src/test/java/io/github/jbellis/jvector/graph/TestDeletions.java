@@ -20,26 +20,15 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
-import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
-import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.file.Files;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.TestUtil.assertGraphEquals;
 import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectors;
-import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectorsParallel;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
@@ -137,5 +126,53 @@ public class TestDeletions extends LuceneTestCase {
         builder.removeDeletedNodes();
         assertEquals(0, graph.size());
         assertEquals(OnHeapGraphIndex.NO_ENTRY_POINT, graph.entry());
+    }
+
+    @Test
+    public void testNoPathToLiveNodesWhenRemovingDeletedNodes() throws IOException {
+        // build a graph that has no path to nodes that won't be deleted
+        // from the entry point.
+        int dimension = 2;
+        var ravv = MockVectorValues.fromValues(createRandomFloatVectors(5, dimension, getRandom()));
+        try(var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f)) {
+            var graph = builder.getGraph();
+
+            var na0 = new NodeArray(dimension);
+            na0.addInOrder(1, 0.5f);
+            na0.addInOrder(2, 0.5f);
+            graph.addNode(0, na0);
+
+            var na1 = new NodeArray(dimension);
+            na1.addInOrder(0, 0.5f);
+            na1.addInOrder(2, 0.5f);
+            graph.addNode(1, na1);
+
+            var na2 = new NodeArray(dimension);
+            na2.addInOrder(0, 0.5f);
+            na2.addInOrder(1, 0.5f);
+            graph.addNode(2, na2);
+
+            var na3 = new NodeArray(dimension);
+            na3.addInOrder(0, 0.5f);
+            na3.addInOrder(2, 0.5f);
+            graph.addNode(3, na3);
+
+            var na4 = new NodeArray(dimension);
+            na4.addInOrder(0, 0.5f);
+            na4.addInOrder(2, 0.5f);
+            graph.addNode(4, na4);
+
+            graph.updateEntryNode(1);
+
+            builder.markNodeDeleted(0);
+            builder.markNodeDeleted(1);
+            builder.markNodeDeleted(2);
+
+            // node 3 and 4 are live, but there are no edges pointing to them
+            builder.removeDeletedNodes();
+
+            assertEquals(2, graph.size());
+            assertNotEquals(OnHeapGraphIndex.NO_ENTRY_POINT, graph.entry());
+        }
     }
 }

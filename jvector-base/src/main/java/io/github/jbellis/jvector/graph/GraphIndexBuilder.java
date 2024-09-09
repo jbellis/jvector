@@ -441,7 +441,7 @@ public class GraphIndexBuilder implements Closeable {
         graph.updateEntryNode(ep);
     }
 
-    private void updateEntryPoint() {
+    private int updateEntryPoint() {
         int newEntryNode = approximateMedioid();
         graph.updateEntryNode(newEntryNode);
         if (newEntryNode >= 0) {
@@ -450,6 +450,7 @@ public class GraphIndexBuilder implements Closeable {
         } else {
             updateEntryNodeIn.addAndGet(10_000);
         }
+        return newEntryNode;
     }
 
     private void improveConnections(int node) {
@@ -563,14 +564,26 @@ public class GraphIndexBuilder implements Closeable {
 
         // Generally we want to keep entryPoint update and node removal distinct, because both can be expensive,
         // but if the entry point was deleted then we have no choice
-        if (toDelete.get(graph.entry())) {
-            updateEntryPoint();
+        var entryPoint = graph.entry();
+        if (toDelete.get(entryPoint)) {
+            entryPoint = updateEntryPoint();
         }
 
         // Remove the deleted nodes from the graph
         assert toDelete.cardinality() == nRemoved : "cardinality changed";
         for (int i = toDelete.nextSetBit(0); i != NO_MORE_DOCS; i = toDelete.nextSetBit(i + 1)) {
             graph.removeNode(i);
+        }
+
+        if (entryPoint == NO_ENTRY_POINT && !liveNodes.isEmpty()) {
+            // This might happen when there is no path to live
+            // nodes from the old entry point.
+            graph.updateEntryNode(randomLiveNode());
+
+            // When that happens, it is very likely that the remaining
+            // live nodes are not connected at all. To maintain connectivity
+            // per the method contract, we will reconnect them.
+            reconnectOrphanedNodes();
         }
 
         return nRemoved * graph.ramBytesUsedOneNode();
