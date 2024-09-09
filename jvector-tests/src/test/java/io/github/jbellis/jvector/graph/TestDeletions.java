@@ -24,6 +24,8 @@ import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -137,5 +139,35 @@ public class TestDeletions extends LuceneTestCase {
         builder.removeDeletedNodes();
         assertEquals(0, graph.size());
         assertEquals(OnHeapGraphIndex.NO_ENTRY_POINT, graph.entry());
+    }
+
+    @Test
+    public void testNoPathToLiveNodesWhenRemovingDeletedNodes2() throws IOException {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var random = getRandom();
+        // generate two clusters of vectors
+        var ravv = MockVectorValues.fromValues(
+                IntStream.range(0, 1100).mapToObj(i -> {
+                    if (i < 1000) {
+                        return vts.createFloatVector(new float[]{0.01f + 100 * random.nextFloat(), 0.01f + 100 * random.nextFloat()});
+                    } else {
+                        return vts.createFloatVector(new float[]{10_000.0f + 100 * random.nextFloat(), 10_000.0f + 100 * random.nextFloat()});
+                    }
+                }).toArray(VectorFloat<?>[]::new)
+        );
+
+        // add the vectors, then delete all the ones from the first (larger) cluster
+        try (var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f)) {
+            for (int i = 0; i < 1100; i++) {
+                builder.addGraphNode(i, ravv.getVector(i));
+            }
+
+            for (int i = 0; i < 1000; i++) {
+                builder.markNodeDeleted(i);
+            }
+
+            builder.cleanup();
+            assert builder.graph.getView().entryNode() != OnHeapGraphIndex.NO_ENTRY_POINT;
+        }
     }
 }

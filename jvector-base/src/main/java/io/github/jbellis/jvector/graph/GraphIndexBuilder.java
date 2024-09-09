@@ -32,6 +32,7 @@ import org.agrona.collections.IntArrayQueue;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -599,14 +600,23 @@ public class GraphIndexBuilder implements Closeable {
         int ep = graph.entry();
         var ssp = scoreProvider.searchProviderFor(centroid);
         try (var gs = searchers.get()) {
+            // search for the centroid.  if we can find a live node nearby, return it
             var result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
-            if (result.getNodes().length == 0) {
-                // graph contains only deleted nodes
+            if (result.getNodes().length != 0) {
+                return result.getNodes()[0].node;
+            }
+
+            // if everything was deleted, return NO_ENTRY_POINT.  (we don't check this earlier because
+            // `cardinality()` can be expensive when lots of deletes are present.)
+            if (graph.getDeletedNodes().cardinality() >= graph.size()) {
                 return NO_ENTRY_POINT;
             }
-            return result.getNodes()[0].node;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+
+            // live nodes exist but we didn't find any in the search.  that must mean the graph is poorly
+            // connected.  we'll do our best under the circumstances by picking a random live node.
+            return randomLiveNode();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
