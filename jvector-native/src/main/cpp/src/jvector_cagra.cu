@@ -30,6 +30,8 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <raft/common/nvtx.hpp>
+#include <raft/util/integer_utils.hpp>
 #include <raft/core/device_mdarray.hpp>
 #include <raft/core/device_resources.hpp>
 #include <raft/core/device_resources_manager.hpp>

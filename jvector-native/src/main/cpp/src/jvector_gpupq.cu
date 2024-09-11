@@ -636,7 +636,7 @@ extern "C" {
 
     float* allocate_float_vector(int32_t length) {
         float* h_ptr = nullptr;  // Host pointer
-        cudaError_t err = cudaMallocManaged((void**)&h_ptr, length * sizeof(float));  // Allocate managed memory
+        cudaError_t err = cudaMallocHost((void**)&h_ptr, length * sizeof(float));  // Allocate pinned host memory
         if (err != cudaSuccess) {
             std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
             return nullptr;
