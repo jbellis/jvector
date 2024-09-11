@@ -135,7 +135,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       norm1 += elem1 * elem1;
       norm2 += elem2 * elem2;
     }
-    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+    return (float) (sum / Math.sqrt(norm1 * norm2));
   }
 
   @Override
@@ -152,7 +152,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       norm1 += elem1 * elem1;
       norm2 += elem2 * elem2;
     }
-    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+    return (float) (sum / Math.sqrt(norm1 * norm2));
   }
 
   @Override
