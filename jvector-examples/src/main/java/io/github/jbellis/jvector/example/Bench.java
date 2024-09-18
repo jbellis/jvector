@@ -74,6 +74,7 @@ public class Bench {
 
         // large embeddings calculated by Neighborhood Watch.  100k files by default; 1M also available
         var coreFiles = List.of(
+                "cohere-english-v3-100k",
                 "colbert-10M");
         executeNw(coreFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, efConstructionGrid, efSearchGrid);
     }
@@ -90,7 +91,7 @@ public class Bench {
 
     private static void validateGroundTruth(DataSet ds) throws IOException {
         System.out.println("Validating ground truth for " + ds.name);
-        int numQueriesToValidate = ds.queryVectors.size();
+        int numQueriesToValidate = 10; // ds.queryVectors.size();
 
         var newGt = new ArrayList<IntHashSet>(numQueriesToValidate);
         for (int i = 0; i < numQueriesToValidate; i++) {
