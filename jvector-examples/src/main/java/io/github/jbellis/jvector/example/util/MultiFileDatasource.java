@@ -59,7 +59,7 @@ public class MultiFileDatasource {
                                                               "wikipedia_squad/100k/cohere_embed-english-v3.0_1024_query_vectors_10000.fvec",
                                                               "wikipedia_squad/100k/cohere_embed-english-v3.0_1024_indices_b100000_q10000_k100.ivec"));
         put("colbert-10M", new MultiFileDatasource("colbert-10M",
-                                                   "wikipedia_squad/10M/no_dedup/colbertv2.0_128_distances_b10000000_q100000_k100.fvec",
+                                                   "wikipedia_squad/10M/no_dedup/colbertv2.0_128_base_vectors_10000000.fvec",
                                                    "wikipedia_squad/10M/no_dedup/colbertv2.0_128_query_vectors_100000.fvec",
                                                    "wikipedia_squad/10M/no_dedup/colbertv2.0_128_indices_b10000000_q100000_k100.ivec"));
         put("colbert-1M", new MultiFileDatasource("colbert-1M",
