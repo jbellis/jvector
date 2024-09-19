@@ -185,5 +185,13 @@ public class AtomicFixedBitSet extends BitSet {
         long storageSize = (long) storage.length() * longSizeInBytes + arrayOverhead;
         return BASE_RAM_BYTES_USED + storageSize;
     }
+
+    public AtomicFixedBitSet copy() {
+        AtomicFixedBitSet copy = new AtomicFixedBitSet(length());
+        for (int i = 0; i < storage.length(); i++) {
+            copy.storage.set(i, storage.get(i));
+        }
+        return copy;
+    }
 }
 

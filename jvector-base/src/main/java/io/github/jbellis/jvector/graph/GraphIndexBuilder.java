@@ -30,7 +30,6 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntArrayQueue;
-import org.agrona.collections.IntHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -241,18 +240,20 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     private void reconnectOrphanedNodes() {
-        // It's possible that reconnecting one node will result in disconnecting another, since we are maintaining
-        // the maxConnections invariant. So, we do a best effort of 5 loops. We claim the entry node as an
-        // already used connectionTarget so that we don't clutter its edge list.
-        var connectionTargets = ConcurrentHashMap.<Integer>newKeySet();
-        connectionTargets.add(graph.entry());
+        // Reconnection is best-effort: reconnecting one node may result in disconnecting another, since we are maintaining
+        // the maxConnections invariant. So, we do a maximum of 5 loops.
         for (int i = 0; i < 5; i++) {
-            // find all nodes reachable from the entry node
+            // determine the nodes reachable from the entry point at the start of this pass
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
-            connectedNodes.set(graph.entry());
-            ConcurrentNeighborMap.Neighbors self1 = graph.getNeighbors(graph.entry());
-            var entryNeighbors = (NodeArray) self1;
+            var entryNeighbors = graph.getNeighbors(graph.entry());
             parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size()).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.getNode(node)))).join();
+            // Set of nodes that may be used as connection targets, initialized to all nodes reachable from the entry
+            // point.  But since reconnection edges are usually worse (by distance and/or diversity) than the original
+            // ones, we update this as edges are added to avoid reusing the same target node more than once.
+            var connectionTargets = connectedNodes.copy();
+            // It's particularly important for the entry node to have high quality edges, so mark it
+            // as an invalid Target before we start.
+            connectionTargets.clear(graph.entry());
 
             // Gather basic debug information about efficacy/efficiency of reconnection attempts
             var nReconnectAttempts = new AtomicInteger();
@@ -270,7 +271,7 @@ public class GraphIndexBuilder implements Closeable {
                 // to connected nodes tends to help for partitioned graphs with large partitions.
                 ConcurrentNeighborMap.Neighbors self = graph.getNeighbors(node);
                 var neighbors = (NodeArray) self;
-                if (connectToClosestNeighbor(node, neighbors, connectionTargets, connectedNodes)) {
+                if (connectToClosestNeighbor(node, neighbors, connectionTargets) != null) {
                     nReconnectedViaNeighbors.incrementAndGet();
                     return;
                 }
@@ -282,33 +283,23 @@ public class GraphIndexBuilder implements Closeable {
                 // greatly degrading search performance.
                 SearchResult result;
                 try (var gs = searchers.get()) {
-                    IntHashSet neighborIds = new IntHashSet();
-                    for (int j = 0; j < neighbors.size(); j++) {
-                        neighborIds.add(neighbors.getNode(j));
-                    }
-
-                    var excludeBits = createExcludeBits(node, neighborIds);
+                    var excludeBits = Bits.inverseOf(connectionTargets);
                     var ssp = scoreProvider.searchProviderFor(node);
                     int ep = graph.entry();
                     result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, excludeBits);
-                    neighbors = new NodeArray(result.getNodes().length);
-                    toScratchCandidates(result.getNodes(), neighbors);
-                    var reconnected = connectToClosestNeighbor(node, neighbors, connectionTargets, connectedNodes);
-
-                    var j = 0;
-                    while (!reconnected && j < 50) {
-                        j++;
-                        nResumesRun.incrementAndGet();
-                        result = gs.resume(beamWidth, beamWidth);
-                        toScratchCandidates(result.getNodes(), neighbors);
-                        reconnected = connectToClosestNeighbor(node, neighbors, connectionTargets, connectedNodes);
-                    }
-
-                    if (reconnected)
-                        nReconnectedViaSearch.incrementAndGet();
-                } catch (Exception e)
-                {
+                } catch (Exception e) {
                     throw new RuntimeException(e);
+                }
+                neighbors = new NodeArray(result.getNodes().length);
+                toScratchCandidates(result.getNodes(), neighbors);
+                var reconnected = connectToClosestNeighbor(node, neighbors, connectionTargets);
+                if (reconnected != null) {
+                    nReconnectedViaSearch.incrementAndGet();
+                    // since we went to the trouble of finding the closest available neighbor, let `backlink`
+                    // check to see if it should be added as an edge to the original node as well
+                    var na = new NodeArray(1);
+                    na.addInOrder(reconnected.node, reconnected.score);
+                    graph.nodes.backlink(na, node, 1.0f);
                 }
             })).join();
 
@@ -323,24 +314,24 @@ public class GraphIndexBuilder implements Closeable {
 
     /**
      * Connect `node` to the closest connected neighbor that is not already a connection target.
-     * @return true if such a neighbor was found.
+     *
+     * @return the neighbor id if such a neighbor was found.
      */
-    private boolean connectToClosestNeighbor(int node, NodeArray neighbors, Set<Integer> connectionTargets, BitSet connectedNodes) {
+    private SearchResult.NodeScore connectToClosestNeighbor(int node, NodeArray neighbors, BitSet connectionTargets) {
         // connect this node to the closest connected neighbor that hasn't already been used as a connection target
         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
         // overwritten by the next node to need reconnection if we don't choose a unique target)
         for (int i = 0; i < neighbors.size(); i++) {
             var neighborNode = neighbors.getNode(i);
-            if (!connectedNodes.get(neighborNode))
+            if (!connectionTargets.get(neighborNode))
                 continue;
 
             var neighborScore = neighbors.getScore(i);
-            if (connectionTargets.add(neighborNode)) {
-                graph.nodes.insertEdgeNotDiverse(neighborNode, node, neighborScore);
-                return true;
-            }
+            graph.nodes.insertEdgeNotDiverse(neighborNode, node, neighborScore);
+            connectionTargets.clear(neighborNode);
+            return new SearchResult.NodeScore(neighborNode, neighborScore);
         }
-        return false;
+        return null;
     }
 
     private void findConnected(AtomicFixedBitSet connectedNodes, int start) {
