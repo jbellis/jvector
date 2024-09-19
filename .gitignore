@@ -30,3 +30,6 @@ hdf5/
 
 ### asdf (or other version managers)
 .tool-versions
+
+### aider
+.aider*
