@@ -240,6 +240,10 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     private void reconnectOrphanedNodes() {
+        // Set of nodes that may be used as connection targets, initialized to all nodes reachable from the entry
+        // point.  But since reconnection edges are usually worse (by distance and/or diversity) than the original
+        // ones, we update this as edges are added to avoid reusing the same target node more than once.
+        AtomicFixedBitSet globalConnectionTargets = null;
         // Reconnection is best-effort: reconnecting one node may result in disconnecting another, since we are maintaining
         // the maxConnections invariant. So, we do a maximum of 5 loops.
         for (int i = 0; i < 5; i++) {
@@ -247,13 +251,13 @@ public class GraphIndexBuilder implements Closeable {
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
             var entryNeighbors = graph.getNeighbors(graph.entry());
             parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size()).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.getNode(node)))).join();
-            // Set of nodes that may be used as connection targets, initialized to all nodes reachable from the entry
-            // point.  But since reconnection edges are usually worse (by distance and/or diversity) than the original
-            // ones, we update this as edges are added to avoid reusing the same target node more than once.
-            var connectionTargets = connectedNodes.copy();
-            // It's particularly important for the entry node to have high quality edges, so mark it
-            // as an invalid Target before we start.
-            connectionTargets.clear(graph.entry());
+            // we deliberately preserve connectionTargets between passes
+            if (globalConnectionTargets == null) {
+                globalConnectionTargets = connectedNodes.copy();
+                // It's particularly important for the entry node to have high quality edges, so mark it
+                // as an invalid Target before we start.
+                globalConnectionTargets.clear(graph.entry());
+            }
 
             // Gather basic debug information about efficacy/efficiency of reconnection attempts
             var nReconnectAttempts = new AtomicInteger();
@@ -261,6 +265,7 @@ public class GraphIndexBuilder implements Closeable {
             var nResumesRun = new AtomicInteger();
             var nReconnectedViaSearch = new AtomicInteger();
 
+            AtomicFixedBitSet connectionTargets = globalConnectionTargets; // effectively final for lambda
             simdExecutor.submit(() -> IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(node -> {
                 if (connectedNodes.get(node) || !graph.containsNode(node)) {
                     return;
