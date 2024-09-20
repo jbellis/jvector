@@ -288,10 +288,9 @@ public class GraphIndexBuilder implements Closeable {
                 // greatly degrading search performance.
                 SearchResult result;
                 try (var gs = searchers.get()) {
-                    var excludeBits = Bits.inverseOf(connectionTargets);
                     var ssp = scoreProvider.searchProviderFor(node);
                     int ep = graph.entry();
-                    result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, excludeBits);
+                    result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, connectionTargets);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
