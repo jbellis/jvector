@@ -290,7 +290,7 @@ public class GraphIndexBuilder implements Closeable {
                 try (var gs = searchers.get()) {
                     var ssp = scoreProvider.searchProviderFor(node);
                     int ep = graph.entry();
-                    result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
+                    result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, other -> other != node);
                     neighbors = new NodeArray(result.getNodes().length);
                     toScratchCandidates(result.getNodes(), neighbors);
                     var j = 0;
