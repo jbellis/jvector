@@ -608,10 +608,6 @@ public class GraphIndexBuilder implements Closeable {
         return nRemoved * graph.ramBytesUsedOneNode();
     }
 
-    private static Bits createExcludeBits(int node, Set<Integer> connectionTargets) {
-        return index -> index != node && !connectionTargets.contains(index);
-    }
-
     /**
      * Returns the ordinal of the node that is closest to the centroid of the graph,
      * or NO_ENTRY_POINT if there are no live nodes in the graph.
