@@ -273,7 +273,7 @@ public class GraphIndexBuilder implements Closeable {
                 nReconnectAttempts.incrementAndGet();
 
                 // first, attempt to connect one of our own connected neighbors to us. Filtering
-                // to connected nodes tends to help for partitioned graphs with large partitions.
+                // to connectionTargets tends to help for partitioned graphs with large partitions.
                 ConcurrentNeighborMap.Neighbors self = graph.getNeighbors(node);
                 var neighbors = (NodeArray) self;
                 if (connectToClosestNeighbor(node, neighbors, connectionTargets) != null) {
@@ -290,20 +290,30 @@ public class GraphIndexBuilder implements Closeable {
                 try (var gs = searchers.get()) {
                     var ssp = scoreProvider.searchProviderFor(node);
                     int ep = graph.entry();
-                    result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, connectionTargets);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                neighbors = new NodeArray(result.getNodes().length);
-                toScratchCandidates(result.getNodes(), neighbors);
-                var reconnected = connectToClosestNeighbor(node, neighbors, connectionTargets);
-                if (reconnected != null) {
-                    nReconnectedViaSearch.incrementAndGet();
-                    // since we went to the trouble of finding the closest available neighbor, let `backlink`
-                    // check to see if it should be added as an edge to the original node as well
-                    var na = new NodeArray(1);
-                    na.addInOrder(reconnected.node, reconnected.score);
-                    graph.nodes.backlink(na, node, 1.0f);
+                    result = gs.searchInternal(ssp, beamWidth, beamWidth, 0.0f, 0.0f, ep, Bits.ALL);
+                    neighbors = new NodeArray(result.getNodes().length);
+                    toScratchCandidates(result.getNodes(), neighbors);
+                    var j = 0;
+                    var reconnectedTo = connectToClosestNeighbor(node, neighbors, connectionTargets);
+                    // if we can't find a valid connectionTarget within 2*degree of the search destination, give up
+                    while (reconnectedTo == null && j < 2 * graph.maxDegree) {
+                        j++;
+                        nResumesRun.incrementAndGet();
+                        result = gs.resume(beamWidth, beamWidth);
+                        toScratchCandidates(result.getNodes(), neighbors);
+                        reconnectedTo = connectToClosestNeighbor(node, neighbors, connectionTargets);
+                    }
+
+                    if (reconnectedTo != null) {
+                        nReconnectedViaSearch.incrementAndGet();
+                        // since we went to the trouble of finding the closest available neighbor, let `backlink`
+                        // check to see if it should be added as an edge to the original node as well
+                        var na = new NodeArray(1);
+                        na.addInOrder(reconnectedTo.node, reconnectedTo.score);
+                        graph.nodes.backlink(na, node, 1.0f);
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
                 }
             })).join();
 
