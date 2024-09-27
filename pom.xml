@@ -185,6 +185,11 @@
             <artifactId>agrona</artifactId>
             <version>1.20.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.16</version>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>
