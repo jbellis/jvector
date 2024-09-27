@@ -322,9 +322,9 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     /**
-     * Connect `node` to the closest connected neighbor that is not already a connection target.
+     * Connect `node` to the closest neighbor that is not already a connection target.
      *
-     * @return the neighbor id if such a neighbor was found.
+     * @return the node score id if such a neighbor was found, else null.
      */
     private SearchResult.NodeScore connectToClosestNeighbor(int node, NodeArray neighbors, BitSet connectionTargets) {
         // connect this node to the closest neighbor that hasn't already been used as a connection target
@@ -343,6 +343,11 @@ public class GraphIndexBuilder implements Closeable {
         return null;
     }
 
+    /**
+     * Connect `node` to the closest connected neighbor that is not already a connection target.
+     *
+     * @return the node score id if such a neighbor was found, else null.
+     */
     private SearchResult.NodeScore connectToClosestNeighbor(int node, NodeArray neighbors, BitSet connectedNodes, BitSet connectionTargets) {
         // connect this node to the closest connected neighbor that hasn't already been used as a connection target
         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
