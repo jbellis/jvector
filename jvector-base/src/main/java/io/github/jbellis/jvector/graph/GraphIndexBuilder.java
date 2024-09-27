@@ -289,14 +289,14 @@ public class GraphIndexBuilder implements Closeable {
                     var j = 0;
                     // no need to filter to connected nodes here, as they're connected by virtue of being reachable via
                     // search
-                    var reconnectedTo = connectToClosestNeighbor(node, neighbors, globalConnectionTargets);
+                    var reconnectedTo = connectToClosestNeighbor(node, neighbors, Bits.ALL, globalConnectionTargets);
                     // if we can't find a valid connectionTarget within 2*degree of the search destination, give up
                     while (reconnectedTo == null && j < 2 * graph.maxDegree) {
                         j++;
                         nResumesRun.incrementAndGet();
                         result = gs.resume(beamWidth, beamWidth);
                         toScratchCandidates(result.getNodes(), neighbors);
-                        reconnectedTo = connectToClosestNeighbor(node, neighbors, globalConnectionTargets);
+                        reconnectedTo = connectToClosestNeighbor(node, neighbors, Bits.ALL, globalConnectionTargets);
                     }
 
                     if (reconnectedTo != null) {
@@ -322,33 +322,11 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     /**
-     * Connect `node` to the closest neighbor that is not already a connection target.
-     *
-     * @return the node score id if such a neighbor was found, else null.
-     */
-    private SearchResult.NodeScore connectToClosestNeighbor(int node, NodeArray neighbors, BitSet connectionTargets) {
-        // connect this node to the closest neighbor that hasn't already been used as a connection target
-        // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
-        // overwritten by the next node to need reconnection if we don't choose a unique target)
-        for (int i = 0; i < neighbors.size(); i++) {
-            var neighborNode = neighbors.getNode(i);
-            if (connectionTargets.get(neighborNode))
-                continue;
-
-            var neighborScore = neighbors.getScore(i);
-            graph.nodes.insertEdgeNotDiverse(neighborNode, node, neighborScore);
-            connectionTargets.set(neighborNode);
-            return new SearchResult.NodeScore(neighborNode, neighborScore);
-        }
-        return null;
-    }
-
-    /**
      * Connect `node` to the closest connected neighbor that is not already a connection target.
      *
      * @return the node score id if such a neighbor was found, else null.
      */
-    private SearchResult.NodeScore connectToClosestNeighbor(int node, NodeArray neighbors, BitSet connectedNodes, BitSet connectionTargets) {
+    private SearchResult.NodeScore connectToClosestNeighbor(int node, NodeArray neighbors, Bits connectedNodes, BitSet connectionTargets) {
         // connect this node to the closest connected neighbor that hasn't already been used as a connection target
         // (since this edge is likely to be the "worst" one in that target's neighborhood, it's likely to be
         // overwritten by the next node to need reconnection if we don't choose a unique target)
