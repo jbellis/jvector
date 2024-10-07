@@ -37,7 +37,7 @@ public class LibraryLoader {
             // as a resource and then copy it to a tmp directory and load it from there
             String libName = System.mapLibraryName("jvector");
             File tmpLibFile = File.createTempFile(libName.substring(0, libName.lastIndexOf('.')), libName.substring(libName.lastIndexOf('.')));
-            try (var in = LibraryLoader.class.getResourceAsStream(STR."/\{libName}");
+            try (var in = LibraryLoader.class.getResourceAsStream("/" + libName);
                  var out = Files.newOutputStream(tmpLibFile.toPath())) {
                 if (in != null) {
                     in.transferTo(out);

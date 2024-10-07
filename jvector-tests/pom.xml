@@ -85,7 +85,6 @@
                                 --add-modules jdk.incubator.vector
                                 --enable-native-access=ALL-UNNAMED
                                 -Djvector.experimental.enable_native_vectorization=true
-                                --enable-preview
                             </argLine>
                             <skip>${skipSIMD}</skip>
                         </configuration>
