@@ -119,7 +119,6 @@
                             <skippedModules>jvector-examples,jvector-tests</skippedModules>
                             <additionalJOptions>
                                 <additionalJOption>--add-modules=jdk.incubator.vector</additionalJOption>
-                                <additionalJOption>--enable-preview</additionalJOption>
                             </additionalJOptions>
                             <release>22</release>
                         </configuration>

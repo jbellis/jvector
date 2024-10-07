@@ -164,7 +164,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
@@ -181,7 +180,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
@@ -196,7 +194,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
@@ -247,7 +244,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-ea</argument>
@@ -262,7 +258,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
@@ -280,7 +275,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-ea</argument>
@@ -295,7 +289,6 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath/>
-                                        <argument>--enable-preview</argument>
                                         <argument>--enable-native-access=ALL-UNNAMED</argument>
                                         <argument>--add-modules=jdk.incubator.vector</argument>
                                         <argument>-Djava.util.concurrent.ForkJoinPool.common.parallelism=1</argument>
