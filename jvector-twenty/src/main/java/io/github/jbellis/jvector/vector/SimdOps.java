@@ -243,7 +243,7 @@ final class SimdOps {
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), i);
             var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.get(), i);
-            vsum = vsum.add(a.mul(b));
+            vsum = a.fma(b, vsum);
             vaMagnitude = a.fma(a, vaMagnitude);
             vbMagnitude = b.fma(b, vbMagnitude);
         }
@@ -270,7 +270,7 @@ final class SimdOps {
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), v1offset + i);
             var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.get(), v2offset + i);
-            vsum = vsum.add(a.mul(b));
+            vsum = a.fma(b, vsum);
             vaMagnitude = a.fma(a, vaMagnitude);
             vbMagnitude = b.fma(b, vbMagnitude);
         }
