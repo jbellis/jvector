@@ -76,7 +76,7 @@ public class NESOptimizer {
 
     private int computeNSamples(int nDims) {
         if (nSamples == 0) {
-            return 4 + (int) Math.floor(3 * Math.log(nDims));
+            return 2 * (4 + (int) Math.floor(3 * Math.log(nDims)));
         } else {
             return nSamples;
         }
@@ -92,7 +92,7 @@ public class NESOptimizer {
 
     private double computeLrSigma(int nDims) {
         if (lrSigma == 0) {
-            return ((9 + 3 * Math.log(nDims)) / (5 * nDims * Math.sqrt(nDims)));
+            return (9 + 3 * Math.log(nDims)) / (5 * nDims * Math.sqrt(nDims));
         } else {
             return lrSigma;
         }
