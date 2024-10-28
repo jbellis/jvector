@@ -66,11 +66,11 @@ public class NESOptimizer {
         //this.distribution = dist;
     }
 
-    public void setnSamples(int nSamples) {
+    public void setNSamples(int nSamples) {
         this.nSamples = nSamples;
     }
 
-    public int getnSamples() {
+    public int getNSamples() {
         return nSamples;
     }
 
