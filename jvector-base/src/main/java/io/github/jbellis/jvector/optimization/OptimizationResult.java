@@ -17,9 +17,21 @@
 package io.github.jbellis.jvector.optimization;
 
 public class OptimizationResult {
+    /**
+     * The solution of the optimization problem.
+     */
     final public double[] x;
+
+    /**
+     * The error achieved by the solver.
+     */
     final public double error;
 
+    /**
+     * Constructs an OptimizationResult
+     * @param x the solution of the optimization problem
+     * @param error the error achieved by the solver
+     */
     public OptimizationResult(double[] x, double error) {
         this.x = x;
         this.error = error;
