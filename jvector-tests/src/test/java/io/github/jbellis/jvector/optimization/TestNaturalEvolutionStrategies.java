@@ -37,7 +37,6 @@ public class TestNaturalEvolutionStrategies {
             assertTrue("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1], sol.x[0] < 1e-3 && sol.x[1] < 1e-3);
         }
 
-
         {
             // No box constraints are specified
             var loss = new TestLossFunction(2);
