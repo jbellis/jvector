@@ -193,4 +193,12 @@ public class Matrix {
         }
         return result;
     }
+
+    public int getNumRows() {
+        return data.length;
+    }
+
+    public int getNumColumns() {
+        return data[0].length();
+    }
 }
