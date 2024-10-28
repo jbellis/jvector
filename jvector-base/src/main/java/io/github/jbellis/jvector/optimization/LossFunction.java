@@ -23,7 +23,7 @@ import java.util.stream.IntStream;
  */
 public abstract class LossFunction {
     // The number of dimensions
-    private final int nDims;
+    final private int nDims;
 
     // The box constraints that define the feasible set.
     private double[] minBounds = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
