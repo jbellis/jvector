@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.github.jbellis.jvector.optimization;
 
 import io.github.jbellis.jvector.util.MathUtil;
@@ -59,7 +60,7 @@ public class NESOptimizer {
      * @param dist The parameter distribution to be used for the optimization.
      *             Currently, only SEPARABLE is supported.
      */
-    private NESOptimizer(Distribution dist) {
+    public NESOptimizer(Distribution dist) {
         if (dist != Distribution.SEPARABLE) {
             throw new UnsupportedOperationException("The multinormal case is not implemented yet.");
         }
@@ -118,15 +119,15 @@ public class NESOptimizer {
         return sorted_utilities;
     }
 
-    public double[] optimize(LossFunction lossFun, double[] initialSolution) {
+    public OptimizationResult optimize(LossFunction lossFun, double[] initialSolution) {
         return optimize(lossFun, initialSolution, 0.5);
     }
 
-    public double[] optimize(LossFunction lossFun, double[] initialSolution, double initSigma) {
+    public OptimizationResult optimize(LossFunction lossFun, double[] initialSolution, double initSigma) {
         return optimizeSeparable(lossFun, initialSolution, initSigma);
     }
 
-    private double[] optimizeSeparable(LossFunction lossFun, double[] initialSolution, double initSigma) {
+    private OptimizationResult optimizeSeparable(LossFunction lossFun, double[] initialSolution, double initSigma) {
         if (initSigma <= 0) {
             throw new IllegalArgumentException("The standard deviation initSigma must be positive");
         }
@@ -194,34 +195,12 @@ public class NESOptimizer {
             error = Math.abs(newFunVal - oldFunVal);
             oldFunVal = newFunVal;
 
-            String str = String.format("%d -> The solution is %.8f  %.8f with error %e", iter, mu[0], mu[1], error);
-            System.out.println(str);
-            iter += 1;
+//            String str = String.format("%d -> The solution is %.8f  %.8f with error %e", iter, mu[0], mu[1], error);
+//            System.out.println(str);
+//            iter += 1;
         }
 
-        return mu;
-    }
-
-    public static void main(String[] args) {
-        class TestLossFunction extends LossFunction {
-            public TestLossFunction(int nDims) {
-                super(nDims);
-            }
-
-            public double compute(double[] x) {
-                return -1 * DoubleStream.of(x).map(MathUtil::square).sum();
-            }
-        }
-        var loss = new TestLossFunction(2);
-        loss.setMinBounds(new double[] {-1000, -1000});
-        loss.setMaxBounds(new double[] {1000, 1000});
-
-        double[] initialSolution = {1, 1};
-        var xnes = new NESOptimizer(Distribution.SEPARABLE);
-        xnes.setTol(1e-9);
-        var sol = xnes.optimize(loss, initialSolution, 0.5);
-        String str = String.format("The solution is %.8f  %.8f", sol[0], sol[1]);
-        System.out.println(str);
+        return new OptimizationResult(mu, error);
     }
 }
 
