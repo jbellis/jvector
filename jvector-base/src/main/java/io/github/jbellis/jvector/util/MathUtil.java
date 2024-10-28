@@ -21,4 +21,9 @@ public class MathUtil {
     public static float square(float a) {
         return a * a;
     }
+
+    // looks silly at first but it really does make code more readable
+    public static double square(double a) {
+        return a * a;
+    }
 }
