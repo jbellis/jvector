@@ -57,6 +57,14 @@ public class TestNaturalEvolutionStrategies {
 
         {
             // Setting the initial solution close to the global minimum works
+            var sol = xnes.optimize(loss, new double[] {1, 1});
+
+            assertTrue("error=" + sol.error + " tolerance=" + tolerance, sol.error <= tolerance);
+            assertTrue("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1], Math.abs(sol.x[0] - 0.76284314) < 1e-3 && Math.abs(sol.x[1] - 0.76284314) < 1e-3);
+        }
+
+        {
+            // Setting the initial solution close to the global minimum works
             var sol = xnes.optimize(loss, new double[] {1, 1}, 0.5);
 
             assertTrue("error=" + sol.error + " tolerance=" + tolerance, sol.error <= tolerance);
