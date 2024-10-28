@@ -19,19 +19,39 @@ public class TestNaturalEvolutionStrategies {
                 return -1 * DoubleStream.of(x).map(MathUtil::square).sum();
             }
         }
-        var loss = new TestLossFunction(2);
-        loss.setMinBounds(new double[] {-1000, -1000});
-        loss.setMaxBounds(new double[] {1000, 1000});
 
-        double[] initialSolution = {1, 1};
-        var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+        {
+            // Box constraints are specified
+            var loss = new TestLossFunction(2);
+            loss.setMinBounds(new double[]{-1000, -1000});
+            loss.setMaxBounds(new double[]{1000, 1000});
 
-        var tolerance = 1e-9;
-        xnes.setTol(tolerance);
-        var sol = xnes.optimize(loss, initialSolution, 0.5);
+            double[] initialSolution = {1, 1};
+            var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
 
-        assertTrue("error=" + sol.error + " tolerance=" + tolerance, sol.error <= tolerance);
-        assertTrue("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1], sol.x[0] < 1e-3 && sol.x[1] < 1e-3);
+            var tolerance = 1e-9;
+            xnes.setTol(tolerance);
+            var sol = xnes.optimize(loss, initialSolution, 0.5);
+
+            assertTrue("error=" + sol.error + " tolerance=" + tolerance, sol.error <= tolerance);
+            assertTrue("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1], sol.x[0] < 1e-3 && sol.x[1] < 1e-3);
+        }
+
+
+        {
+            // No box constraints are specified
+            var loss = new TestLossFunction(2);
+
+            double[] initialSolution = {1, 1};
+            var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+
+            var tolerance = 1e-9;
+            xnes.setTol(tolerance);
+            var sol = xnes.optimize(loss, initialSolution, 0.5);
+
+            assertTrue("error=" + sol.error + " tolerance=" + tolerance, sol.error <= tolerance);
+            assertTrue("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1], sol.x[0] < 1e-3 && sol.x[1] < 1e-3);
+        }
     }
 
     @Test
