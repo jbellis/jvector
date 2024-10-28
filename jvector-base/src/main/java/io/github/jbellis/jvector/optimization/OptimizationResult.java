@@ -20,7 +20,7 @@ public class OptimizationResult {
     /**
      * The solution of the optimization problem.
      */
-    final public double[] x;
+    public final double[] x;
 
     /**
      * The error achieved by the solver.
