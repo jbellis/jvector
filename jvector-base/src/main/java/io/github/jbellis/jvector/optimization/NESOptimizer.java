@@ -24,7 +24,8 @@ import java.util.stream.IntStream;
 
 /**
  * Implements Exponential Natural Evolution Strategies (xNES) for the separable case (Algorithm 6 in [1]).
- * Added a modification to support box constraints (min/max values for each parameter) by projecting onto
+ * It implements loss maximization.
+ * We added a modification to support box constraints (min/max values for each parameter) by projecting onto
  * the feasible set.
  * <p>
  * [1]
@@ -104,7 +105,7 @@ public class NESOptimizer {
     /**
      * Sets the learning rate used to update the variance of the solution throughout the optimization process.
      * Used to override the default number (see Table 1 in [1]).
-     * @param lrSigma
+     * @param lrSigma the learning rate
      */
     public void setLrSigma(double lrSigma) {
         this.lrSigma = lrSigma;
@@ -164,6 +165,7 @@ public class NESOptimizer {
      * Runs the Exponential Natural Evolution Strategies (xNES) solver for the following parameters distributions
      * (1) separable and normal (Algorithm 6 in [1]).
      * (2) multinormal (Algorithm 5 in [1]). The latter is not implemented yet.
+     * It implements loss maximization.
      * We extended the algorithm to support box constraints (min/max values for each parameter) by projecting onto
      * the feasible set.
      *
@@ -179,6 +181,7 @@ public class NESOptimizer {
      * Runs the Exponential Natural Evolution Strategies (xNES) solver for the following parameters distributions
      * (1) separable and normal (Algorithm 6 in [1]).
      * (2) multinormal (Algorithm 5 in [1]). The latter is not implemented yet.
+     * It implements loss maximization.
      * We extended the algorithm to support box constraints (min/max values for each parameter) by projecting onto
      * the feasible set.
      *
@@ -197,7 +200,7 @@ public class NESOptimizer {
     /**
      * Runs the Exponential Natural Evolution Strategies (xNES) solver for a separable and normal parameter
      * distribution (Algorithm 6 in [1]) with a modification to support box constraints (min/max) by projecting onto
-     * the feasible set.
+     * the feasible set. It implements loss maximization.
      *
      * @param lossFun the loss function, that allows to specify its own feasible set (box constraints).
      * @param initialSolution the initial solution.
