@@ -18,8 +18,6 @@ package io.github.jbellis.jvector.optimization;
 import io.github.jbellis.jvector.util.MathUtil;
 
 import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
@@ -27,11 +25,10 @@ import java.util.stream.IntStream;
 /**
  * Implements Exponential Natural Evolution Strategies (xNES) for the separable case (Algorithm 6 in [1]).
  * Added a simple modification to support box constraints (min/max) by projecting onto the feasible set.
- *
  * [1]
  * Wierstra, Schaul, Glasmachers, Sun, Peters, and Schmidhuber
  * Natural Evolution Strategies
- * https://www.jmlr.org/papers/volume15/wierstra14a/wierstra14a.pdf
+ * <a href="https://www.jmlr.org/papers/volume15/wierstra14a/wierstra14a.pdf">Link</a>
  */
 public class NESOptimizer {
     public enum Distribution {
@@ -55,17 +52,18 @@ public class NESOptimizer {
     private double tol = 1e-6;
 
     // the distribution to use
-    private final Distribution distribution;
+    // private final Distribution distribution;
 
     /**
-     *
-     * @param dist
+     * Constructor
+     * @param dist The parameter distribution to be used for the optimization.
+     *             Currently, only SEPARABLE is supported.
      */
     private NESOptimizer(Distribution dist) {
         if (dist != Distribution.SEPARABLE) {
             throw new UnsupportedOperationException("The multinormal case is not implemented yet.");
         }
-        this.distribution = dist;
+        //this.distribution = dist;
     }
 
     public void setnSamples(int nSamples) {
@@ -110,7 +108,7 @@ public class NESOptimizer {
         var u_sum = Arrays.stream(us).sum();
         final var utilities = Arrays.stream(us).map(u -> (u / u_sum) - (1. / samples.length)).toArray();
 
-        var funValues = Arrays.stream(samples).mapToDouble(samp -> lossFun.projectCompute(samp)).toArray();
+        var funValues = Arrays.stream(samples).mapToDouble(lossFun::projectCompute).toArray();
 
         var indices = IntStream.range(0, samples.length).boxed().toArray(Integer[]::new);
         Arrays.sort(indices, (i1, i2) -> -1 * Double.compare(funValues[i1], funValues[i2]));
@@ -118,11 +116,6 @@ public class NESOptimizer {
         float[] sorted_utilities = new float[samples.length];
         IntStream.range(0, samples.length).forEach(i -> sorted_utilities[indices[i]] = (float) utilities[i]);
         return sorted_utilities;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> T getParam(Map<String, Object> map, String key, T defaultValue) {
-        return (map.containsKey(key)) ? (T) map.get(key) : defaultValue;
     }
 
     public double[] optimize(LossFunction lossFun, double[] initialSolution) {
