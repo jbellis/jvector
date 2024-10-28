@@ -152,7 +152,7 @@ public class NESOptimizer {
 
         var oldFunVal = lossFun.compute(mu);
 
-        int iter = 0;
+//        int iter = 0;
         double error = tol + 1.;
         while (error > tol) {
             double[][] rawSamples = new double[_nSamples][];
