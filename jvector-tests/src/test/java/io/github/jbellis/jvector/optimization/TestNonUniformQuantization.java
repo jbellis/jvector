@@ -8,10 +8,10 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Test;
 
 import java.util.Random;
+import java.util.stream.DoubleStream;
 
 import static io.github.jbellis.jvector.util.MathUtil.square;
-import static io.github.jbellis.jvector.vector.VectorUtil.min;
-import static io.github.jbellis.jvector.vector.VectorUtil.max;
+import static io.github.jbellis.jvector.vector.VectorUtil.*;
 import static org.junit.Assert.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
@@ -93,7 +93,7 @@ public class TestNonUniformQuantization extends RandomizedTest {
 
         double lossValue = 0;
         for (int d = 0; d < vector.length(); d++) {
-            lossValue -= square(vector.get(d) - vectorCopy.get(d));
+            lossValue += square(vector.get(d) - vectorCopy.get(d));
         }
         return lossValue;
     }
@@ -101,34 +101,52 @@ public class TestNonUniformQuantization extends RandomizedTest {
     @Test
     public void testGaussian() {
         {
+            var nDims = 3096;
             var nBits = 8;
+            var nTrials = 10;
 
-            var vector = gaussianVector(getRandom(), 3096);
-            var min = min(vector);
-            var max = max(vector);
-            for (int d = 0; d < vector.length(); d++) {
-                vector.set(d, (vector.get(d) - min) / (max - min));
+            var uniformError = new double[nTrials];
+            var kumaraswamyError = new double[nTrials];
+
+            for (int trial = 0; trial < nTrials; trial++) {
+                var vector = gaussianVector(getRandom(), nDims);
+                var min = min(vector);
+                var max = max(vector);
+                subInPlace(vector, min);
+                scale(vector, 1.f / (max - min));
+
+                var loss = new KumaraswamyQuantizationLossFunction(2, nBits, vector);
+                loss.setMinBounds(new double[]{1e-6, 1e-6});
+
+                double[] initialSolution = {1, 1};
+                var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+
+                var tolerance = 1e-6;
+                xnes.setTol(tolerance);
+                var sol = xnes.optimize(loss, initialSolution, 0.5);
+
+                uniformError[trial] = uniformQuantizationLoss(vector, nBits);
+                kumaraswamyError[trial] = -1 * loss.compute(sol.x);
             }
 
-            var loss = new KumaraswamyQuantizationLossFunction(2, nBits, vector);
-            loss.setMinBounds(new double[]{1e-6, 1e-6});
+            var averageUniformError = DoubleStream.of(uniformError).average().getAsDouble();
+            var averageKumaraswamyError = DoubleStream.of(kumaraswamyError).average().getAsDouble();
 
-            double[] initialSolution = {1, 1};
-            var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
-//            xnes.setNSamples(50);
+            var stdUniformError = Math.sqrt(DoubleStream.of(uniformError).map(e -> Math.pow(e - averageUniformError, 2)).average().getAsDouble());
+            var stdKumaraswamyError = Math.sqrt(DoubleStream.of(kumaraswamyError).map(e -> Math.pow(e - averageKumaraswamyError, 2)).average().getAsDouble());
 
-            var tolerance = 1e-6;
-            xnes.setTol(tolerance);
-            var sol = xnes.optimize(loss, initialSolution, 0.5);
+            System.out.println("Uniform reconstruction loss=" + averageUniformError + "  STD=" + stdUniformError);
+            System.out.println("Kumaraswamy reconstruction loss=" + averageKumaraswamyError + "  STD=" + stdKumaraswamyError);
 
-            System.out.println("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1]);
-            System.out.println("error=" + sol.error);
-            System.out.println("Kumaraswamy reconstruction loss=" + loss.compute(sol.x));
+            System.out.println("Ratio=" + (averageUniformError / averageKumaraswamyError));
 
-            System.out.println("uniform reconstruction loss=" + uniformQuantizationLoss(vector, nBits));
-
-//            assertTrue("error=" + sol.error + " tolerance=" + tolerance, sol.error <= tolerance);
-//            assertTrue("sol.x[0]=" + sol.x[0] + " sol.x[1]=" + sol.x[1], sol.x[0] < 1e-3 && sol.x[1] < 1e-3);
+            // This tolerance is too conservative, the value should in reality be >1.7 with a high number of samples.
+            // Keeping it this way for speed
+            var testTolerance = 1.6;
+            assertTrue(
+                    "Uniform AVG reconstruction error=" + averageUniformError +
+                            " Kumaraswamy reconstruction loss=" + averageKumaraswamyError,
+                    (averageUniformError / averageKumaraswamyError) >=testTolerance);
         }
     }
 }
