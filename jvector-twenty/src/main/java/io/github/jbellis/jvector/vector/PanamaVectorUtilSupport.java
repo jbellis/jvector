@@ -78,6 +78,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public void subInPlace(VectorFloat<?> vector, float value) {
+        SimdOps.subInPlace((ArrayVectorFloat) vector, value);
+    }
+
+    @Override
     public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
         if (a.length() != b.length()) {
             throw new IllegalArgumentException("Vectors must be the same length");

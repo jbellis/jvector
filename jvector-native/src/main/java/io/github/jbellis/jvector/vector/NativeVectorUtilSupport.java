@@ -83,6 +83,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public void subInPlace(VectorFloat<?> vector, float value) {
+        VectorSimdOps.subInPlace((MemorySegmentVectorFloat)vector, value);
+    }
+
+    @Override
     public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
         if (a.length() != b.length()) {
             throw new IllegalArgumentException("Vectors must be the same length");

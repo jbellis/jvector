@@ -138,6 +138,10 @@ public final class VectorUtil {
     impl.subInPlace(v1, v2);
   }
 
+  public static void subInPlace(VectorFloat<?> vector, float value) {
+    impl.subInPlace(vector, value);
+  }
+
   public static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
     return impl.sub(lhs, rhs);
   }

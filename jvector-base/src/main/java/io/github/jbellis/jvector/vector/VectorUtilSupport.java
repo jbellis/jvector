@@ -67,6 +67,9 @@ public interface VectorUtilSupport {
   /** Subtracts v2 from v1, in place (v1 will be modified) */
   void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
+  /** Subtracts value from each element of v1, in place (v1 will be modified) */
+  void subInPlace(VectorFloat<?> vector, float value);
+
   /** @return a - b, element-wise */
   VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);
 

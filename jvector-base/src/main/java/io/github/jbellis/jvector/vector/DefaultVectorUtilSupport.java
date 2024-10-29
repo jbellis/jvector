@@ -251,6 +251,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void subInPlace(VectorFloat<?> v1, float v2) {
+    for (int i = 0; i < v1.length(); i++) {
+      v1.set(i, v1.get(i) - v2);
+    }
+  }
+
+  @Override
   public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
     return sub(a, 0, b, 0, a.length());
   }
