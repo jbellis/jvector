@@ -143,7 +143,7 @@ public class TestNonUniformQuantization extends RandomizedTest {
             assertTrue(
                     "Uniform AVG reconstruction error=" + averageUniformError +
                             " Kumaraswamy reconstruction loss=" + averageKumaraswamyError,
-                    (averageUniformError / averageKumaraswamyError) >=testTolerance);
+                    (averageUniformError / averageKumaraswamyError) >= testTolerance);
         }
     }
 }
