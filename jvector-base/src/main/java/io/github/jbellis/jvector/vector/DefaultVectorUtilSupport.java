@@ -237,6 +237,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void pow(VectorFloat<?> vector, float exponent) {
+    for (int i = 0; i < vector.length(); i++) {
+      vector.set(i, (float) Math.pow(vector.get(i), exponent));
+    }
+  }
+
+  @Override
   public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     for (int i = 0; i < v1.length(); i++) {
       v1.set(i, v1.get(i) + v2.get(i));
@@ -251,9 +258,23 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void subInPlace(VectorFloat<?> v1, float v2) {
-    for (int i = 0; i < v1.length(); i++) {
-      v1.set(i, v1.get(i) - v2);
+  public void subInPlace(VectorFloat<?> vector, float value) {
+    for (int i = 0; i < vector.length(); i++) {
+      vector.set(i, vector.get(i) - value);
+    }
+  }
+
+  @Override
+  public void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
+    for (int i = 0; i < vector.length(); i++) {
+      vector.set(i, constant - (float) Math.pow(vector.get(i), exponent));
+    }
+  }
+
+  @Override
+  public void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
+    for (int i = 0; i < vector.length(); i++) {
+      vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
     }
   }
 

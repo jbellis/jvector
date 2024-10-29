@@ -68,6 +68,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public void pow(VectorFloat<?> vector, float exponent) {
+        SimdOps.pow((ArrayVectorFloat) vector, exponent);
+    }
+
+    @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         SimdOps.addInPlace((ArrayVectorFloat)v1, (ArrayVectorFloat)v2);
     }
@@ -80,6 +85,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public void subInPlace(VectorFloat<?> vector, float value) {
         SimdOps.subInPlace((ArrayVectorFloat) vector, value);
+    }
+
+    @Override
+    public void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
+        SimdOps.constantMinusExponentiatedVector((ArrayVectorFloat) vector, constant, exponent);
+    }
+
+    @Override
+    public void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
+        SimdOps.exponentiateConstantMinusVector((ArrayVectorFloat) vector, constant, exponent);
     }
 
     @Override

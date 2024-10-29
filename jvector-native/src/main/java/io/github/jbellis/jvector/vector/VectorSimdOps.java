@@ -84,6 +84,21 @@ final class VectorSimdOps {
         }
     }
 
+    static void pow(MemorySegmentVectorFloat vector, float exponent) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            a.pow(exponent).intoMemorySegment(vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            vector.set(i, (float) Math.pow(vector.get(i), exponent));
+        }
+    }
+
     static float dot64(MemorySegmentVectorFloat v1, int offset1, MemorySegmentVectorFloat v2, int offset2) {
         var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), v1.offset(offset1), ByteOrder.LITTLE_ENDIAN);
         var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v2.get(), v1.offset(offset2), ByteOrder.LITTLE_ENDIAN);
@@ -525,7 +540,41 @@ final class VectorSimdOps {
 
         // Process the tail
         for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i,  vector.get(i) - value);
+            vector.set(i, vector.get(i) - value);
+        }
+
+    }
+
+    static void constantMinusExponentiatedVector(MemorySegmentVectorFloat vector, float constant, float exponent) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var subResult = a.pow(exponent).neg().add(constant);
+            subResult.intoMemorySegment(vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            vector.set(i, constant - (float) Math.pow(vector.get(i), exponent));
+        }
+
+    }
+
+    static void exponentiateConstantMinusVector(MemorySegmentVectorFloat vector, float constant, float exponent) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var subResult = a.neg().add(constant).pow(exponent);
+            subResult.intoMemorySegment(vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
         }
 
     }

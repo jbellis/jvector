@@ -130,6 +130,10 @@ public final class VectorUtil {
     impl.scale(vector, multiplier);
   }
 
+  public static void pow(VectorFloat<?> vector, float exponent) {
+    impl.scale(vector, exponent);
+  }
+
   public static void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     impl.addInPlace(v1, v2);
   }
@@ -141,6 +145,15 @@ public final class VectorUtil {
   public static void subInPlace(VectorFloat<?> vector, float value) {
     impl.subInPlace(vector, value);
   }
+
+  public static void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
+    impl.constantMinusExponentiatedVector(vector, constant, exponent);
+  }
+
+  public static void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
+    impl.exponentiateConstantMinusVector(vector, constant, exponent);
+  }
+
 
   public static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
     return impl.sub(lhs, rhs);

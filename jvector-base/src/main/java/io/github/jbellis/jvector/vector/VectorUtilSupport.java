@@ -61,6 +61,9 @@ public interface VectorUtilSupport {
   /** Multiply vector by multiplier, in place (vector will be modified) */
   void scale(VectorFloat<?> vector, float multiplier);
 
+  /** Raises this vector to a scalar power, in place (vector will be modified) */
+  void pow(VectorFloat<?> vector, float exponent);
+
   /** Adds v2 into v1, in place (v1 will be modified) */
   void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
@@ -69,6 +72,12 @@ public interface VectorUtilSupport {
 
   /** Subtracts value from each element of v1, in place (v1 will be modified) */
   void subInPlace(VectorFloat<?> vector, float value);
+
+  /** Computes constant - pow(vector, exponent), in place (v1 will be modified) */
+  void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent);
+
+  /** Computes pow(constant - vector, exponent), in place (v1 will be modified) */
+  void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent);
 
   /** @return a - b, element-wise */
   VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);

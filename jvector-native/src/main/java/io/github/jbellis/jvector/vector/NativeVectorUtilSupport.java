@@ -73,6 +73,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public void pow(VectorFloat<?> vector, float exponent) {
+        VectorSimdOps.pow((MemorySegmentVectorFloat) vector, exponent);
+    }
+
+    @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         VectorSimdOps.addInPlace((MemorySegmentVectorFloat)v1, (MemorySegmentVectorFloat)v2);
     }
@@ -85,6 +90,16 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public void subInPlace(VectorFloat<?> vector, float value) {
         VectorSimdOps.subInPlace((MemorySegmentVectorFloat)vector, value);
+    }
+
+    @Override
+    public void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
+        VectorSimdOps.constantMinusExponentiatedVector((MemorySegmentVectorFloat)vector, constant, exponent);
+    }
+
+    @Override
+    public void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
+        VectorSimdOps.exponentiateConstantMinusVector((MemorySegmentVectorFloat)vector, constant, exponent);
     }
 
     @Override
