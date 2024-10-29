@@ -74,11 +74,7 @@ public class TestNonUniformQuantization extends RandomizedTest {
             uniformDequantize(vectorCopy, nBits);
             inverseKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
 
-            double lossValue = 0;
-            for (int d = 0; d < vectorOriginal.length(); d++) {
-                lossValue -= MathUtil.square(vectorOriginal.get(d) - vectorCopy.get(d));
-            }
-            return lossValue;
+            return -VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
         }
     }
 
@@ -88,11 +84,7 @@ public class TestNonUniformQuantization extends RandomizedTest {
         uniformQuantize(vectorCopy, nBits);
         uniformDequantize(vectorCopy, nBits);
 
-        double lossValue = 0;
-        for (int d = 0; d < vector.length(); d++) {
-            lossValue += MathUtil.square(vector.get(d) - vectorCopy.get(d));
-        }
-        return lossValue;
+        return VectorUtil.squareL2Distance(vector, vectorCopy);
     }
 
     @Test
