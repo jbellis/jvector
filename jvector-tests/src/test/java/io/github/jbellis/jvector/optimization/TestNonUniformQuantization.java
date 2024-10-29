@@ -10,8 +10,8 @@ import org.junit.Test;
 import java.util.Random;
 import java.util.stream.DoubleStream;
 
-import static io.github.jbellis.jvector.util.MathUtil.square;
-import static io.github.jbellis.jvector.vector.VectorUtil.*;
+import io.github.jbellis.jvector.util.MathUtil;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import static org.junit.Assert.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
@@ -28,34 +28,31 @@ public class TestNonUniformQuantization extends RandomizedTest {
 
     // In-place quantization
     private void uniformQuantize(VectorFloat<?> x, int nBits) {
-        double constant = Math.pow(2, nBits) - 1;
+        float constant = (float) (Math.pow(2, nBits) - 1);
+        VectorUtil.scale(x, constant);
         for (int d = 0; d < x.length(); d++) {
-            x.set(d, (float) Math.round(constant * x.get(d)));
+            x.set(d, (float) Math.round(x.get(d)));
         }
     }
 
     // In-place dequantization
     private void uniformDequantize(VectorFloat<?> x, int nBits) {
-        double constant = Math.pow(2, nBits) - 1;
-        for (int d = 0; d < x.length(); d++) {
-            x.set(d, (float) (x.get(d) / constant));
-        }
+        float constant = (float) (Math.pow(2, nBits) - 1);
+        VectorUtil.scale(x, 1.f / constant);
     }
 
     // In-place application of the CDF of the Kumaraswamy distribution
-    private void forwardKumaraswamy(VectorFloat<?> x, double a, double b) {
-        // Compute 1 - (1 - x ** a) ** b
-        for (int d = 0; d < x.length(); d++) {
-            x.set(d, (float) (1.f - Math.pow(1 - Math.pow(x.get(d), a), b)));
-        }
+    private void forwardKumaraswamy(VectorFloat<?> x, float a, float b) {
+        // Compute 1 - (1 - v ** a) ** b
+        VectorUtil.constantMinusExponentiatedVector(x, 1, a); // 1 - v ** a
+        VectorUtil.constantMinusExponentiatedVector(x, 1, b); // 1 - v ** b
     }
 
     // In-place application of the inverse CDF of the Kumaraswamy distribution
-    private void inverseKumaraswamy(VectorFloat<?> y, double a, double b) {
+    private void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {
         // Compute (1 - (1 - y) ** (1 / b)) ** (1 / a)
-        for (int d = 0; d < y.length(); d++) {
-            y.set(d, (float) Math.pow(1 - Math.pow(1 - y.get(d), 1. / b), 1. / a));
-        }
+        VectorUtil.exponentiateConstantMinusVector(y, 1, 1.f / b); // 1 - v ** (1 / a)
+        VectorUtil.exponentiateConstantMinusVector(y, 1, 1.f / a); // 1 - v ** (1 / b)
     }
 
     class KumaraswamyQuantizationLossFunction extends LossFunction {
@@ -72,14 +69,14 @@ public class TestNonUniformQuantization extends RandomizedTest {
 
         public double compute(double[] x) {
             vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            forwardKumaraswamy(vectorCopy, x[0], x[1]);
+            forwardKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
             uniformQuantize(vectorCopy, nBits);
             uniformDequantize(vectorCopy, nBits);
-            inverseKumaraswamy(vectorCopy, x[0], x[1]);
+            inverseKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
 
             double lossValue = 0;
             for (int d = 0; d < vectorOriginal.length(); d++) {
-                lossValue -= square(vectorOriginal.get(d) - vectorCopy.get(d));
+                lossValue -= MathUtil.square(vectorOriginal.get(d) - vectorCopy.get(d));
             }
             return lossValue;
         }
@@ -93,7 +90,7 @@ public class TestNonUniformQuantization extends RandomizedTest {
 
         double lossValue = 0;
         for (int d = 0; d < vector.length(); d++) {
-            lossValue += square(vector.get(d) - vectorCopy.get(d));
+            lossValue += MathUtil.square(vector.get(d) - vectorCopy.get(d));
         }
         return lossValue;
     }
@@ -103,17 +100,17 @@ public class TestNonUniformQuantization extends RandomizedTest {
         {
             var nDims = 3096;
             var nBits = 8;
-            var nTrials = 10;
+            var nTrials = 50;
 
             var uniformError = new double[nTrials];
             var kumaraswamyError = new double[nTrials];
 
             for (int trial = 0; trial < nTrials; trial++) {
                 var vector = gaussianVector(getRandom(), nDims);
-                var min = min(vector);
-                var max = max(vector);
-                subInPlace(vector, min);
-                scale(vector, 1.f / (max - min));
+                var min = VectorUtil.min(vector);
+                var max = VectorUtil.max(vector);
+                VectorUtil.subInPlace(vector, min);
+                VectorUtil.scale(vector, 1.f / (max - min));
 
                 var loss = new KumaraswamyQuantizationLossFunction(2, nBits, vector);
                 loss.setMinBounds(new double[]{1e-6, 1e-6});
