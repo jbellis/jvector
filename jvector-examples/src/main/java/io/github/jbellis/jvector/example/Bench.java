@@ -116,7 +116,7 @@ public class Bench {
         for (var nwDatasetName : coreFiles) {
             if (pattern.matcher(nwDatasetName).find()) {
                 var mfd = DownloadHelper.maybeDownloadFvecs(nwDatasetName);
-//                Grid.runAll(mfd.load(), mGrid, efConstructionGrid, featureSets, buildCompression, compressionGrid, efSearchGrid);
+                Grid.runAll(mfd.load(), mGrid, efConstructionGrid, featureSets, buildCompression, compressionGrid, efSearchGrid);
             }
         }
     }

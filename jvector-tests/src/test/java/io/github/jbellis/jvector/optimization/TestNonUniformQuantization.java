@@ -10,6 +10,7 @@ import org.junit.Test;
 import java.util.Random;
 import java.util.stream.DoubleStream;
 
+import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import static org.junit.Assert.assertTrue;
 
