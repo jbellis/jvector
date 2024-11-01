@@ -747,184 +747,114 @@ final class SimdOps {
         }
     }
 
-//    static VectorFloat<?> nvqDequantize4bit(ArrayByteSequence bytes, final int length) {
-//        float[] res = new float[length];
-//
-//        //Common case first
-//        if (length >= FloatVector.SPECIES_PREFERRED.length())
-//            return dotProductPreferred(bytes, res);
-//
-//        if (length < FloatVector.SPECIES_128.length())
-//            return nvqDequantize4bit64(bytes, res);
-//        else if (length < FloatVector.SPECIES_256.length())
-//            return nvqDequantize4bit128(bytes, res);
-//        else
-//            return nvqDequantize4bit256(bytes, res);
-//
-//        return new ArrayVectorFloat(res);
-//    }
-//
-//    static float nvqDequantize4bit64(ArrayByteSequence bytes, float[] res) {
-//
-//        if (length == FloatVector.SPECIES_64.length())
-//            return dot64(v1, v1offset, v2, v2offset);
-//
-//        final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
-//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
-//        int i = 0;
-//        // Process the vectorized part
-//        for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
-//            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
-//                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
-//                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
-//                    .reinterpretAsInts()
-//                    .add(scale)
-//                    .intoArray(convOffsets,0);
-//
-//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.get(), v1offset + i);
-//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2.get(), v2offset + i);
-//            sum = a.fma(b, sum);
-//        }
-//
-//        float res = sum.reduceLanes(VectorOperators.ADD);
-//
-//        // Process the tail
-//        for (; i < length; ++i)
-//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
-//
-//        return res;
-//    }
-//
-//    static float nvqDequantize4bit128(ArrayByteSequence bytes, float[] res) {
-//
-//        if (length == FloatVector.SPECIES_128.length())
-//            return dot128(v1, v1offset, v2, v2offset);
-//
-//        final int vectorizedLength = FloatVector.SPECIES_128.loopBound(length);
-//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_128);
-//
-//        int i = 0;
-//        // Process the vectorized part
-//        for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
-//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1.get(), v1offset + i);
-//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2.get(), v2offset + i);
-//            sum = a.fma(b, sum);
-//        }
-//
-//        float res = sum.reduceLanes(VectorOperators.ADD);
-//
-//        // Process the tail
-//        for (; i < length; ++i)
-//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
-//
-//        return res;
-//    }
-//
-//
-//    static float nvqDequantize4bit256(ArrayByteSequence bytes, float[] res) {
-//
-//        if (length == FloatVector.SPECIES_256.length())
-//            return dot256(v1, v1offset, v2, v2offset);
-//
-//        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
-//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
-//
-//        int i = 0;
-//        // Process the vectorized part
-//        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1.get(), v1offset + i);
-//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2.get(), v2offset + i);
-//            sum = a.fma(b, sum);
-//        }
-//
-//        float res = sum.reduceLanes(VectorOperators.ADD);
-//
-//        // Process the tail
-//        for (; i < length; ++i)
-//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
-//
-//        return res;
-//    }
-//
-//    static float nvqDequantize4bit512(ArrayByteSequence bytes, float[] res) {
-//
-//        if (length == FloatVector.SPECIES_512.length())
-//            return dot256(v1, v1offset, v2, v2offset);
-//
-//        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
-//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
-//
-//        int i = 0;
-//        // Process the vectorized part
-//        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1.get(), v1offset + i);
-//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2.get(), v2offset + i);
-//            sum = a.fma(b, sum);
-//        }
-//
-//        float res = sum.reduceLanes(VectorOperators.ADD);
-//
-//        // Process the tail
-//        for (; i < length; ++i)
-//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
-//
-//        return res;
-//    }
-//
-//    static float nvqDequantizePreferred(ArrayByteSequence bytes, float[] res) {
-//        if (length == FloatVector.SPECIES_PREFERRED.length())
-//            return dotPreferred(v1, v1offset, v2, v2offset);
-//
-//        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
-//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-//
-//        int i = 0;
-//        // Process the vectorized part
-//        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), v1offset + i);
-//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.get(), v2offset + i);
-//            sum = a.fma(b, sum);
-//        }
-//
-//        float res = sum.reduceLanes(VectorOperators.ADD);
-//
-//        // Process the tail
-//        for (; i < length; ++i)
-//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
-//
-//        return res;
-//    }
-//
-//
-//    static void dequantizeKumaraswamy(ArrayByteSequence bytes, float a, float b) {
-//        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(bytes.length());
-//
-//        // Process the vectorized part
-//        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-//            var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, bytes.get(), i);
-//            arr = arr.neg().add(1.f).pow(1.f / b); // 1 - v ** (1 / a)
-//            arr = arr.neg().add(1.f).pow(1.f / a); // 1 - v ** (1 / b)
-//            subResult.intoArray(vector.get(), i);
-//        }
-//
-//        // Process the tail
-//        for (int i = vectorizedLength; i < vector.length(); i++) {
-//            vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
-//        }
-//    }
+    //---------------------------------------------
+    // NVQ quantization instructions start here
+    //---------------------------------------------
 
-    public float nvqDotProduct(ArrayVectorFloat vector, ByteVector quantizedVector, float scale, float bias, float a, float b, float vectorSum) {
-////        var vector = bitsPerDimension.uniformDequantize(bytes);
-////        inverseKumaraswamy(vector, kumaraswamyA, kumaraswamyB);
-//        FloatVector dequantizedVector = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE);;
-//        exponentiateConstantMinusVector(dequantizedVector, 1, 1.f / b); // 1 - v ** (1 / a)
-//        exponentiateConstantMinusVector(dequantizedVector, 1, 1.f / a); // 1 - v ** (1 / b)
-//
-//        float dotProd = 0;
-//        for (int i = 0; i < vector.length(); i++) {
-//            dotProd += vector.get(i) * vectorDQ.get(i);
-//        }
-//        return quantizedVector.kumaraswamyScale * dotProd + quantizedVector.kumaraswamyBias * vectorSum;
-        return 0;
+    static enum NVQBitsPerDimension {
+        EIGHT,
+        FOUR;
     }
+
+    static void inverseKumaraswamy(FloatVector vector, float a, float b) {
+        vector = vector.neg().add(1.f).pow(1.f / b); // 1 - v ** (1 / a)
+        vector.neg().add(1.f).pow(1.f / a);          // 1 - v ** (1 / b)
+    }
+
+    static float inverseKumaraswamy(float value, float a, float b) {
+        var temp = (float) Math.pow(1 - value, 1.f / b);
+        return (float) Math.pow(1 - temp, 1.f / a);
+    }
+
+
+    static ArrayVectorFloat nvqDequantize4bit(ArrayByteSequence bytes, float a, float b, float[] res) {
+        /*
+         * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
+         * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
+         *
+         * 1st pass of original array:
+         * & 0xf:      | 0    | 2    | 4    | 6    | 8    | 10     | 12     | 14     |
+         * 2nd pass of original array:
+         * lS 4:       | 1    | 3    | 5    | 7    | 9    | 11     | 13     | 15     |
+         */
+
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            var arr = ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i);
+            // 1st pass
+            var subResult = arr.lanewise(VectorOperators.AND, 0xf)
+                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
+                    .reinterpretAsFloats();
+
+            inverseKumaraswamy(subResult, a, b);
+            subResult.intoArray(res, 2 * i);
+
+            // 2nd pass
+            subResult = arr.lanewise(VectorOperators.LSHL, 4)
+                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
+                    .reinterpretAsFloats();
+
+            inverseKumaraswamy(subResult, a, b);
+            subResult.intoArray(res, 2 * i + 1);
+
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < bytes.length(); i++) {
+            res[2 * i] = inverseKumaraswamy(bytes.get(i) << 4, a, b);
+            res[2 * i + 1] = inverseKumaraswamy(bytes.get(i), a, b);
+        }
+
+        return new ArrayVectorFloat(res);
+    }
+
+    static ArrayVectorFloat nvqDequantize8bit(ArrayByteSequence bytes, float a, float b, float[] res) {
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            var arr = ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i)
+                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
+                    .reinterpretAsFloats();
+
+            inverseKumaraswamy(arr, a, b);
+            arr.intoArray(res, i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < bytes.length(); i++) {
+            res[i] = inverseKumaraswamy(bytes.get(i), a, b);
+        }
+
+        return new ArrayVectorFloat(res);
+    }
+
+    static ArrayVectorFloat nvqDequantize(ArrayByteSequence bytes, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+        float[] res;
+        switch (bitsPerDimension) {
+            case EIGHT:
+                res = new float[bytes.length()];
+                return nvqDequantize8bit(bytes, a, b, res);
+            case FOUR:
+                res = new float[2 * bytes.length()];
+                return nvqDequantize4bit(bytes, a, b, res);
+            default: // never realized
+                throw new AssertionError();
+        }
+    }
+
+    static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
+        ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+
+        float dotProd = 0;
+        for (int i = 0; i < vector.length(); i++) {
+            dotProd += vector.get(i) * dequantizedVector.get(i);
+        }
+        return scale * dotProd + bias * vectorSum;
+    }
+
+    //---------------------------------------------
+    // NVQ quantization instructions end here
+    //---------------------------------------------
+
 }
