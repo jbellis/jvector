@@ -16,6 +16,8 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.NVQuantization;
+import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -75,6 +77,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         SimdOps.addInPlace((ArrayVectorFloat)v1, (ArrayVectorFloat)v2);
+    }
+
+    @Override
+    public void addInPlace(VectorFloat<?> v1, float value) {
+        SimdOps.addInPlace((ArrayVectorFloat)v1, value);
     }
 
     @Override
@@ -178,6 +185,46 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBases, ByteSequence<?> quantizedPartials) {
         SimdOps.quantizePartials(delta, (ArrayVectorFloat) partials, (ArrayVectorFloat) partialBases, (ArrayByteSequence) quantizedPartials);
+    }
+
+    @Override
+    public float nvqDotProduct(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, float vectorSum) {
+        var vectorDQ = quantizedVector.getDequantizedUnormalized();
+        float dotProd = 0;
+        for (int i = 0; i < vector.length(); i++) {
+            dotProd += vector.get(i) * vectorDQ.get(i);
+        }
+        return quantizedVector.kumaraswamyScale * dotProd + quantizedVector.kumaraswamyBias * vectorSum;
+    }
+
+    @Override
+    public float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
+        var vectorDQ = quantizedVector.getDequantized();
+        float sum = 0;
+        for (int i = 0; i < vector.length(); i++) {
+            sum += MathUtil.square(vector.get(i) - vectorDQ.get(i));
+        }
+        return sum;
+    }
+
+    @Override
+    public float nvqCosine(VectorFloat<?>[] subvectors, NVQuantization.QuantizedVector quantizedVector, VectorFloat<?> centroid) {
+        float sum = 0;
+        float normV = 0;
+        float normDQ = 0;
+        for (int i = 0; i < subvectors.length; i++) {
+            var subvector1 = subvectors[i];
+            var subvectorDQ = quantizedVector.subVectors[i].getDequantized();
+            for (int d = 0; d < subvector1.length(); d++) {
+                float elem1 = subvector1.get(d);
+                float elem2 = subvectorDQ.get(d) + centroid.get(d);
+                sum += elem1 * elem2;
+                normV = elem1 * elem1;
+                normDQ += elem2 * elem2;
+            }
+        }
+
+        return (float) (sum / Math.sqrt((double) normV * (double) normDQ));
     }
 }
 

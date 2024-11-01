@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
@@ -465,6 +466,11 @@ final class SimdOps {
         a.add(b).intoArray(v1.get(), 0);
     }
 
+    static void addInPlace64(ArrayVectorFloat v1, float value) {
+        var a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.get(), 0);
+        a.add(value).intoArray(v1.get(), 0);
+    }
+
     static void addInPlace(ArrayVectorFloat v1, ArrayVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -487,6 +493,26 @@ final class SimdOps {
         // Process the tail
         for (int i = vectorizedLength; i < v1.length(); i++) {
             v1.set(i,  v1.get(i) + v2.get(i));
+        }
+    }
+
+    static void addInPlace(ArrayVectorFloat v1, float value) {
+        if (v1.length() == 2) {
+            addInPlace64(v1, value);
+            return;
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), i);
+            a.add(value).intoArray(v1.get(), i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length(); i++) {
+            v1.set(i,  v1.get(i) + value);
         }
     }
 
@@ -719,5 +745,186 @@ final class SimdOps {
                 quantizedPartials.setLittleEndianShort(i * codebookSize + j, quantized);
             }
         }
+    }
+
+//    static VectorFloat<?> nvqDequantize4bit(ArrayByteSequence bytes, final int length) {
+//        float[] res = new float[length];
+//
+//        //Common case first
+//        if (length >= FloatVector.SPECIES_PREFERRED.length())
+//            return dotProductPreferred(bytes, res);
+//
+//        if (length < FloatVector.SPECIES_128.length())
+//            return nvqDequantize4bit64(bytes, res);
+//        else if (length < FloatVector.SPECIES_256.length())
+//            return nvqDequantize4bit128(bytes, res);
+//        else
+//            return nvqDequantize4bit256(bytes, res);
+//
+//        return new ArrayVectorFloat(res);
+//    }
+//
+//    static float nvqDequantize4bit64(ArrayByteSequence bytes, float[] res) {
+//
+//        if (length == FloatVector.SPECIES_64.length())
+//            return dot64(v1, v1offset, v2, v2offset);
+//
+//        final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
+//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
+//        int i = 0;
+//        // Process the vectorized part
+//        for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
+//            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
+//                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
+//                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
+//                    .reinterpretAsInts()
+//                    .add(scale)
+//                    .intoArray(convOffsets,0);
+//
+//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.get(), v1offset + i);
+//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_64, v2.get(), v2offset + i);
+//            sum = a.fma(b, sum);
+//        }
+//
+//        float res = sum.reduceLanes(VectorOperators.ADD);
+//
+//        // Process the tail
+//        for (; i < length; ++i)
+//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
+//
+//        return res;
+//    }
+//
+//    static float nvqDequantize4bit128(ArrayByteSequence bytes, float[] res) {
+//
+//        if (length == FloatVector.SPECIES_128.length())
+//            return dot128(v1, v1offset, v2, v2offset);
+//
+//        final int vectorizedLength = FloatVector.SPECIES_128.loopBound(length);
+//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_128);
+//
+//        int i = 0;
+//        // Process the vectorized part
+//        for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
+//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_128, v1.get(), v1offset + i);
+//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_128, v2.get(), v2offset + i);
+//            sum = a.fma(b, sum);
+//        }
+//
+//        float res = sum.reduceLanes(VectorOperators.ADD);
+//
+//        // Process the tail
+//        for (; i < length; ++i)
+//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
+//
+//        return res;
+//    }
+//
+//
+//    static float nvqDequantize4bit256(ArrayByteSequence bytes, float[] res) {
+//
+//        if (length == FloatVector.SPECIES_256.length())
+//            return dot256(v1, v1offset, v2, v2offset);
+//
+//        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+//
+//        int i = 0;
+//        // Process the vectorized part
+//        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1.get(), v1offset + i);
+//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2.get(), v2offset + i);
+//            sum = a.fma(b, sum);
+//        }
+//
+//        float res = sum.reduceLanes(VectorOperators.ADD);
+//
+//        // Process the tail
+//        for (; i < length; ++i)
+//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
+//
+//        return res;
+//    }
+//
+//    static float nvqDequantize4bit512(ArrayByteSequence bytes, float[] res) {
+//
+//        if (length == FloatVector.SPECIES_512.length())
+//            return dot256(v1, v1offset, v2, v2offset);
+//
+//        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
+//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+//
+//        int i = 0;
+//        // Process the vectorized part
+//        for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_256, v1.get(), v1offset + i);
+//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_256, v2.get(), v2offset + i);
+//            sum = a.fma(b, sum);
+//        }
+//
+//        float res = sum.reduceLanes(VectorOperators.ADD);
+//
+//        // Process the tail
+//        for (; i < length; ++i)
+//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
+//
+//        return res;
+//    }
+//
+//    static float nvqDequantizePreferred(ArrayByteSequence bytes, float[] res) {
+//        if (length == FloatVector.SPECIES_PREFERRED.length())
+//            return dotPreferred(v1, v1offset, v2, v2offset);
+//
+//        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+//        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+//
+//        int i = 0;
+//        // Process the vectorized part
+//        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+//            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), v1offset + i);
+//            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.get(), v2offset + i);
+//            sum = a.fma(b, sum);
+//        }
+//
+//        float res = sum.reduceLanes(VectorOperators.ADD);
+//
+//        // Process the tail
+//        for (; i < length; ++i)
+//            res += v1.get(v1offset + i) * v2.get(v2offset + i);
+//
+//        return res;
+//    }
+//
+//
+//    static void dequantizeKumaraswamy(ArrayByteSequence bytes, float a, float b) {
+//        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(bytes.length());
+//
+//        // Process the vectorized part
+//        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+//            var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, bytes.get(), i);
+//            arr = arr.neg().add(1.f).pow(1.f / b); // 1 - v ** (1 / a)
+//            arr = arr.neg().add(1.f).pow(1.f / a); // 1 - v ** (1 / b)
+//            subResult.intoArray(vector.get(), i);
+//        }
+//
+//        // Process the tail
+//        for (int i = vectorizedLength; i < vector.length(); i++) {
+//            vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
+//        }
+//    }
+
+    public float nvqDotProduct(ArrayVectorFloat vector, ByteVector quantizedVector, float scale, float bias, float a, float b, float vectorSum) {
+////        var vector = bitsPerDimension.uniformDequantize(bytes);
+////        inverseKumaraswamy(vector, kumaraswamyA, kumaraswamyB);
+//        FloatVector dequantizedVector = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE);;
+//        exponentiateConstantMinusVector(dequantizedVector, 1, 1.f / b); // 1 - v ** (1 / a)
+//        exponentiateConstantMinusVector(dequantizedVector, 1, 1.f / a); // 1 - v ** (1 / b)
+//
+//        float dotProd = 0;
+//        for (int i = 0; i < vector.length(); i++) {
+//            dotProd += vector.get(i) * vectorDQ.get(i);
+//        }
+//        return quantizedVector.kumaraswamyScale * dotProd + quantizedVector.kumaraswamyBias * vectorSum;
+        return 0;
     }
 }

@@ -464,6 +464,11 @@ final class VectorSimdOps {
         a.add(b).intoMemorySegment(v1.get(), v1.offset(0), ByteOrder.LITTLE_ENDIAN);
     }
 
+    static void addInPlace64(MemorySegmentVectorFloat v1, float value) {
+        var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_64, v1.get(), 0, ByteOrder.LITTLE_ENDIAN);
+        a.add(value).intoMemorySegment(v1.get(), v1.offset(0), ByteOrder.LITTLE_ENDIAN);
+    }
+
     static void addInPlace(MemorySegmentVectorFloat v1, MemorySegmentVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -486,6 +491,26 @@ final class VectorSimdOps {
         // Process the tail
         for (int i = vectorizedLength; i < v1.length(); i++) {
             v1.set(i,  v1.get(i) + v2.get(i));
+        }
+    }
+
+    static void addInPlace(MemorySegmentVectorFloat v1, float value) {
+        if (v1.length() == 2) {
+            addInPlace64(v1, value);
+            return;
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            a.add(value).intoMemorySegment(v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length(); i++) {
+            v1.set(i,  v1.get(i) + value);
         }
     }
 

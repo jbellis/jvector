@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -138,6 +139,10 @@ public final class VectorUtil {
     impl.addInPlace(v1, v2);
   }
 
+  public static void addInPlace(VectorFloat<?> v1, float value) {
+    impl.addInPlace(v1, value);
+  }
+
   public static void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     impl.subInPlace(v1, v2);
   }
@@ -210,5 +215,17 @@ public final class VectorUtil {
    */
   public static float min(VectorFloat<?> v) {
     return impl.min(v);
+  }
+
+  public static float nvqDotProduct(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, float vectorSum) {
+    return impl.nvqDotProduct(vector, quantizedVector, vectorSum);
+  }
+
+  public static float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
+    return impl.nvqSquareL2Distance(vector, quantizedVector);
+  }
+
+  public static float nvqCosine(VectorFloat<?>[] subvectors, NVQuantization.QuantizedVector quantizedVector, VectorFloat<?> centroid) {
+    return impl.nvqCosine(subvectors, quantizedVector, centroid);
   }
 }

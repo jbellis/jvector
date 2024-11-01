@@ -20,6 +20,7 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -33,17 +34,17 @@ public class NVQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     final NVQuantization nvq;
-    final NVQuantization.QuantizedSubVector[] compressedVectors;
+    final NVQuantization.QuantizedVector[] compressedVectors;
 
     /**
      * Initialize the PQVectors with an initial List of vectors.  This list may be
      * mutated, but caller is responsible for thread safety issues when doing so.
      */
-    public NVQVectors(NVQuantization nvq, List<NVQuantization.QuantizedSubVector> compressedVectors) {
-        this(nvq, compressedVectors.toArray(new NVQuantization.QuantizedSubVector[0]));
+    public NVQVectors(NVQuantization nvq, List<NVQuantization.QuantizedVector> compressedVectors) {
+        this(nvq, compressedVectors.toArray(new NVQuantization.QuantizedVector[0]));
     }
 
-    public NVQVectors(NVQuantization nvq, NVQuantization.QuantizedSubVector[] compressedVectors) {
+    public NVQVectors(NVQuantization nvq, NVQuantization.QuantizedVector[] compressedVectors) {
         this.nvq = nvq;
         this.compressedVectors = compressedVectors;
     }
@@ -75,15 +76,10 @@ public class NVQVectors implements CompressedVectors {
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
-        NVQuantization.QuantizedSubVector[] compressedVectors = new NVQuantization.QuantizedSubVector[size];
-
-        int compressedDimension = in.readInt();
-        if (compressedDimension < 0) {
-            throw new IOException("Invalid compressed vector dimension " + compressedDimension);
-        }
+        NVQuantization.QuantizedVector[] compressedVectors = new NVQuantization.QuantizedVector[size];
 
         for (int i = 0; i < size; i++) {
-            compressedVectors[i] = NVQuantization.QuantizedSubVector.load(in);
+            compressedVectors[i] = NVQuantization.QuantizedVector.load(in);
         }
 
         return new NVQVectors(nvq, compressedVectors);
@@ -110,29 +106,94 @@ public class NVQVectors implements CompressedVectors {
     }
 
     @Override
-    public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        return implPrecomputedScoreFunctionFor(q, similarityFunction);
+    public ScoreFunction.ApproximateScoreFunction precomputedScoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
+        return scoreFunctionFor(query, similarityFunction);
     }
 
     @Override
-    public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
-        return implPrecomputedScoreFunctionFor(q, similarityFunction);
-    }
-
-    private ScoreFunction.ApproximateScoreFunction implPrecomputedScoreFunctionFor(VectorFloat<?> q, VectorSimilarityFunction similarityFunction) {
+    public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
-                //return new NVQDecoder.DotProductDecoder(this, q);
+                return dotProductScoreFunctionFor(query);
             case EUCLIDEAN:
-                // return new NVQDecoder.EuclideanDecoder(this, q);
+                return euclideanScoreFunctionFor(query);
             case COSINE:
-                // return new NVQDecoder.CosineDecoder(this, q);
+                return cosineScoreFunctionFor(query);
             default:
                 throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
         }
     }
 
-    public NVQuantization.QuantizedSubVector get(int ordinal) {
+    private ScoreFunction.ApproximateScoreFunction dotProductScoreFunctionFor(VectorFloat<?> query) {
+        /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
+         * first de-meaned by subtracting the global mean.
+         * The dot product is calculated between the query and quantized sub-vectors as follows:
+         *
+         * <query, vector> \approx <query, scale * quantized + bias + globalMean>
+         *                       = scale * <query, quantized> + bias <query, broadcast(1)> + <query, globalMean>
+         *
+         * where scale and bias are scalars.
+         *
+         * The following terms can be precomputed:
+         *     queryGlobalBias = <query, globalMean>
+         *     querySum = <query, broadcast(1)>
+         */
+        var queryGlobalBias = VectorUtil.dotProduct(query, this.nvq.globalMean);
+        var querySubVectors = this.nvq.getSubVectors(query);
+
+        var querySum = new float[querySubVectors.length];
+        for (int i = 0; i < querySubVectors.length; i++) {
+            querySum[i] = VectorUtil.sum(querySubVectors[i]);
+        }
+
+        return node2 -> {
+            var vNVQ = compressedVectors[node2];
+            float nvqDot = 0;
+            for (int i = 0; i < querySubVectors.length; i++) {
+                var subVec = vNVQ.subVectors[i];
+                nvqDot += VectorUtil.nvqDotProduct(querySubVectors[i], subVec, querySum[i]);
+            }
+            return nvqDot + queryGlobalBias;
+        };
+    }
+
+    private ScoreFunction.ApproximateScoreFunction euclideanScoreFunctionFor(VectorFloat<?> query) {
+        /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
+         * first de-meaned by subtracting the global mean.
+         *
+         * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
+         *
+         * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
+         *                          = |(query - globalMean) - scale * quantized + bias|^2
+         *
+         * where scale and bias are scalars.
+         *
+         * The following term can be precomputed:
+         *     shiftedQuery = query - globalMean
+         */
+        var shiftedQuery = VectorUtil.sub(query, this.nvq.globalMean);
+        var querySubVectors = this.nvq.getSubVectors(shiftedQuery);
+
+        return node2 -> {
+            var vNVQ = compressedVectors[node2];
+            float dist = 0;
+            for (int i = 0; i < querySubVectors.length; i++) {
+                dist += VectorUtil.nvqSquareL2Distance(querySubVectors[i], vNVQ.subVectors[i]);
+            }
+            return dist;
+        };
+    }
+
+    private ScoreFunction.ApproximateScoreFunction cosineScoreFunctionFor(VectorFloat<?> query) {
+        var querySubVectors = this.nvq.getSubVectors(query);
+
+        return node2 -> {
+            var vNVQ = compressedVectors[node2];
+            return VectorUtil.nvqCosine(querySubVectors, vNVQ, this.nvq.globalMean);
+        };
+    }
+
+    public NVQuantization.QuantizedVector get(int ordinal) {
         return compressedVectors[ordinal];
     }
 
