@@ -225,7 +225,7 @@ public final class VectorUtil {
     return impl.nvqSquareL2Distance(vector, quantizedVector);
   }
 
-  public static float nvqCosine(VectorFloat<?>[] subvectors, NVQuantization.QuantizedVector quantizedVector, VectorFloat<?> centroid) {
-    return impl.nvqCosine(subvectors, quantizedVector, centroid);
+  public static float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
+    return impl.nvqCosine(vector, quantizedVector, centroid);
   }
 }

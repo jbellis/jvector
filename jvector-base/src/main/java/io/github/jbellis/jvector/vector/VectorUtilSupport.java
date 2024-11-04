@@ -219,5 +219,5 @@ public interface VectorUtilSupport {
 
   float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector);
 
-  float nvqCosine(VectorFloat<?>[] vector, NVQuantization.QuantizedVector quantizedVector, VectorFloat<?> centroid);
+  float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid);
 }

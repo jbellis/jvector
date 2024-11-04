@@ -751,7 +751,7 @@ final class SimdOps {
     // NVQ quantization instructions start here
     //---------------------------------------------
 
-    static enum NVQBitsPerDimension {
+    enum NVQBitsPerDimension {
         EIGHT,
         FOUR;
     }
@@ -846,11 +846,42 @@ final class SimdOps {
     static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
         ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
 
-        float dotProd = 0;
-        for (int i = 0; i < vector.length(); i++) {
-            dotProd += vector.get(i) * dequantizedVector.get(i);
-        }
+        float dotProd = dotProduct(vector, dequantizedVector);
         return scale * dotProd + bias * vectorSum;
+    }
+
+    static float[] nvqCosine(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, ArrayVectorFloat centroid, NVQBitsPerDimension bitsPerDimension) {
+        ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+
+        if ((vector.length() != dequantizedVector.length()) && (dequantizedVector.length() != centroid.length())) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        scale(dequantizedVector, scale);
+        addInPlace(dequantizedVector, bias);
+        addInPlace(dequantizedVector, centroid);
+
+        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            var vb = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i);
+            vsum = va.fma(vb, vsum);
+            vbMagnitude = vb.fma(vb, vbMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            sum += vector.get(i) * dequantizedVector.get(i);
+            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+        }
+
+        return new float[]{sum, bMagnitude};
     }
 
     //---------------------------------------------

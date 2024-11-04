@@ -185,11 +185,20 @@ public class NVQVectors implements CompressedVectors {
     }
 
     private ScoreFunction.ApproximateScoreFunction cosineScoreFunctionFor(VectorFloat<?> query) {
+        float queryNorm = (float) Math.sqrt(VectorUtil.dotProduct(query, query));
         var querySubVectors = this.nvq.getSubVectors(query);
+        var meanSubVectors = this.nvq.getSubVectors(this.nvq.globalMean);
 
         return node2 -> {
             var vNVQ = compressedVectors[node2];
-            return VectorUtil.nvqCosine(querySubVectors, vNVQ, this.nvq.globalMean);
+            float dotProduct = 0;
+            float squaredNormalization = 0;
+            for (int i = 0; i < querySubVectors.length; i++) {
+                var partialCosSim = VectorUtil.nvqCosine(querySubVectors[i], vNVQ.subVectors[i], meanSubVectors[i]);
+                dotProduct += partialCosSim[0];
+                squaredNormalization += partialCosSim[1];
+            }
+            return (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
         };
     }
 
