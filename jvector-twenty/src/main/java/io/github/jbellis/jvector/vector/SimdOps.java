@@ -830,16 +830,16 @@ final class SimdOps {
 
     static ArrayVectorFloat nvqDequantize(ArrayByteSequence bytes, float a, float b, NVQBitsPerDimension bitsPerDimension) {
         float[] res;
-        switch (bitsPerDimension) {
-            case EIGHT:
+        return switch (bitsPerDimension) {
+            case EIGHT -> {
                 res = new float[bytes.length()];
-                return nvqDequantize8bit(bytes, a, b, res);
-            case FOUR:
+                yield nvqDequantize8bit(bytes, a, b, res);
+            }
+            case FOUR -> {
                 res = new float[2 * bytes.length()];
-                return nvqDequantize4bit(bytes, a, b, res);
-            default: // never realized
-                throw new AssertionError();
-        }
+                yield nvqDequantize4bit(bytes, a, b, res);
+            }
+        };
     }
 
     static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
