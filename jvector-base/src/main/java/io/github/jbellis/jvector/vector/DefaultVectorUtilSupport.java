@@ -412,22 +412,21 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqCosine(VectorFloat<?>[] subvectors, NVQuantization.QuantizedVector quantizedVector, VectorFloat<?> centroid) {
+  public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
     float sum = 0;
-    float normV = 0;
     float normDQ = 0;
-    for (int i = 0; i < subvectors.length; i++) {
-      var subvector1 = subvectors[i];
-      var subvectorDQ = quantizedVector.subVectors[i].getDequantized();
-      for (int d = 0; d < subvector1.length(); d++) {
-        float elem1 = subvector1.get(d);
-        float elem2 = subvectorDQ.get(d) + centroid.get(d);
-        sum += elem1 * elem2;
-        normV = elem1 * elem1;
-        normDQ += elem2 * elem2;
-      }
+
+    var vectorDQ = quantizedVector.getDequantized();
+    for (int d = 0; d < vector.length(); d++) {
+      float elem1 = vector.get(d);
+      float elem2 = vectorDQ.get(d) + centroid.get(d);
+      sum += elem1 * elem2;
+      normDQ += elem2 * elem2;
     }
 
-    return (float) (sum / Math.sqrt((double) normV * (double) normDQ));
+    return new float[]{sum, normDQ};
   }
+
+  @Override
+  public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {}
 }

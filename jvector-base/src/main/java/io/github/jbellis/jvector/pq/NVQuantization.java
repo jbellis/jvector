@@ -380,10 +380,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * A NuVeQ sub-vector.
      */
     public static class QuantizedSubVector {
-        private final ByteSequence<?> bytes;
-        private BitsPerDimension bitsPerDimension;
-        private final float kumaraswamyA;
-        private final float kumaraswamyB;
+        public final ByteSequence<?> bytes;
+        public BitsPerDimension bitsPerDimension;
+        public final float kumaraswamyA;
+        public final float kumaraswamyB;
         public final float kumaraswamyBias;
         public final float kumaraswamyScale;
 
@@ -419,7 +419,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
             this.bitsPerDimension = bitsPerDimension;
             this.kumaraswamyBias = l;
-            this.kumaraswamyScale = (u - l) / 255;
+            this.kumaraswamyScale = (u - l);
             this.kumaraswamyA = a;
             this.kumaraswamyB = b;
             this.bytes = quantized;
