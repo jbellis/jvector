@@ -423,7 +423,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
             this.bitsPerDimension = bitsPerDimension;
             this.kumaraswamyBias = l;
-            this.kumaraswamyScale = (u - l) / 255;
+            this.kumaraswamyScale = (u - l);
             this.kumaraswamyA = a;
             this.kumaraswamyB = b;
             this.bytes = quantized;
