@@ -214,11 +214,12 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         for (int i = 0; i < subvectorSizesAndOffsets.length; i++) {
             int size = subvectorSizesAndOffsets[i][0];   // Size of the subvector
             int offset = subvectorSizesAndOffsets[i][1]; // Offset from the start of the input vector
-            VectorFloat<?> subVector = vectorTypeSupport.createFloatVector(size);
-            subvector.copyFrom(vector, offset, size);
+            VectorFloat<?> subvector = vectorTypeSupport.createFloatVector(size);
+            subvector.copyFrom(vector, offset, 0, size);
             subvectors[i] = subvector;
         }
         return subvectors;
+    }
 
     /**
      * Splits the vector dimension into M subvectors of roughly equal size.
