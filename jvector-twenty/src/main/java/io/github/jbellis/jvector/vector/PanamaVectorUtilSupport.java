@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.pq.NVQuantization;
-import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
