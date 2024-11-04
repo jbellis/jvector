@@ -681,7 +681,7 @@ final class VectorSimdOps {
 
     enum NVQBitsPerDimension {
         EIGHT,
-        FOUR;
+        FOUR
     }
 
     static void inverseKumaraswamy(FloatVector vector, float a, float b) {
