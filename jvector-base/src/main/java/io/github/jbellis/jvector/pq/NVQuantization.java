@@ -179,7 +179,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     }
 
     /**
-     * Encodes the given vectors in parallel using the PQ codebooks.
+     * Encodes the given vectors in parallel using NVQ.
      */
     @Override
     public QuantizedVector[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
@@ -191,15 +191,12 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     }
 
     /**
-     * Encodes the input vector using the PQ codebooks.
-     * @return one byte per subspace
+     * Encodes the input vector using NVQ.
+     * @return one subvector per subspace
      */
     @Override
     public QuantizedVector encode(VectorFloat<?> vector) {
-        // TODO TLW right now, this is applied to the full vector, think how to apply to to subvectors
-
         vector = VectorUtil.sub(vector, globalMean);
-
         return new QuantizedVector(getSubVectors(vector), bitsPerDimension);
     }
 
@@ -226,11 +223,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     @VisibleForTesting
     static int[][] getSubvectorSizesAndOffsets(int dimensions, int M) {
-        // TODO TLW check whether this code is right or we want to do it differently
         if (M > dimensions) {
             throw new IllegalArgumentException("Number of subspaces must be less than or equal to the vector dimension");
         }
-        int[][] sizes = new int[M][];
+        int[][] sizes = new int[M][2];
         int baseSize = dimensions / M;
         int remainder = dimensions % M;
         // distribute the remainder among the subvectors
@@ -404,7 +400,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             VectorUtil.scale(vector, 1.f / (u - l));
 
             //-----------------------------------------------------------------
-            // Optimization to find the hyperparamters of the Kumaraswamy quantization
+            // Optimization to find the hyperparameters of the Kumaraswamy quantization
             var loss = new KumaraswamyQuantizationLossFunction(2, bitsPerDimension, vector);
             loss.setMinBounds(new double[]{1e-6, 1e-6});
 
