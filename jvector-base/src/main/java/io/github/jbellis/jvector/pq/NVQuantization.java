@@ -204,17 +204,21 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     }
 
     /**
-     * Extracts the m-th subvector from a single vector.
+     * Creates an array of subvectors from a given vector
      */
+    @VisibleForTesting
     public VectorFloat<?>[] getSubVectors(VectorFloat<?> vector) {
-        // TODO TLW finish implementation
-//        int length = subvectorSizesAndOffsets.length;
-//
-//        VectorFloat<?> subvector = vectorTypeSupport.createFloatVector(subvectorSizesAndOffsets[m][0]);
-//        subvector.copyFrom(vector, subvectorSizesAndOffsets[m][1], 0, subvectorSizesAndOffsets[m][0]);
-//        return subvector;
-        return null;
-    }
+        VectorFloat<?>[] subvectors = new VectorFloat<?>[subvectorSizesAndOffsets.length];
+
+        // Iterate through the subvectorSizesAndOffsets to create each subvector and copy slices into them
+        for (int i = 0; i < subvectorSizesAndOffsets.length; i++) {
+            int size = subvectorSizesAndOffsets[i][0];   // Size of the subvector
+            int offset = subvectorSizesAndOffsets[i][1]; // Offset from the start of the input vector
+            VectorFloat<?> subVector = vectorTypeSupport.createFloatVector(size);
+            subvector.copyFrom(vector, offset, size);
+            subvectors[i] = subvector;
+        }
+        return subvectors;
 
     /**
      * Splits the vector dimension into M subvectors of roughly equal size.
