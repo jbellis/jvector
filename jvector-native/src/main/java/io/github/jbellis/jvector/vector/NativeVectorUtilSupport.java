@@ -185,12 +185,13 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float nvqDotProduct(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, float vectorSum) {
-        var vectorDQ = quantizedVector.getDequantizedUnormalized();
-        float dotProd = 0;
-        for (int i = 0; i < vector.length(); i++) {
-            dotProd += vector.get(i) * vectorDQ.get(i);
+        VectorSimdOps.NVQBitsPerDimension bpd;
+        switch (quantizedVector.bitsPerDimension) {
+            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
+            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
+            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
         }
-        return quantizedVector.kumaraswamyScale * dotProd + quantizedVector.kumaraswamyBias * vectorSum;
+        return VectorSimdOps.nvqDotProduct((MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes, quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd);
     }
 
     @Override
@@ -205,6 +206,17 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
-        return new float[]{0, 0};
+        VectorSimdOps.NVQBitsPerDimension bpd;
+        switch (quantizedVector.bitsPerDimension) {
+            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
+            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
+            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
+        }
+
+        return VectorSimdOps.nvqCosine(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
+                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
+                quantizedVector.kumaraswamyB, (MemorySegmentVectorFloat) centroid, bpd
+        );
     }
 }
