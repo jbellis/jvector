@@ -219,4 +219,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
                 quantizedVector.kumaraswamyB, (MemorySegmentVectorFloat) centroid, bpd
         );
     }
+
+    @Override
+    public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
+        if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
+            VectorSimdOps.nvqShuffleQueryInPlace((ArrayVectorFloat) vector);
+        }
+    }
 }

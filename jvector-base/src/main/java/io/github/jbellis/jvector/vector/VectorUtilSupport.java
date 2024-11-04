@@ -220,4 +220,6 @@ public interface VectorUtilSupport {
   float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector);
 
   float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid);
+
+  void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension);
 }

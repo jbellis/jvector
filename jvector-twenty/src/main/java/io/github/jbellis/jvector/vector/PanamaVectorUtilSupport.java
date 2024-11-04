@@ -223,5 +223,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 quantizedVector.kumaraswamyB, (ArrayVectorFloat) centroid, bpd
         );
     }
+
+    @Override
+    public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
+        if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
+            SimdOps.nvqShuffleQueryInPlace((ArrayVectorFloat) vector);
+        }
+    }
 }
 

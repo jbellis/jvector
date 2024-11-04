@@ -426,4 +426,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
     return new float[]{sum, normDQ};
   }
+
+  @Override
+  public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {}
 }

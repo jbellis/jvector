@@ -228,4 +228,8 @@ public final class VectorUtil {
   public static float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
     return impl.nvqCosine(vector, quantizedVector, centroid);
   }
+
+  public static void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
+    impl.nvqShuffleQueryInPlace(vector, bitsPerDimension);
+  }
 }

@@ -17,12 +17,7 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import jdk.incubator.vector.ByteVector;
-import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.IntVector;
-import jdk.incubator.vector.LongVector;
-import jdk.incubator.vector.ShortVector;
-import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.*;
 
 import java.util.List;
 
@@ -796,7 +791,6 @@ final class SimdOps {
 
             inverseKumaraswamy(subResult, a, b);
             subResult.intoArray(res, 2 * i + 1);
-
         }
 
         // Process the tail
@@ -881,6 +875,22 @@ final class SimdOps {
         }
 
         return new float[]{sum, bMagnitude};
+    }
+
+    static void nvqShuffleQueryInPlace(ArrayVectorFloat vector) {
+//        VectorShuffle<Float> shuffle;
+//        int vectorizedLength = FloatVector.SPECIES_512.loopBound(vector.length());
+//        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+//            FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i).rearrange(shuffle);
+//        }
+//
+//        // Process the tail
+//        for (int i = vectorizedLength; i < vector.length(); i++) {
+//            sum += vector.get(i) * dequantizedVector.get(i);
+//            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+//        }
+//
+//        return new float[]{sum, bMagnitude};
     }
 
     //---------------------------------------------

@@ -812,6 +812,40 @@ final class VectorSimdOps {
         return new float[]{sum, bMagnitude};
     }
 
+    static void nvqShuffleQueryInPlace(ArrayVectorFloat vector) {
+//        ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+//
+//        if ((vector.length() != dequantizedVector.length()) && (dequantizedVector.length() != centroid.length())) {
+//            throw new IllegalArgumentException("Vectors must have the same length");
+//        }
+//
+//        scale(dequantizedVector, scale);
+//        addInPlace(dequantizedVector, bias);
+//        addInPlace(dequantizedVector, centroid);
+//
+//        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+//        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+//
+//        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+//        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+//            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+//            var vb = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i);
+//            vsum = va.fma(vb, vsum);
+//            vbMagnitude = vb.fma(vb, vbMagnitude);
+//        }
+//
+//        float sum = vsum.reduceLanes(VectorOperators.ADD);
+//        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+//
+//        // Process the tail
+//        for (int i = vectorizedLength; i < vector.length(); i++) {
+//            sum += vector.get(i) * dequantizedVector.get(i);
+//            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+//        }
+//
+//        return new float[]{sum, bMagnitude};
+    }
+
     //---------------------------------------------
     // NVQ quantization instructions end here
     //---------------------------------------------
