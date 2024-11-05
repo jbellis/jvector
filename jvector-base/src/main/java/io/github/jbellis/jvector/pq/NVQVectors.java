@@ -144,6 +144,7 @@ public class NVQVectors implements CompressedVectors {
         var querySum = new float[querySubVectors.length];
         for (int i = 0; i < querySubVectors.length; i++) {
             querySum[i] = VectorUtil.sum(querySubVectors[i]);
+            VectorUtil.nvqShuffleQueryInPlace(querySubVectors[i], this.nvq.bitsPerDimension);
         }
 
         return node2 -> {
@@ -175,6 +176,10 @@ public class NVQVectors implements CompressedVectors {
         var shiftedQuery = VectorUtil.sub(query, this.nvq.globalMean);
         var querySubVectors = this.nvq.getSubVectors(shiftedQuery);
 
+        for (VectorFloat<?> querySubVector : querySubVectors) {
+            VectorUtil.nvqShuffleQueryInPlace(querySubVector, this.nvq.bitsPerDimension);
+        }
+
         return node2 -> {
             var vNVQ = compressedVectors[node2];
             float dist = 0;
@@ -190,6 +195,10 @@ public class NVQVectors implements CompressedVectors {
         float queryNorm = (float) Math.sqrt(VectorUtil.dotProduct(query, query));
         var querySubVectors = this.nvq.getSubVectors(query);
         var meanSubVectors = this.nvq.getSubVectors(this.nvq.globalMean);
+
+        for (VectorFloat<?> querySubVector : querySubVectors) {
+            VectorUtil.nvqShuffleQueryInPlace(querySubVector, this.nvq.bitsPerDimension);
+        }
 
         return node2 -> {
             var vNVQ = compressedVectors[node2];
