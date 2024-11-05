@@ -209,6 +209,21 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public float nvqEuclideanDistance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
+        SimdOps.NVQBitsPerDimension bpd;
+        switch (quantizedVector.bitsPerDimension) {
+            case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
+            case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
+            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
+        }
+
+        return SimdOps.nvqEuclideanDistance(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
+                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
+        );
+    }
+
+    @Override
     public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
         SimdOps.NVQBitsPerDimension bpd;
         switch (quantizedVector.bitsPerDimension) {

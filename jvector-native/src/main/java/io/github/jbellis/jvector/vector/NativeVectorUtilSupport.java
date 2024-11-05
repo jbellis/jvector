@@ -205,6 +205,13 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public float nvqEuclideanDistance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
+        // TODO TLW: This is the default implementation.  Complete the native implementation.
+        float squareL2Distance = nvqSquareL2Distance(vector, quantizedVector);
+        return (float) Math.sqrt(squareL2Distance);
+    }
+
+    @Override
     public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
         VectorSimdOps.NVQBitsPerDimension bpd;
         switch (quantizedVector.bitsPerDimension) {

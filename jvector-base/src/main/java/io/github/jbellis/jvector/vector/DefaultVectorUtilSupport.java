@@ -412,6 +412,12 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public float nvqEuclideanDistance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
+    float squareL2Distance = nvqSquareL2Distance(vector, quantizedVector);
+    return (float) Math.sqrt(squareL2Distance);
+  }
+
+  @Override
   public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
     float sum = 0;
     float normDQ = 0;
