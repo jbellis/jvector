@@ -795,8 +795,8 @@ final class SimdOps {
 
         // Process the tail
         for (int i = vectorizedLength; i < bytes.length(); i++) {
-            res[2 * i] = inverseKumaraswamy(bytes.get(i) << 4, a, b);
-            res[2 * i + 1] = inverseKumaraswamy(bytes.get(i), a, b);
+            res[2 * i] = inverseKumaraswamy(bytes.get(i) & 0xf, a, b);
+            res[2 * i + 1] = inverseKumaraswamy(bytes.get(i) << 4, a, b);
         }
 
         return new ArrayVectorFloat(res);
@@ -916,19 +916,15 @@ final class SimdOps {
     }
 
     static void nvqShuffleQueryInPlace(ArrayVectorFloat vector) {
-//        VectorShuffle<Float> shuffle;
-//        int vectorizedLength = FloatVector.SPECIES_512.loopBound(vector.length());
-//        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
-//            FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i).rearrange(shuffle);
-//        }
-//
-//        // Process the tail
-//        for (int i = vectorizedLength; i < vector.length(); i++) {
-//            sum += vector.get(i) * dequantizedVector.get(i);
-//            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
-//        }
-//
-//        return new float[]{sum, bMagnitude};
+        // To understand this shuffle, see nvqDequantize4bit
+        var shuffle = VectorShuffle.fromValues(FloatVector.SPECIES_512,
+                0, 2, 4, 6, 8, 10, 12, 14,
+                1, 3, 5, 7, 9, 11, 13, 15);
+        int vectorizedLength = FloatVector.SPECIES_512.loopBound(vector.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i).rearrange(shuffle);
+        }
+        // There's no need to shuffle the tail
     }
 
     //---------------------------------------------
