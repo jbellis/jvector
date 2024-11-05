@@ -153,7 +153,8 @@ public class NVQVectors implements CompressedVectors {
                 var subVec = vNVQ.subVectors[i];
                 nvqDot += VectorUtil.nvqDotProduct(querySubVectors[i], subVec, querySum[i]);
             }
-            return nvqDot + queryGlobalBias;
+            // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
+            return (1 + nvqDot + queryGlobalBias) / 2;
         };
     }
 
@@ -180,7 +181,8 @@ public class NVQVectors implements CompressedVectors {
             for (int i = 0; i < querySubVectors.length; i++) {
                 dist += VectorUtil.nvqSquareL2Distance(querySubVectors[i], vNVQ.subVectors[i]);
             }
-            return dist;
+
+            return 1 / (1 + dist);
         };
     }
 
@@ -198,7 +200,9 @@ public class NVQVectors implements CompressedVectors {
                 dotProduct += partialCosSim[0];
                 squaredNormalization += partialCosSim[1];
             }
-            return (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
+            float cosine = (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
+
+            return (1 + cosine) / 2;
         };
     }
 

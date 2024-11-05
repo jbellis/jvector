@@ -836,42 +836,33 @@ final class SimdOps {
         };
     }
 
-    static float nvqEuclideanDistance(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+    /**
+     * Compute the squared L2 distance for NVQ
+     * Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
+     * first de-meaned by subtracting the global mean.
+     *
+     * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
+     *
+     * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
+     *                          = |(query - globalMean) - scale * quantized + bias|^2
+     *
+     * @param vector The shifted query (precomputed query - globalMean)
+     * @param quantizedVector A quantized vector from the index
+     * @return The square L2 distance
+     */
+    static float nvqSquareDistance(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
         ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
-
-        // Define the species, which represents a specific SIMD size based on the processor capabilities
-        VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
 
         if (vector.length() != dequantizedVector.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        float sum = 0.0f;
-        int i = 0;
-        int upperBound = SPECIES.loopBound(vector.length()); // Upper bound for vectorized processing
+        // Apply Kumaraswamy scale and bias
+        scale(dequantizedVector, scale);
+        addInPlace(dequantizedVector, bias);
 
-        // Vectorized computation for the majority of elements
-        for (; i < upperBound; i += SPECIES.length()) {
-            // Load elements into FloatVectors
-            FloatVector va = FloatVector.fromArray(SPECIES, vector.get(), i);
-            FloatVector vb = FloatVector.fromArray(SPECIES, dequantizedVector.get(), i);
-
-            // Calculate (va - vb)^2
-            FloatVector diff = va.sub(vb);
-            FloatVector squaredDiff = diff.mul(diff);
-
-            // Sum up squared differences
-            sum += squaredDiff.reduceLanes(VectorOperators.ADD);
-        }
-
-        // Handle remaining elements that don't fit into a full vector
-        for (; i < vector.length(); i++) {
-            float diff = vector.get(i) - quantizedVector.get(i);
-            sum += diff * diff;
-        }
-
-        // Return the square root of the sum for the Euclidean distance
-        return (float) Math.sqrt(sum);
+        // Assumes global mean removed from vector
+        return squareDistance(vector, dequantizedVector);
     }
 
     static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {

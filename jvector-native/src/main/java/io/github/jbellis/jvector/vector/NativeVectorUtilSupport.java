@@ -196,19 +196,24 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
-        var vectorDQ = quantizedVector.getDequantized();
-        float sum = 0;
-        for (int i = 0; i < vector.length(); i++) {
-            sum += MathUtil.square(vector.get(i) - vectorDQ.get(i));
+        VectorSimdOps.NVQBitsPerDimension bpd;
+        switch (quantizedVector.bitsPerDimension) {
+            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
+            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
+            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
         }
-        return sum;
-    }
 
-    @Override
-    public float nvqEuclideanDistance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
-        // TODO TLW: This is the default implementation.  Complete the native implementation.
-        float squareL2Distance = nvqSquareL2Distance(vector, quantizedVector);
-        return (float) Math.sqrt(squareL2Distance);
+        var vectorDQ = quantizedVector.getDequantized();
+
+        if (vectorDQ.length() != vector.length()) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        return VectorSimdOps.nvqSquareDistance(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
+                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
+                quantizedVector.kumaraswamyB, bpd
+        );
     }
 
     @Override

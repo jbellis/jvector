@@ -404,17 +404,17 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
     var vectorDQ = quantizedVector.getDequantized();
+
+    if (vectorDQ.length() != vector.length()) {
+      throw new IllegalArgumentException("Vectors must have the same length");
+    }
+
+    // Assumes vectorDQ is already Kumaraswamy scaled and biased
     float sum = 0;
     for (int i = 0; i < vector.length(); i++) {
       sum += MathUtil.square(vector.get(i) - vectorDQ.get(i));
     }
     return sum;
-  }
-
-  @Override
-  public float nvqEuclideanDistance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
-    float squareL2Distance = nvqSquareL2Distance(vector, quantizedVector);
-    return (float) Math.sqrt(squareL2Distance);
   }
 
   @Override
