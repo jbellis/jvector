@@ -88,6 +88,98 @@ public class TestCompressedVectors extends RandomizedTest {
         }
     }
 
+    @Test
+    public void testSaveLoadNVQ() throws Exception {
+        // Generate an NVQ for random vectors
+        var vectors = createRandomVectors(512, 64);
+        var ravv = new ListRandomAccessVectorValues(vectors, 64);
+
+        {
+            var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
+
+            // Compress the vectors
+            var compressed = nvq.encodeAll(ravv);
+            var cv = new NVQVectors(nvq, compressed);
+            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
+            assertEquals(84, cv.getCompressedSize());
+
+            // Write compressed vectors
+            File cvFile = File.createTempFile("bqtest", ".cv");
+            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+                cv.write(out);
+            }
+            // Read compressed vectors
+            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+                var cv2 = NVQVectors.load(in, 0);
+                assertEquals(cv, cv2);
+            }
+        }
+
+        {
+            var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.FOUR);
+
+            // Compress the vectors
+            var compressed = nvq.encodeAll(ravv);
+            var cv = new NVQVectors(nvq, compressed);
+            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
+            assertEquals(52, cv.getCompressedSize());
+
+            // Write compressed vectors
+            File cvFile = File.createTempFile("bqtest", ".cv");
+            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+                cv.write(out);
+            }
+            // Read compressed vectors
+            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+                var cv2 = NVQVectors.load(in, 0);
+                assertEquals(cv, cv2);
+            }
+        }
+
+        {
+            var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
+
+            // Compress the vectors
+            var compressed = nvq.encodeAll(ravv);
+            var cv = new NVQVectors(nvq, compressed);
+            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
+            assertEquals(104, cv.getCompressedSize());
+
+            // Write compressed vectors
+            File cvFile = File.createTempFile("bqtest", ".cv");
+            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+                cv.write(out);
+            }
+            // Read compressed vectors
+            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+                var cv2 = NVQVectors.load(in, 0);
+                assertEquals(cv, cv2);
+            }
+        }
+
+        {
+            var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.FOUR);
+
+            // Compress the vectors
+            var compressed = nvq.encodeAll(ravv);
+            var cv = new NVQVectors(nvq, compressed);
+            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
+            assertEquals(72, cv.getCompressedSize());
+
+            // Write compressed vectors
+            File cvFile = File.createTempFile("bqtest", ".cv");
+            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+                cv.write(out);
+            }
+            // Read compressed vectors
+            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+                var cv2 = NVQVectors.load(in, 0);
+                assertEquals(cv, cv2);
+            }
+        }
+    }
+
+
     private void testEncodings(int dimension, int codebooks) {
         // Generate a PQ for random vectors
         var vectors = createRandomVectors(512, dimension);
