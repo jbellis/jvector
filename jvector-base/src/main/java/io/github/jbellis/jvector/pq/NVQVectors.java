@@ -27,6 +27,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -97,7 +98,7 @@ public class NVQVectors implements CompressedVectors {
 
         NVQVectors that = (NVQVectors) o;
         if (!Objects.equals(nvq, that.nvq)) return false;
-        return Objects.equals(compressedVectors, that.compressedVectors);
+        return Arrays.deepEquals(compressedVectors, that.compressedVectors);
     }
 
     @Override
