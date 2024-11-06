@@ -695,7 +695,7 @@ final class VectorSimdOps {
     }
 
 
-    static MemorySegmentVectorFloat nvqDequantize4bit(MemorySegmentByteSequence bytes, float a, float b, float[] res) {
+    static MemorySegmentVectorFloat nvqDequantizeUnnormalized4bit(MemorySegmentByteSequence bytes, int originalDimensions, float a, float b, float[] res) {
         /*
          * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
          * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
@@ -729,15 +729,23 @@ final class VectorSimdOps {
         }
 
         // Process the tail
-        for (int i = vectorizedLength; i < bytes.length(); i++) {
-            res[2 * i] = inverseKumaraswamy(bytes.get(i) << 4, a, b);
-            res[2 * i + 1] = inverseKumaraswamy(bytes.get(i), a, b);
+        for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
+            var intValue = Byte.toUnsignedInt(bytes.get(i));
+            res[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
+            res[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
+        }
+
+        vectorizedLength = bytes.length() - 1;
+        var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
+        res[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
+        if (vectorizedLength * 2 == originalDimensions) {
+            res[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
         }
 
         return new MemorySegmentVectorFloat(res);
     }
 
-    static MemorySegmentVectorFloat nvqDequantize8bit(MemorySegmentByteSequence bytes, float a, float b, float[] res) {
+    static MemorySegmentVectorFloat nvqDequantizeUnnormalized8bit(MemorySegmentByteSequence bytes, float a, float b, float[] res) {
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
@@ -757,22 +765,16 @@ final class VectorSimdOps {
         return new MemorySegmentVectorFloat(res);
     }
 
-    static MemorySegmentVectorFloat nvqDequantize(MemorySegmentByteSequence bytes, float a, float b, NVQBitsPerDimension bitsPerDimension) {
-        float[] res;
+    static MemorySegmentVectorFloat nvqDequantizeUnnormalized(MemorySegmentByteSequence bytes, int originalDimensions, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+        float[] res = new float[originalDimensions];
         return switch (bitsPerDimension) {
-            case EIGHT -> {
-                res = new float[bytes.length()];
-                yield nvqDequantize8bit(bytes, a, b, res);
-            }
-            case FOUR -> {
-                res = new float[2 * bytes.length()];
-                yield nvqDequantize4bit(bytes, a, b, res);
-            }
+            case EIGHT -> nvqDequantizeUnnormalized8bit(bytes, a, b, res);
+            case FOUR -> nvqDequantizeUnnormalized4bit(bytes, originalDimensions, a, b, res);
         };
     }
 
-    static float nvqSquareDistance(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+    static float nvqSquareDistance(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+        MemorySegmentVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
 
         if (vector.length() != dequantizedVector.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -786,15 +788,15 @@ final class VectorSimdOps {
         return squareDistance(vector, dequantizedVector);
     }
 
-    static float nvqDotProduct(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+    static float nvqDotProduct(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
+        MemorySegmentVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
 
         float dotProd = dotProduct(vector, dequantizedVector);
         return scale * dotProd + bias * vectorSum;
     }
 
-    static float[] nvqCosine(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, MemorySegmentVectorFloat centroid, NVQBitsPerDimension bitsPerDimension) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+    static float[] nvqCosine(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, MemorySegmentVectorFloat centroid, NVQBitsPerDimension bitsPerDimension) {
+        MemorySegmentVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
 
         if ((vector.length() != dequantizedVector.length()) && (dequantizedVector.length() != centroid.length())) {
             throw new IllegalArgumentException("Vectors must have the same length");

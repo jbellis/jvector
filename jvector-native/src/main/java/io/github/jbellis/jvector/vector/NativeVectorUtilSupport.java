@@ -191,7 +191,12 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
             case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
             default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
         }
-        return VectorSimdOps.nvqDotProduct((MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes, quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd);
+        return VectorSimdOps.nvqDotProduct(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
+                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
+                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd
+        );
     }
 
     @Override
@@ -211,6 +216,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
         return VectorSimdOps.nvqSquareDistance(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
                 quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
                 quantizedVector.kumaraswamyB, bpd
         );
@@ -227,6 +233,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
         return VectorSimdOps.nvqCosine(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
                 quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
                 quantizedVector.kumaraswamyB, (MemorySegmentVectorFloat) centroid, bpd
         );
@@ -237,5 +244,21 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
         if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
             VectorSimdOps.nvqShuffleQueryInPlace((ArrayVectorFloat) vector);
         }
+    }
+
+    @Override
+    public VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector) {
+        VectorSimdOps.NVQBitsPerDimension bpd;
+        switch (quantizedVector.bitsPerDimension) {
+            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
+            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
+            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
+        }
+        return VectorSimdOps.nvqDequantizeUnnormalized(
+                (MemorySegmentByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
+                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
+        );
+
     }
 }

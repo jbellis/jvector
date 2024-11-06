@@ -194,7 +194,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
             default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
         }
-        return SimdOps.nvqDotProduct((ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes, quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd);
+        return SimdOps.nvqDotProduct(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
+                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
+                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd);
     }
 
     @Override
@@ -208,6 +212,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         return SimdOps.nvqSquareDistance(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
                 quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
                 quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
         );
@@ -224,6 +229,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         return SimdOps.nvqCosine(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
+                quantizedVector.originalDimensions,
                 quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
                 quantizedVector.kumaraswamyB, (ArrayVectorFloat) centroid, bpd
         );
@@ -235,5 +241,20 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             SimdOps.nvqShuffleQueryInPlace((ArrayVectorFloat) vector);
         }
     }
+
+    @Override
+    public VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector) {
+        SimdOps.NVQBitsPerDimension bpd;
+        switch (quantizedVector.bitsPerDimension) {
+            case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
+            case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
+            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
+        }
+        return SimdOps.nvqDequantizeUnnormalized(
+                (ArrayByteSequence) quantizedVector.bytes, quantizedVector.originalDimensions,
+                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
+        );
+    }
+
 }
 

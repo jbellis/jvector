@@ -90,81 +90,42 @@ public class TestCompressedVectors extends RandomizedTest {
 
     @Test
     public void testSaveLoadNVQ() throws Exception {
-        // Generate an NVQ for random vectors
-        var vectors = createRandomVectors(512, 64);
-        var ravv = new ListRandomAccessVectorValues(vectors, 64);
 
-        {
-            var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
+        int[][] testsConfigAndResults = {
+                //Tuples of: nDimensions, nSubvectors, number of bots per dimension, and the expected number of bytes
+                {64, 1, 8, 84},
+                {64, 2, 8, 104},
+                {64, 1, 4, 52},
+                {64, 2, 4, 72},
+                {65, 1, 8, 85},
+                {65, 1, 4, 53},
+                {63, 1, 4, 52},
+        };
+
+        for (int[] testConfigAndResult : testsConfigAndResults) {
+            var nDimensions = testConfigAndResult[0];
+            var nSubvectors = testConfigAndResult[1];
+            NVQuantization.BitsPerDimension bpd;
+            if (testConfigAndResult[2] == 8) {
+                bpd = NVQuantization.BitsPerDimension.EIGHT;
+            } else if (testConfigAndResult[2] == 4) {
+                bpd = NVQuantization.BitsPerDimension.FOUR;
+            } else {
+                throw new RuntimeException("Unknown bits per dimension: " + testConfigAndResult[1]);
+            }
+            var expectedSize = testConfigAndResult[3];
+
+            // Generate an NVQ for random vectors
+            var vectors = createRandomVectors(512, nDimensions);
+            var ravv = new ListRandomAccessVectorValues(vectors, nDimensions);
+
+            var nvq = NVQuantization.compute(ravv, nSubvectors, bpd);
 
             // Compress the vectors
             var compressed = nvq.encodeAll(ravv);
             var cv = new NVQVectors(nvq, compressed);
-            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
-            assertEquals(84, cv.getCompressedSize());
-
-            // Write compressed vectors
-            File cvFile = File.createTempFile("bqtest", ".cv");
-            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
-                cv.write(out);
-            }
-            // Read compressed vectors
-            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-                var cv2 = NVQVectors.load(in, 0);
-                assertEquals(cv, cv2);
-            }
-        }
-
-        {
-            var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.FOUR);
-
-            // Compress the vectors
-            var compressed = nvq.encodeAll(ravv);
-            var cv = new NVQVectors(nvq, compressed);
-            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
-            assertEquals(52, cv.getCompressedSize());
-
-            // Write compressed vectors
-            File cvFile = File.createTempFile("bqtest", ".cv");
-            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
-                cv.write(out);
-            }
-            // Read compressed vectors
-            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-                var cv2 = NVQVectors.load(in, 0);
-                assertEquals(cv, cv2);
-            }
-        }
-
-        {
-            var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
-
-            // Compress the vectors
-            var compressed = nvq.encodeAll(ravv);
-            var cv = new NVQVectors(nvq, compressed);
-            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
-            assertEquals(104, cv.getCompressedSize());
-
-            // Write compressed vectors
-            File cvFile = File.createTempFile("bqtest", ".cv");
-            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
-                cv.write(out);
-            }
-            // Read compressed vectors
-            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-                var cv2 = NVQVectors.load(in, 0);
-                assertEquals(cv, cv2);
-            }
-        }
-
-        {
-            var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.FOUR);
-
-            // Compress the vectors
-            var compressed = nvq.encodeAll(ravv);
-            var cv = new NVQVectors(nvq, compressed);
-            assertEquals(64 * Float.BYTES, cv.getOriginalSize());
-            assertEquals(72, cv.getCompressedSize());
+            assertEquals(nDimensions * Float.BYTES, cv.getOriginalSize());
+            assertEquals(expectedSize, cv.getCompressedSize());
 
             // Write compressed vectors
             File cvFile = File.createTempFile("bqtest", ".cv");

@@ -761,7 +761,7 @@ final class SimdOps {
     }
 
 
-    static ArrayVectorFloat nvqDequantize4bit(ArrayByteSequence bytes, float a, float b, float[] res) {
+    static ArrayVectorFloat nvqDequantizeUnnormalized4bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float[] res) {
         /*
          * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
          * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
@@ -794,15 +794,23 @@ final class SimdOps {
         }
 
         // Process the tail
-        for (int i = vectorizedLength; i < bytes.length(); i++) {
-            res[2 * i] = inverseKumaraswamy(bytes.get(i) & 0xf, a, b);
-            res[2 * i + 1] = inverseKumaraswamy(bytes.get(i) << 4, a, b);
+        for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
+            var intValue = Byte.toUnsignedInt(bytes.get(i));
+            res[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
+            res[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
+        }
+
+        vectorizedLength = bytes.length() - 1;
+        var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
+        res[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
+        if (vectorizedLength * 2 == originalDimensions) {
+            res[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
         }
 
         return new ArrayVectorFloat(res);
     }
 
-    static ArrayVectorFloat nvqDequantize8bit(ArrayByteSequence bytes, float a, float b, float[] res) {
+    static ArrayVectorFloat nvqDequantizeUnnormalized8bit(ArrayByteSequence bytes, float a, float b, float[] res) {
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
@@ -822,17 +830,11 @@ final class SimdOps {
         return new ArrayVectorFloat(res);
     }
 
-    static ArrayVectorFloat nvqDequantize(ArrayByteSequence bytes, float a, float b, NVQBitsPerDimension bitsPerDimension) {
-        float[] res;
+    static ArrayVectorFloat nvqDequantizeUnnormalized(ArrayByteSequence bytes, int originalDimensions, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+        float[] res = new float[originalDimensions];
         return switch (bitsPerDimension) {
-            case EIGHT -> {
-                res = new float[bytes.length()];
-                yield nvqDequantize8bit(bytes, a, b, res);
-            }
-            case FOUR -> {
-                res = new float[2 * bytes.length()];
-                yield nvqDequantize4bit(bytes, a, b, res);
-            }
+            case EIGHT -> nvqDequantizeUnnormalized8bit(bytes, a, b, res);
+            case FOUR -> nvqDequantizeUnnormalized4bit(bytes, originalDimensions, a, b, res);
         };
     }
 
@@ -850,8 +852,8 @@ final class SimdOps {
      * @param quantizedVector A quantized vector from the index
      * @return The square L2 distance
      */
-    static float nvqSquareDistance(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
-        ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+    static float nvqSquareDistance(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+        ArrayVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
 
         if (vector.length() != dequantizedVector.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -865,19 +867,19 @@ final class SimdOps {
         return squareDistance(vector, dequantizedVector);
     }
 
-    static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
-        ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+    static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
+        ArrayVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
 
         float dotProd = dotProduct(vector, dequantizedVector);
         return scale * dotProd + bias * vectorSum;
     }
 
-    static float[] nvqCosine(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float scale, float bias, float a, float b, ArrayVectorFloat centroid, NVQBitsPerDimension bitsPerDimension) {
-        ArrayVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
-
-        if ((vector.length() != dequantizedVector.length()) && (dequantizedVector.length() != centroid.length())) {
+    static float[] nvqCosine(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, ArrayVectorFloat centroid, NVQBitsPerDimension bitsPerDimension) {
+        if ((vector.length() != originalDimensions) && (originalDimensions != centroid.length())) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
+
+        ArrayVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
 
         scale(dequantizedVector, scale);
         addInPlace(dequantizedVector, bias);

@@ -435,4 +435,49 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {}
+
+  // In-place application of the inverse CDF of the Kumaraswamy distribution
+  private void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {
+    // Compute (1 - (1 - y) ** (1 / b)) ** (1 / a)
+    exponentiateConstantMinusVector(y, 1, 1.f / b); // 1 - v ** (1 / b)
+    exponentiateConstantMinusVector(y, 1, 1.f / a); // 1 - v ** (1 / a)
+  }
+
+  public VectorFloat<?> nvqDequantize8bit(NVQuantization.QuantizedSubVector quantizedVector) {
+    VectorFloat<?> vector = new ArrayVectorFloat(quantizedVector.originalDimensions);
+    for (int d = 0; d < quantizedVector.bytes.length(); d++) {
+      vector.set(d, Byte.toUnsignedInt(quantizedVector.bytes.get(d)));
+    }
+    int constant = (1 << 8) - 1;
+    scale(vector, 1.f / constant);
+    inverseKumaraswamy(vector, quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB);
+    return vector;
+  }
+
+  public VectorFloat<?> nvqDequantize4bit(NVQuantization.QuantizedSubVector quantizedVector) {
+    VectorFloat<?> vector = new ArrayVectorFloat(quantizedVector.originalDimensions);
+    int constant = (1 << 4) - 1;
+    for (int d = 0; d < quantizedVector.bytes.length(); d++) {
+      int quantizedValue = Byte.toUnsignedInt(quantizedVector.bytes.get(d));
+      vector.set(2 * d, quantizedValue & constant);
+      if (2 * d + 1 < vector.length()) {
+        vector.set(2 * d + 1, quantizedValue >> 4);
+      }
+    }
+    scale(vector, 1.f / constant);
+    inverseKumaraswamy(vector, quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB);
+    return vector;
+  }
+
+  @Override
+  public VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector) {
+    switch (quantizedVector.bitsPerDimension) {
+      case EIGHT:
+        return nvqDequantize8bit(quantizedVector);
+      case FOUR:
+        return nvqDequantize4bit(quantizedVector);
+      default:
+        return null; // never realized
+    }
+  }
 }

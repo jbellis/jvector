@@ -232,4 +232,8 @@ public final class VectorUtil {
   public static void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
     impl.nvqShuffleQueryInPlace(vector, bitsPerDimension);
   }
+
+  static VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector) {
+    return impl.nvqDequantizeUnnormalized(quantizedVector);
+  }
 }
