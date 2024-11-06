@@ -199,17 +199,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
-//        var vectorDQ = quantizedVector.getDequantized();
-//        float sum = 0;
-//        for (int i = 0; i < vector.length(); i++) {
-//            sum += MathUtil.square(vector.get(i) - vectorDQ.get(i));
-//        }
-//        return sum;
-        return 0;
-    }
-
-    @Override
-    public float nvqEuclideanDistance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
         SimdOps.NVQBitsPerDimension bpd;
         switch (quantizedVector.bitsPerDimension) {
             case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
@@ -217,8 +206,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
         }
 
-        return SimdOps.nvqEuclideanDistance(
+        return SimdOps.nvqSquareDistance(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
+                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
                 quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
         );
     }

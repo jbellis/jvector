@@ -771,6 +771,21 @@ final class VectorSimdOps {
         };
     }
 
+    static float nvqSquareDistance(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
+        MemorySegmentVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
+
+        if (vector.length() != dequantizedVector.length()) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        // Apply Kumaraswamy scale and bias
+        scale(dequantizedVector, scale);
+        addInPlace(dequantizedVector, bias);
+
+        // Assumes global mean removed from vector
+        return squareDistance(vector, dequantizedVector);
+    }
+
     static float nvqDotProduct(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
         MemorySegmentVectorFloat dequantizedVector = nvqDequantize(quantizedVector, a, b, bitsPerDimension);
 
