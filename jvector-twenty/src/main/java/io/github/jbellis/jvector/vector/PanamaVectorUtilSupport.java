@@ -112,6 +112,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, float value) {
+        return SimdOps.sub((ArrayVectorFloat)a, 0, value, a.length());
+    }
+
+    @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
         return SimdOps.sub((ArrayVectorFloat) a, aOffset, (ArrayVectorFloat) b, bOffset, length);
     }

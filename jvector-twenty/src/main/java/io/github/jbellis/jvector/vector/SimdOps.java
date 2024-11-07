@@ -597,6 +597,26 @@ final class SimdOps {
         return new ArrayVectorFloat(res);
     }
 
+    static VectorFloat<?> sub(ArrayVectorFloat a, int aOffset, float value, int length) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        float[] res = new float[length];
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var lhs = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, a.get(), aOffset + i);
+            var subResult = lhs.sub(value);
+            subResult.intoArray(res, i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < length; i++) {
+            res[i] = a.get(aOffset + i) - value;
+        }
+
+        return new ArrayVectorFloat(res);
+    }
+
+
     static float assembleAndSum(float[] data, int dataBase, byte[] baseOffsets) {
         return HAS_AVX512 ? assembleAndSum512(data, dataBase, baseOffsets)
                : assembleAndSum256(data, dataBase, baseOffsets);
@@ -750,9 +770,10 @@ final class SimdOps {
         FOUR
     }
 
-    static void inverseKumaraswamy(FloatVector vector, float a, float b) {
-        vector = vector.neg().add(1.f).pow(1.f / b); // 1 - v ** (1 / a)
-        vector.neg().add(1.f).pow(1.f / a);          // 1 - v ** (1 / b)
+    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
+        var res = vector.neg().add(1.f).pow(1.f / b);   // 1 - v ** (1 / a)
+        res = res.neg().add(1.f).pow(1.f / a);          // 1 - v ** (1 / b)
+        return res;
     }
 
     static float inverseKumaraswamy(float value, float a, float b) {
@@ -781,7 +802,7 @@ final class SimdOps {
                     .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
                     .reinterpretAsFloats();
 
-            inverseKumaraswamy(subResult, a, b);
+            subResult = inverseKumaraswamy(subResult, a, b);
             subResult.intoArray(res, 2 * i);
 
             // 2nd pass
@@ -789,7 +810,7 @@ final class SimdOps {
                     .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
                     .reinterpretAsFloats();
 
-            inverseKumaraswamy(subResult, a, b);
+            subResult = inverseKumaraswamy(subResult, a, b);
             subResult.intoArray(res, 2 * i + 1);
         }
 
@@ -815,10 +836,11 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
             var arr = ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i)
-                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
-                    .reinterpretAsFloats();
+                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, 0)
+                    .reinterpretAsFloats()
+                    .add(128.f).div(255.f);
 
-            inverseKumaraswamy(arr, a, b);
+            arr = inverseKumaraswamy(arr, a, b);
             arr.intoArray(res, i);
         }
 

@@ -164,6 +164,10 @@ public final class VectorUtil {
     return impl.sub(lhs, rhs);
   }
 
+  public static VectorFloat<?> sub(VectorFloat<?> lhs, float value) {
+    return impl.sub(lhs, value);
+  }
+
   public static VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
     return impl.sub(a, aOffset, b, bOffset, length);
   }

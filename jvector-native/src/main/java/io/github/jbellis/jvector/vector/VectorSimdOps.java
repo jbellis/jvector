@@ -530,6 +530,25 @@ final class VectorSimdOps {
         return result;
     }
 
+    static VectorFloat<?> sub(MemorySegmentVectorFloat a, int aOffset, float value, int length) {
+        MemorySegmentVectorFloat result = new MemorySegmentVectorFloat(length);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var lhs = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, a.get(), a.offset(aOffset + i), ByteOrder.LITTLE_ENDIAN);
+            var subResult = lhs.sub(value);
+            subResult.intoMemorySegment(result.get(), result.offset(i), ByteOrder.LITTLE_ENDIAN);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < length; i++) {
+            result.set(i, a.get(aOffset + i) - value);
+        }
+
+        return result;
+    }
+
     static void subInPlace(MemorySegmentVectorFloat v1, MemorySegmentVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");

@@ -86,6 +86,9 @@ public interface VectorUtilSupport {
   /** @return a - b, element-wise */
   VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);
 
+  /** Subtracts value from each element of a */
+  VectorFloat<?> sub(VectorFloat<?> a, float value);
+
   /** @return a - b, element-wise, starting at aOffset and bOffset respectively */
   VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length);
 

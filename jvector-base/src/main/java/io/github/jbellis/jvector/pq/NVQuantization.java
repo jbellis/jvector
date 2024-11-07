@@ -150,6 +150,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public final VectorFloat<?> globalMean;
     public final int originalDimension;
     public final int[][] subvectorSizesAndOffsets;
+    public boolean learn = true;
 
     private NVQuantization(int[][] subvectorSizesAndOffsets, VectorFloat<?> globalMean, BitsPerDimension bitsPerDimension) {
         this.bitsPerDimension = bitsPerDimension;
@@ -208,7 +209,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     @Override
     public QuantizedVector encode(VectorFloat<?> vector) {
         vector = VectorUtil.sub(vector, globalMean);
-        return new QuantizedVector(getSubVectors(vector), bitsPerDimension);
+        return new QuantizedVector(getSubVectors(vector), bitsPerDimension, learn);
     }
 
     /**
@@ -360,10 +361,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public static class QuantizedVector {
         public final QuantizedSubVector[] subVectors;
 
-        public QuantizedVector(VectorFloat<?>[] subVectors, BitsPerDimension bitsPerDimension) {
+        public QuantizedVector(VectorFloat<?>[] subVectors, BitsPerDimension bitsPerDimension, boolean learn) {
             this.subVectors = new QuantizedSubVector[subVectors.length];
             for (int i = 0; i < subVectors.length; i++) {
-                this.subVectors[i] = new QuantizedSubVector(subVectors[i], bitsPerDimension);
+                this.subVectors[i] = new QuantizedSubVector(subVectors[i], bitsPerDimension, learn);
             }
         }
 
@@ -421,30 +422,40 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             }
         }
 
-        public QuantizedSubVector(VectorFloat<?> vector, BitsPerDimension bitsPerDimension) {
+        public QuantizedSubVector(VectorFloat<?> vector, BitsPerDimension bitsPerDimension, boolean learn) {
             var u = VectorUtil.max(vector);
             var l = VectorUtil.min(vector);
 
-            VectorUtil.subInPlace(vector, l);
-            VectorUtil.scale(vector, 1.f / (u - l));
+            var vectorCopy = VectorUtil.sub(vector, l);
+            VectorUtil.scale(vectorCopy, 1.f / (u - l));
 
             //-----------------------------------------------------------------
             // Optimization to find the hyperparameters of the Kumaraswamy quantization
-            var loss = new KumaraswamyQuantizationLossFunction(2, bitsPerDimension, vector);
-            loss.setMinBounds(new double[]{1e-6, 1e-6});
+            float a;
+            float b;
 
-            double[] initialSolution = {1, 1};
-            var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+            if (learn) {
+                var loss = new KumaraswamyQuantizationLossFunction(2, bitsPerDimension, vectorCopy);
+                loss.setMinBounds(new double[]{1e-6, 1e-6});
 
-            var tolerance = 1e-6;
-            xnes.setTol(tolerance);
-            var sol = xnes.optimize(loss, initialSolution, 0.5);
-            float a = (float) sol.x[0];
-            float b = (float) sol.x[1];
+                double[] initialSolution = {1, 1};
+                var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+
+                var tolerance = 1e-6;
+                xnes.setTol(tolerance);
+                var sol = xnes.optimize(loss, initialSolution, 0.5);
+//                System.out.println("Solution " + -loss.compute(initialSolution) + " " + -loss.compute(sol.x));
+                //            System.out.println(sol.x[0] + " " + sol.x[1]);
+                a = (float) sol.x[0];
+                b = (float) sol.x[1];
+            } else {
+                a = 1.f;
+                b = 1.f;
+            }
             //-----------------------------------------------------------------
 
-            forwardKumaraswamy(vector, a, b);
-            var quantized = bitsPerDimension.uniformQuantize(vector);
+            forwardKumaraswamy(vectorCopy, a, b);
+            var quantized = bitsPerDimension.uniformQuantize(vectorCopy);
 
             this.bitsPerDimension = bitsPerDimension;
             this.kumaraswamyBias = l;
@@ -452,7 +463,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             this.kumaraswamyA = a;
             this.kumaraswamyB = b;
             this.bytes = quantized;
-            this.originalDimensions = vector.length();
+            this.originalDimensions = vectorCopy.length();
         }
 
         private QuantizedSubVector(ByteSequence<?> bytes, int originalDimensions, BitsPerDimension bitsPerDimension,
@@ -539,7 +550,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
             forwardKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
             var bytes = bitsPerDimension.uniformQuantize(vectorCopy);
-            vectorCopy = bitsPerDimension.uniformDequantize(bytes, vectorOriginal.length());
+            vectorCopy = bitsPerDimension.uniformDequantize(bytes, vectorCopy.length());
             inverseKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
 
             return -VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
@@ -559,5 +570,4 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         VectorUtil.exponentiateConstantMinusVector(y, 1, 1.f / b); // 1 - v ** (1 / b)
         VectorUtil.exponentiateConstantMinusVector(y, 1, 1.f / a); // 1 - v ** (1 / a)
     }
-
 }

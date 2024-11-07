@@ -118,6 +118,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, float value) {
+        return VectorSimdOps.sub((MemorySegmentVectorFloat) a, 0, value, a.length());
+    }
+
+    @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
         return VectorSimdOps.sub((MemorySegmentVectorFloat) a, aOffset, (MemorySegmentVectorFloat) b, bOffset, length);
     }
