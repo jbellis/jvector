@@ -23,6 +23,8 @@ import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
@@ -31,6 +33,7 @@ import java.io.FileOutputStream;
 import java.util.List;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
+import static io.github.jbellis.jvector.TestUtil.createNormalRandomVectors;
 import static io.github.jbellis.jvector.TestUtil.nextInt;
 import static java.lang.Math.abs;
 import static java.lang.Math.log;
@@ -141,7 +144,7 @@ public class TestCompressedVectors extends RandomizedTest {
     }
 
 
-    private void testEncodings(int dimension, int codebooks) {
+    private void testPQEncodings(int dimension, int codebooks) {
         // Generate a PQ for random vectors
         var vectors = createRandomVectors(512, dimension);
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
@@ -173,13 +176,69 @@ public class TestCompressedVectors extends RandomizedTest {
     }
 
     @Test
-    public void testEncodings() {
+    public void testPQEncodings() {
         // start with i=2 (dimension 4) b/c dimension 2 is an outlier for our error prediction
         for (int i = 2; i <= 8; i++) {
             for (int M = 1; M <= i; M++) {
-                testEncodings(2 * i, M);
+                testPQEncodings(2 * i, M);
             }
         }
+    }
+
+    private void testNVQEncodings(List<VectorFloat<?>> vectors, List<VectorFloat<?>> queries, int nSubvectors, boolean learn) {
+        int dimension = vectors.get(0).length();
+        int nQueries = queries.size();
+
+        // Generate a PQ for random vectors
+        var ravv = new ListRandomAccessVectorValues(vectors, dimension);
+        var nvq = NVQuantization.compute(ravv, nSubvectors, NVQuantization.BitsPerDimension.FOUR);
+        nvq.learn = learn;
+
+        // Compress the vectors
+        var compressed = nvq.encodeAll(ravv);
+        var cv = new NVQVectors(nvq, compressed);
+
+        // compare the encoded similarities to the raw
+        for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {
+            double delta = 0;
+            for (int i = 0; i < nQueries; i++) {
+                var q = queries.get(i);
+                VectorUtil.l2normalize(q);
+                var f = cv.precomputedScoreFunctionFor(q, vsf);
+                for (int j = 0; j < vectors.size(); j++) {
+                    var v = vectors.get(j);
+                    delta += abs(f.similarityTo(j) - vsf.compare(q, v)) / abs(vsf.compare(q, v));
+                }
+            }
+            delta /= nQueries * vectors.size();
+            System.out.println(vsf + " delta " + delta);
+
+            var tolerance = 0.01;
+//            assert delta <= tolerance : String.format("%s > %s for %s with %d dimensions and %d codebooks", delta, tolerance, vsf, dimension, nSubvectors);
+        }
+        System.out.println("--");
+    }
+
+    @Test
+    public void testNVQEncodings() {
+//        var vectors = createRandomVectors(512, 1536);
+//        var queries = createRandomVectors(10, 1536);
+        var vectors = createNormalRandomVectors(512, 1536);
+        var queries = createNormalRandomVectors(10, 1536);
+
+        testNVQEncodings(vectors, queries, 1, false);
+        testNVQEncodings(vectors, queries, 1, true);
+        testNVQEncodings(vectors, queries, 8, false);
+        testNVQEncodings(vectors, queries, 8, true);
+//        testNVQEncodings(vectors, queries, 2);
+//        testNVQEncodings(vectors, queries, 4);
+//        testNVQEncodings(vectors, queries, 8);
+//        testNVQEncodings(vectors, queries, 16);
+//        for (int d = 256; d <= 1024; d+=256) {
+////            for (int M = 1; M <= 8; M*=2) {
+//                testNVQEncodings(d, 1);
+////            }
+//        }
     }
 
     @Test
