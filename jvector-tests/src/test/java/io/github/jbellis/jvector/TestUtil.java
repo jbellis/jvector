@@ -134,6 +134,18 @@ public class TestUtil {
         return IntStream.range(0, count).mapToObj(i -> TestUtil.randomVector(getRandom(), dimension)).collect(Collectors.toList());
     }
 
+    public static VectorFloat<?> normalRandomVector(Random random, int dim) {
+        var vec = vectorTypeSupport.createFloatVector(dim);
+        for (int i = 0; i < dim; i++) {
+            vec.set(i, (float) random.nextGaussian());
+        }
+        return vec;
+    }
+
+    public static List<VectorFloat<?>> createNormalRandomVectors(int count, int dimension) {
+        return IntStream.range(0, count).mapToObj(i -> TestUtil.normalRandomVector(getRandom(), dimension)).collect(Collectors.toList());
+    }
+
     public static void writeGraph(GraphIndex graph, RandomAccessVectorValues ravv, Path outputPath) throws IOException {
         OnDiskGraphIndex.write(graph, ravv, outputPath);
     }

@@ -2,6 +2,7 @@ package io.github.jbellis.jvector.optimization;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -16,14 +17,6 @@ import static org.junit.Assert.assertTrue;
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestNonUniformQuantization extends RandomizedTest {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-
-    private static VectorFloat<?> gaussianVector(Random random, int dim) {
-        var vec = vectorTypeSupport.createFloatVector(dim);
-        for (int i = 0; i < dim; i++) {
-            vec.set(i, (float) random.nextGaussian());
-        }
-        return vec;
-    }
 
     // In-place quantization
     private void uniformQuantize(VectorFloat<?> x, int nBits) {
@@ -97,7 +90,7 @@ public class TestNonUniformQuantization extends RandomizedTest {
             var kumaraswamyError = new double[nTrials];
 
             for (int trial = 0; trial < nTrials; trial++) {
-                var vector = gaussianVector(getRandom(), nDims);
+                var vector = TestUtil.normalRandomVector(getRandom(), nDims);
                 var min = VectorUtil.min(vector);
                 var max = VectorUtil.max(vector);
                 VectorUtil.subInPlace(vector, min);
