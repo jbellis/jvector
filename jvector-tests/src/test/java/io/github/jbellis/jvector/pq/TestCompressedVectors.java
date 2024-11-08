@@ -185,13 +185,14 @@ public class TestCompressedVectors extends RandomizedTest {
         }
     }
 
-    private void testNVQEncodings(List<VectorFloat<?>> vectors, List<VectorFloat<?>> queries, int nSubvectors, boolean learn) {
+    private void testNVQEncodings(List<VectorFloat<?>> vectors, List<VectorFloat<?>> queries, int nSubvectors,
+                                  boolean learn, NVQuantization.BitsPerDimension bitsPerDimension) {
         int dimension = vectors.get(0).length();
         int nQueries = queries.size();
 
-        // Generate a PQ for random vectors
+        // Generate a NVQ for random vectors
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
-        var nvq = NVQuantization.compute(ravv, nSubvectors, NVQuantization.BitsPerDimension.FOUR);
+        var nvq = NVQuantization.compute(ravv, nSubvectors, bitsPerDimension);
         nvq.learn = learn;
 
         // Compress the vectors
@@ -207,38 +208,48 @@ public class TestCompressedVectors extends RandomizedTest {
                 var f = cv.precomputedScoreFunctionFor(q, vsf);
                 for (int j = 0; j < vectors.size(); j++) {
                     var v = vectors.get(j);
-                    delta += abs(f.similarityTo(j) - vsf.compare(q, v)) / abs(vsf.compare(q, v));
+                    vsf.compare(q, v);
+                    if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
+                        delta += abs(f.similarityTo(j) - vsf.compare(q, v)) / abs(vsf.compare(v, v));
+                    } else {
+                        delta += abs(f.similarityTo(j) - vsf.compare(q, v));
+                    }
                 }
             }
             delta /= nQueries * vectors.size();
             System.out.println(vsf + " delta " + delta);
 
-            var tolerance = 0.01;
-//            assert delta <= tolerance : String.format("%s > %s for %s with %d dimensions and %d codebooks", delta, tolerance, vsf, dimension, nSubvectors);
+            float tolerance;
+            if (bitsPerDimension == NVQuantization.BitsPerDimension.EIGHT) {
+                tolerance = 0.0005f * (dimension / 256.f);
+            } else {
+                tolerance = 0.005f * (dimension / 256.f);
+            }
+            if (vsf == VectorSimilarityFunction.COSINE) {
+                tolerance *= 10;
+            } else if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
+                tolerance *= 2;
+            }
+            assert delta <= tolerance : String.format("%s > %s for %s with %d dimensions and %d subvectors", delta, tolerance, vsf, dimension, nSubvectors);
         }
         System.out.println("--");
     }
 
     @Test
     public void testNVQEncodings() {
-//        var vectors = createRandomVectors(512, 1536);
-//        var queries = createRandomVectors(10, 1536);
-        var vectors = createNormalRandomVectors(512, 1536);
-        var queries = createNormalRandomVectors(10, 1536);
+        for (int d = 256; d <= 2048; d += 256) {
+            var vectors = createNormalRandomVectors(512, d);
+            var queries = createNormalRandomVectors(10, d);
 
-        testNVQEncodings(vectors, queries, 1, false);
-        testNVQEncodings(vectors, queries, 1, true);
-        testNVQEncodings(vectors, queries, 8, false);
-        testNVQEncodings(vectors, queries, 8, true);
-//        testNVQEncodings(vectors, queries, 2);
-//        testNVQEncodings(vectors, queries, 4);
-//        testNVQEncodings(vectors, queries, 8);
-//        testNVQEncodings(vectors, queries, 16);
-//        for (int d = 256; d <= 1024; d+=256) {
-////            for (int M = 1; M <= 8; M*=2) {
-//                testNVQEncodings(d, 1);
-////            }
-//        }
+            for (var bps : List.of(NVQuantization.BitsPerDimension.FOUR, NVQuantization.BitsPerDimension.EIGHT)) {
+                for (var nSubvectors : List.of(1, 2, 4, 8)) {
+                    for (var learn : List.of(false, true)) {
+                        System.out.println("bps: " + bps + " subvectors: " + nSubvectors + " learn: " + learn);
+                        testNVQEncodings(vectors, queries, nSubvectors, learn, bps);
+                    }
+                }
+            }
+        }
     }
 
     @Test
