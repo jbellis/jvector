@@ -765,11 +765,6 @@ final class SimdOps {
     // NVQ quantization instructions start here
     //---------------------------------------------
 
-    enum NVQBitsPerDimension {
-        EIGHT,
-        FOUR
-    }
-
     static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
         var res = vector.neg().add(1.f).pow(1.f / b);   // 1 - v ** (1 / a)
         res = res.neg().add(1.f).pow(1.f / a);          // 1 - v ** (1 / b)
@@ -782,7 +777,7 @@ final class SimdOps {
     }
 
 
-    static ArrayVectorFloat nvqDequantizeUnnormalized4bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float[] res) {
+    static void nvqDequantizeUnnormalized4bit(ArrayByteSequence bytes, float a, float b, ArrayVectorFloat res) {
         /*
          * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
          * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
@@ -792,6 +787,7 @@ final class SimdOps {
          * 2nd pass of original array:
          * lS 4:       | 1    | 3    | 5    | 7    | 9    | 11     | 13     | 15     |
          */
+        var resArr = res.get();
 
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
 
@@ -805,7 +801,7 @@ final class SimdOps {
                     .div(15.f);
 
             subResult = inverseKumaraswamy(subResult, a, b);
-            subResult.intoArray(res, 2 * i);
+            subResult.intoArray(resArr, 2 * i);
 
             // 2nd pass
             subResult = arr.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
@@ -816,29 +812,29 @@ final class SimdOps {
                     .div(15.f);
 
             subResult = inverseKumaraswamy(subResult, a, b);
-            subResult.intoArray(res, 2 * i + 8);
+            subResult.intoArray(resArr, 2 * i + 8);
         }
 
         // Process the tail
         if (vectorizedLength < bytes.length()) {
             for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
                 var intValue = Byte.toUnsignedInt(bytes.get(i));
-                res[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
-                res[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
+                resArr[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
+                resArr[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
             }
 
             vectorizedLength = bytes.length() - 1;
             var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
-            res[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
-            if (vectorizedLength * 2 == originalDimensions) {
-                res[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
+            resArr[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
+            if (vectorizedLength * 2 == resArr.length) {
+                resArr[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
             }
         }
-
-        return new ArrayVectorFloat(res);
     }
 
-    static ArrayVectorFloat nvqDequantizeUnnormalized8bit(ArrayByteSequence bytes, float a, float b, float[] res) {
+    static void nvqDequantizeUnnormalized8bit(ArrayByteSequence bytes, float a, float b, ArrayVectorFloat res) {
+        var resArr = res.get();
+
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
@@ -850,27 +846,41 @@ final class SimdOps {
                     .div(255.f);
 
             arr = inverseKumaraswamy(arr, a, b);
-            arr.intoArray(res, i);
+            arr.intoArray(resArr, i);
         }
 
         // Process the tail
         for (int i = vectorizedLength; i < bytes.length(); i++) {
-            res[i] = inverseKumaraswamy(bytes.get(i), a, b);
+            resArr[i] = inverseKumaraswamy(bytes.get(i), a, b);
         }
-
-        return new ArrayVectorFloat(res);
     }
 
-    static ArrayVectorFloat nvqDequantizeUnnormalized(ArrayByteSequence bytes, int originalDimensions, float a, float b, NVQBitsPerDimension bitsPerDimension) {
-        float[] res = new float[originalDimensions];
-        return switch (bitsPerDimension) {
-            case EIGHT -> nvqDequantizeUnnormalized8bit(bytes, a, b, res);
-            case FOUR -> nvqDequantizeUnnormalized4bit(bytes, originalDimensions, a, b, res);
-        };
+    static ArrayVectorFloat nvqDequantize8bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        var res = new ArrayVectorFloat(new float[originalDimensions]);
+        nvqDequantize8bit(bytes, a, b, scale, bias, res);
+        return res;
+    }
+
+    static ArrayVectorFloat nvqDequantize4bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        var res = new ArrayVectorFloat(new float[originalDimensions]);
+        nvqDequantize4bit(bytes, a, b, scale, bias, res);
+        return res;
+    }
+
+    static void nvqDequantize8bit(ArrayByteSequence bytes, float a, float b, float scale, float bias, ArrayVectorFloat destination) {
+        nvqDequantizeUnnormalized8bit(bytes, a, b, destination);
+        scale(destination, scale);
+        addInPlace(destination, bias);
+    }
+
+    static void nvqDequantize4bit(ArrayByteSequence bytes, float a, float b, float scale, float bias, ArrayVectorFloat destination) {
+        nvqDequantizeUnnormalized4bit(bytes, a, b, destination);
+        scale(destination, scale);
+        addInPlace(destination, bias);
     }
 
     /**
-     * Compute the squared L2 distance for NVQ
+     * Compute the squared L2 distance for 8-bit NVQ
      * Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
      * first de-meaned by subtracting the global mean.
      *
@@ -883,37 +893,87 @@ final class SimdOps {
      * @param quantizedVector A quantized vector from the index
      * @return The square L2 distance
      */
-    static float nvqSquareDistance(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, NVQBitsPerDimension bitsPerDimension) {
-        ArrayVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
-
-        if (vector.length() != dequantizedVector.length()) {
-            throw new IllegalArgumentException("Vectors must have the same length");
-        }
-
-        // Apply Kumaraswamy scale and bias
-        scale(dequantizedVector, scale);
-        addInPlace(dequantizedVector, bias);
+    static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float a, float b, float scale, float bias) {
+        ArrayVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, originalDimensions, a, b, scale, bias);
 
         // Assumes global mean removed from vector
         return squareDistance(vector, dequantizedVector);
     }
 
-    static float nvqDotProduct(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, float vectorSum, NVQBitsPerDimension bitsPerDimension) {
-        ArrayVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
+    /**
+     * Compute the squared L2 distance for 4-bit NVQ
+     * Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
+     * first de-meaned by subtracting the global mean.
+     *
+     * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
+     *
+     * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
+     *                          = |(query - globalMean) - scale * quantized + bias|^2
+     *
+     * @param vector The shifted query (precomputed query - globalMean)
+     * @param quantizedVector A quantized vector from the index
+     * @return The square L2 distance
+     */
+    static float nvqSquareDistance4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float a, float b, float scale, float bias) {
+        ArrayVectorFloat dequantizedVector = nvqDequantize4bit(quantizedVector, originalDimensions, a, b, scale, bias);
+
+        // Assumes global mean removed from vector
+        return squareDistance(vector, dequantizedVector);
+    }
+
+    static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+        ArrayVectorFloat dequantizedVector = new ArrayVectorFloat(new float[originalDimensions]);
+        nvqDequantizeUnnormalized8bit(quantizedVector, a, b, dequantizedVector);
 
         float dotProd = dotProduct(vector, dequantizedVector);
         return scale * dotProd + bias * vectorSum;
     }
 
-    static float[] nvqCosine(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float scale, float bias, float a, float b, ArrayVectorFloat centroid, NVQBitsPerDimension bitsPerDimension) {
+    static float nvqDotProduct4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+        ArrayVectorFloat dequantizedVector = new ArrayVectorFloat(new float[originalDimensions]);
+        nvqDequantizeUnnormalized4bit(quantizedVector, a, b, dequantizedVector);
+
+        float dotProd = dotProduct(vector, dequantizedVector);
+        return scale * dotProd + bias * vectorSum;
+    }
+
+    static float[] nvqCosine8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float a, float b, float scale, float bias, ArrayVectorFloat centroid) {
         if ((vector.length() != originalDimensions) && (originalDimensions != centroid.length())) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        ArrayVectorFloat dequantizedVector = nvqDequantizeUnnormalized(quantizedVector, originalDimensions, a, b, bitsPerDimension);
+        ArrayVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, originalDimensions, a, b, scale, bias);
+        addInPlace(dequantizedVector, centroid);
 
-        scale(dequantizedVector, scale);
-        addInPlace(dequantizedVector, bias);
+        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            var vb = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i);
+            vsum = va.fma(vb, vsum);
+            vbMagnitude = vb.fma(vb, vbMagnitude);
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            sum += vector.get(i) * dequantizedVector.get(i);
+            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+        }
+
+        return new float[]{sum, bMagnitude};
+    }
+
+    static float[] nvqCosine4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, int originalDimensions, float a, float b, float scale, float bias, ArrayVectorFloat centroid) {
+        if ((vector.length() != originalDimensions) && (originalDimensions != centroid.length())) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        ArrayVectorFloat dequantizedVector = nvqDequantize4bit(quantizedVector, originalDimensions, a, b, scale, bias);
         addInPlace(dequantizedVector, centroid);
 
         var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);

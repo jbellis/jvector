@@ -192,51 +192,48 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public float nvqDotProduct(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, float vectorSum) {
-        SimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
-        return SimdOps.nvqDotProduct(
-                (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
-                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd);
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+        return SimdOps.nvqDotProduct8bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                originalDimensions, a, b, scale, bias, vectorSum);
     }
 
     @Override
-    public float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
-        SimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
+    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+        return SimdOps.nvqDotProduct4bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                originalDimensions, a, b, scale, bias, vectorSum);
+    }
 
-        return SimdOps.nvqSquareDistance(
-                (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
-                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
+    @Override
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return SimdOps.nvqSquareDistance8bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                originalDimensions, a, b, scale, bias);
+    }
+
+    @Override
+    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return SimdOps.nvqSquareDistance4bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                originalDimensions, a, b, scale, bias);
+    }
+
+    @Override
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+        return SimdOps.nvqCosine8bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                originalDimensions,  a, b, scale, bias,
+                (ArrayVectorFloat) centroid
         );
     }
 
     @Override
-    public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
-        SimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
-
-        return SimdOps.nvqCosine(
-                (ArrayVectorFloat) vector, (ArrayByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
-                quantizedVector.kumaraswamyB, (ArrayVectorFloat) centroid, bpd
+    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+        return SimdOps.nvqCosine4bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                originalDimensions,  a, b, scale, bias,
+                (ArrayVectorFloat) centroid
         );
     }
 
@@ -248,18 +245,45 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector) {
-        SimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = SimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = SimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
-        return SimdOps.nvqDequantizeUnnormalized(
-                (ArrayByteSequence) quantizedVector.bytes, quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
+    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes, originalDimensions,  a, b, scale, bias);
+    }
+
+    @Override
+    public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return SimdOps.nvqDequantize4bit((ArrayByteSequence) bytes, originalDimensions,  a, b, scale, bias);
+    }
+
+    @Override
+    public void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
+        SimdOps.nvqDequantize8bit(
+                (ArrayByteSequence) bytes,  a, b, scale, bias,
+                (ArrayVectorFloat) destination
         );
     }
 
+    @Override
+    public void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
+        SimdOps.nvqDequantize4bit(
+                (ArrayByteSequence) bytes,  a, b, scale, bias,
+                (ArrayVectorFloat) destination
+        );
+    }
+
+    @Override
+    public void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+        SimdOps.nvqDequantizeUnnormalized8bit(
+                (ArrayByteSequence) bytes, a, b,
+                (ArrayVectorFloat) destination
+        );
+    }
+
+    @Override
+    public void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+        SimdOps.nvqDequantizeUnnormalized4bit(
+                (ArrayByteSequence) bytes, a, b,
+                (ArrayVectorFloat) destination
+        );
+    }
 }
 

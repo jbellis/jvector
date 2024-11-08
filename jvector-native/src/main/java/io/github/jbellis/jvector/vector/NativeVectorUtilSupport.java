@@ -189,81 +189,90 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public float nvqDotProduct(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, float vectorSum) {
-        VectorSimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
-        return VectorSimdOps.nvqDotProduct(
-                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias,
-                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, vectorSum, bpd
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+        return VectorSimdOps.nvqDotProduct8bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                originalDimensions, a, b, scale, bias, vectorSum
         );
     }
 
     @Override
-    public float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector) {
-        VectorSimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
-
-        var vectorDQ = quantizedVector.getDequantized();
-
-        if (vectorDQ.length() != vector.length()) {
-            throw new IllegalArgumentException("Vectors must have the same length");
-        }
-
-        return VectorSimdOps.nvqSquareDistance(
-                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
-                quantizedVector.kumaraswamyB, bpd
+    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+        return VectorSimdOps.nvqDotProduct4bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                originalDimensions, a, b, scale, bias, vectorSum
         );
     }
 
     @Override
-    public float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid) {
-        VectorSimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return VectorSimdOps.nvqSquareDistance8bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                originalDimensions, a, b, scale, bias
+        );
+    }
 
-        return VectorSimdOps.nvqCosine(
-                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyScale, quantizedVector.kumaraswamyBias, quantizedVector.kumaraswamyA,
-                quantizedVector.kumaraswamyB, (MemorySegmentVectorFloat) centroid, bpd
+    @Override
+    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return VectorSimdOps.nvqSquareDistance4bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                originalDimensions, a, b, scale, bias
+        );
+    }
+
+    @Override
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+        return VectorSimdOps.nvqCosine8bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                originalDimensions, a, b, scale, bias,
+                (MemorySegmentVectorFloat) centroid
+        );
+    }
+
+    @Override
+    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+        return VectorSimdOps.nvqCosine4bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                originalDimensions, a, b, scale, bias,
+                (MemorySegmentVectorFloat) centroid
         );
     }
 
     @Override
     public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
         if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
-            VectorSimdOps.nvqShuffleQueryInPlace4bit((ArrayVectorFloat) vector);
+            VectorSimdOps.nvqShuffleQueryInPlace4bit((MemorySegmentVectorFloat) vector);
         }
     }
 
     @Override
-    public VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector) {
-        VectorSimdOps.NVQBitsPerDimension bpd;
-        switch (quantizedVector.bitsPerDimension) {
-            case FOUR -> bpd = VectorSimdOps.NVQBitsPerDimension.FOUR;
-            case EIGHT -> bpd = VectorSimdOps.NVQBitsPerDimension.EIGHT;
-            default -> throw new UnsupportedOperationException("Unsupported bits per dimension");
-        }
-        return VectorSimdOps.nvqDequantizeUnnormalized(
-                (MemorySegmentByteSequence) quantizedVector.bytes,
-                quantizedVector.originalDimensions,
-                quantizedVector.kumaraswamyA, quantizedVector.kumaraswamyB, bpd
-        );
-
+    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, originalDimensions, a, b, scale, bias);
     }
+
+    @Override
+    public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+        return VectorSimdOps.nvqDequantize4bit((MemorySegmentByteSequence) bytes, originalDimensions, a, b, scale, bias);
+    }
+
+    @Override
+    public void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
+        VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, a, b, scale, bias, (MemorySegmentVectorFloat) destination);
+    }
+
+    @Override
+    public void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
+        VectorSimdOps.nvqDequantize4bit((MemorySegmentByteSequence) bytes, a, b, scale, bias, (MemorySegmentVectorFloat) destination);
+    }
+
+    @Override
+    public void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+        VectorSimdOps.nvqDequantizeUnnormalized8bit((MemorySegmentByteSequence) bytes, a, b, (MemorySegmentVectorFloat) destination);
+    }
+
+    @Override
+    public void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+        VectorSimdOps.nvqDequantizeUnnormalized4bit((MemorySegmentByteSequence) bytes, a, b, (MemorySegmentVectorFloat) destination);
+    }
+
 }

@@ -218,13 +218,31 @@ public interface VectorUtilSupport {
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);
 
-  float nvqDotProduct(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, float vectorSum);
+  float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum);
 
-  float nvqSquareL2Distance(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector);
+  float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum);
 
-  float[] nvqCosine(VectorFloat<?> vector, NVQuantization.QuantizedSubVector quantizedVector, VectorFloat<?> centroid);
+  float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+
+  float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+
+  float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid);
+
+  float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid);
 
   void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension);
 
-  VectorFloat<?> nvqDequantizeUnnormalized(NVQuantization.QuantizedSubVector quantizedVector);
+  VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+
+  VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+
+  void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
+
+  void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
+
+  void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination);
+
+  void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination);
+
+//  VectorFloat<?> nvqQuantize(VectorFloat<?> vector);
 }

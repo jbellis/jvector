@@ -62,17 +62,17 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                 return quantized;
             }
 
-            @Override
-            public VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions) {
-                // TODO there is an opportunity for vectorization here
-                var vector = vectorTypeSupport.createFloatVector(bytes.length());
-                for (int d = 0; d < bytes.length(); d++) {
-                    vector.set(d, Byte.toUnsignedInt(bytes.get(d)));
-                }
-                int constant = (1 << getInt()) - 1;
-                VectorUtil.scale(vector, 1.f / constant);
-                return vector;
-            }
+//            @Override
+//            public VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions) {
+//                // TODO there is an opportunity for vectorization here
+//                var vector = vectorTypeSupport.createFloatVector(bytes.length());
+//                for (int d = 0; d < bytes.length(); d++) {
+//                    vector.set(d, Byte.toUnsignedInt(bytes.get(d)));
+//                }
+//                int constant = (1 << getInt()) - 1;
+//                VectorUtil.scale(vector, 1.f / constant);
+//                return vector;
+//            }
         },
         FOUR {
             @Override
@@ -102,21 +102,21 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                 return quantized;
             }
 
-            @Override
-            public VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions) {
-                // TODO there is an opportunity for vectorization here
-                var vector = vectorTypeSupport.createFloatVector(originalDimensions);
-                int constant = (1 << getInt()) - 1;
-                for (int d = 0; d < bytes.length(); d++) {
-                    int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-                    vector.set(2 * d, quantizedValue & constant);
-                    if (2 * d + 1 < vector.length()) {
-                        vector.set(2 * d + 1, quantizedValue >> getInt());
-                    }
-                }
-                VectorUtil.scale(vector, 1.f / constant);
-                return vector;
-            }
+//            @Override
+//            public VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions) {
+//                // TODO there is an opportunity for vectorization here
+//                var vector = vectorTypeSupport.createFloatVector(originalDimensions);
+//                int constant = (1 << getInt()) - 1;
+//                for (int d = 0; d < bytes.length(); d++) {
+//                    int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
+//                    vector.set(2 * d, quantizedValue & constant);
+//                    if (2 * d + 1 < vector.length()) {
+//                        vector.set(2 * d + 1, quantizedValue >> getInt());
+//                    }
+//                }
+//                VectorUtil.scale(vector, 1.f / constant);
+//                return vector;
+//            }
         };
 
         public void write(DataOutput out) throws IOException {
@@ -125,7 +125,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
         public abstract ByteSequence<?> uniformQuantize(VectorFloat<?> vector);
 
-        public abstract VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions);
+//        public abstract VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions);
 
         public abstract int getInt();
 
@@ -416,8 +416,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         public static int compressedVectorSize(int nDims, BitsPerDimension bitsPerDimension) {
             // Here we assume that an enum takes 4 bytes
             switch (bitsPerDimension) {
-                case EIGHT: return nDims + 4 * Float.BYTES + 4;
-                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + 4;
+                case EIGHT: return nDims + 4 * Float.BYTES + Integer.BYTES + 4;
+                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + Integer.BYTES + 4;
                 default: return 0; // never realized
             }
         }
@@ -435,7 +435,17 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             float b;
 
             if (learn) {
-                var loss = new KumaraswamyQuantizationLossFunction(2, bitsPerDimension, vectorCopy);
+                KumaraswamyQuantizationLossFunction loss;
+                switch (bitsPerDimension) {
+                    case FOUR:
+                        loss = new KumaraswamyQuantizationLossFunction4bit(2, bitsPerDimension, vectorCopy);
+                        break;
+                    case EIGHT:
+                        loss = new KumaraswamyQuantizationLossFunction8bit(2, bitsPerDimension, vectorCopy);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unsupported bits per dimension " + bitsPerDimension);
+                }
                 loss.setMinBounds(new double[]{1e-6, 1e-6});
 
                 double[] initialSolution = {1, 1};
@@ -478,19 +488,15 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             this.originalDimensions = originalDimensions;
         }
 
-        // Does not apply the scale and bias, provided for vectorization purposes of similarity computations
-        public VectorFloat<?> getDequantizedUnormalized() {
-            var vector = bitsPerDimension.uniformDequantize(bytes, this.originalDimensions);
-            inverseKumaraswamy(vector, kumaraswamyA, kumaraswamyB);
-            return vector;
-        }
-
         public VectorFloat<?> getDequantized() {
-            var vector = bitsPerDimension.uniformDequantize(bytes, this.originalDimensions);
-            inverseKumaraswamy(vector, kumaraswamyA, kumaraswamyB);
-            VectorUtil.scale(vector, kumaraswamyScale);
-            VectorUtil.addInPlace(vector, kumaraswamyBias);
-            return vector;
+            switch (bitsPerDimension) {
+                case EIGHT:
+                    return VectorUtil.nvqDequantize8bit(bytes, this.originalDimensions, kumaraswamyA, kumaraswamyB, kumaraswamyScale, kumaraswamyBias);
+                case FOUR:
+                    return VectorUtil.nvqDequantize4bit(bytes, this.originalDimensions, kumaraswamyA, kumaraswamyB, kumaraswamyScale, kumaraswamyBias);
+                default:
+                    throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
+            }
         }
 
         public void write(DataOutput out) throws IOException {
@@ -534,10 +540,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
     }
 
-    private static class KumaraswamyQuantizationLossFunction extends LossFunction {
-        final private BitsPerDimension bitsPerDimension;
-        final private VectorFloat<?> vectorOriginal;
-        private VectorFloat<?> vectorCopy;
+    private static abstract class KumaraswamyQuantizationLossFunction extends LossFunction {
+        final protected BitsPerDimension bitsPerDimension;
+        final protected VectorFloat<?> vectorOriginal;
+        protected VectorFloat<?> vectorCopy;
 
         public KumaraswamyQuantizationLossFunction(int nDims, BitsPerDimension bitsPerDimension, VectorFloat<?> vector) {
             super(nDims);
@@ -546,13 +552,35 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             vectorCopy = vectorTypeSupport.createFloatVector(vectorOriginal.length());
         }
 
+        abstract public double compute(double[] x);
+    }
+
+    private static class KumaraswamyQuantizationLossFunction8bit extends KumaraswamyQuantizationLossFunction {
+        public KumaraswamyQuantizationLossFunction8bit(int nDims, BitsPerDimension bitsPerDimension, VectorFloat<?> vector) {
+            super(nDims, bitsPerDimension, vector);
+        }
+
+        @Override
         public double compute(double[] x) {
             vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
             forwardKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
             var bytes = bitsPerDimension.uniformQuantize(vectorCopy);
-            vectorCopy = bitsPerDimension.uniformDequantize(bytes, vectorCopy.length());
-            inverseKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
+            VectorUtil.nvqDequantizeUnnormalized8bit(bytes, (float) x[0], (float) x[1], vectorCopy);
+            return -VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
+        }
+    }
 
+    private static class KumaraswamyQuantizationLossFunction4bit extends KumaraswamyQuantizationLossFunction {
+        public KumaraswamyQuantizationLossFunction4bit(int nDims, BitsPerDimension bitsPerDimension, VectorFloat<?> vector) {
+            super(nDims, bitsPerDimension, vector);
+        }
+
+        @Override
+        public double compute(double[] x) {
+            vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
+            forwardKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
+            var bytes = bitsPerDimension.uniformQuantize(vectorCopy);
+            VectorUtil.nvqDequantizeUnnormalized4bit(bytes, (float) x[0], (float) x[1], vectorCopy);
             return -VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
         }
     }

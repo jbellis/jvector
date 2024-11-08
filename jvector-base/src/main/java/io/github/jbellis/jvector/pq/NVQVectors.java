@@ -28,6 +28,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.function.Consumer;
 import java.util.List;
 import java.util.Objects;
 
@@ -125,6 +126,8 @@ public class NVQVectors implements CompressedVectors {
         }
     }
 
+
+
     private ScoreFunction.ApproximateScoreFunction dotProductScoreFunctionFor(VectorFloat<?> query) {
         /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
          * first de-meaned by subtracting the global mean.
@@ -148,16 +151,40 @@ public class NVQVectors implements CompressedVectors {
             VectorUtil.nvqShuffleQueryInPlace(querySubVectors[i], this.nvq.bitsPerDimension);
         }
 
-        return node2 -> {
-            var vNVQ = compressedVectors[node2];
-            float nvqDot = 0;
-            for (int i = 0; i < querySubVectors.length; i++) {
-                var subVec = vNVQ.subVectors[i];
-                nvqDot += VectorUtil.nvqDotProduct(querySubVectors[i], subVec, querySum[i]);
-            }
-            // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
-            return (1 + nvqDot + queryGlobalBias) / 2;
-        };
+        switch (this.nvq.bitsPerDimension) {
+            case EIGHT:
+                return node2 -> {
+                    var vNVQ = compressedVectors[node2];
+                    float nvqDot = 0;
+                    for (int i = 0; i < querySubVectors.length; i++) {
+                        var svDB = vNVQ.subVectors[i];
+                        nvqDot += VectorUtil.nvqDotProduct8bit(querySubVectors[i],
+                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
+                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                querySum[i]
+                        );
+                    }
+                    // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
+                    return (1 + nvqDot + queryGlobalBias) / 2;
+                };
+            case FOUR:
+                return node2 -> {
+                    var vNVQ = compressedVectors[node2];
+                    float nvqDot = 0;
+                    for (int i = 0; i < querySubVectors.length; i++) {
+                        var svDB = vNVQ.subVectors[i];
+                        nvqDot += VectorUtil.nvqDotProduct4bit(querySubVectors[i],
+                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
+                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                querySum[i]
+                        );
+                    }
+                    // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
+                    return (1 + nvqDot + queryGlobalBias) / 2;
+                };
+            default:
+                throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
+        }
     }
 
     private ScoreFunction.ApproximateScoreFunction euclideanScoreFunctionFor(VectorFloat<?> query) {
@@ -181,15 +208,39 @@ public class NVQVectors implements CompressedVectors {
             VectorUtil.nvqShuffleQueryInPlace(querySubVector, this.nvq.bitsPerDimension);
         }
 
-        return node2 -> {
-            var vNVQ = compressedVectors[node2];
-            float dist = 0;
-            for (int i = 0; i < querySubVectors.length; i++) {
-                dist += VectorUtil.nvqSquareL2Distance(querySubVectors[i], vNVQ.subVectors[i]);
-            }
+        switch (this.nvq.bitsPerDimension) {
+            case EIGHT:
+                return node2 -> {
+                    var vNVQ = compressedVectors[node2];
+                    float dist = 0;
+                    for (int i = 0; i < querySubVectors.length; i++) {
+                        var svDB = vNVQ.subVectors[i];
+                        dist += VectorUtil.nvqSquareL2Distance8bit(
+                                querySubVectors[i],
+                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
+                                svDB.kumaraswamyScale, svDB.kumaraswamyBias
+                        );
+                    }
 
-            return 1 / (1 + dist);
-        };
+                    return 1 / (1 + dist);
+                };
+            case FOUR:
+                return node2 -> {
+                    var vNVQ = compressedVectors[node2];
+                    float dist = 0;
+                    for (int i = 0; i < querySubVectors.length; i++) {
+                        var svDB = vNVQ.subVectors[i];
+                        dist += VectorUtil.nvqSquareL2Distance4bit(querySubVectors[i],
+                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
+                                svDB.kumaraswamyScale, svDB.kumaraswamyBias
+                        );
+                    }
+
+                    return 1 / (1 + dist);
+                };
+            default:
+                throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
+        }
     }
 
     private ScoreFunction.ApproximateScoreFunction cosineScoreFunctionFor(VectorFloat<?> query) {
@@ -202,19 +253,46 @@ public class NVQVectors implements CompressedVectors {
             VectorUtil.nvqShuffleQueryInPlace(meanSubVectors[i], this.nvq.bitsPerDimension);
         }
 
-        return node2 -> {
-            var vNVQ = compressedVectors[node2];
-            float dotProduct = 0;
-            float squaredNormalization = 0;
-            for (int i = 0; i < querySubVectors.length; i++) {
-                var partialCosSim = VectorUtil.nvqCosine(querySubVectors[i], vNVQ.subVectors[i], meanSubVectors[i]);
-                dotProduct += partialCosSim[0];
-                squaredNormalization += partialCosSim[1];
-            }
-            float cosine = (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
+        switch (this.nvq.bitsPerDimension) {
+            case EIGHT:
+                return node2 -> {
+                    var vNVQ = compressedVectors[node2];
+                    float cos = 0;
+                    float squaredNormalization = 0;
+                    for (int i = 0; i < querySubVectors.length; i++) {
+                        var svDB = vNVQ.subVectors[i];
+                        var partialCosSim = VectorUtil.nvqCosine8bit(querySubVectors[i],
+                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
+                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                meanSubVectors[i]);
+                        cos += partialCosSim[0];
+                        squaredNormalization += partialCosSim[1];
+                    }
+                    float cosine = (cos / queryNorm) / (float) Math.sqrt(squaredNormalization);
 
-            return (1 + cosine) / 2;
-        };
+                    return (1 + cosine) / 2;
+                };
+            case FOUR:
+                return node2 -> {
+                    var vNVQ = compressedVectors[node2];
+                    float dotProduct = 0;
+                    float squaredNormalization = 0;
+                    for (int i = 0; i < querySubVectors.length; i++) {
+                        var svDB = vNVQ.subVectors[i];
+                        var partialCosSim = VectorUtil.nvqCosine4bit(querySubVectors[i],
+                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
+                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                meanSubVectors[i]);
+                        dotProduct += partialCosSim[0];
+                        squaredNormalization += partialCosSim[1];
+                    }
+                    float cosine = (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
+
+                    return (1 + cosine) / 2;
+                };
+            default:
+                throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
+        }
     }
 
     public NVQuantization.QuantizedVector get(int ordinal) {
