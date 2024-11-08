@@ -247,7 +247,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
         if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
-            VectorSimdOps.nvqShuffleQueryInPlace((ArrayVectorFloat) vector);
+            VectorSimdOps.nvqShuffleQueryInPlace4bit((ArrayVectorFloat) vector);
         }
     }
 

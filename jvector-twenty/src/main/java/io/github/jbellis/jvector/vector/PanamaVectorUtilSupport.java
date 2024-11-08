@@ -243,7 +243,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
         if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
-            SimdOps.nvqShuffleQueryInPlace((ArrayVectorFloat) vector);
+            SimdOps.nvqShuffleQueryInPlace4bit((ArrayVectorFloat) vector);
         }
     }
 

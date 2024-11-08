@@ -798,34 +798,41 @@ final class SimdOps {
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
             var arr = ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i);
             // 1st pass
-            var subResult = arr.lanewise(VectorOperators.AND, 0xf)
-                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
-                    .reinterpretAsFloats();
+            var subResult = arr.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
+                    .lanewise(VectorOperators.AND, 0xf)
+                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
+                    .reinterpretAsFloats()
+                    .div(15.f);
 
             subResult = inverseKumaraswamy(subResult, a, b);
             subResult.intoArray(res, 2 * i);
 
             // 2nd pass
-            subResult = arr.lanewise(VectorOperators.LSHL, 4)
-                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, i)
-                    .reinterpretAsFloats();
+            subResult = arr.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
+                    .lanewise(VectorOperators.AND, 0xff)
+                    .lanewise(VectorOperators.LSHR, 4)
+                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
+                    .reinterpretAsFloats()
+                    .div(15.f);
 
             subResult = inverseKumaraswamy(subResult, a, b);
-            subResult.intoArray(res, 2 * i + 1);
+            subResult.intoArray(res, 2 * i + 8);
         }
 
         // Process the tail
-        for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
-            var intValue = Byte.toUnsignedInt(bytes.get(i));
-            res[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
-            res[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
-        }
+        if (vectorizedLength < bytes.length()) {
+            for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
+                var intValue = Byte.toUnsignedInt(bytes.get(i));
+                res[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
+                res[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
+            }
 
-        vectorizedLength = bytes.length() - 1;
-        var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
-        res[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
-        if (vectorizedLength * 2 == originalDimensions) {
-            res[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
+            vectorizedLength = bytes.length() - 1;
+            var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
+            res[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
+            if (vectorizedLength * 2 == originalDimensions) {
+                res[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
+            }
         }
 
         return new ArrayVectorFloat(res);
@@ -836,9 +843,11 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
             var arr = ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i)
-                    .convertShape(VectorOperators.B2F, FloatVector.SPECIES_256, 0)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
+                    .lanewise(VectorOperators.AND, 0xff)
+                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
                     .reinterpretAsFloats()
-                    .add(128.f).div(255.f);
+                    .div(255.f);
 
             arr = inverseKumaraswamy(arr, a, b);
             arr.intoArray(res, i);
@@ -930,14 +939,15 @@ final class SimdOps {
         return new float[]{sum, bMagnitude};
     }
 
-    static void nvqShuffleQueryInPlace(ArrayVectorFloat vector) {
+    static void nvqShuffleQueryInPlace4bit(ArrayVectorFloat vector) {
         // To understand this shuffle, see nvqDequantize4bit
         var shuffle = VectorShuffle.fromValues(FloatVector.SPECIES_512,
                 0, 2, 4, 6, 8, 10, 12, 14,
                 1, 3, 5, 7, 9, 11, 13, 15);
         int vectorizedLength = FloatVector.SPECIES_512.loopBound(vector.length());
+        var arr = vector.get();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
-            FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i).rearrange(shuffle);
+            FloatVector.fromArray(FloatVector.SPECIES_512, arr, i).rearrange(shuffle).intoArray(arr, i);;
         }
         // There's no need to shuffle the tail
     }
