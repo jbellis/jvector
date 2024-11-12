@@ -658,4 +658,43 @@ final class SimdOps {
             }
         }
     }
+
+    public static float decodedCosineSimilarity(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+        var sum = FloatVector.zero(FloatVector.SPECIES_512);
+        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
+        var baseOffsets = encoded.get();
+        var partialSumsArray = partialSums.get();
+        var aMagnitudeArray = aMagnitude.get();
+
+        int[] convOffsets = scratchInt512.get();
+        int i = 0;
+        int limit = ByteVector.SPECIES_128.loopBound(baseOffsets.length);
+
+        var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount);
+
+        for (; i < limit; i += ByteVector.SPECIES_128.length()) {
+
+            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
+                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
+                    .reinterpretAsInts()
+                    .add(scale)
+                    .intoArray(convOffsets,0);
+
+            var offset = i * clusterCount;
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, partialSumsArray, offset, convOffsets, 0));
+            vaMagnitude = vaMagnitude.add(FloatVector.fromArray(FloatVector.SPECIES_512, aMagnitudeArray, offset, convOffsets, 0));
+        }
+
+        float sumResult = sum.reduceLanes(VectorOperators.ADD);
+        float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
+
+        for (; i < baseOffsets.length; i++) {
+            int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets[i]);
+            sumResult += partialSumsArray[offset];
+            aMagnitudeResult += aMagnitudeArray[offset];
+        }
+
+        return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
+    }
 }
