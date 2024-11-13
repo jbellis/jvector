@@ -20,7 +20,7 @@ public class OptimizationResult {
     /**
      * The solution of the optimization problem.
      */
-    public final double[] x;
+    public final float[] x;
 
     /**
      * The error achieved by the solver.
@@ -32,7 +32,7 @@ public class OptimizationResult {
      * @param x the solution of the optimization problem
      * @param error the error achieved by the solver
      */
-    public OptimizationResult(double[] x, double error) {
+    public OptimizationResult(float[] x, double error) {
         this.x = x;
         this.error = error;
     }

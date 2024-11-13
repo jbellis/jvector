@@ -812,7 +812,7 @@ final class SimdOps {
                     .div(15.f);
 
             subResult = inverseKumaraswamy(subResult, a, b);
-            subResult.intoArray(resArr, 2 * i + 8);
+            subResult.intoArray(resArr, 2 * i + ByteVector.SPECIES_64.length());
         }
 
         // Process the tail

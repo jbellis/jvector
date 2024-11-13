@@ -24,8 +24,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.pq.NVQuantization;
-import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -467,7 +465,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {}
+  public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {}
 
   // In-place application of the inverse CDF of the Kumaraswamy distribution
   private void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {

@@ -26,8 +26,8 @@ public abstract class LossFunction {
     final private int nDims;
 
     // The box constraints that define the feasible set.
-    private double[] minBounds = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
-    private double[] maxBounds = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY};
+    private float[] minBounds;
+    private float[] maxBounds;
 
     /**
      * Constructs a LossFunction acting on vectors of the specified number of dimensions.
@@ -37,6 +37,13 @@ public abstract class LossFunction {
         if (nDims <= 0) {
             throw new IllegalArgumentException("The standard deviation initSigma must be positive");
         }
+        minBounds = new float[nDims];
+        maxBounds = new float[nDims];
+        for (int d = 0; d < nDims; d++) {
+            minBounds[d] = Float.NEGATIVE_INFINITY;
+            maxBounds[d] = Float.POSITIVE_INFINITY;
+        }
+
         this.nDims = nDims;
     }
 
@@ -45,14 +52,14 @@ public abstract class LossFunction {
      * @param x the input vector
      * @return the loss
      */
-    public abstract double compute(double[] x);
+    public abstract float compute(float[] x);
 
     /**
      * Computes the loss function and projects the input in-place onto the feasible set
      * @param x the input vector
      * @return the loss
      */
-    public double projectCompute(double[] x) {
+    public float projectCompute(float[] x) {
         project(x);
         return compute(x);
     }
@@ -61,7 +68,7 @@ public abstract class LossFunction {
      * Sets the minimum values of the box constraints.
      * @param bounds the specified minimum bound
      */
-    public void setMinBounds(double[] bounds) {
+    public void setMinBounds(float[] bounds) {
         if (nDims != bounds.length) {
             throw new IllegalArgumentException("The length of bounds should match the number of dimensions");
         }
@@ -72,7 +79,7 @@ public abstract class LossFunction {
      * Gets the minimum values of the box constraints.
      * @return the minimum bound
      */
-    public double[] getMinBounds() {
+    public float[] getMinBounds() {
         return minBounds;
     }
 
@@ -80,7 +87,7 @@ public abstract class LossFunction {
      * Sets the maximum values of the box constraints.
      * @param bounds the specified maximum bound
      */
-    public void setMaxBounds(double[] bounds) {
+    public void setMaxBounds(float[] bounds) {
         if (nDims != bounds.length) {
             throw new IllegalArgumentException("The length of bounds should match the number of dimensions");
         }
@@ -91,7 +98,7 @@ public abstract class LossFunction {
      * Gets the maximum values of the box constraints.
      * @return the maximum bound
      */
-    public double[] getMaxBounds() {
+    public float[] getMaxBounds() {
         return maxBounds;
     }
 
@@ -102,8 +109,8 @@ public abstract class LossFunction {
      * @param inPlace If true, the input array is modified; otherwise, a copy is created and then projected.
      * @return the projected vector
      */
-    public double[] project(double[] x, boolean inPlace) {
-        double[] copy;
+    public float[] project(float[] x, boolean inPlace) {
+        float[] copy;
         if (inPlace) {
             copy = x;
         }
@@ -117,7 +124,8 @@ public abstract class LossFunction {
     /**
      * Projects the input in-place onto the feasible set.
      * @param x the input vector
-     */    public void project(double[] x) {
+     */
+    public void project(float[] x) {
         project(x, true);
     }
 }
