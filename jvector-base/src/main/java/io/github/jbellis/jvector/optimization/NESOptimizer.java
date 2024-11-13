@@ -301,11 +301,6 @@ public class NESOptimizer {
             oldFunVal = newFunVal;
         }
 
-//        long endTime = System.nanoTime();
-//        long duration = (endTime - startTime) / 1_000_000;  // in milliseconds.
-//        System.out.println("Optimization time: " + duration + "ms " + iter);
-//        System.out.println("Initial and Final sol: " + lossFun.compute(new float[]{1, 1}) + " " + oldFunVal);
-
         return new OptimizationResult(mu, error);
     }
 }
