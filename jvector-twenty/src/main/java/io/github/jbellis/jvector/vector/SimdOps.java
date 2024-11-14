@@ -528,14 +528,15 @@ final class SimdOps {
         var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase);
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
-            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i * dataBase)
+            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
                     .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
                     .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
                     .reinterpretAsInts()
                     .add(scale)
                     .intoArray(convOffsets,0);
 
-            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, data, 0, convOffsets, 0));
+            var offset = i * dataBase;
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, data, offset, convOffsets, 0));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -556,14 +557,15 @@ final class SimdOps {
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
 
-            ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i * dataBase)
+            ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i)
                     .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
                     .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
                     .reinterpretAsInts()
                     .add(scale)
                     .intoArray(convOffsets,0);
 
-            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_256, data, 0, convOffsets, 0));
+            var offset = i * dataBase;
+            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_256, data, offset, convOffsets, 0));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
