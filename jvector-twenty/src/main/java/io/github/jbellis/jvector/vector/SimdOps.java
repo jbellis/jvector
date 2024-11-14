@@ -525,11 +525,10 @@ final class SimdOps {
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
         int i = 0;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsets.length);
+        var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase);
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
-            var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(1).add(i).mul(dataBase);
-
-            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i)
+            ByteVector.fromArray(ByteVector.SPECIES_128, baseOffsets, i * dataBase)
                     .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
                     .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
                     .reinterpretAsInts()
@@ -553,11 +552,11 @@ final class SimdOps {
         FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsets.length);
+        var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase);
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
-            var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(1).add(i).mul(dataBase);
 
-            ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i)
+            ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets, i * dataBase)
                     .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
                     .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
                     .reinterpretAsInts()
