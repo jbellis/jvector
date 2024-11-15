@@ -90,7 +90,7 @@ public class NESOptimizer {
      */
     private int computeNSamples(int nDims) {
         if (nSamples == 0) {
-            return 2 * (4 + (int) Math.floor(3 * Math.log(nDims)));
+            return (4 + (int) Math.floor(3 * Math.log(nDims)));
         } else {
             return nSamples;
         }
@@ -155,23 +155,29 @@ public class NESOptimizer {
      * monotonically increasing (i.e., rank preserving) transformations of the loss function.
      * For this, the samples losses are transformed into a set of utility values using the method in Section 3.1 of [1].
      *
-     * @param lossFun the loss function
-     * @param samples the set of samples at which to evaluate the loss function
+     * @param nSamples the loss function values for each sample
+     * @return the unsorted utilities to use throughout the iterations
+     */
+    private double[] computeUnsortedUtilities(int nSamples) {
+        var us = IntStream.range(1, nSamples + 1).asDoubleStream().map(i -> Math.max(0., Math.log(1 + (double) nSamples / 2) - Math.log(i))).toArray();
+        var uSum = Arrays.stream(us).sum();
+        return Arrays.stream(us).map(u -> (u / uSum) - (1. / nSamples)).toArray();
+    }
+
+    /**
+     * NES utilizes rank-based fitness shaping in order to render the algorithm invariant under
+     * monotonically increasing (i.e., rank preserving) transformations of the loss function.
+     * For this, the samples losses are transformed into a set of utility values using the method in Section 3.1 of [1].
+     *
+     * @param unsortedUtilities the unsorted utility values to be assigned to each sample
+     * @param funValues the loss function values for each sample
      * @param utilities the utility corresponding to each sample
      */
-    private float[] computeUtilities(LossFunction lossFun, float[][] samples, float[] utilities) {
-        // See section 3.1 in https://www.jmlr.org/papers/volume15/wierstra14a/wierstra14a.pdf
-        var us = IntStream.range(1, samples.length + 1).asDoubleStream().map(i -> Math.max(0., Math.log(1 + (double) samples.length / 2) - Math.log(i))).toArray();
-        var uSum = Arrays.stream(us).sum();
-        final var tempUtilities = Arrays.stream(us).map(u -> (u / uSum) - (1. / samples.length)).toArray();
-
-        var funValues = Arrays.stream(samples).mapToDouble(lossFun::projectCompute).toArray();
-
-        var indices = IntStream.range(0, samples.length).boxed().toArray(Integer[]::new);
+    private void sortUtilities(double[] unsortedUtilities, float[] funValues, float[] utilities) {
+        var indices = IntStream.range(0, funValues.length).boxed().toArray(Integer[]::new);
         Arrays.sort(indices, (i1, i2) -> -1 * Double.compare(funValues[i1], funValues[i2]));
 
-        IntStream.range(0, samples.length).forEach(i -> utilities[indices[i]] = (float) tempUtilities[i]);
-        return utilities;
+        IntStream.range(0, funValues.length).forEach(i -> utilities[indices[i]] = (float) unsortedUtilities[i]);
     }
 
     /**
@@ -250,13 +256,15 @@ public class NESOptimizer {
         var oldFunVal = lossFun.compute(mu);
 
         float[][] rawSamples = new float[nSamples][];
-        float[][] samples = new float[nSamples][];
         for (int i = 0; i < nSamples; i++) {
             rawSamples[i] = new float[nDims];
-            samples[i] = new float[nDims];
         }
+        float[] sample = new float[nDims];
 
+        float[] funValues = new float[nSamples];
         float[] utilities = new float[nSamples];
+
+        double[] unsortedUtilities = computeUnsortedUtilities(nSamples);
 
         int iter = 0;
         double error = tol + 1.;
@@ -269,12 +277,13 @@ public class NESOptimizer {
                     var v = random.nextGaussian();
                     rawSamples[i][d] = (float) v;
                     var z = mu[d] + sigma[d] * v;
-                    samples[i][d] = (float) z;
+                    sample[d] = (float) z;
                 }
+                funValues[i] = lossFun.projectCompute(sample);
             }
 
             // See section 3.1 in [1].
-            computeUtilities(lossFun, samples, utilities);
+            sortUtilities(unsortedUtilities, funValues, utilities);
 
             // Compute gradients:
             for (int d = 0; d < nDims; d++) {
@@ -297,11 +306,11 @@ public class NESOptimizer {
 
             // Compute stopping criterion
             var newFunVal = lossFun.compute(mu);
-            error = Math.abs(newFunVal - oldFunVal) / Math.abs(oldFunVal);
+            error = Math.abs(newFunVal - oldFunVal);
             oldFunVal = newFunVal;
         }
 
-        return new OptimizationResult(mu, error);
+        return new OptimizationResult(mu, error, iter, oldFunVal);
     }
 }
 
