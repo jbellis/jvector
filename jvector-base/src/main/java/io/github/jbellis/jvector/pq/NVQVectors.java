@@ -36,6 +36,7 @@ public class NVQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     final NVQuantization nvq;
+    final NVQScorer scorer;
     final NVQuantization.QuantizedVector[] compressedVectors;
 
     /**
@@ -48,6 +49,7 @@ public class NVQVectors implements CompressedVectors {
 
     public NVQVectors(NVQuantization nvq, NVQuantization.QuantizedVector[] compressedVectors) {
         this.nvq = nvq;
+        this.scorer = new NVQScorer(nvq);
         this.compressedVectors = compressedVectors;
     }
 
@@ -114,185 +116,8 @@ public class NVQVectors implements CompressedVectors {
 
     @Override
     public ScoreFunction.ApproximateScoreFunction scoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
-        switch (similarityFunction) {
-            case DOT_PRODUCT:
-                return dotProductScoreFunctionFor(query);
-            case EUCLIDEAN:
-                return euclideanScoreFunctionFor(query);
-            case COSINE:
-                return cosineScoreFunctionFor(query);
-            default:
-                throw new IllegalArgumentException("Unsupported similarity function " + similarityFunction);
-        }
-    }
-
-
-
-    private ScoreFunction.ApproximateScoreFunction dotProductScoreFunctionFor(VectorFloat<?> query) {
-        /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
-         * first de-meaned by subtracting the global mean.
-         * The dot product is calculated between the query and quantized sub-vectors as follows:
-         *
-         * <query, vector> \approx <query, scale * quantized + bias + globalMean>
-         *                       = scale * <query, quantized> + bias <query, broadcast(1)> + <query, globalMean>
-         *
-         * where scale and bias are scalars.
-         *
-         * The following terms can be precomputed:
-         *     queryGlobalBias = <query, globalMean>
-         *     querySum = <query, broadcast(1)>
-         */
-        var queryGlobalBias = VectorUtil.dotProduct(query, this.nvq.globalMean);
-        var querySubVectors = this.nvq.getSubVectors(query);
-
-        var querySum = new float[querySubVectors.length];
-        for (int i = 0; i < querySubVectors.length; i++) {
-            querySum[i] = VectorUtil.sum(querySubVectors[i]);
-            VectorUtil.nvqShuffleQueryInPlace(querySubVectors[i], this.nvq.bitsPerDimension);
-        }
-
-        switch (this.nvq.bitsPerDimension) {
-            case EIGHT:
-                return node2 -> {
-                    var vNVQ = compressedVectors[node2];
-                    float nvqDot = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vNVQ.subVectors[i];
-                        nvqDot += VectorUtil.nvqDotProduct8bit(querySubVectors[i],
-                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
-                                querySum[i]
-                        );
-                    }
-                    // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
-                    return (1 + nvqDot + queryGlobalBias) / 2;
-                };
-            case FOUR:
-                return node2 -> {
-                    var vNVQ = compressedVectors[node2];
-                    float nvqDot = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vNVQ.subVectors[i];
-                        nvqDot += VectorUtil.nvqDotProduct4bit(querySubVectors[i],
-                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
-                                querySum[i]
-                        );
-                    }
-                    // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
-                    return (1 + nvqDot + queryGlobalBias) / 2;
-                };
-            default:
-                throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
-        }
-    }
-
-    private ScoreFunction.ApproximateScoreFunction euclideanScoreFunctionFor(VectorFloat<?> query) {
-        /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
-         * first de-meaned by subtracting the global mean.
-         *
-         * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
-         *
-         * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
-         *                          = |(query - globalMean) - scale * quantized + bias|^2
-         *
-         * where scale and bias are scalars.
-         *
-         * The following term can be precomputed:
-         *     shiftedQuery = query - globalMean
-         */
-        var shiftedQuery = VectorUtil.sub(query, this.nvq.globalMean);
-        var querySubVectors = this.nvq.getSubVectors(shiftedQuery);
-
-        for (VectorFloat<?> querySubVector : querySubVectors) {
-            VectorUtil.nvqShuffleQueryInPlace(querySubVector, this.nvq.bitsPerDimension);
-        }
-
-        switch (this.nvq.bitsPerDimension) {
-            case EIGHT:
-                return node2 -> {
-                    var vNVQ = compressedVectors[node2];
-                    float dist = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vNVQ.subVectors[i];
-                        dist += VectorUtil.nvqSquareL2Distance8bit(
-                                querySubVectors[i],
-                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias
-                        );
-                    }
-
-                    return 1 / (1 + dist);
-                };
-            case FOUR:
-                return node2 -> {
-                    var vNVQ = compressedVectors[node2];
-                    float dist = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vNVQ.subVectors[i];
-                        dist += VectorUtil.nvqSquareL2Distance4bit(querySubVectors[i],
-                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias
-                        );
-                    }
-
-                    return 1 / (1 + dist);
-                };
-            default:
-                throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
-        }
-    }
-
-    private ScoreFunction.ApproximateScoreFunction cosineScoreFunctionFor(VectorFloat<?> query) {
-        float queryNorm = (float) Math.sqrt(VectorUtil.dotProduct(query, query));
-        var querySubVectors = this.nvq.getSubVectors(query);
-        var meanSubVectors = this.nvq.getSubVectors(this.nvq.globalMean);
-
-        for (var i = 0; i < querySubVectors.length; i++) {
-            VectorUtil.nvqShuffleQueryInPlace(querySubVectors[i], this.nvq.bitsPerDimension);
-            VectorUtil.nvqShuffleQueryInPlace(meanSubVectors[i], this.nvq.bitsPerDimension);
-        }
-
-        switch (this.nvq.bitsPerDimension) {
-            case EIGHT:
-                return node2 -> {
-                    var vNVQ = compressedVectors[node2];
-                    float cos = 0;
-                    float squaredNormalization = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vNVQ.subVectors[i];
-                        var partialCosSim = VectorUtil.nvqCosine8bit(querySubVectors[i],
-                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
-                                meanSubVectors[i]);
-                        cos += partialCosSim[0];
-                        squaredNormalization += partialCosSim[1];
-                    }
-                    float cosine = (cos / queryNorm) / (float) Math.sqrt(squaredNormalization);
-
-                    return (1 + cosine) / 2;
-                };
-            case FOUR:
-                return node2 -> {
-                    var vNVQ = compressedVectors[node2];
-                    float dotProduct = 0;
-                    float squaredNormalization = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vNVQ.subVectors[i];
-                        var partialCosSim = VectorUtil.nvqCosine4bit(querySubVectors[i],
-                                svDB.bytes, svDB.originalDimensions, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
-                                meanSubVectors[i]);
-                        dotProduct += partialCosSim[0];
-                        squaredNormalization += partialCosSim[1];
-                    }
-                    float cosine = (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
-
-                    return (1 + cosine) / 2;
-                };
-            default:
-                throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
-        }
+        var function = scorer.scoreFunctionFor(query, similarityFunction);
+        return node2 -> function.similarityTo(compressedVectors[node2]);
     }
 
     public NVQuantization.QuantizedVector get(int ordinal) {
