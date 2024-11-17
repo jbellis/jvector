@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -238,10 +237,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
-        if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
-            SimdOps.nvqShuffleQueryInPlace4bit((ArrayVectorFloat) vector);
-        }
+    public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {
+        SimdOps.nvqShuffleQueryInPlace4bit((ArrayVectorFloat) vector);
     }
 
     @Override

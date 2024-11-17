@@ -44,14 +44,18 @@ public class NESOptimizer {
     private int nSamples = 0; // using 0 to denote uni
 
     // learning rate for the mean mu (i.e., the solution)
-    private double lrMu = 1;
+    private float lrMu = 1;
 
     // learning rate for the standard deviation sigma (i.e., the solution)
     // This value can never be zero. Using zero to indicate that it has not been initialized.
-    private double lrSigma = 0;
+    private float lrSigma = 0;
 
     // value of the stopping condition for the optimization
-    private double tol = 1e-6;
+    private float tol = 1e-6f;
+
+    // Maximum number of iterations performed by the solver
+    // Using zero to indicate that maxIterations is infinite
+    private int maxIterations = 0;
 
     // the distribution to use
     // private final Distribution distribution;
@@ -98,7 +102,7 @@ public class NESOptimizer {
      *
      * @param lrMu the learning rate
      */
-    public void setLrMu(double lrMu) {
+    public void setLrMu(float lrMu) {
         this.lrMu = lrMu;
     }
 
@@ -107,7 +111,7 @@ public class NESOptimizer {
      * Used to override the default number (see Table 1 in [1]).
      * @param lrSigma the learning rate
      */
-    public void setLrSigma(double lrSigma) {
+    public void setLrSigma(float lrSigma) {
         this.lrSigma = lrSigma;
     }
 
@@ -117,9 +121,9 @@ public class NESOptimizer {
      * @param nDims the number of parameters of the optimization problem.
      * @return the learning rate
      */
-    private double computeLrSigma(int nDims) {
+    private float computeLrSigma(int nDims) {
         if (lrSigma == 0) {
-            return (9 + 3 * Math.log(nDims)) / (5 * nDims * Math.sqrt(nDims));
+            return (float) ((9 + 3 * Math.log(nDims)) / (5 * nDims * Math.sqrt(nDims)));
         } else {
             return lrSigma;
         }
@@ -132,8 +136,18 @@ public class NESOptimizer {
      *
      * @param tol the maximum acceptable tolerance
      */
-    public void setTol(double tol) {
+    public void setTol(float tol) {
         this.tol = tol;
+    }
+
+    /**
+     * Sets the maximum number of iterations performed by the solver. Use zero to indicate an unbounded number
+     * of interations.
+     *
+     * @param maxIterations the maximum number of iterations
+     */
+    public void setMaxIterations(int maxIterations) {
+        this.maxIterations = maxIterations;
     }
 
     /**
@@ -143,22 +157,21 @@ public class NESOptimizer {
      *
      * @param lossFun the loss function
      * @param samples the set of samples at which to evaluate the loss function
-     * @return the utilities corresponding to each sample
+     * @param utilities the utility corresponding to each sample
      */
-    private float[] computeUtilities(LossFunction lossFun, double[][] samples) {
+    private float[] computeUtilities(LossFunction lossFun, float[][] samples, float[] utilities) {
         // See section 3.1 in https://www.jmlr.org/papers/volume15/wierstra14a/wierstra14a.pdf
         var us = IntStream.range(1, samples.length + 1).asDoubleStream().map(i -> Math.max(0., Math.log(1 + (double) samples.length / 2) - Math.log(i))).toArray();
         var uSum = Arrays.stream(us).sum();
-        final var utilities = Arrays.stream(us).map(u -> (u / uSum) - (1. / samples.length)).toArray();
+        final var tempUtilities = Arrays.stream(us).map(u -> (u / uSum) - (1. / samples.length)).toArray();
 
         var funValues = Arrays.stream(samples).mapToDouble(lossFun::projectCompute).toArray();
 
         var indices = IntStream.range(0, samples.length).boxed().toArray(Integer[]::new);
         Arrays.sort(indices, (i1, i2) -> -1 * Double.compare(funValues[i1], funValues[i2]));
 
-        float[] sortedUtilities = new float[samples.length];
-        IntStream.range(0, samples.length).forEach(i -> sortedUtilities[indices[i]] = (float) utilities[i]);
-        return sortedUtilities;
+        IntStream.range(0, samples.length).forEach(i -> utilities[indices[i]] = (float) tempUtilities[i]);
+        return utilities;
     }
 
     /**
@@ -173,8 +186,8 @@ public class NESOptimizer {
      * @param initialSolution The initial solution.
      * @return the optimization result
      */
-    public OptimizationResult optimize(LossFunction lossFun, double[] initialSolution) {
-        return optimize(lossFun, initialSolution, 0.5);
+    public OptimizationResult optimize(LossFunction lossFun, float[] initialSolution) {
+        return optimize(lossFun, initialSolution, 0.5f);
     }
 
     /**
@@ -193,7 +206,7 @@ public class NESOptimizer {
      *                  Set with care depending on the problem although a value in [0.5, 1] is reasonable.
      * @return the optimization result
      */
-    public OptimizationResult optimize(LossFunction lossFun, double[] initialSolution, double initSigma) {
+    public OptimizationResult optimize(LossFunction lossFun, float[] initialSolution, float initSigma) {
         return optimizeSeparable(lossFun, initialSolution, initSigma);
     }
 
@@ -210,7 +223,7 @@ public class NESOptimizer {
      *                  Set with care depending on the problem although a value in [0.5, 1] is reasonable.
      * @return the optimization result
      */
-    private OptimizationResult optimizeSeparable(LossFunction lossFun, double[] initialSolution, double initSigma) {
+    private OptimizationResult optimizeSeparable(LossFunction lossFun, float[] initialSolution, float initSigma) {
         if (initSigma <= 0) {
             throw new IllegalArgumentException("The standard deviation initSigma must be positive");
         }
@@ -223,39 +236,45 @@ public class NESOptimizer {
         var lrSigma = computeLrSigma(nDims);
 
         // Initialize mu and sigma
-        var mu = new double[nDims];
-        var sigma = new double[nDims];
+        var mu = new float[nDims];
+        var sigma = new float[nDims];
         for (int d = 0; d < nDims; d++) {
             mu[d] = initialSolution[d];
             sigma[d] = initSigma;
         }
 
         // create their natural gradient
-        var deltaMu = new double[nDims];
-        var deltaSigma = new double[nDims];
+        var deltaMu = new float[nDims];
+        var deltaSigma = new float[nDims];
 
         var oldFunVal = lossFun.compute(mu);
 
-//        int iter = 0;
-        double error = tol + 1.;
-        while (error > tol) {
-            // generate samples used to compute the natural gradient
-            double[][] rawSamples = new double[nSamples][];
-            double[][] samples = new double[nSamples][];
-            for (int i = 0; i < nSamples; i++) {
-                rawSamples[i] = new double[nDims];
-                samples[i] = new double[nDims];
+        float[][] rawSamples = new float[nSamples][];
+        float[][] samples = new float[nSamples][];
+        for (int i = 0; i < nSamples; i++) {
+            rawSamples[i] = new float[nDims];
+            samples[i] = new float[nDims];
+        }
 
+        float[] utilities = new float[nSamples];
+
+        int iter = 0;
+        double error = tol + 1.;
+        while (error > tol && (maxIterations == 0 || iter < maxIterations)) {
+            iter += 1;
+
+            // generate samples used to compute the natural gradient
+            for (int i = 0; i < nSamples; i++) {
                 for (int d = 0; d < nDims; d++) {
                     var v = random.nextGaussian();
-                    rawSamples[i][d] = v;
+                    rawSamples[i][d] = (float) v;
                     var z = mu[d] + sigma[d] * v;
-                    samples[i][d] = z;
+                    samples[i][d] = (float) z;
                 }
             }
 
             // See section 3.1 in [1].
-            var utilities = computeUtilities(lossFun, samples);
+            computeUtilities(lossFun, samples, utilities);
 
             // Compute gradients:
             for (int d = 0; d < nDims; d++) {
@@ -269,21 +288,17 @@ public class NESOptimizer {
 
             for (int d = 0; d < nDims; d++) {
                 // Update mean in each dimension
-                mu[d] = mu[d] + lrMu * sigma[d] * deltaMu[d];
+                mu[d] += lrMu * sigma[d] * deltaMu[d];
 
                 // Update the standard deviation in each dimension
-                sigma[d] = sigma[d] * Math.exp(deltaSigma[d] * lrSigma / 2);
+                sigma[d] *= (float) Math.exp(deltaSigma[d] * lrSigma / 2);
             }
             lossFun.project(mu);
 
             // Compute stopping criterion
             var newFunVal = lossFun.compute(mu);
-            error = Math.abs(newFunVal - oldFunVal);
+            error = Math.abs(newFunVal - oldFunVal) / Math.abs(oldFunVal);
             oldFunVal = newFunVal;
-
-//            String str = String.format("%d -> The solution is %.8f  %.8f with error %e", iter, mu[0], mu[1], error);
-//            System.out.println(str);
-//            iter += 1;
         }
 
         return new OptimizationResult(mu, error);

@@ -205,7 +205,7 @@ public class TestCompressedVectors extends RandomizedTest {
             for (int i = 0; i < nQueries; i++) {
                 var q = queries.get(i);
                 VectorUtil.l2normalize(q);
-                var f = cv.precomputedScoreFunctionFor(q, vsf);
+                var f = cv.scoreFunctionFor(q, vsf);
                 for (int j = 0; j < vectors.size(); j++) {
                     var v = vectors.get(j);
                     vsf.compare(q, v);

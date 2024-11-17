@@ -24,7 +24,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -245,8 +244,8 @@ public final class VectorUtil {
     return impl.nvqCosine4bit(vector, bytes, originalDimensions, a, b, scale, bias, centroid);
   }
 
-  public static void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
-    impl.nvqShuffleQueryInPlace(vector, bitsPerDimension);
+  public static void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {
+    impl.nvqShuffleQueryInPlace4bit(vector);
   }
 
   public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {

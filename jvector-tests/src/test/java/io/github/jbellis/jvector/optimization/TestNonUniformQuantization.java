@@ -8,7 +8,6 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.junit.Test;
 
-import java.util.Random;
 import java.util.stream.DoubleStream;
 
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -59,12 +58,12 @@ public class TestNonUniformQuantization extends RandomizedTest {
             vectorCopy = vectorTypeSupport.createFloatVector(vectorOriginal.length());
         }
 
-        public double compute(double[] x) {
+        public float compute(float[] x) {
             vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            forwardKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
+            forwardKumaraswamy(vectorCopy, x[0], x[1]);
             uniformQuantize(vectorCopy, nBits);
             uniformDequantize(vectorCopy, nBits);
-            inverseKumaraswamy(vectorCopy, (float) x[0], (float) x[1]);
+            inverseKumaraswamy(vectorCopy, x[0], x[1]);
 
             return -VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
         }
@@ -97,14 +96,15 @@ public class TestNonUniformQuantization extends RandomizedTest {
                 VectorUtil.scale(vector, 1.f / (max - min));
 
                 var loss = new KumaraswamyQuantizationLossFunction(2, nBits, vector);
-                loss.setMinBounds(new double[]{1e-6, 1e-6});
+                loss.setMinBounds(new float[]{1e-6f, 1e-6f});
 
-                double[] initialSolution = {1, 1};
+                float[] initialSolution = {1, 1};
                 var xnes = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+                xnes.setMaxIterations(10);
 
-                var tolerance = 1e-6;
+                var tolerance = 1e-4f;
                 xnes.setTol(tolerance);
-                var sol = xnes.optimize(loss, initialSolution, 0.5);
+                var sol = xnes.optimize(loss, initialSolution, 0.5f);
 
                 uniformError[trial] = uniformQuantizationLoss(vector, nBits);
                 kumaraswamyError[trial] = -1 * loss.compute(sol.x);

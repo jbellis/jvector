@@ -16,8 +16,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.pq.NVQuantization;
-import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -239,10 +237,8 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void nvqShuffleQueryInPlace(VectorFloat<?> vector, NVQuantization.BitsPerDimension bitsPerDimension) {
-        if (bitsPerDimension == NVQuantization.BitsPerDimension.FOUR) {
-            VectorSimdOps.nvqShuffleQueryInPlace4bit((MemorySegmentVectorFloat) vector);
-        }
+    public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {
+        VectorSimdOps.nvqShuffleQueryInPlace4bit((MemorySegmentVectorFloat) vector);
     }
 
     @Override
