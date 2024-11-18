@@ -38,11 +38,9 @@ public class NVQ implements Feature {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     private final NVQuantization nvq;
-    // private final ExplicitThreadLocal<ByteSequence<?>> reusableBytes;
 
     public NVQ(NVQuantization nvq) {
         this.nvq = nvq;
-        // this.reusableBytes = ExplicitThreadLocal.withInitial(() -> vectorTypeSupport.createByteSequence(nvq.compressedVectorSize()));
     }
 
     @Override
