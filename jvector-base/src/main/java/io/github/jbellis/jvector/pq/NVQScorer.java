@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.pq;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.disk.NVQ;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -35,13 +36,17 @@ public class NVQScorer {
     final NVQuantization nvq;
 
     /**
-     * Initialize the PQVectors with an initial List of vectors.  This list may be
+     * Initialize the NVQ Vectors with an initial List of vectors.  This list may be
      * mutated, but caller is responsible for thread safety issues when doing so.
      */
     public NVQScorer(NVQuantization nvq) {
         this.nvq = nvq;
     }
 
+    public ScoreFunction.ExactScoreFunction scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, NVQ.PackedQuantizedVectors quantizedVectors) {
+        var function = scoreFunctionFor(query, similarityFunction);
+        return node2 -> function.similarityTo(quantizedVectors.getQuantizedVector(node2));
+    }
     public NVQScoreFunction scoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
         switch (similarityFunction) {
             case DOT_PRODUCT:
