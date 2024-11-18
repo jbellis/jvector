@@ -318,6 +318,7 @@ float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned c
 
     return res;
 }
+
 float decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int baseOffsetsLength, int clusterCount, const float* partialSums, const float* aMagnitude, float bMagnitude) {
     __m512 sum = _mm512_setzero_ps();
     __m512 vaMagnitude = _mm512_setzero_ps();
@@ -336,11 +337,8 @@ float decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int ba
         // Scale the baseOffsets by the cluster count
         __m512i scaledOffsets = _mm512_mullo_epi32(indexRegister, scale);
 
-        // Compute the offset base by multiplying 'i' with clusterCount and broadcasting to all lanes
-        __m512i offsetBase = _mm512_set1_epi32(i * clusterCount);
-
-        // Calculate the final convOffsets by adding the scaled offsets and the offset base
-        __m512i convOffsets = _mm512_add_epi32(scaledOffsets, offsetBase);
+        // Calculate the final convOffsets by adding the scaled indexes and the base offsets
+        __m512i convOffsets = _mm512_add_epi32(scaledOffsets, baseOffsetsInt);
 
         // Gather and sum values for partial sums and a magnitude
         __m512 partialSumVals = _mm512_i32gather_ps(convOffsets, partialSums, 4);
