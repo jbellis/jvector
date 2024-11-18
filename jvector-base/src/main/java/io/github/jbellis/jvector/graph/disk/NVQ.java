@@ -33,7 +33,6 @@ import java.io.UncheckedIOException;
 /**
  * Implements the storage of NuVeQ vectors in an on-disk graph index.  These can be used for reranking.
  */
-
 public class NVQ implements Feature {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
