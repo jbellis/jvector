@@ -16,21 +16,9 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.disk.NVQ;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
-import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
-import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
-
-import java.io.DataOutput;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
 
 public class NVQScorer {
     final NVQuantization nvq;
@@ -43,10 +31,6 @@ public class NVQScorer {
         this.nvq = nvq;
     }
 
-    public ScoreFunction.ExactScoreFunction scoreFunctionFrom(VectorFloat<?> query, VectorSimilarityFunction similarityFunction, NVQ.PackedQuantizedVectors quantizedVectors) {
-        var function = scoreFunctionFor(query, similarityFunction);
-        return node2 -> function.similarityTo(quantizedVectors.getQuantizedVector(node2));
-    }
     public NVQScoreFunction scoreFunctionFor(VectorFloat<?> query, VectorSimilarityFunction similarityFunction) {
         switch (similarityFunction) {
             case DOT_PRODUCT:

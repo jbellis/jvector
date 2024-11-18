@@ -19,13 +19,10 @@ package io.github.jbellis.jvector.graph.disk;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.pq.NVQScorer;
-import io.github.jbellis.jvector.pq.NVQVectors;
 import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.pq.NVQuantization.QuantizedVector;
-import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
@@ -93,11 +90,12 @@ public class NVQ implements Feature {
     }
 
     ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector,
-                                       VectorSimilarityFunction vsf,
-                                       FeatureSource source)
-    {
-        NVQScorer scorer = new NVQScorer(this.nvq);
-        return scorer.scoreFunctionFrom(queryVector, vsf, createPackedVectors(source));
+                                                 VectorSimilarityFunction vsf,
+                                                 FeatureSource source) {
+        var scorer = new NVQScorer(this.nvq);
+        var quantizedVectors = createPackedVectors(source);
+        var function = scorer.scoreFunctionFor(queryVector, vsf);
+        return node2 -> function.similarityTo(quantizedVectors.getQuantizedVector(node2));
     }
 
     public PackedQuantizedVectors createPackedVectors(FeatureSource source) {
