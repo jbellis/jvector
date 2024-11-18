@@ -96,21 +96,20 @@ public class NVQ implements Feature {
         return node2 -> function.similarityTo(quantizedVectors.getQuantizedVector(node2));
     }
 
-    public PackedQuantizedVectors createPackedVectors(FeatureSource source) {
-        return new PackedQuantizedVectors(source);
+    private static NVQPackedVectors createPackedVectors(FeatureSource source) {
+        return new NVQPackedVectors(source);
     }
 
     /*
      * Retrieves one NVQ quantized vector from disk.
      */
-    public static class PackedQuantizedVectors implements NVQPackedVectors {
-        final FeatureSource source;
+    private static class NVQPackedVectors {
+        private final FeatureSource source;
 
-        public PackedQuantizedVectors(FeatureSource source) {
+        public NVQPackedVectors(FeatureSource source) {
             this.source = source;
         }
 
-        @Override
         public QuantizedVector getQuantizedVector(int ordinal) {
             // TODO determine if ExplicitThreadLocal should be used with subvector byte sequences
             try {
