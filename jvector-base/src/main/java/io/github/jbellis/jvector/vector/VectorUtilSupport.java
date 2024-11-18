@@ -217,31 +217,175 @@ public interface VectorUtilSupport {
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);
 
-  float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum);
+  /**
+   * Computes the dot product between a vector and a 8-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param vectorSum the sum of the values of the vector (the dot product <vector, 1>)
+   * @return the dot product
+   */
+  float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum);
 
-  float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum);
+  /**
+   * Computes the dot product between a vector and a 4-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param vectorSum the sum of the values of the vector (the dot product <vector, 1>)
+   * @return the dot product
+   */
+  float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum);
 
-  float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+  /**
+   * Computes the squared Euclidean distance between a vector and a 8-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @return the squared Euclidean distance
+   */
+  float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias);
 
-  float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+  /**
+   * Computes the squared Euclidean distance between a vector and a 4-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @return the squared Euclidean distance
+   */
+  float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias);
 
-  float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid);
+  /**
+   * Computes the cosine similarity between a vector and a 8-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param centroid the global mean vector used to re-center the quantized subvectors.
+   * @return the cosine similarity
+   */
+  float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid);
 
-  float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid);
+  /**
+   * Computes the cosine similarity between a vector and a 4-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param centroid the global mean vector used to re-center the quantized distribution.
+   * @return the cosine similarity
+   */
+  float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid);
 
+  /**
+   * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
+   * uneven entries within register. This method shuffles the query entries so that it matches this order.
+   * See: https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf
+   * @param vector
+   */
   void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector);
 
+  /**
+   * Dequantize an 8-bit quntized subvector.
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @return the reconstructed vector
+   */
   VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
 
+  /**
+   * Dequantize a 4-bit quantized subvector.
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @return the reconstructed vector
+   */
   VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
 
+  /**
+   * Dequantize an 8-bit quantized subvector into destination
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param destination The vector where the reconstructed values are stored
+   */
   void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
 
+  /**
+   * Dequantize a 4-bit quantized subvector into destination
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
+   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param destination The vector where the reconstructed values are stored
+   */
   void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
 
-  void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination);
+  /**
+   * Quantize a subvector as an 8-bit quantized subvector. This method assumes that the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param vector The vector to quantized
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param destination The vector where the reconstructed values are stored
+   */
+  void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination);
 
-  void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination);
+  /**
+   * Quantize a subvector as a 4-bit quantized subvector. This method assumes that the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param vector The vector to quantized
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param destination The vector where the reconstructed values are stored
+   */
+  void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination);
 
-//  VectorFloat<?> nvqQuantize(VectorFloat<?> vector);
+  /**
+   * Method to quantize a subvector as an 8-bit quantized subvector and dequantize it in place.
+   * This is a convenience tool for optimizing for a and b that is faster than separately quantizing and dequantizing.
+   * @param vector The vector to quantized
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   */
+  void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b);
+
+  /**
+   * Method to quantize a subvector as a 4-bit quantized subvector and dequantize it in place.
+   * This is a convenience tool for optimizing for a and b that is faster than separately quantizing and dequantizing.
+   * @param vector The vector to quantized
+   * @param a The parameter a of the Generalized Kumaraswamy distribution
+   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   */
+  void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b);
 }

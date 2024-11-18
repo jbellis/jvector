@@ -187,51 +187,51 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
         return VectorSimdOps.nvqDotProduct8bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                originalDimensions, a, b, scale, bias, vectorSum
+                a, b, scale, bias, vectorSum
         );
     }
 
     @Override
-    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
         return VectorSimdOps.nvqDotProduct4bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                originalDimensions, a, b, scale, bias, vectorSum
+                a, b, scale, bias, vectorSum
         );
     }
 
     @Override
-    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
         return VectorSimdOps.nvqSquareDistance8bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                originalDimensions, a, b, scale, bias
+                a, b, scale, bias
         );
     }
 
     @Override
-    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
         return VectorSimdOps.nvqSquareDistance4bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                originalDimensions, a, b, scale, bias
+                a, b, scale, bias
         );
     }
 
     @Override
-    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
         return VectorSimdOps.nvqCosine8bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                originalDimensions, a, b, scale, bias,
+                a, b, scale, bias,
                 (MemorySegmentVectorFloat) centroid
         );
     }
 
     @Override
-    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
         return VectorSimdOps.nvqCosine4bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                originalDimensions, a, b, scale, bias,
+                a, b, scale, bias,
                 (MemorySegmentVectorFloat) centroid
         );
     }
@@ -262,13 +262,22 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-        VectorSimdOps.nvqDequantizeUnnormalized8bit((MemorySegmentByteSequence) bytes, a, b, (MemorySegmentVectorFloat) destination);
+    public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+        VectorSimdOps.nvqQuantizeNormalized8bit((MemorySegmentVectorFloat) vector, a, b, (MemorySegmentByteSequence) destination);
     }
 
     @Override
-    public void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-        VectorSimdOps.nvqDequantizeUnnormalized4bit((MemorySegmentByteSequence) bytes, a, b, (MemorySegmentVectorFloat) destination);
+    public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+        VectorSimdOps.nvqQuantizeNormalized4bit((MemorySegmentVectorFloat) vector, a, b, (MemorySegmentByteSequence) destination);
     }
 
+    @Override
+    public void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
+        VectorSimdOps.nvqQuantizeDequantizeUnnormalized((MemorySegmentVectorFloat) vector, a, b, 8);
+    }
+
+    @Override
+    public void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
+        VectorSimdOps.nvqQuantizeDequantizeUnnormalized((MemorySegmentVectorFloat) vector, a, b, 4);
+    }
 }

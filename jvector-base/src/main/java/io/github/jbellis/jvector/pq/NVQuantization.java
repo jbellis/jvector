@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.optimization.LossFunction;
 import io.github.jbellis.jvector.optimization.NESOptimizer;
+import io.github.jbellis.jvector.optimization.OptimizationResult;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -39,96 +40,52 @@ import java.util.stream.IntStream;
 
 /**
  * Non-uniform Vector Quantization for float vectors.
+ * It divides each vector in subvectors and then quantizes each one individually using a non-uniform quantizer.
  */
 public class NVQuantization implements VectorCompressor<NVQuantization.QuantizedVector>, Accountable {
     public enum BitsPerDimension {
         EIGHT {
             @Override
-            public int getInt() {
-                return 8;
+            public void write(DataOutput out) throws IOException {
+                out.writeInt(8);
             }
 
             @Override
-            public ByteSequence<?> uniformQuantize(VectorFloat<?> vector) {
-                // TODO there is an opportunity for vectorization here
-                var quantized = vectorTypeSupport.createByteSequence(vector.length());
-                int constant = (1 << getInt()) - 1;
-                VectorUtil.scale(vector, (float) constant);
-                for (int d = 0; d < vector.length(); d++) {
-                    // Ensure the quantized value is within the 0 to constant range
-                    int quantizedValue = Math.min(Math.max(0, Math.round(vector.get(d))), constant);
-                    quantized.set(d, (byte) quantizedValue);
-                }
-                return quantized;
+            public ByteSequence<?> createByteSequence(int nDimensions) {
+                return vectorTypeSupport.createByteSequence(nDimensions);
             }
-
-//            @Override
-//            public VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions) {
-//                // TODO there is an opportunity for vectorization here
-//                var vector = vectorTypeSupport.createFloatVector(bytes.length());
-//                for (int d = 0; d < bytes.length(); d++) {
-//                    vector.set(d, Byte.toUnsignedInt(bytes.get(d)));
-//                }
-//                int constant = (1 << getInt()) - 1;
-//                VectorUtil.scale(vector, 1.f / constant);
-//                return vector;
-//            }
         },
         FOUR {
             @Override
-            public int getInt() {
-                return 4;
-            };
-
-            @Override
-            public ByteSequence<?> uniformQuantize(VectorFloat<?> vector) {
-                // TODO there is an opportunity for vectorization here
-                var quantized = vectorTypeSupport.createByteSequence((int) Math.ceil(vector.length() / 2.));
-                int constant = (1 << getInt()) - 1;
-                VectorUtil.scale(vector, (float) constant);
-                for (int d = 0; d < vector.length(); d += 2) {
-                    // Ensure the quantized value is within the 0 to constant range
-                    int quantizedValue0 = Math.min(Math.max(0, Math.round(vector.get(d))), constant);
-                    int quantizedValue1;
-                    if (d + 1 < vector.length()) {
-                        quantizedValue1 = Math.min(Math.max(0, Math.round(vector.get(d + 1))), constant);
-                    } else {
-                        quantizedValue1 = 0;
-                    }
-
-                    quantized.set(d / 2, (byte) ((quantizedValue1 << getInt()) + quantizedValue0));
-                }
-
-                return quantized;
+            public void write(DataOutput out) throws IOException {
+                out.writeInt(8);
             }
 
-//            @Override
-//            public VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions) {
-//                // TODO there is an opportunity for vectorization here
-//                var vector = vectorTypeSupport.createFloatVector(originalDimensions);
-//                int constant = (1 << getInt()) - 1;
-//                for (int d = 0; d < bytes.length(); d++) {
-//                    int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-//                    vector.set(2 * d, quantizedValue & constant);
-//                    if (2 * d + 1 < vector.length()) {
-//                        vector.set(2 * d + 1, quantizedValue >> getInt());
-//                    }
-//                }
-//                VectorUtil.scale(vector, 1.f / constant);
-//                return vector;
-//            }
+            @Override
+            public ByteSequence<?> createByteSequence(int nDimensions) {
+                return vectorTypeSupport.createByteSequence((int) Math.ceil(nDimensions / 2.));
+            }
         };
 
-        public void write(DataOutput out) throws IOException {
-            out.writeInt(getInt());
-        }
+        /**
+         * Writes the BitsPerDimension to DataOutput.
+         * @param out the DataOutput into which to write the object
+         * @throws IOException if there is a problem writing to out.
+         */
+        public abstract void write(DataOutput out) throws IOException;
 
-        public abstract ByteSequence<?> uniformQuantize(VectorFloat<?> vector);
+        /**
+         * Creates a ByteSequence of the proper length to store the quantized vector.
+         * @param nDimensions the number of dimensions of the original vector
+         * @return the byte sequence
+         */
+        public abstract ByteSequence<?> createByteSequence(int nDimensions);
 
-//        public abstract VectorFloat<?> uniformDequantize(ByteSequence<?> bytes, int originalDimensions);
-
-        public abstract int getInt();
-
+        /**
+         * Loads the BitsPerDimension from a RandomAccessReader.
+         * @param in the RandomAccessReader to read from.
+         * @throws IOException if there is a problem reading from in.
+         */
         public static BitsPerDimension load(RandomAccessReader in) throws IOException {
             int nBitsPerDimension = in.readInt();
             switch (nBitsPerDimension) {
@@ -146,12 +103,27 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
+    // How many bits to use for each dimension when quantizing the vector:
     public final BitsPerDimension bitsPerDimension;
+
+    // We subtract the global mean vector to make it robust against center datasets with a large mean:
     public final VectorFloat<?> globalMean;
+
+    // The number of dimensions of the original (uncompressed) vectors:
     public final int originalDimension;
+
+    // A matrix that stores the size and starting point of each subvector:
     public final int[][] subvectorSizesAndOffsets;
+
+    // Whether we want to skip the optimization of the Kumaraswamy parameters. Here for debug purposes only.
     public boolean learn = true;
 
+    /**
+     * Class constructor.
+     * @param subvectorSizesAndOffsets a matrix that stores the size and starting point of each subvector
+     * @param globalMean the mean of the database (its average vector)
+     * @param bitsPerDimension the number of bits to use for each dimension when quantizing the vector
+     */
     private NVQuantization(int[][] subvectorSizesAndOffsets, VectorFloat<?> globalMean, BitsPerDimension bitsPerDimension) {
         this.bitsPerDimension = bitsPerDimension;
         this.globalMean = globalMean;
@@ -165,10 +137,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     }
 
     /**
-     * Initializes the codebooks by clustering the input data using Product Quantization.
+     * Computes the global mean vector and the data structures used to divide each vector into subvectors.
      *
      * @param ravv the vectors to quantize
-     * @param nSubVectors number of subspaces
+     * @param nSubVectors number of subvectors
+     * @param bitsPerDimension the number of bits to use for each dimension when quantizing the vector
      */
     public static NVQuantization compute(RandomAccessVectorValues ravv, int nSubVectors, BitsPerDimension bitsPerDimension) {
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), nSubVectors);
@@ -230,7 +203,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     /**
      * Creates an array of subvectors from a given vector
      */
-    @VisibleForTesting
     public VectorFloat<?>[] getSubVectors(VectorFloat<?> vector) {
         VectorFloat<?>[] subvectors = new VectorFloat<?>[subvectorSizesAndOffsets.length];
 
@@ -248,7 +220,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     /**
      * Splits the vector dimension into M subvectors of roughly equal size.
      */
-    @VisibleForTesting
     static int[][] getSubvectorSizesAndOffsets(int dimensions, int M) {
         if (M > dimensions) {
             throw new IllegalArgumentException("Number of subspaces must be less than or equal to the vector dimension");
@@ -266,6 +237,12 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         return sizes;
     }
 
+    /**
+     * Writes the instance to a DataOutput.
+     * @param out DataOutput to write to
+     * @param version serialization version.
+     * @throws IOException fails if we cannot write to the DataOutput
+     */
     public void write(DataOutput out, int version) throws IOException
     {
         if (version > OnDiskGraphIndex.CURRENT_VERSION) {
@@ -289,6 +266,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
     }
 
+    /**
+     * Returns the size in bytes of this class when writing it using the write method.
+     * @return the size in bytes
+     */
     @Override
     public int compressorSize() {
         int size = 0;
@@ -299,6 +280,12 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         return size;
     }
 
+    /**
+     * Loads an instance from a RandomAccessReader
+     * @param in the RandomAccessReader
+     * @return the instance
+     * @throws IOException fails if we cannot read from the RandomAccessReader
+     */
     public static NVQuantization load(RandomAccessReader in) throws IOException {
         int maybeMagic = in.readInt();
         int version;
@@ -376,6 +363,12 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public static class QuantizedVector {
         public final QuantizedSubVector[] subVectors;
 
+        /**
+         * Class constructor.
+         * @param subVectors receives the subvectors to quantize
+         * @param bitsPerDimension the number of bits per dimension
+         * @param lossFunction the loss function used to optimize the parameters of the quantization
+         */
         public QuantizedVector(VectorFloat<?>[] subVectors, BitsPerDimension bitsPerDimension, KumaraswamyQuantizationLossFunction lossFunction) {
             this.subVectors = new QuantizedSubVector[subVectors.length];
             for (int i = 0; i < subVectors.length; i++) {
@@ -383,10 +376,19 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             }
         }
 
+        /**
+         * Constructs an instance from existing subvectors. Used when loading from a RandomAccessReader.
+         * @param subVectors the subvectors
+         */
         private QuantizedVector(QuantizedSubVector[] subVectors) {
             this.subVectors = subVectors;
         }
 
+        /**
+         * Write the instance to a DataOutput
+         * @param out the DataOutput
+         * @throws IOException fails if we cannot write to the DataOutput
+         */
         public void write(DataOutput out) throws IOException {
             // write the min and max
             out.writeInt(subVectors.length);
@@ -396,6 +398,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             }
         }
 
+        /**
+         * Read the instance from a RandomAccessReader
+         * @param in the RandomAccessReader
+         * @throws IOException fails if we cannot read from the RandomAccessReader
+         */
         public static QuantizedVector load(RandomAccessReader in) throws IOException {
             int length = in.readInt();
             var subVectors = new QuantizedSubVector[length];
@@ -420,37 +427,59 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * A NuVeQ sub-vector.
      */
     public static class QuantizedSubVector {
+        // The byte sequence that stores the quantized subvector
         public final ByteSequence<?> bytes;
+
+        // The number of bits for each dimension of the input uncompressed subvector
         public BitsPerDimension bitsPerDimension;
+
+        // The parameters of the Generalized Kumaraswamy distibution
         public final float kumaraswamyA;
         public final float kumaraswamyB;
         public final float kumaraswamyBias;
         public final float kumaraswamyScale;
+
+        // The number of dimensions of the input uncompressed subvector
         public final int originalDimensions;
 
+        // We initialize the solver with (a=1, b=1), which is equivalent to using an uniform quantization
         private static final float[] solverinitialSolution = {1, 1};
+        // The NEW solver used to run the optimization
         private static final NESOptimizer solverNES = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
-
+        // These parameters are set this way mostly for speed. Better reconstruction errors can be achieved
+        // by running the solver longer.
         static {
             solverNES.setTol(1e-4f);
             solverNES.setMaxIterations(10);
         }
 
+        /**
+         * Return the number of bytes occupied by the serialization of a QuantizedSubVector
+         * @param nDims
+         * @param bitsPerDimension
+         * @return
+         */
         public static int compressedVectorSize(int nDims, BitsPerDimension bitsPerDimension) {
             // Here we assume that an enum takes 4 bytes
             switch (bitsPerDimension) {
-                case EIGHT: return nDims + 4 * Float.BYTES + Integer.BYTES + 4;
-                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + Integer.BYTES + 4;
+                case EIGHT: return nDims + 4 * Float.BYTES + 2 * Integer.BYTES;
+                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + 2 * Integer.BYTES;
                 default: return 0; // never realized
             }
         }
 
+        /**
+         * Class constructor.
+         * @param vector the subvector to quantize
+         * @param bitsPerDimension the number of bits per dimension
+         * @param lossFunction the loss function used to optimize the parameters of the quantization
+         */
         public QuantizedSubVector(VectorFloat<?> vector, BitsPerDimension bitsPerDimension, KumaraswamyQuantizationLossFunction lossFunction) {
-            var u = VectorUtil.max(vector);
-            var l = VectorUtil.min(vector);
+            var bias = VectorUtil.min(vector);
+            var scale = VectorUtil.max(vector) - bias;
 
-            var vectorCopy = VectorUtil.sub(vector, l);
-            VectorUtil.scale(vectorCopy, 1.f / (u - l));
+            var vectorCopy = VectorUtil.sub(vector, bias);
+            VectorUtil.scale(vectorCopy, 1.f / scale);
 
             //-----------------------------------------------------------------
             // Optimization to find the hyperparameters of the Kumaraswamy quantization
@@ -458,25 +487,49 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             float b = 1.f;
 
             if (lossFunction != null) {
+                /*
+                We are optimizing a non-convex and discontinuous function.
+                As such, any optimizer will have trouble finding the optimum. The NES solver is pretty good and does a
+                reasonable job in most cases. However, since it computes natural gradients from random samples,
+                sometimes the sampling in the first few iterations ends up being suboptimal and the method fails to find
+                a good optimum. To avoid this, we simply reinitialize the optimization again until we succeed.
+                For the vast majority of vectors, we only need to run it once and only a handful of runs are needed
+                for the outliers.
+                 */
+
                 lossFunction.setVector(vectorCopy);
-                var sol = solverNES.optimize(lossFunction, solverinitialSolution, 0.5f);
+                OptimizationResult sol;
+                do {
+                    sol = solverNES.optimize(lossFunction, solverinitialSolution, 0.5f);
+                } while (lossFunction.compute(sol.x) < 1);
+
                 a = sol.x[0];
                 b = sol.x[1];
             }
-            //-----------------------------------------------------------------
+            //---------------------------------------------------------------------------
 
-            forwardKumaraswamy(vectorCopy, a, b);
-            var quantized = bitsPerDimension.uniformQuantize(vectorCopy);
+            var quantized = bitsPerDimension.createByteSequence(vectorCopy.length());
+            switch (bitsPerDimension) {
+                case FOUR:
+                    VectorUtil.nvqQuantizeNormalized4bit(vectorCopy, a, b, quantized);
+                    break;
+                case EIGHT:
+                    VectorUtil.nvqQuantizeNormalized8bit(vectorCopy, a, b, quantized);
+                    break;
+            }
 
             this.bitsPerDimension = bitsPerDimension;
-            this.kumaraswamyBias = l;
-            this.kumaraswamyScale = (u - l);
+            this.kumaraswamyBias = bias;
+            this.kumaraswamyScale = scale;
             this.kumaraswamyA = a;
             this.kumaraswamyB = b;
             this.bytes = quantized;
             this.originalDimensions = vectorCopy.length();
         }
 
+        /**
+         * Constructor used when loading from a RandomAccessReader. It takes its member fields.
+         */
         private QuantizedSubVector(ByteSequence<?> bytes, int originalDimensions, BitsPerDimension bitsPerDimension,
                                    float kumaraswamyBias, float kumaraswamyScale,
                                    float kumaraswamyA, float kumaraswamyB) {
@@ -489,6 +542,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             this.originalDimensions = originalDimensions;
         }
 
+        /**
+         * Returns a dequantized subvector. Since the quantization process is lossy, this subvector will only be an
+         * approximation of the origingal subvector used to build this QuantizedSubVector
+         * @return the reconstructed subvector
+         */
         public VectorFloat<?> getDequantized() {
             switch (bitsPerDimension) {
                 case EIGHT:
@@ -500,6 +558,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             }
         }
 
+        /**
+         * Write the instance to a DataOutput
+         * @param out the DataOutput
+         * @throws IOException fails if we cannot write to the DataOutput
+         */
         public void write(DataOutput out) throws IOException {
             bitsPerDimension.write(out);
             out.writeFloat(kumaraswamyBias);
@@ -512,6 +575,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             vectorTypeSupport.writeByteSequence(out, bytes);
         }
 
+        /**
+         * Read the instance from a RandomAccessReader
+         * @param in the RandomAccessReader
+         * @throws IOException fails if we cannot read from the RandomAccessReader
+         */
         public static QuantizedSubVector load(RandomAccessReader in) throws IOException {
             BitsPerDimension bitsPerDimension = BitsPerDimension.load(in);
             float kumaraswamyBias = in.readFloat();
@@ -541,19 +609,29 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
     }
 
+    /**
+     * The loss used to optimize for the parameters of the Kumaraswamy distribution.
+     * We use the ratio between the loss given by the uniform quantization (a=1 ad b=1) and
+     * the loss obtained with the non-uniform Kumaraswamy quantization.
+     */
     private static abstract class KumaraswamyQuantizationLossFunction extends LossFunction {
         final protected BitsPerDimension bitsPerDimension;
         protected VectorFloat<?> vectorOriginal;
         protected VectorFloat<?> vectorCopy;
+        protected float baseline;
 
         public KumaraswamyQuantizationLossFunction(int nDims, BitsPerDimension bitsPerDimension) {
             super(nDims);
             this.bitsPerDimension = bitsPerDimension;
         }
 
-        public void setVector(VectorFloat<?> vector) {
-            vectorOriginal = vector;
-            vectorCopy = vectorTypeSupport.createFloatVector(vectorOriginal.length());
+        public abstract void setVector(VectorFloat<?> vector);
+
+        public abstract float computeRaw(float[] x);
+
+        @Override
+        public float compute(float[] x) {
+            return baseline / computeRaw(x);
         }
     }
 
@@ -563,12 +641,17 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
 
         @Override
-        public float compute(float[] x) {
+        public void setVector(VectorFloat<?> vector) {
+            vectorOriginal = vector;
+            vectorCopy = vectorTypeSupport.createFloatVector(vectorOriginal.length());
+            baseline = computeRaw(new float[]{1.f, 1.f});
+        }
+
+        @Override
+        public float computeRaw(float[] x) {
             vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            forwardKumaraswamy(vectorCopy, x[0], x[1]);
-            var bytes = bitsPerDimension.uniformQuantize(vectorCopy);
-            VectorUtil.nvqDequantizeUnnormalized8bit(bytes, x[0], x[1], vectorCopy);
-            return -VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
+            VectorUtil.nvqQuantizeDequantizeUnnormalized8bit(vectorCopy, x[0], x[1]);
+            return VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
         }
     }
 
@@ -587,30 +670,15 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             vectorOriginalShuffled = vectorTypeSupport.createFloatVector(vectorOriginal.length());
             vectorOriginalShuffled.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
             VectorUtil.nvqShuffleQueryInPlace4bit(vectorOriginalShuffled);
-        }
 
+            baseline = computeRaw(new float[]{1.f, 1.f});
+        }
 
         @Override
-        public float compute(float[] x) {
+        public float computeRaw(float[] x) {
             vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            forwardKumaraswamy(vectorCopy, x[0], x[1]);
-            var bytes = bitsPerDimension.uniformQuantize(vectorCopy);
-            VectorUtil.nvqDequantizeUnnormalized4bit(bytes, x[0], x[1], vectorCopy);
-            return -VectorUtil.squareL2Distance(vectorOriginalShuffled, vectorCopy);
+            VectorUtil.nvqQuantizeDequantizeUnnormalized4bit(vectorCopy, x[0], x[1]);
+            return VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
         }
-    }
-
-    // In-place application of the CDF of the Kumaraswamy distribution
-    private static void forwardKumaraswamy(VectorFloat<?> x, float a, float b) {
-        // Compute 1 - (1 - v ** a) ** b
-        VectorUtil.constantMinusExponentiatedVector(x, 1, a); // 1 - v ** a
-        VectorUtil.constantMinusExponentiatedVector(x, 1, b); // 1 - v ** b
-    }
-
-    // In-place application of the inverse CDF of the Kumaraswamy distribution
-    private static void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {
-        // Compute (1 - (1 - y) ** (1 / b)) ** (1 / a)
-        VectorUtil.exponentiateConstantMinusVector(y, 1, 1.f / b); // 1 - v ** (1 / b)
-        VectorUtil.exponentiateConstantMinusVector(y, 1, 1.f / a); // 1 - v ** (1 / a)
     }
 }

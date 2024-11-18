@@ -220,28 +220,28 @@ public final class VectorUtil {
     return impl.min(v);
   }
 
-  public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
-    return impl.nvqDotProduct8bit(vector, bytes, originalDimensions, a, b, scale, bias, vectorSum);
+  public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+    return impl.nvqDotProduct8bit(vector, bytes, a, b, scale, bias, vectorSum);
   }
 
-  public static float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
-    return impl.nvqDotProduct4bit(vector, bytes, originalDimensions, a, b, scale, bias, vectorSum);
+  public static float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+    return impl.nvqDotProduct4bit(vector, bytes, a, b, scale, bias, vectorSum);
   }
 
-  public static float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    return impl.nvqSquareL2Distance8bit(vector, bytes, originalDimensions, a, b, scale, bias);
+  public static float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+    return impl.nvqSquareL2Distance8bit(vector, bytes, a, b, scale, bias);
   }
 
-  public static float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    return impl.nvqSquareL2Distance4bit(vector, bytes, originalDimensions, a, b, scale, bias);
+  public static float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+    return impl.nvqSquareL2Distance4bit(vector, bytes, a, b, scale, bias);
   }
 
-  public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
-    return impl.nvqCosine8bit(vector, bytes, originalDimensions, a, b, scale, bias, centroid);
+  public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    return impl.nvqCosine8bit(vector, bytes, a, b, scale, bias, centroid);
   }
 
-  public static float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
-    return impl.nvqCosine4bit(vector, bytes, originalDimensions, a, b, scale, bias, centroid);
+  public static float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    return impl.nvqCosine4bit(vector, bytes, a, b, scale, bias, centroid);
   }
 
   public static void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {
@@ -264,15 +264,19 @@ public final class VectorUtil {
     impl.nvqDequantize4bit(bytes, a, b, scale, bias, destination);
   }
 
-  public static void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-    impl.nvqDequantizeUnnormalized8bit(bytes, a, b, destination);
+  public static void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+    impl.nvqQuantizeNormalized8bit(vector, a, b, destination);
   }
 
-  public static void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-    impl.nvqDequantizeUnnormalized4bit(bytes, a, b, destination);
+  public static void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+    impl.nvqQuantizeNormalized4bit(vector, a, b, destination);
   }
 
-//  static VectorFloat<?> nvqQuantize(VectorFloat<?> vector) {
-//    return impl.nvqQuantize(vector);
-//  }
+  public static void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
+    impl.nvqQuantizeDequantizeUnnormalized8bit(vector, a, b);
+  }
+
+  public static void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
+    impl.nvqQuantizeDequantizeUnnormalized4bit(vector, a, b);
+  }
 }

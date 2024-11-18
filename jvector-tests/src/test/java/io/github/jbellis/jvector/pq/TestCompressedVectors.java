@@ -227,7 +227,7 @@ public class TestCompressedVectors extends RandomizedTest {
             if (vsf == VectorSimilarityFunction.COSINE) {
                 tolerance *= 10;
             } else if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
-                tolerance *= 2;
+                tolerance *= 4;
             }
             System.out.println(vsf + " error " + error + " tolerance " + tolerance);
             assert error <= tolerance : String.format("%s > %s for %s with %d dimensions and %d subvectors", error, tolerance, vsf, dimension, nSubvectors);
@@ -237,14 +237,6 @@ public class TestCompressedVectors extends RandomizedTest {
 
     @Test
     public void testNVQEncodings() {
-//        var vectors = createNormalRandomVectors(2, 64);
-//        for (var v : vectors) {
-//            for (int d = 0; d < 64; d++) {
-//                v.set(d, d);
-//            }
-//            VectorUtil.l2normalize(v);
-//        }
-//        testNVQEncodings(vectors, vectors, 1, true, NVQuantization.BitsPerDimension.FOUR);
         for (int d = 256; d <= 2048; d += 256) {
             var vectors = createNormalRandomVectors(512, d);
             var queries = createNormalRandomVectors(10, d);

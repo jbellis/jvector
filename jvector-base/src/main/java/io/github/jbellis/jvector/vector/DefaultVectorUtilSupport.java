@@ -399,8 +399,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
-    VectorFloat<?> vectorDQ = new ArrayVectorFloat(originalDimensions);
+  public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+    VectorFloat<?> vectorDQ = new ArrayVectorFloat(vector.length());
     nvqDequantizeUnnormalized8bit(bytes, a, b, vectorDQ);
     float dotProd = 0;
     for (int i = 0; i < vector.length(); i++) {
@@ -410,8 +410,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
-    VectorFloat<?> vectorDQ = new ArrayVectorFloat(originalDimensions);
+  public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+    VectorFloat<?> vectorDQ = new ArrayVectorFloat(vector.length());
     nvqDequantizeUnnormalized4bit(bytes, a, b, vectorDQ);
     float dotProd = 0;
     for (int i = 0; i < vector.length(); i++) {
@@ -421,23 +421,23 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    var vectorDQ = nvqDequantize8bit(bytes, originalDimensions, a, b, scale, bias);
+  public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+    var vectorDQ = nvqDequantize8bit(bytes, vector.length(), a, b, scale, bias);
     return squareDistance(vector, vectorDQ);
   }
 
   @Override
-  public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    var vectorDQ = nvqDequantize4bit(bytes, originalDimensions, a, b, scale, bias);
+  public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+    var vectorDQ = nvqDequantize4bit(bytes, vector.length(), a, b, scale, bias);
     return squareDistance(vector, vectorDQ);
   }
 
   @Override
-  public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+  public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
     float sum = 0;
     float normDQ = 0;
 
-    var vectorDQ = nvqDequantize8bit(bytes, originalDimensions, a, b, scale, bias);
+    var vectorDQ = nvqDequantize8bit(bytes, vector.length(), a, b, scale, bias);
     for (int d = 0; d < vector.length(); d++) {
       float elem1 = vector.get(d);
       float elem2 = vectorDQ.get(d) + centroid.get(d);
@@ -449,11 +449,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+  public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
     float sum = 0;
     float normDQ = 0;
 
-    var vectorDQ = nvqDequantize4bit(bytes, originalDimensions, a, b, scale, bias);
+    var vectorDQ = nvqDequantize4bit(bytes, vector.length(), a, b, scale, bias);
     for (int d = 0; d < vector.length(); d++) {
       float elem1 = vector.get(d);
       float elem2 = vectorDQ.get(d) + centroid.get(d);
@@ -468,14 +468,20 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {}
 
   // In-place application of the inverse CDF of the Kumaraswamy distribution
-  private void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {
-    // Compute (1 - (1 - y) ** (1 / b)) ** (1 / a)
-    exponentiateConstantMinusVector(y, 1, 1.f / b); // 1 - v ** (1 / b)
-    exponentiateConstantMinusVector(y, 1, 1.f / a); // 1 - v ** (1 / a)
+  private void forwardKumaraswamy(VectorFloat<?> x, float a, float b) {
+    // Compute 1 - (1 - x ** a) ** b
+    constantMinusExponentiatedVector(x, 1, a); // 1 - v ** a
+    constantMinusExponentiatedVector(x, 1, b); // 1 - v ** b
   }
 
-  @Override
-  public void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+  // In-place application of the inverse CDF of the Kumaraswamy distribution
+  private void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {
+    // Compute (1 - (1 - y) ** (1 / b)) ** (1 / a)
+    exponentiateConstantMinusVector(y, 1, 1.f / b); // (1 - v) ** (1 / b)
+    exponentiateConstantMinusVector(y, 1, 1.f / a); // (1 - v) ** (1 / a)
+  }
+
+  private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
     for (int d = 0; d < bytes.length(); d++) {
       destination.set(d, Byte.toUnsignedInt(bytes.get(d)));
     }
@@ -484,8 +490,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     inverseKumaraswamy(destination, a, b);
   }
 
-  @Override
-  public void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+  private void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
     int constant = (1 << 4) - 1;
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
@@ -528,5 +533,59 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     nvqDequantizeUnnormalized4bit(bytes, a, b, destination);
     scale(destination, scale);
     addInPlace(destination, bias);
+  }
+
+  @Override
+  public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+    int constant = (1 << 8) - 1;
+    for (int d = 0; d < vector.length(); d++) {
+      // Ensure the quantized value is within the 0 to constant range
+      float value = vector.get(d);
+      value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+      int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
+      destination.set(d, (byte) quantizedValue);
+    }
+  }
+
+  @Override
+  public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+    int constant = (1 << 4) - 1;
+    for (int d = 0; d < vector.length(); d += 2) {
+      // Ensure the quantized value is within the 0 to constant range
+      float value = vector.get(d);
+      value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+      int quantizedValue0 = Math.min(Math.max(0, Math.round(constant * value)), constant);
+      int quantizedValue1;
+      if (d + 1 < vector.length()) {
+        value = vector.get(d + 1);
+        value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+        quantizedValue1 = Math.min(Math.max(0, Math.round(constant * value)), constant);
+      } else {
+        quantizedValue1 = 0;
+      }
+      destination.set(d / 2, (byte) ((quantizedValue1 << 4) + quantizedValue0));
+    }
+  }
+
+  private void nvqQuantizeDequantizeUnnormalized(VectorFloat<?> vector, float a, float b, int nBits) {
+    int constant = (1 << nBits) - 1;
+    for (int d = 0; d < vector.length(); d++) {
+      float value = vector.get(d);
+      // Ensure the quantized value is within the 0 to constant range
+      value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+      value = Math.min(Math.max(0, Math.round(constant * value)), constant);
+      value /= constant;
+      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      vector.set(d, value);
+    }
+  }
+  @Override
+  public void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
+    nvqQuantizeDequantizeUnnormalized(vector, a, b, 8);
+  }
+
+  @Override
+  public void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
+    nvqQuantizeDequantizeUnnormalized(vector, a, b, 4);
   }
 }

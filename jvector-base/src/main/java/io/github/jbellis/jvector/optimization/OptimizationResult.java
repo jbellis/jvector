@@ -28,12 +28,24 @@ public class OptimizationResult {
     final public double error;
 
     /**
+     * The number of iterations performed by the solver.
+     */
+    final public int iterations;
+
+    /**
+     * The loss value achieved in the last iteration.
+     */
+    final public float lastLoss;
+
+    /**
      * Constructs an OptimizationResult
      * @param x the solution of the optimization problem
      * @param error the error achieved by the solver
      */
-    public OptimizationResult(float[] x, double error) {
+    public OptimizationResult(float[] x, double error, int iterations, float lastLoss) {
         this.x = x;
         this.error = error;
+        this.iterations = iterations;
+        this.lastLoss = lastLoss;
     }
 }

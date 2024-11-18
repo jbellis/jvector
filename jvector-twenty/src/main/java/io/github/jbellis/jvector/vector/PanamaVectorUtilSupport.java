@@ -191,47 +191,47 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
         return SimdOps.nvqDotProduct8bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                originalDimensions, a, b, scale, bias, vectorSum);
+                a, b, scale, bias, vectorSum);
     }
 
     @Override
-    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
         return SimdOps.nvqDotProduct4bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                originalDimensions, a, b, scale, bias, vectorSum);
+                a, b, scale, bias, vectorSum);
     }
 
     @Override
-    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
         return SimdOps.nvqSquareDistance8bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                originalDimensions, a, b, scale, bias);
+                a, b, scale, bias);
     }
 
     @Override
-    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
         return SimdOps.nvqSquareDistance4bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                originalDimensions, a, b, scale, bias);
+                a, b, scale, bias);
     }
 
     @Override
-    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
         return SimdOps.nvqCosine8bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                originalDimensions,  a, b, scale, bias,
+                a, b, scale, bias,
                 (ArrayVectorFloat) centroid
         );
     }
 
     @Override
-    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
         return SimdOps.nvqCosine4bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                originalDimensions,  a, b, scale, bias,
+                a, b, scale, bias,
                 (ArrayVectorFloat) centroid
         );
     }
@@ -268,19 +268,23 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-        SimdOps.nvqDequantizeUnnormalized8bit(
-                (ArrayByteSequence) bytes, a, b,
-                (ArrayVectorFloat) destination
-        );
+    public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+        SimdOps.nvqQuantizeNormalized8bit((ArrayVectorFloat) vector, a, b, (ArrayByteSequence) destination);
     }
 
     @Override
-    public void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-        SimdOps.nvqDequantizeUnnormalized4bit(
-                (ArrayByteSequence) bytes, a, b,
-                (ArrayVectorFloat) destination
-        );
+    public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+        SimdOps.nvqQuantizeNormalized4bit((ArrayVectorFloat) vector, a, b, (ArrayByteSequence) destination);
+    }
+
+    @Override
+    public void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
+        SimdOps.nvqQuantizeDequantizeUnnormalized((ArrayVectorFloat) vector, a, b, 8);
+    }
+
+    @Override
+    public void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
+        SimdOps.nvqQuantizeDequantizeUnnormalized((ArrayVectorFloat) vector, a, b, 4);
     }
 }
 
