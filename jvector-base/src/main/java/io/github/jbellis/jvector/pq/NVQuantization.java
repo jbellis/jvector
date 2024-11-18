@@ -499,9 +499,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
                 lossFunction.setVector(vectorCopy);
                 OptimizationResult sol;
+                int trials = 0;
                 do {
                     sol = solverNES.optimize(lossFunction, solverinitialSolution, 0.5f);
-                } while (lossFunction.compute(sol.x) < 1);
+                    trials++;
+                } while (sol.lastLoss < 1 && trials < 10);
 
                 a = sol.x[0];
                 b = sol.x[1];
