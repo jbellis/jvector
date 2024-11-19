@@ -46,7 +46,7 @@ public class NVQ implements Feature {
 
     @Override
     public FeatureId id() {
-        return FeatureId.NVQ;
+        return FeatureId.NVQ_VECTORS;
     }
 
     @Override
@@ -114,7 +114,7 @@ public class NVQ implements Feature {
         public QuantizedVector getQuantizedVector(int ordinal) {
             // TODO determine if ExplicitThreadLocal should be used with subvector byte sequences
             try {
-                var reader = source.inlineReaderForNode(ordinal, FeatureId.NVQ);
+                var reader = source.inlineReaderForNode(ordinal, FeatureId.NVQ_VECTORS);
                 return QuantizedVector.load(reader);
             } catch (IOException e) {
                 throw new RuntimeException(e);

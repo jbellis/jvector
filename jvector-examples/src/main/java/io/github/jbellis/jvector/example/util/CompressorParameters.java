@@ -17,8 +17,12 @@
 package io.github.jbellis.jvector.example.util;
 
 import io.github.jbellis.jvector.pq.BinaryQuantization;
+import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.pq.VectorCompressor;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+
+import java.util.Arrays;
 
 public abstract class CompressorParameters {
     public static final CompressorParameters NONE = new NoCompressionParameters();
@@ -67,6 +71,31 @@ public abstract class CompressorParameters {
         @Override
         public VectorCompressor<?> computeCompressor(DataSet ds) {
             return new BinaryQuantization(ds.getDimension());
+        }
+    }
+
+    public static class NVQParameters extends CompressorParameters {
+        private final NVQuantization.BitsPerDimension bitsPerDimension;
+        private final int nSubVectors;
+
+        public NVQParameters(int nSubVectors, NVQuantization.BitsPerDimension bitsPerDimension) {
+            this.nSubVectors = nSubVectors;
+            this.bitsPerDimension = bitsPerDimension;
+        }
+
+        @Override
+        public VectorCompressor<?> computeCompressor(DataSet ds) {
+            return NVQuantization.compute(ds.getBaseRavv(), nSubVectors, bitsPerDimension);
+        }
+
+        @Override
+        public String idStringFor(DataSet ds) {
+            return String.format("NVQ_%s_%d_%s", ds.name, nSubVectors, bitsPerDimension);
+        }
+
+        @Override
+        public boolean supportsCaching() {
+            return true;
         }
     }
 
