@@ -58,7 +58,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         FOUR {
             @Override
             public void write(DataOutput out) throws IOException {
-                out.writeInt(8);
+                out.writeInt(4);
             }
 
             @Override
@@ -277,6 +277,9 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         size += Integer.BYTES; // STORAGE_VERSION
         size += Integer.BYTES; // globalCentroidLength
         size += Float.BYTES * globalMean.length();
+        size += Integer.BYTES; // bitsPerDimension
+        size += Integer.BYTES; // nSubVectors
+        size += subvectorSizesAndOffsets.length * Integer.BYTES;
         return size;
     }
 
@@ -340,7 +343,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
     @Override
     public int compressedVectorSize() {
-        int size = 0;
+        int size = Integer.BYTES; // number of subvectors
         for (int[] subvectorSizesAndOffset : subvectorSizesAndOffsets) {
             size += QuantizedSubVector.compressedVectorSize(subvectorSizesAndOffset[0], bitsPerDimension);
         }
@@ -462,8 +465,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         public static int compressedVectorSize(int nDims, BitsPerDimension bitsPerDimension) {
             // Here we assume that an enum takes 4 bytes
             switch (bitsPerDimension) {
-                case EIGHT: return nDims + 4 * Float.BYTES + 2 * Integer.BYTES;
-                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + 2 * Integer.BYTES;
+                case EIGHT: return nDims + 4 * Float.BYTES + 3 * Integer.BYTES;
+                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + 3 * Integer.BYTES;
                 default: return 0; // never realized
             }
         }
