@@ -195,7 +195,7 @@ public final class VectorUtil {
     return impl.min(v);
   }
 
-  public static float decodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
-    return impl.decodedCosineSimilarity(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+  public static float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
+    return impl.pqDecodedCosineSimilarity(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
   }
 }

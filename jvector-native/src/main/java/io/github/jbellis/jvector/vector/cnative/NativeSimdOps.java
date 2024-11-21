@@ -452,7 +452,7 @@ public class NativeSimdOps {
         }
     }
 
-    private static class decoded_cosine_similarity_f32_512 {
+    private static class pq_decoded_cosine_similarity_f32_512 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
@@ -464,39 +464,39 @@ public class NativeSimdOps {
         );
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(
-                    NativeSimdOps.findOrThrow("decoded_cosine_similarity_f32_512"),
+                    NativeSimdOps.findOrThrow("pq_decoded_cosine_similarity_f32_512"),
                     DESC, Linker.Option.critical(true));
     }
 
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
-    public static FunctionDescriptor decoded_cosine_similarity_f32_512$descriptor() {
-        return decoded_cosine_similarity_f32_512.DESC;
+    public static FunctionDescriptor pq_decoded_cosine_similarity_f32_512$descriptor() {
+        return pq_decoded_cosine_similarity_f32_512.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
-    public static MethodHandle decoded_cosine_similarity_f32_512$handle() {
-        return decoded_cosine_similarity_f32_512.HANDLE;
+    public static MethodHandle pq_decoded_cosine_similarity_f32_512$handle() {
+        return pq_decoded_cosine_similarity_f32_512.HANDLE;
     }
     /**
      * {@snippet lang=c :
-     * float decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
-    public static float decoded_cosine_similarity_f32_512(MemorySegment baseOffsets, int baseOffsetsLength, int clusterCount, MemorySegment partialSums, MemorySegment aMagnitude, float bMagnitude) {
-        var mh$ = decoded_cosine_similarity_f32_512.HANDLE;
+    public static float pq_decoded_cosine_similarity_f32_512(MemorySegment baseOffsets, int baseOffsetsLength, int clusterCount, MemorySegment partialSums, MemorySegment aMagnitude, float bMagnitude) {
+        var mh$ = pq_decoded_cosine_similarity_f32_512.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("decoded_cosine_similarity_f32_512", baseOffsets, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
+                traceDowncall("pq_decoded_cosine_similarity_f32_512", baseOffsets, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
             }
             return (float)mh$.invokeExact(baseOffsets, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
         } catch (Throwable ex$) {

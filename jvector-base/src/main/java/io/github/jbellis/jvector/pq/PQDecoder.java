@@ -134,7 +134,7 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
 
             ByteSequence<?> encoded = cv.get(node2);
 
-            return VectorUtil.decodedCosineSimilarity(encoded, cv.pq.getClusterCount(), partialSums, aMagnitude, bMagnitude);
+            return VectorUtil.pqDecodedCosineSimilarity(encoded, cv.pq.getClusterCount(), partialSums, aMagnitude, bMagnitude);
         }
     }
 }

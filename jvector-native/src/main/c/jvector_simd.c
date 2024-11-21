@@ -319,7 +319,7 @@ float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned c
     return res;
 }
 
-float decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int baseOffsetsLength, int clusterCount, const float* partialSums, const float* aMagnitude, float bMagnitude) {
+float pq_decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int baseOffsetsLength, int clusterCount, const float* partialSums, const float* aMagnitude, float bMagnitude) {
     __m512 sum = _mm512_setzero_ps();
     __m512 vaMagnitude = _mm512_setzero_ps();
     int i = 0;
