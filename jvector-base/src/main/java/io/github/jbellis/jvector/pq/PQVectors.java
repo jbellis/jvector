@@ -29,33 +29,38 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 public class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ProductQuantization pq;
-    private final List<ByteSequence<?>> compressedVectors;
+    // In order to decrease the memory footprint, we store the compressed vectors in their raw representation
+    // and then use the vectorTypeSupport to convert them to ByteSequence when needed and to interpret
+    // the raw Object.
+    private final List<Object> rawCompressedVectors;
 
     /**
      * Initialize the PQVectors with an initial List of vectors.  This list may be
      * mutated, but caller is responsible for thread safety issues when doing so.
      */
-    public PQVectors(ProductQuantization pq, List<ByteSequence<?>> compressedVectors)
+    public PQVectors(ProductQuantization pq, List<Object> compressedVectors)
     {
         this.pq = pq;
-        this.compressedVectors = compressedVectors;
+        this.rawCompressedVectors = compressedVectors;
     }
 
     public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedVectors)
     {
-        this(pq, List.of(compressedVectors));
+        this(pq, Arrays.stream(compressedVectors).map(ByteSequence::get).collect(Collectors.toList()));
     }
 
     @Override
     public int count() {
-        return compressedVectors.size();
+        return rawCompressedVectors.size();
     }
 
     @Override
@@ -65,10 +70,10 @@ public class PQVectors implements CompressedVectors {
         pq.write(out, version);
 
         // compressed vectors
-        out.writeInt(compressedVectors.size());
+        out.writeInt(rawCompressedVectors.size());
         out.writeInt(pq.getSubspaceCount());
-        for (var v : compressedVectors) {
-            vectorTypeSupport.writeByteSequence(out, v);
+        for (var v : rawCompressedVectors) {
+            vectorTypeSupport.writeBytes(out, v);
         }
     }
 
@@ -81,7 +86,7 @@ public class PQVectors implements CompressedVectors {
         if (size < 0) {
             throw new IOException("Invalid compressed vector count " + size);
         }
-        List<ByteSequence<?>> compressedVectors = new ArrayList<>(size);
+        List<Object> compressedVectors = new ArrayList<>(size);
 
         int compressedDimension = in.readInt();
         if (compressedDimension < 0) {
@@ -90,7 +95,7 @@ public class PQVectors implements CompressedVectors {
 
         for (int i = 0; i < size; i++)
         {
-            ByteSequence<?> vector = vectorTypeSupport.readByteSequence(in, compressedDimension);
+            Object vector = vectorTypeSupport.readBytes(in, compressedDimension);
             compressedVectors.add(vector);
         }
 
@@ -109,12 +114,21 @@ public class PQVectors implements CompressedVectors {
 
         PQVectors that = (PQVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
-        return Objects.equals(compressedVectors, that.compressedVectors);
+        if (rawCompressedVectors.size() != that.rawCompressedVectors.size()) return false;
+        for (int i = 0; i < rawCompressedVectors.size(); i++) {
+            // Because this method is not called on any hot path, we accept the overhead of creating ByteSequence
+            var a = vectorTypeSupport.createByteSequence(rawCompressedVectors.get(i));
+            var b = vectorTypeSupport.createByteSequence(that.rawCompressedVectors.get(i));
+            if (!a.equals(b)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pq, compressedVectors);
+        return Objects.hash(pq, rawCompressedVectors);
     }
 
     @Override
@@ -188,7 +202,11 @@ public class PQVectors implements CompressedVectors {
     }
 
     public ByteSequence<?> get(int ordinal) {
-        return compressedVectors.get(ordinal);
+        return vectorTypeSupport.createByteSequence(rawCompressedVectors.get(ordinal));
+    }
+
+    public Object getRaw(int ordinal) {
+        return rawCompressedVectors.get(ordinal);
     }
 
     public ProductQuantization getProductQuantization() {
@@ -225,8 +243,8 @@ public class PQVectors implements CompressedVectors {
         int AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
 
         long codebooksSize = pq.ramBytesUsed();
-        long listSize = (long) REF_BYTES * (1 + compressedVectors.size());
-        long dataSize = (long) (OH_BYTES + AH_BYTES + pq.compressedVectorSize()) * compressedVectors.size();
+        long listSize = (long) REF_BYTES * (1 + rawCompressedVectors.size());
+        long dataSize = (long) (OH_BYTES + AH_BYTES + pq.compressedVectorSize()) * rawCompressedVectors.size();
         return codebooksSize + listSize + dataSize;
     }
 
@@ -234,7 +252,7 @@ public class PQVectors implements CompressedVectors {
     public String toString() {
         return "PQVectors{" +
                 "pq=" + pq +
-                ", count=" + compressedVectors.size() +
+                ", count=" + rawCompressedVectors.size() +
                 '}';
     }
 }

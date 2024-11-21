@@ -660,16 +660,15 @@ final class SimdOps {
         }
     }
 
-    public static float pqDecodedCosineSimilarity(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+    public static float pqDecodedCosineSimilarity(byte[] encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
         return HAS_AVX512
                 ? pqDecodedCosineSimilarity512(encoded, clusterCount, partialSums, aMagnitude, bMagnitude)
                 : pqDecodedCosineSimilarity256(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
     }
 
-    public static float pqDecodedCosineSimilarity512(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+    public static float pqDecodedCosineSimilarity512(byte[] baseOffsets, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
         var sum = FloatVector.zero(FloatVector.SPECIES_512);
         var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
-        var baseOffsets = encoded.get();
         var partialSumsArray = partialSums.get();
         var aMagnitudeArray = aMagnitude.get();
 
@@ -705,10 +704,9 @@ final class SimdOps {
         return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
     }
 
-    public static float pqDecodedCosineSimilarity256(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+    public static float pqDecodedCosineSimilarity256(byte[] baseOffsets, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
         var sum = FloatVector.zero(FloatVector.SPECIES_256);
         var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
-        var baseOffsets = encoded.get();
         var partialSumsArray = partialSums.get();
         var aMagnitudeArray = aMagnitude.get();
 

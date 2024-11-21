@@ -83,11 +83,17 @@ final class ArrayVectorProvider implements VectorTypeSupport
     }
 
     @Override
-    public ByteSequence<?> readByteSequence(RandomAccessReader r, int size) throws IOException
+    public byte[] readBytes(RandomAccessReader r, int size) throws IOException
     {
         byte[] vector = new byte[size];
         r.readFully(vector);
-        return new ArrayByteSequence(vector);
+        return vector;
+    }
+
+    @Override
+    public ByteSequence<?> readByteSequence(RandomAccessReader r, int size) throws IOException
+    {
+        return new ArrayByteSequence(readBytes(r, size));
     }
 
     @Override
@@ -101,5 +107,11 @@ final class ArrayVectorProvider implements VectorTypeSupport
     {
         ArrayByteSequence v = (ArrayByteSequence) sequence;
         out.write(v.get());
+    }
+
+    @Override
+    public void writeBytes(DataOutput out, Object sequence) throws IOException
+    {
+        out.write((byte[]) sequence);
     }
 }

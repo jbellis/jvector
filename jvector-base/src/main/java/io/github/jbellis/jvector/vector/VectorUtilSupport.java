@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -199,10 +200,11 @@ public interface VectorUtilSupport {
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);
 
-  default float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
+  default float pqDecodedCosineSimilarity(PQVectors cv, int node, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
   {
     float sum = 0.0f;
     float aMag = 0.0f;
+    ByteSequence<?> encoded = cv.get(node);
 
     for (int m = 0; m < encoded.length(); ++m) {
       int centroidIndex = Byte.toUnsignedInt(encoded.get(m));

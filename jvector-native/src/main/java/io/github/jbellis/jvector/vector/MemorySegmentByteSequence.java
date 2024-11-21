@@ -72,6 +72,10 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
         return segment.get(ValueLayout.JAVA_BYTE, n);
     }
 
+    public static byte get(MemorySegment ms, int n) {
+        return ms.get(ValueLayout.JAVA_BYTE, n);
+    }
+
     @Override
     public void set(int n, byte value) {
         segment.set(ValueLayout.JAVA_BYTE, n, value);

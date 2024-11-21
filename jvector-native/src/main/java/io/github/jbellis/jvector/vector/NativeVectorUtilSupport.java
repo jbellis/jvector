@@ -16,10 +16,12 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 
 /**
@@ -157,8 +159,9 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
+    public float pqDecodedCosineSimilarity(PQVectors cv, int node, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
     {
-        return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(((MemorySegmentByteSequence) encoded).get(), encoded.length(), clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
+        MemorySegment encoded = (MemorySegment) cv.getRaw(node);
+        return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(encoded, (int) encoded.byteSize(), clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
     }
 }

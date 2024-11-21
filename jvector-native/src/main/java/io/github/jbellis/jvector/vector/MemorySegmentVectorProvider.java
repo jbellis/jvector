@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.nio.Buffer;
 
 /**
@@ -90,6 +91,14 @@ public class MemorySegmentVectorProvider implements VectorTypeSupport
     }
 
     @Override
+    public MemorySegment readBytes(RandomAccessReader r, int size) throws IOException
+    {
+        var array = new byte[size];
+        r.readFully(array);
+        return MemorySegment.ofArray(array);
+    }
+
+    @Override
     public void readByteSequence(RandomAccessReader r, ByteSequence<?> sequence) throws IOException {
         r.readFully(((MemorySegmentByteSequence) sequence).get().asByteBuffer());
     }
@@ -100,5 +109,14 @@ public class MemorySegmentVectorProvider implements VectorTypeSupport
     {
         for (int i = 0; i < sequence.length(); i++)
             out.writeByte(sequence.get(i));
+    }
+
+    @Override
+    public void writeBytes(DataOutput out, Object bytes) throws IOException
+    {
+        MemorySegment sequence = (MemorySegment) bytes;
+        int size = Math.toIntExact(sequence.byteSize());
+        for (int i = 0; i < size; i++)
+            out.writeByte(MemorySegmentByteSequence.get(sequence, i));
     }
 }

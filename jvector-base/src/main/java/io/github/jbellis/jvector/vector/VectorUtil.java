@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -195,7 +196,7 @@ public final class VectorUtil {
     return impl.min(v);
   }
 
-  public static float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
-    return impl.pqDecodedCosineSimilarity(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+  public static float pqDecodedCosineSimilarity(PQVectors cv, int node, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
+    return impl.pqDecodedCosineSimilarity(cv, node, clusterCount, partialSums, aMagnitude, bMagnitude);
   }
 }

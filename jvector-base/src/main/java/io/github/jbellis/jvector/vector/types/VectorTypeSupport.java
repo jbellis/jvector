@@ -81,7 +81,11 @@ public interface VectorTypeSupport {
 
     ByteSequence<?> readByteSequence(RandomAccessReader r, int size) throws IOException;
 
+    Object readBytes(RandomAccessReader r, int size) throws IOException;
+
     void readByteSequence(RandomAccessReader r, ByteSequence<?> sequence) throws IOException;
 
     void writeByteSequence(DataOutput out, ByteSequence<?> sequence) throws IOException;
+
+    void writeBytes(DataOutput out, Object bytes) throws IOException;
 }
