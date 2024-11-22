@@ -16,7 +16,6 @@
 
 package io.github.jbellis.jvector.pq;
 
-import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
@@ -29,6 +28,7 @@ import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import static io.github.jbellis.jvector.vector.VectorUtil.scale;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -154,6 +154,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         for (int i = 0; i < ravvCopy.size(); i++) {
             VectorUtil.addInPlace(globalMean, ravvCopy.getVector(i));
         }
+        scale(globalMean, 1.0f / ravvCopy.size());
         return new NVQuantization(subvectorSizesAndOffsets, globalMean, bitsPerDimension);
     }
 
