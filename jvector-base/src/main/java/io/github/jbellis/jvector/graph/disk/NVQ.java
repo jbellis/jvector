@@ -37,11 +37,11 @@ public class NVQ implements Feature {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     private final NVQuantization nvq;
-    // private final ExplicitThreadLocal<ByteSequence<?>> reusableBytes;
+    private final NVQScorer scorer;
 
     public NVQ(NVQuantization nvq) {
         this.nvq = nvq;
-        // this.reusableBytes = ExplicitThreadLocal.withInitial(() -> vectorTypeSupport.createByteSequence(nvq.compressedVectorSize()));
+        scorer = new NVQScorer(this.nvq);
     }
 
     @Override
@@ -91,34 +91,21 @@ public class NVQ implements Feature {
     ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector,
                                                  VectorSimilarityFunction vsf,
                                                  FeatureSource source) {
-        var scorer = new NVQScorer(this.nvq);
-        var quantizedVectors = createPackedVectors(source);
         var function = scorer.scoreFunctionFor(queryVector, vsf);
-        return node2 -> function.similarityTo(quantizedVectors.getQuantizedVector(node2));
-    }
 
-    private static NVQPackedVectors createPackedVectors(FeatureSource source) {
-        return new NVQPackedVectors(source);
-    }
+        return new ScoreFunction.ExactScoreFunction() {
+            private final QuantizedVector scratch = NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension);
 
-    /*
-     * Retrieves one NVQ quantized vector from disk.
-     */
-    private static class NVQPackedVectors {
-        private final FeatureSource source;
-
-        public NVQPackedVectors(FeatureSource source) {
-            this.source = source;
-        }
-
-        public QuantizedVector getQuantizedVector(int ordinal) {
-            // TODO determine if ExplicitThreadLocal should be used with subvector byte sequences
-            try {
-                var reader = source.inlineReaderForNode(ordinal, FeatureId.NVQ_VECTORS);
-                return QuantizedVector.load(reader);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            @Override
+            public float similarityTo(int node2) {
+                try {
+                    var reader = source.inlineReaderForNode(node2, FeatureId.NVQ_VECTORS);
+                    QuantizedVector.loadInto(reader, scratch);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                return function.similarityTo(scratch);
             }
-        }
+        };
     }
 }

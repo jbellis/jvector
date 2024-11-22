@@ -388,6 +388,20 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
 
         /**
+         * Create an empty instance. Meant to be used as scratch space in conjunction with loadInto
+         * @param subvectorSizesAndOffsets the array containing the sizes for the subvectors
+         * @param bitsPerDimension the number of bits per dimension
+         */
+        public static QuantizedVector createEmpty(int[][] subvectorSizesAndOffsets, BitsPerDimension bitsPerDimension) {
+            var subVectors = new QuantizedSubVector[subvectorSizesAndOffsets.length];
+            for (int i = 0; i < subvectorSizesAndOffsets.length; i++) {
+                subVectors[i] = QuantizedSubVector.createEmpty(bitsPerDimension, subvectorSizesAndOffsets[i][0]);
+            }
+            return new QuantizedVector(subVectors);
+        }
+
+
+        /**
          * Write the instance to a DataOutput
          * @param out the DataOutput
          * @throws IOException fails if we cannot write to the DataOutput
@@ -416,6 +430,18 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             return new QuantizedVector(subVectors);
         }
 
+        /**
+         * Read the instance from a RandomAccessReader
+         * @param in the RandomAccessReader
+         * @throws IOException fails if we cannot read from the RandomAccessReader
+         */
+        public static void loadInto(RandomAccessReader in, QuantizedVector qvector) throws IOException {
+            in.readInt();
+            for (int i = 0; i < qvector.subVectors.length; i++) {
+                QuantizedSubVector.loadInto(in, qvector.subVectors[i]);
+            }
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -431,19 +457,19 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     public static class QuantizedSubVector {
         // The byte sequence that stores the quantized subvector
-        public final ByteSequence<?> bytes;
+        public ByteSequence<?> bytes;
 
         // The number of bits for each dimension of the input uncompressed subvector
         public BitsPerDimension bitsPerDimension;
 
         // The parameters of the Generalized Kumaraswamy distibution
-        public final float kumaraswamyA;
-        public final float kumaraswamyB;
-        public final float kumaraswamyBias;
-        public final float kumaraswamyScale;
+        public float kumaraswamyA;
+        public float kumaraswamyB;
+        public float kumaraswamyBias;
+        public float kumaraswamyScale;
 
         // The number of dimensions of the input uncompressed subvector
-        public final int originalDimensions;
+        public int originalDimensions;
 
         // We initialize the solver with (a=1, b=1), which is equivalent to using an uniform quantization
         private static final float[] solverinitialSolution = {1, 1};
@@ -581,6 +607,17 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
 
         /**
+         * Create an empty instance. Meant to be used as scratch space in conjunction with loadInto
+         * @param bitsPerDimension the number of bits per dimension
+         * @param length the number of dimensions
+         * @throws IOException fails if we cannot read from the RandomAccessReader
+         */
+        public static QuantizedSubVector createEmpty(BitsPerDimension bitsPerDimension, int length) {
+            ByteSequence<?> bytes = bitsPerDimension.createByteSequence(length);
+            return new QuantizedSubVector(bytes, length, bitsPerDimension, 0.f, 0.f, 0.f, 0.f);
+        }
+
+        /**
          * Read the instance from a RandomAccessReader
          * @param in the RandomAccessReader
          * @throws IOException fails if we cannot read from the RandomAccessReader
@@ -597,6 +634,23 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             ByteSequence<?> bytes = vectorTypeSupport.readByteSequence(in, compressedDimension);
 
             return new QuantizedSubVector(bytes, originalDimensions, bitsPerDimension, kumaraswamyBias, kumaraswamyScale, kumaraswamyA, kumaraswamyB);
+        }
+
+        /**
+         * Read the instance from a RandomAccessReader
+         * @param in the RandomAccessReader
+         * @throws IOException fails if we cannot read from the RandomAccessReader
+         */
+        public static void loadInto(RandomAccessReader in, QuantizedSubVector quantizedSubVector) throws IOException {
+            quantizedSubVector.bitsPerDimension = BitsPerDimension.load(in);;
+            quantizedSubVector.kumaraswamyBias = in.readFloat();
+            quantizedSubVector.kumaraswamyScale = in.readFloat();
+            quantizedSubVector.kumaraswamyA = in.readFloat();
+            quantizedSubVector.kumaraswamyB = in.readFloat();
+            quantizedSubVector.originalDimensions = in.readInt();
+            in.readInt();
+
+            vectorTypeSupport.readByteSequence(in, quantizedSubVector.bytes);
         }
 
         @Override
