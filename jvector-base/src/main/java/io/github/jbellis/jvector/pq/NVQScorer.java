@@ -110,7 +110,7 @@ public class NVQScorer {
          *
          * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
          *
-         * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
+         * |query - vector|^2 \approx |query - (scale * quantized + bias + globalMean)|^2
          *                          = |(query - globalMean) - scale * quantized + bias|^2
          *
          * where scale and bias are scalars.
