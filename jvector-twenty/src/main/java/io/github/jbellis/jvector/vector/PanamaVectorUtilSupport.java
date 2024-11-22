@@ -92,11 +92,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
-        float sum = 0f;
-        for (int i = 0; i < baseOffsets.length(); i++) {
-            sum += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i)));
-        }
-        return sum;
+        return SimdOps.assembleAndSum(((ArrayVectorFloat) data).get(), dataBase, ((ArrayByteSequence) baseOffsets).get());
     }
 
     @Override
@@ -158,6 +154,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public void quantizePartials(float delta, VectorFloat<?> partials, VectorFloat<?> partialBases, ByteSequence<?> quantizedPartials) {
         SimdOps.quantizePartials(delta, (ArrayVectorFloat) partials, (ArrayVectorFloat) partialBases, (ArrayByteSequence) quantizedPartials);
+    }
+
+    @Override
+    public float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
+    {
+        return SimdOps.pqDecodedCosineSimilarity((ArrayByteSequence) encoded, clusterCount, (ArrayVectorFloat) partialSums, (ArrayVectorFloat) aMagnitude, bMagnitude);
     }
 }
 

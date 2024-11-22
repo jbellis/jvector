@@ -131,18 +131,10 @@ abstract class PQDecoder implements ScoreFunction.ApproximateScoreFunction {
         }
 
         protected float decodedCosine(int node2) {
-            float sum = 0.0f;
-            float aMag = 0.0f;
 
             ByteSequence<?> encoded = cv.get(node2);
 
-            for (int m = 0; m < encoded.length(); ++m) {
-                int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
-                sum += partialSums.get((m * cv.pq.getClusterCount()) + centroidIndex);
-                aMag += aMagnitude.get((m * cv.pq.getClusterCount()) + centroidIndex);
-            }
-
-            return (float) (sum / Math.sqrt(aMag * bMagnitude));
+            return VectorUtil.pqDecodedCosineSimilarity(encoded, cv.pq.getClusterCount(), partialSums, aMagnitude, bMagnitude);
         }
     }
 }
