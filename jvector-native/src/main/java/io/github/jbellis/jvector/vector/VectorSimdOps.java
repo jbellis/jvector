@@ -710,7 +710,7 @@ final class VectorSimdOps {
     }
 
     static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
-        vector = vector.neg().add(1.f).pow(1.f / b);  // (1 - v) ** (1 / a)
+        vector = vector.neg().add(1.f).pow(1.f / b);  // (1 - v) ** (1 / b)
         return vector.neg().add(1.f).pow(1.f / a);      // (1 - v) ** (1 / a)
     }
 
