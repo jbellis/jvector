@@ -272,12 +272,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
-        VectorSimdOps.nvqQuantizeDequantizeUnnormalized((MemorySegmentVectorFloat) vector, a, b, 8);
-    }
-
-    @Override
-    public void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
-        VectorSimdOps.nvqQuantizeDequantizeUnnormalized((MemorySegmentVectorFloat) vector, a, b, 4);
+    public float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
+        return VectorSimdOps.nvqLoss((MemorySegmentVectorFloat) vector, a, b, nBits);
     }
 }

@@ -352,7 +352,8 @@ public interface VectorUtilSupport {
   void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
 
   /**
-   * Quantize a subvector as an 8-bit quantized subvector. This method assumes that the input vector has been
+   * Quantize a subvector as an 8-bit quantized subvector.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
    * @param vector The vector to quantized
    * @param a The parameter a of the Generalized Kumaraswamy distribution
@@ -362,7 +363,8 @@ public interface VectorUtilSupport {
   void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination);
 
   /**
-   * Quantize a subvector as a 4-bit quantized subvector. This method assumes that the input vector has been
+   * Quantize a subvector as a 4-bit quantized subvector.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
    * @param vector The vector to quantized
    * @param a The parameter a of the Generalized Kumaraswamy distribution
@@ -372,20 +374,12 @@ public interface VectorUtilSupport {
   void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination);
 
   /**
-   * Method to quantize a subvector as an 8-bit quantized subvector and dequantize it in place.
-   * This is a convenience tool for optimizing for a and b that is faster than separately quantizing and dequantizing.
-   * @param vector The vector to quantized
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * Compute the squared error of quantizing the vector using the Kumaraswamy distribution.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param a The parameter a of the Kumaraswamy distribution
+   * @param b The parameter b of the Kumaraswamy distribution
+   * @param nBits the number of bits per dimension
    */
-  void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b);
-
-  /**
-   * Method to quantize a subvector as a 4-bit quantized subvector and dequantize it in place.
-   * This is a convenience tool for optimizing for a and b that is faster than separately quantizing and dequantizing.
-   * @param vector The vector to quantized
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   */
-  void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b);
+  float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits);
 }

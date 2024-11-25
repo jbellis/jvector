@@ -46,8 +46,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public enum BitsPerDimension {
         EIGHT {
             @Override
-            public void write(DataOutput out) throws IOException {
-                out.writeInt(8);
+            public int getInt() {
+                return 8;
             }
 
             @Override
@@ -56,6 +56,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             }
         },
         FOUR {
+            @Override
+            public int getInt() {
+                return 4;
+            }
+
             @Override
             public void write(DataOutput out) throws IOException {
                 out.writeInt(4);
@@ -72,7 +77,14 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          * @param out the DataOutput into which to write the object
          * @throws IOException if there is a problem writing to out.
          */
-        public abstract void write(DataOutput out) throws IOException;
+        public void write(DataOutput out) throws IOException {
+            out.writeInt(getInt());
+        }
+
+        /**
+         * Returns the integer 4 for FOUR and 8 for EIGHT
+         */
+        public abstract int getInt();
 
         /**
          * Creates a ByteSequence of the proper length to store the quantized vector.
@@ -184,16 +196,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public QuantizedVector encode(VectorFloat<?> vector) {
         KumaraswamyQuantizationLossFunction lossFunction = null;
         if (learn) {
-            switch (bitsPerDimension) {
-                case FOUR:
-                    lossFunction = new KumaraswamyQuantizationLossFunction4bit(2, bitsPerDimension);
-                    break;
-                case EIGHT:
-                    lossFunction = new KumaraswamyQuantizationLossFunction8bit(2, bitsPerDimension);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unsupported bits per dimension " + bitsPerDimension);
-            }
+            lossFunction = new KumaraswamyQuantizationLossFunction(bitsPerDimension);
             lossFunction.setMinBounds(new float[]{1e-6f, 1e-6f});
         }
 
@@ -674,71 +677,33 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * We use the ratio between the loss given by the uniform quantization (a=1 ad b=1) and
      * the loss obtained with the non-uniform Kumaraswamy quantization.
      */
-    private static abstract class KumaraswamyQuantizationLossFunction extends LossFunction {
+    private static class KumaraswamyQuantizationLossFunction extends LossFunction {
         final protected BitsPerDimension bitsPerDimension;
-        protected VectorFloat<?> vectorOriginal;
-        protected VectorFloat<?> vectorCopy;
+        protected VectorFloat<?> vector;
         protected float baseline;
 
-        public KumaraswamyQuantizationLossFunction(int nDims, BitsPerDimension bitsPerDimension) {
-            super(nDims);
+        public KumaraswamyQuantizationLossFunction(BitsPerDimension bitsPerDimension) {
+            super(2);
             this.bitsPerDimension = bitsPerDimension;
         }
 
-        public abstract void setVector(VectorFloat<?> vector);
+        public void setVector(VectorFloat<?> vector) {
+            this.vector = vector;
+            baseline = computeRaw(new float[]{1.f, 1.f});
+        }
 
-        public abstract float computeRaw(float[] x);
+        public float computeRaw(float[] x) {
+            return VectorUtil.nvqLoss(vector, x[0], x[1], bitsPerDimension.getInt());
+        }
 
         @Override
         public float compute(float[] x) {
             return baseline / computeRaw(x);
         }
-    }
-
-    private static class KumaraswamyQuantizationLossFunction8bit extends KumaraswamyQuantizationLossFunction {
-        public KumaraswamyQuantizationLossFunction8bit(int nDims, BitsPerDimension bitsPerDimension) {
-            super(nDims, bitsPerDimension);
-        }
 
         @Override
-        public void setVector(VectorFloat<?> vector) {
-            vectorOriginal = vector;
-            vectorCopy = vectorTypeSupport.createFloatVector(vectorOriginal.length());
-            baseline = computeRaw(new float[]{1.f, 1.f});
-        }
-
-        @Override
-        public float computeRaw(float[] x) {
-            vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            VectorUtil.nvqQuantizeDequantizeUnnormalized8bit(vectorCopy, x[0], x[1]);
-            return VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
-        }
-    }
-
-    private static class KumaraswamyQuantizationLossFunction4bit extends KumaraswamyQuantizationLossFunction {
-        protected VectorFloat<?> vectorOriginalShuffled;
-
-        public KumaraswamyQuantizationLossFunction4bit(int nDims, BitsPerDimension bitsPerDimension) {
-            super(nDims, bitsPerDimension);
-        }
-
-        @Override
-        public void setVector(VectorFloat<?> vector) {
-            vectorOriginal = vector;
-            vectorCopy = vectorTypeSupport.createFloatVector(vectorOriginal.length());
-
-            vectorOriginalShuffled = vectorTypeSupport.createFloatVector(vectorOriginal.length());
-            vectorOriginalShuffled.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            VectorUtil.nvqShuffleQueryInPlace4bit(vectorOriginalShuffled);
-
-            baseline = computeRaw(new float[]{1.f, 1.f});
-        }
-
-        @Override
-        public float computeRaw(float[] x) {
-            vectorCopy.copyFrom(vectorOriginal, 0, 0, vectorOriginal.length());
-            VectorUtil.nvqQuantizeDequantizeUnnormalized4bit(vectorCopy, x[0], x[1]);
-            return VectorUtil.squareL2Distance(vectorOriginal, vectorCopy);
+        public boolean minimumGoalAchieved(float lossValue) {
+            return lossValue > 1.1f;
         }
     }
 }

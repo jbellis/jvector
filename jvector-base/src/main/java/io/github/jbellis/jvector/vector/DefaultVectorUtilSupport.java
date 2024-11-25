@@ -24,6 +24,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -448,8 +449,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
       value = scale * value + bias;
 
-      value -= vector.get(d);
-      squareSum += value * value;
+      squareSum += MathUtil.square(value - vector.get(d));
     }
     return squareSum;
   }
@@ -537,40 +537,46 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {}
 
-  // In-place application of the inverse CDF of the Kumaraswamy distribution
-  private void forwardKumaraswamy(VectorFloat<?> x, float a, float b) {
-    // Compute 1 - (1 - x ** a) ** b
-    constantMinusExponentiatedVector(x, 1, a); // 1 - v ** a
-    constantMinusExponentiatedVector(x, 1, b); // 1 - v ** b
+  static float forwardKumaraswamy(float value, float a, float b) {
+    var temp = 1.f - (float) Math.pow(value, a);   // 1 - v ** a
+    return 1.f - (float) Math.pow(temp, b);        // 1 - v ** b
   }
 
-  // In-place application of the inverse CDF of the Kumaraswamy distribution
-  private void inverseKumaraswamy(VectorFloat<?> y, float a, float b) {
-    // Compute (1 - (1 - y) ** (1 / b)) ** (1 / a)
-    exponentiateConstantMinusVector(y, 1, 1.f / b); // (1 - v) ** (1 / b)
-    exponentiateConstantMinusVector(y, 1, 1.f / a); // (1 - v) ** (1 / a)
+  static float inverseKumaraswamy(float value, float a, float b) {
+    var temp = (float) Math.pow(1 - value, 1.f / b);  // (1 - v) ** (1 / a)
+    return (float) Math.pow(1 - temp, 1.f / a);       // (1 - v) ** (1 / a)
   }
 
   private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-    for (int d = 0; d < bytes.length(); d++) {
-      destination.set(d, Byte.toUnsignedInt(bytes.get(d)));
-    }
     int constant = (1 << 8) - 1;
-    scale(destination, 1.f / constant);
-    inverseKumaraswamy(destination, a, b);
+
+    float value;
+    for (int d = 0; d < bytes.length(); d++) {
+      value = Byte.toUnsignedInt(bytes.get(d));
+      value /= constant;
+      value = inverseKumaraswamy(value, a, b);
+      destination.set(d, value);
+    }
   }
 
   private void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
     int constant = (1 << 4) - 1;
+
+    float value;
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-      destination.set(2 * d, quantizedValue & constant);
+      value = quantizedValue & constant;
+      value /= constant;
+      value = inverseKumaraswamy(value, a, b);
+      destination.set(2 * d, value);
+
       if (2 * d + 1 < destination.length()) {
-        destination.set(2 * d + 1, quantizedValue >> 4);
+        value = quantizedValue >> 4;
+        value /= constant;
+        value = inverseKumaraswamy(value, a, b);
+        destination.set(2 * d + 1, value);
       }
     }
-    scale(destination, 1.f / constant);
-    inverseKumaraswamy(destination, a, b);
   }
 
   @Override
@@ -637,25 +643,23 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
-  private void nvqQuantizeDequantizeUnnormalized(VectorFloat<?> vector, float a, float b, int nBits) {
-    int constant = (1 << nBits) - 1;
-    for (int d = 0; d < vector.length(); d++) {
-      float value = vector.get(d);
-      // Ensure the quantized value is within the 0 to constant range
-      value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
-      value = Math.min(Math.max(0, Math.round(constant * value)), constant);
-      value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
-      vector.set(d, value);
-    }
-  }
-  @Override
-  public void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
-    nvqQuantizeDequantizeUnnormalized(vector, a, b, 8);
-  }
+  public float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
+    float invA = 1.f / a;
+    float invB = 1.f / b;
+    float constant = (1 << nBits) - 1;
 
-  @Override
-  public void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
-    nvqQuantizeDequantizeUnnormalized(vector, a, b, 4);
+    float squaredSum = 0.f;
+    float originalValue, reconstructedValue;
+    for (int d = 0; d < vector.length(); d++) {
+      originalValue = vector.get(d);
+
+      reconstructedValue = 1.f - (float) Math.pow(1. - Math.pow(originalValue, a), b);
+      reconstructedValue = Math.min(Math.max(0, Math.round(constant * reconstructedValue)), constant) / constant;
+      reconstructedValue = (float) Math.pow(1. - Math.pow(1. - reconstructedValue, invB), invA);
+
+      squaredSum += MathUtil.square(originalValue - reconstructedValue);
+    }
+
+    return squaredSum;
   }
 }

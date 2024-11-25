@@ -28,16 +28,12 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.Feature;
-import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.InlineVectors;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
-import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
+import io.github.jbellis.jvector.graph.disk.*;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ApproximateScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ExactScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
+import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
@@ -266,6 +262,69 @@ public class SiftSmall {
         }
     }
 
+    public static void siftDiskAnnLTMWithNVQ(List<VectorFloat<?>> baseVectors, List<VectorFloat<?>> queryVectors, List<Set<Integer>> groundTruth) throws IOException {
+        int originalDimension = baseVectors.get(0).length();
+        RandomAccessVectorValues ravv = new ListRandomAccessVectorValues(baseVectors, originalDimension);
+
+        // compute the codebook, but don't encode any vectors yet
+        ProductQuantization pq = ProductQuantization.compute(ravv, 16, 256, true);
+
+        var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
+        nvq.learn = false;
+
+        // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
+        // this is used to score the construction searches
+        List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
+        PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
+        BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
+
+        Path indexPath = Files.createTempFile("siftsmall", ".inline");
+        Path pqPath = Files.createTempFile("siftsmall", ".pq");
+        // Builder creation looks mostly the same
+        try (GraphIndexBuilder builder = new GraphIndexBuilder(bsp, ravv.dimension(), 16, 100, 1.2f, 1.2f);
+             // explicit Writer for the first time, this is what's behind OnDiskGraphIndex.write
+             OnDiskGraphIndexWriter writer = new OnDiskGraphIndexWriter.Builder(builder.getGraph(), indexPath)
+                     .with(new NVQ(nvq))
+                     .withMapper(new OrdinalMapper.IdentityMapper(baseVectors.size() - 1))
+                     .build();
+             // output for the compressed vectors
+             DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
+        {
+            // build the index vector-at-a-time (on disk)
+            for (VectorFloat<?> v : baseVectors) {
+                // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
+                int ordinal = incrementallyCompressedVectors.size();
+                incrementallyCompressedVectors.add(pq.encode(v));
+                // write the NVQ vector to disk
+                writer.writeInline(ordinal, Feature.singleState(FeatureId.NVQ_VECTORS, new NVQ.State(nvq.encode(v))));
+                // now add it to the graph -- the previous steps must be completed first since the PQVectors
+                // and InlineVectorValues are both used during the search that runs as part of addGraphNode construction
+                builder.addGraphNode(ordinal, v);
+            }
+
+            // cleanup does a final enforcement of maxDegree and handles other scenarios like deleted nodes
+            // that we don't need to worry about here
+            builder.cleanup();
+
+            // finish writing the index (by filling in the edge lists) and write our completed PQVectors
+            writer.write(Map.of());
+            pqv.write(pqOut);
+        }
+
+        // searching the index does not change
+        ReaderSupplier rs = new MMapReader.Supplier(indexPath);
+        OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
+        try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {
+            var pqvSearch = PQVectors.load(in);
+            Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> {
+                ApproximateScoreFunction asf = pqvSearch.precomputedScoreFunctionFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                ExactScoreFunction reranker = index.getView().rerankerFor(q, VectorSimilarityFunction.EUCLIDEAN);
+                return new SearchScoreProvider(asf, reranker);
+            };
+            testRecall(index, queryVectors, groundTruth, sspFactory);
+        }
+    }
+
     //
     // Utilities and main() harness
     //
@@ -311,6 +370,7 @@ public class SiftSmall {
         } catch (Exception e) {
             ExceptionUtils.throwIoException(e);
         }
+
         System.out.printf("(%s) Recall: %.4f%n", graphType, (double) topKfound.get() / (queryVectors.size() * topK));
     }
 
@@ -322,11 +382,12 @@ public class SiftSmall {
         System.out.format("%d base and %d query vectors loaded, dimensions %d%n",
                           baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
 
-        siftInMemory(baseVectors);
-        siftInMemoryWithSearcher(baseVectors);
-        siftInMemoryWithRecall(baseVectors, queryVectors, groundTruth);
-        siftPersisted(baseVectors, queryVectors, groundTruth);
-        siftDiskAnn(baseVectors, queryVectors, groundTruth);
+//        siftInMemory(baseVectors);
+//        siftInMemoryWithSearcher(baseVectors);
+//        siftInMemoryWithRecall(baseVectors, queryVectors, groundTruth);
+//        siftPersisted(baseVectors, queryVectors, groundTruth);
+//        siftDiskAnn(baseVectors, queryVectors, groundTruth);
         siftDiskAnnLTM(baseVectors, queryVectors, groundTruth);
+        siftDiskAnnLTMWithNVQ(baseVectors, queryVectors, groundTruth);
     }
 }

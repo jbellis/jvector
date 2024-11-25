@@ -117,7 +117,9 @@ public abstract class LossFunction {
         else {
             copy = Arrays.copyOf(x, x.length);
         }
-        IntStream.range(0, x.length).forEach(d -> copy[d] = Math.min(Math.max(x[d], minBounds[d]), maxBounds[d]));
+        for (int d = 0; d < nDims; d++) {
+            copy[d] = Math.min(Math.max(x[d], minBounds[d]), maxBounds[d]);
+        }
         return copy;
     }
 
@@ -127,5 +129,9 @@ public abstract class LossFunction {
      */
     public void project(float[] x) {
         project(x, true);
+    }
+
+    public boolean minimumGoalAchieved(float lossValue) {
+        return false;
     }
 }

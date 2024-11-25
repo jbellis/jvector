@@ -278,13 +278,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
-        SimdOps.nvqQuantizeDequantizeUnnormalized((ArrayVectorFloat) vector, a, b, 8);
-    }
-
-    @Override
-    public void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
-        SimdOps.nvqQuantizeDequantizeUnnormalized((ArrayVectorFloat) vector, a, b, 4);
+    public float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
+        return SimdOps.nvqLoss((ArrayVectorFloat) vector, a, b, nBits);
     }
 }
 

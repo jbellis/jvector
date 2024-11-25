@@ -173,11 +173,9 @@ public class NESOptimizer {
      * @param funValues the loss function values for each sample
      * @param utilities the utility corresponding to each sample
      */
-    private void sortUtilities(double[] unsortedUtilities, float[] funValues, float[] utilities) {
-        var indices = IntStream.range(0, funValues.length).boxed().toArray(Integer[]::new);
-        Arrays.sort(indices, (i1, i2) -> -1 * Double.compare(funValues[i1], funValues[i2]));
-
-        IntStream.range(0, funValues.length).forEach(i -> utilities[indices[i]] = (float) unsortedUtilities[i]);
+    private void sortUtilities(double[] unsortedUtilities, FunValue[] funValues, float[] utilities) {
+        Arrays.sort(funValues, (f1, f2) -> -1 * Double.compare(f1.value, f2.value));
+        IntStream.range(0, funValues.length).forEach(i -> utilities[funValues[i].pos] = (float) unsortedUtilities[i]);
     }
 
     /**
@@ -216,6 +214,12 @@ public class NESOptimizer {
         return optimizeSeparable(lossFun, initialSolution, initSigma);
     }
 
+    /** Little helper class to make argsort more efficient */
+    static class FunValue {
+        public Integer pos;
+        public float value;
+    }
+
     /**
      * Runs the Exponential Natural Evolution Strategies (xNES) solver for a separable and normal parameter
      * distribution (Algorithm 6 in [1]) with a modification to support box constraints (min/max) by projecting onto
@@ -242,6 +246,7 @@ public class NESOptimizer {
         var lrSigma = computeLrSigma(nDims);
 
         // Initialize mu and sigma
+        var sample = new float[nDims];
         var mu = new float[nDims];
         var sigma = new float[nDims];
         for (int d = 0; d < nDims; d++) {
@@ -256,19 +261,20 @@ public class NESOptimizer {
         var oldFunVal = lossFun.compute(mu);
 
         float[][] rawSamples = new float[nSamples][];
+        FunValue[] funValues = new FunValue[nSamples];
         for (int i = 0; i < nSamples; i++) {
             rawSamples[i] = new float[nDims];
+            funValues[i] = new FunValue();
         }
-        float[] sample = new float[nDims];
 
-        float[] funValues = new float[nSamples];
+
         float[] utilities = new float[nSamples];
 
         double[] unsortedUtilities = computeUnsortedUtilities(nSamples);
 
         int iter = 0;
         double error = tol + 1.;
-        while (error > tol && (maxIterations == 0 || iter < maxIterations)) {
+        while (error > tol && (maxIterations == 0 || iter < maxIterations) && !lossFun.minimumGoalAchieved(oldFunVal)) {
             iter += 1;
 
             // generate samples used to compute the natural gradient
@@ -279,7 +285,8 @@ public class NESOptimizer {
                     var z = mu[d] + sigma[d] * v;
                     sample[d] = (float) z;
                 }
-                funValues[i] = lossFun.projectCompute(sample);
+                funValues[i].pos = i;
+                funValues[i].value = lossFun.projectCompute(sample);
             }
 
             // See section 3.1 in [1].

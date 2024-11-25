@@ -272,11 +272,7 @@ public final class VectorUtil {
     impl.nvqQuantizeNormalized4bit(vector, a, b, destination);
   }
 
-  public static void nvqQuantizeDequantizeUnnormalized8bit(VectorFloat<?> vector, float a, float b) {
-    impl.nvqQuantizeDequantizeUnnormalized8bit(vector, a, b);
-  }
-
-  public static void nvqQuantizeDequantizeUnnormalized4bit(VectorFloat<?> vector, float a, float b) {
-    impl.nvqQuantizeDequantizeUnnormalized4bit(vector, a, b);
+  public static float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
+    return impl.nvqLoss(vector, a, b, nBits);
   }
 }

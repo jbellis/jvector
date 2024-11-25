@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.*;
 
@@ -777,14 +778,14 @@ final class SimdOps {
     }
 
     static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
-        var res = vector.neg().add(1.f).pow(1.f / b);   // 1 - v ** (1 / a)
-        res = res.neg().add(1.f).pow(1.f / a);          // 1 - v ** (1 / b)
+        var res = vector.neg().add(1.f).pow(1.f / b);   // (1 - v) ** (1 / b)
+        res = res.neg().add(1.f).pow(1.f / a);          // (1 - v) ** (1 / a)
         return res;
     }
 
     static float inverseKumaraswamy(float value, float a, float b) {
-        var temp = (float) Math.pow(1 - value, 1.f / b);
-        return (float) Math.pow(1 - temp, 1.f / a);
+        var temp = (float) Math.pow(1 - value, 1.f / b);   // (1 - v) ** (1 / b)
+        return (float) Math.pow(1 - temp, 1.f / a);        // (1 - v) ** (1 / a)
     }
 
     static FloatVector nvqDequantizeUnnormalized4bitPart1(ByteVector bytes, float a, float b) {
@@ -965,7 +966,7 @@ final class SimdOps {
         for (int d = vectorizedLength; d < vector.length(); d++) {
             // Ensure the quantized value is within the 0 to constant range
             float value = vector.get(d);
-            value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+            value = forwardKumaraswamy(value, a, b);
             int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
             destination.set(d, (byte) quantizedValue);
         }
@@ -999,12 +1000,12 @@ final class SimdOps {
         for (int d = vectorizedLength; d < vector.length(); d += 2) {
             // Ensure the quantized value is within the 0 to constant range
             float value = vector.get(d);
-            value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+            value = forwardKumaraswamy(value, a, b);
             int quantizedValue0 = Math.min(Math.max(0, Math.round(constant * value)), constant);
             int quantizedValue1;
             if (d + 1 < vector.length()) {
                 value = vector.get(d + 1);
-                value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+                value = forwardKumaraswamy(value, a, b);
                 quantizedValue1 = Math.min(Math.max(0, Math.round(constant * value)), constant);
             } else {
                 quantizedValue1 = 0;
@@ -1013,34 +1014,41 @@ final class SimdOps {
         }
     }
 
-    static void nvqQuantizeDequantizeUnnormalized(ArrayVectorFloat vector, float a, float b, int nBits) {
+    static float nvqLoss(ArrayVectorFloat vector, float a, float b, int nBits) {
         int constant = (1 << nBits) - 1;
-
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        float squaredSum = 0.f;
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b);
-            arr = arr.mul(constant).add(0.5f)
+            var recArr = forwardKumaraswamy(arr, a, b);
+            recArr = recArr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsInts()
                     .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsFloats()
                     .div(constant);
-            arr = inverseKumaraswamy(arr, a, b);
-            arr.intoArray(vector.get(), i);
+            recArr = inverseKumaraswamy(recArr, a, b);
+
+            var diff = arr.sub(recArr);
+            squaredSum += diff.mul(diff).reduceLanes(VectorOperators.ADD);
         }
 
         // Process the tail
+        float value, recValue;
         for (int i = vectorizedLength; i < vector.length(); i++) {
-            float value = vector.get(i);
-            // Ensure the quantized value is within the 0 to constant range
-            value = forwardKumaraswamy(value, a, b);
-            value = Math.min(Math.max(0, Math.round(constant * value)), constant);
-            value /= constant;
-            value = inverseKumaraswamy(value, a, b);
-            vector.set(i, value);
+            value = vector.get(i);
+
+            recValue = forwardKumaraswamy(value, a, b);
+            recValue = Math.min(Math.max(0, Math.round(constant * recValue)), constant);
+            recValue /= constant;
+            recValue = inverseKumaraswamy(recValue, a, b);
+
+            squaredSum += MathUtil.square(value - recValue);
         }
+
+        return squaredSum;
     }
 
     /**
