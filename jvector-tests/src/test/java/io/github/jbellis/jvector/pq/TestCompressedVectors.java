@@ -59,6 +59,7 @@ public class TestCompressedVectors extends RandomizedTest {
         // Read compressed vectors
         try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
             var cv2 = PQVectors.load(in, 0);
+            assertEquals(cv.hashCode(), cv2.hashCode());
             assertEquals(cv, cv2);
         }
     }

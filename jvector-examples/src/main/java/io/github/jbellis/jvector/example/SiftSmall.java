@@ -215,8 +215,8 @@ public class SiftSmall {
 
         // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
         // this is used to score the construction searches
-        List<ByteSequence<?>> incrementallyCompressedVectors = new ArrayList<>();
-        PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors);
+        ByteSequence<?>[] incrementallyCompressedVectors = new ByteSequence[baseVectors.size() * pq.compressedVectorSize()];
+        PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors, baseVectors.size(), 1);
         BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
 
         Path indexPath = Files.createTempFile("siftsmall", ".inline");
@@ -232,10 +232,10 @@ public class SiftSmall {
              DataOutputStream pqOut = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(pqPath))))
         {
             // build the index vector-at-a-time (on disk)
-            for (VectorFloat<?> v : baseVectors) {
+            for (int ordinal = 0; ordinal < baseVectors.size(); ordinal++) {
+                VectorFloat<?> v = baseVectors.get(ordinal);
                 // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
-                int ordinal = incrementallyCompressedVectors.size();
-                incrementallyCompressedVectors.add(pq.encode(v));
+                incrementallyCompressedVectors[ordinal] = pq.encode(v);
                 // write the full vector to disk
                 writer.writeInline(ordinal, Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(v)));
                 // now add it to the graph -- the previous steps must be completed first since the PQVectors

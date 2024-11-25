@@ -25,6 +25,8 @@ public interface ByteSequence<T> extends Accountable
      */
     T get();
 
+    int offset();
+
     int length();
 
     byte get(int i);
@@ -42,4 +44,6 @@ public interface ByteSequence<T> extends Accountable
     void copyFrom(ByteSequence<?> src, int srcOffset, int destOffset, int length);
 
     ByteSequence<T> copy();
+
+    ByteSequence<T>  slice(int offset, int length);
 }

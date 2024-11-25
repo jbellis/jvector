@@ -42,6 +42,11 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
     }
 
     @Override
+    public int offset() {
+        return 0;
+    }
+
+    @Override
     public byte get(int n) {
         return data[n];
     }
@@ -70,6 +75,14 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
     @Override
     public ArrayByteSequence copy() {
         return new ArrayByteSequence(Arrays.copyOf(data, data.length));
+    }
+
+    @Override
+    public ByteSequence<byte[]> slice(int offset, int length) {
+        if (offset == 0 && length == data.length) {
+            return this;
+        }
+        return new ArraySliceByteSequence(data, offset, length);
     }
 
     @Override

@@ -221,7 +221,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
 
     @Override
     public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
-        return new PQVectors(this, (ByteSequence<?>[]) compressedVectors);
+        return new PQVectors(this, (ByteSequence<?>[]) compressedVectors, compressedVectors.length, 1);
     }
 
     /**

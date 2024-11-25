@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
@@ -660,13 +661,13 @@ final class SimdOps {
         }
     }
 
-    public static float pqDecodedCosineSimilarity(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+    public static float pqDecodedCosineSimilarity(ByteSequence<byte[]> encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
         return HAS_AVX512
                 ? pqDecodedCosineSimilarity512(encoded, clusterCount, partialSums, aMagnitude, bMagnitude)
                 : pqDecodedCosineSimilarity256(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
     }
 
-    public static float pqDecodedCosineSimilarity512(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+    public static float pqDecodedCosineSimilarity512(ByteSequence<byte[]> encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
         var sum = FloatVector.zero(FloatVector.SPECIES_512);
         var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
         var baseOffsets = encoded.get();
@@ -674,8 +675,9 @@ final class SimdOps {
         var aMagnitudeArray = aMagnitude.get();
 
         int[] convOffsets = scratchInt512.get();
-        int i = 0;
-        int limit = ByteVector.SPECIES_128.loopBound(baseOffsets.length);
+        int i = encoded.offset();
+        int length = encoded.length();
+        int limit = i + ByteVector.SPECIES_128.loopBound(length);
 
         var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount);
 
@@ -696,7 +698,7 @@ final class SimdOps {
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
         float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
 
-        for (; i < baseOffsets.length; i++) {
+            for (; i < length; i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets[i]);
             sumResult += partialSumsArray[offset];
             aMagnitudeResult += aMagnitudeArray[offset];
@@ -705,7 +707,7 @@ final class SimdOps {
         return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
     }
 
-    public static float pqDecodedCosineSimilarity256(ArrayByteSequence encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+    public static float pqDecodedCosineSimilarity256(ByteSequence<byte[]> encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
         var sum = FloatVector.zero(FloatVector.SPECIES_256);
         var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
         var baseOffsets = encoded.get();
@@ -713,8 +715,9 @@ final class SimdOps {
         var aMagnitudeArray = aMagnitude.get();
 
         int[] convOffsets = scratchInt256.get();
-        int i = 0;
-        int limit = ByteVector.SPECIES_64.loopBound(baseOffsets.length);
+        int i = encoded.offset();
+        int length = encoded.length();
+        int limit = i + ByteVector.SPECIES_64.loopBound(length);
 
         var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(clusterCount);
 
@@ -735,7 +738,7 @@ final class SimdOps {
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
         float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
 
-        for (; i < baseOffsets.length; i++) {
+        for (; i < length; i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets[i]);
             sumResult += partialSumsArray[offset];
             aMagnitudeResult += aMagnitudeArray[offset];

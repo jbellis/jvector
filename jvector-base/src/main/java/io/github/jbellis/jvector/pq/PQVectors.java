@@ -28,34 +28,34 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    private static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
     final ProductQuantization pq;
-    private final List<ByteSequence<?>> compressedVectors;
+    private final ByteSequence<?>[] compressedDataChunks;
+    private final int vectorCount;
+    private final int vectorsPerChunk;
 
-    /**
-     * Initialize the PQVectors with an initial List of vectors.  This list may be
-     * mutated, but caller is responsible for thread safety issues when doing so.
-     */
-    public PQVectors(ProductQuantization pq, List<ByteSequence<?>> compressedVectors)
+    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedDataChunks)
     {
-        this.pq = pq;
-        this.compressedVectors = compressedVectors;
+        this(pq, compressedDataChunks, compressedDataChunks.length, 1);
     }
 
-    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedVectors)
+    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedDataChunks, int vectorCount, int vectorsPerChunk)
     {
-        this(pq, List.of(compressedVectors));
+        this.pq = pq;
+        this.compressedDataChunks = compressedDataChunks;
+        this.vectorCount = vectorCount;
+        this.vectorsPerChunk = vectorsPerChunk;
     }
 
     @Override
     public int count() {
-        return compressedVectors.size();
+        return vectorCount;
     }
 
     @Override
@@ -65,10 +65,10 @@ public class PQVectors implements CompressedVectors {
         pq.write(out, version);
 
         // compressed vectors
-        out.writeInt(compressedVectors.size());
+        out.writeInt(vectorCount);
         out.writeInt(pq.getSubspaceCount());
-        for (var v : compressedVectors) {
-            vectorTypeSupport.writeByteSequence(out, v);
+        for (ByteSequence<?> chunk : compressedDataChunks) {
+            vectorTypeSupport.writeByteSequence(out, chunk);
         }
     }
 
@@ -77,24 +77,33 @@ public class PQVectors implements CompressedVectors {
         var pq = ProductQuantization.load(in);
 
         // read the vectors
-        int size = in.readInt();
-        if (size < 0) {
-            throw new IOException("Invalid compressed vector count " + size);
+        int vectorCount = in.readInt();
+        if (vectorCount < 0) {
+            throw new IOException("Invalid compressed vector count " + vectorCount);
         }
-        List<ByteSequence<?>> compressedVectors = new ArrayList<>(size);
 
         int compressedDimension = in.readInt();
         if (compressedDimension < 0) {
             throw new IOException("Invalid compressed vector dimension " + compressedDimension);
         }
 
-        for (int i = 0; i < size; i++)
-        {
-            ByteSequence<?> vector = vectorTypeSupport.readByteSequence(in, compressedDimension);
-            compressedVectors.add(vector);
+        // Calculate if we need to split into multiple chunks
+        long totalSize = (long) vectorCount * compressedDimension;
+        int vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? vectorCount : MAX_CHUNK_SIZE / compressedDimension;
+
+        int numChunks = vectorCount / vectorsPerChunk;
+        ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
+
+        for (int i = 0; i < numChunks - 1; i++) {
+            int chunkSize = vectorsPerChunk * compressedDimension;
+            chunks[i] = vectorTypeSupport.readByteSequence(in, chunkSize);
         }
 
-        return new PQVectors(pq, compressedVectors);
+        // Last chunk might be smaller
+        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
+        chunks[numChunks - 1] = vectorTypeSupport.readByteSequence(in, remainingVectors * compressedDimension);
+
+        return new PQVectors(pq, chunks, vectorCount, vectorsPerChunk);
     }
 
     public static PQVectors load(RandomAccessReader in, long offset) throws IOException {
@@ -102,6 +111,12 @@ public class PQVectors implements CompressedVectors {
         return load(in);
     }
 
+    /**
+     * We consider two PQVectors equal when their PQs are equal and their compressed data is equal. We ignore the
+     * chunking strategy in the comparison since this is an implementation detail.
+     * @param o the object to check for equality
+     * @return true if the objects are equal, false otherwise
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -109,12 +124,29 @@ public class PQVectors implements CompressedVectors {
 
         PQVectors that = (PQVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
-        return Objects.equals(compressedVectors, that.compressedVectors);
+        if (this.count() != that.count()) return false;
+        // TODO how do we want to determine equality? With the current change, we are willing to write one
+        // thing and materialize another. It seems like the real concern should be whether the compressedVectors have
+        // the same data, not whether they are in a MemorySegment or a byte[] and not whether there is one chunk of many
+        // vectors or many chunks of one vector. This technically goes against the implementation of each of the
+        // ByteSequence#equals methods, which raises the question of whether this is valid. I primarily updated this
+        // code to get testSaveLoadPQ to pass.
+        for (int i = 0; i < this.count(); i++) {
+            var thisNode = this.get(i);
+            var thatNode = that.get(i);
+            if (thisNode.length() != thatNode.length()) return false;
+            for (int j = 0; j < thisNode.length(); j++) {
+                if (thisNode.get(j) != thatNode.get(j)) return false;
+            }
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pq, compressedVectors);
+        // We don't use the array structure in the hash code calculation because we allow for different chunking
+        // strategies. Instead, we use the first entry in the first chunk to provide a stable hash code.
+        return Objects.hash(pq, count(), count() > 0 ? get(0).get(0) : 0);
     }
 
     @Override
@@ -188,7 +220,10 @@ public class PQVectors implements CompressedVectors {
     }
 
     public ByteSequence<?> get(int ordinal) {
-        return compressedVectors.get(ordinal);
+        int chunkIndex = ordinal / vectorsPerChunk;
+        int vectorIndexInChunk = ordinal % vectorsPerChunk;
+        int start = vectorIndexInChunk * pq.getSubspaceCount();
+        return compressedDataChunks[chunkIndex].slice(start, pq.getSubspaceCount());
     }
 
     public ProductQuantization getProductQuantization() {
@@ -225,16 +260,19 @@ public class PQVectors implements CompressedVectors {
         int AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
 
         long codebooksSize = pq.ramBytesUsed();
-        long listSize = (long) REF_BYTES * (1 + compressedVectors.size());
-        long dataSize = (long) (OH_BYTES + AH_BYTES + pq.compressedVectorSize()) * compressedVectors.size();
-        return codebooksSize + listSize + dataSize;
+        long chunksArraySize = OH_BYTES + AH_BYTES + (long) compressedDataChunks.length * REF_BYTES;
+        long dataSize = 0;
+        for (ByteSequence<?> chunk : compressedDataChunks) {
+            dataSize += chunk.ramBytesUsed();
+        }
+        return codebooksSize + chunksArraySize + dataSize;
     }
 
     @Override
     public String toString() {
         return "PQVectors{" +
                 "pq=" + pq +
-                ", count=" + compressedVectors.size() +
+                ", count=" + vectorCount +
                 '}';
     }
 }
