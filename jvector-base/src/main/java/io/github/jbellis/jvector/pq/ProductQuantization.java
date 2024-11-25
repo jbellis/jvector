@@ -228,12 +228,13 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
      * Encodes the given vectors in parallel using the PQ codebooks.
      */
     @Override
-    public ByteSequence<?>[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> IntStream.range(0, ravv.size())
-                        .parallel()
-                        .mapToObj(i -> encode(ravv.getVector(i)))
-                        .toArray(ByteSequence<?>[]::new))
+    public PQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        final PQVectors pqv = new PQVectors(this, ravv.size());
+        simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+                .parallel()
+                .forEach(ordinal -> pqv.set(ordinal, encode(ravv.getVector(ordinal)))))
                 .join();
+        return pqv;
     }
 
     /**

@@ -183,9 +183,8 @@ public class SiftSmall {
                                                                  16, // number of subspaces
                                                                  256, // number of centroids per subspace
                                                                  true); // center the dataset
-            ByteSequence<?>[] compressed = pq.encodeAll(ravv);
+            var pqv = pq.encodeAll(ravv);
             // write the compressed vectors to disk
-            PQVectors pqv = new PQVectors(pq, compressed);
             pqv.write(out);
         }
 
@@ -215,8 +214,7 @@ public class SiftSmall {
 
         // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
         // this is used to score the construction searches
-        ByteSequence<?>[] incrementallyCompressedVectors = new ByteSequence[baseVectors.size() * pq.compressedVectorSize()];
-        PQVectors pqv = new PQVectors(pq, incrementallyCompressedVectors, baseVectors.size(), 1);
+        PQVectors pqv = new PQVectors(pq, baseVectors.size());
         BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
 
         Path indexPath = Files.createTempFile("siftsmall", ".inline");
@@ -235,7 +233,7 @@ public class SiftSmall {
             for (int ordinal = 0; ordinal < baseVectors.size(); ordinal++) {
                 VectorFloat<?> v = baseVectors.get(ordinal);
                 // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
-                incrementallyCompressedVectors[ordinal] = pq.encode(v);
+                pqv.set(ordinal, pq.encode(v));
                 // write the full vector to disk
                 writer.writeInline(ordinal, Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(v)));
                 // now add it to the graph -- the previous steps must be completed first since the PQVectors

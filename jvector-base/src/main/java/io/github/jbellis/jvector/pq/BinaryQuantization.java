@@ -63,12 +63,13 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     }
 
     @Override
-    public long[][] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+    public CompressedVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        var cv = simdExecutor.submit(() -> IntStream.range(0, ravv.size())
                 .parallel()
                 .mapToObj(i -> encode(ravv.getVector(i)))
                 .toArray(long[][]::new))
                 .join();
+        return new BQVectors(this, cv);
     }
 
     /**

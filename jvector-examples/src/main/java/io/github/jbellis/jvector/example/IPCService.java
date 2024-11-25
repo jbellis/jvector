@@ -182,17 +182,7 @@ public class IPCService
         ProductQuantization pq = ProductQuantization.compute(ravv, pqDims, 256, ctx.similarityFunction == VectorSimilarityFunction.EUCLIDEAN);
         System.out.format("PQ@%s build %.2fs,%n", pqDims, (System.nanoTime() - start) / 1_000_000_000.0);
         start = System.nanoTime();
-
-        ByteSequence<?>[] quantizedVectors = new ByteSequence<?>[ravv.size()];
-        var ravvCopy = ravv.threadLocalSupplier();
-        PhysicalCoreExecutor.instance.execute(() ->
-            IntStream.range(0, quantizedVectors.length).parallel().forEach(i -> {
-                var localRavv = ravvCopy.get();
-                quantizedVectors[i] = pq.encode(localRavv.getVector(i));
-            })
-        );
-
-        var cv = new PQVectors(pq, quantizedVectors);
+        var cv = pq.encodeAll(ravv);
         System.out.format("PQ encoded %d vectors [%.2f MB] in %.2fs,%n", ravv.size(), (cv.ramBytesUsed()/1024f/1024f) , (System.nanoTime() - start) / 1_000_000_000.0);
         return cv;
     }

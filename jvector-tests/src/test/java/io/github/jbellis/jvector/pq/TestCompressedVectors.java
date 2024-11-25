@@ -46,8 +46,7 @@ public class TestCompressedVectors extends RandomizedTest {
         var pq = ProductQuantization.compute(ravv, 1, 256, false);
 
         // Compress the vectors
-        var compressed = pq.encodeAll(ravv);
-        var cv = new PQVectors(pq, compressed);
+        var cv = pq.encodeAll(ravv);
         assertEquals(2 * Float.BYTES, cv.getOriginalSize());
         assertEquals(1, cv.getCompressedSize());
 
@@ -72,8 +71,7 @@ public class TestCompressedVectors extends RandomizedTest {
         var bq = new BinaryQuantization(ravv.dimension());
 
         // Compress the vectors
-        var compressed = bq.encodeAll(ravv);
-        var cv = new BQVectors(bq, compressed);
+        var cv = bq.encodeAll(ravv);
         assertEquals(64 * Float.BYTES, cv.getOriginalSize());
         assertEquals(8, cv.getCompressedSize());
 
@@ -96,8 +94,7 @@ public class TestCompressedVectors extends RandomizedTest {
         var pq = ProductQuantization.compute(ravv, codebooks, 256, false);
 
         // Compress the vectors
-        var compressed = pq.encodeAll(ravv);
-        var cv = new PQVectors(pq, compressed);
+        var cv = pq.encodeAll(ravv);
 
         // compare the encoded similarities to the raw
         for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {
@@ -141,8 +138,7 @@ public class TestCompressedVectors extends RandomizedTest {
             var pq = ProductQuantization.compute(ravv, codebooks, 256, center);
 
             // Compress the vectors
-            var compressed = pq.encodeAll(ravv);
-            var cv = new PQVectors(pq, compressed);
+            var cv = pq.encodeAll(ravv);
 
             // compare the precomputed similarities to the raw
             for (int i = 0; i < 10; i++) {

@@ -28,26 +28,46 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    private static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
+    static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
     final ProductQuantization pq;
     private final ByteSequence<?>[] compressedDataChunks;
     private final int vectorCount;
     private final int vectorsPerChunk;
+    private final boolean mutable;
 
-    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedDataChunks)
+    public PQVectors(ProductQuantization pq, int vectorCount)
     {
-        this(pq, compressedDataChunks, compressedDataChunks.length, 1);
+        this.pq = pq;
+        this.mutable = true;
+        this.vectorCount = vectorCount;
+
+        // Calculate if we need to split into multiple chunks
+        int compressedDimension = pq.compressedVectorSize();
+        long totalSize = (long) vectorCount * compressedDimension;
+        this.vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? vectorCount : MAX_CHUNK_SIZE / compressedDimension;
+
+        int numChunks = vectorCount / vectorsPerChunk;
+        ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
+        int chunkSize = vectorsPerChunk * compressedDimension;
+        for (int i = 0; i < numChunks - 1; i++)
+            chunks[i] = vectorTypeSupport.createByteSequence(chunkSize);
+
+        // Last chunk might be smaller
+        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
+        chunks[numChunks - 1] = vectorTypeSupport.createByteSequence(remainingVectors * compressedDimension);
+
+        compressedDataChunks = chunks;
     }
 
     public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedDataChunks, int vectorCount, int vectorsPerChunk)
     {
         this.pq = pq;
+        this.mutable = false;
         this.compressedDataChunks = compressedDataChunks;
         this.vectorCount = vectorCount;
         this.vectorsPerChunk = vectorsPerChunk;
@@ -224,6 +244,19 @@ public class PQVectors implements CompressedVectors {
         int vectorIndexInChunk = ordinal % vectorsPerChunk;
         int start = vectorIndexInChunk * pq.getSubspaceCount();
         return compressedDataChunks[chunkIndex].slice(start, pq.getSubspaceCount());
+    }
+
+    public void set(int ordinal, ByteSequence<?> byteSequence)
+    {
+        if (!mutable)
+        {
+            throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
+        }
+        int chunkIndex = ordinal / vectorsPerChunk;
+        int vectorIndexInChunk = ordinal % vectorsPerChunk;
+        int start = vectorIndexInChunk * pq.getSubspaceCount();
+        assert byteSequence.length() == pq.getSubspaceCount() : "ByteSequence length mismatch " + byteSequence.length() + " != " + pq.getSubspaceCount();
+        compressedDataChunks[chunkIndex].copyFrom(byteSequence, 0, start, pq.getSubspaceCount());
     }
 
     public ProductQuantization getProductQuantization() {
