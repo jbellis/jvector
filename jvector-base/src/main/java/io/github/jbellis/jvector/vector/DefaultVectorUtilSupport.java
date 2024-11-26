@@ -532,13 +532,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {}
 
   static float forwardKumaraswamy(float value, float a, float b) {
-    var temp = 1.f - (float) Math.pow(value, a);   // 1 - v ** a
-    return 1.f - (float) Math.pow(temp, b);        // 1 - v ** b
+    var temp = 1.f - MathUtil.fastExp(MathUtil.fastLog(value) * a);   // 1 - v ** a
+    return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b
   }
 
   static float inverseKumaraswamy(float value, float a, float b) {
-//    var temp = (float) Math.pow(1 - value, 1.f / b);  // (1 - v) ** (1 / a)
-//    return (float) Math.pow(1 - temp, 1.f / a);       // (1 - v) ** (1 / a)
     var temp = MathUtil.fastExp(MathUtil.fastLog(1.f - value) / b);   // (1 - v) ** (1 / b)
     return MathUtil.fastExp(MathUtil.fastLog(1.f - temp) / a);        // (1 - v) ** (1 / a)
   }
