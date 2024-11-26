@@ -401,7 +401,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
-    int constant = (1 << 8) - 1;
+    int constant = 255;
     float dotProd = 0;
     float value;
     for (int d = 0; d < bytes.length(); d++) {
@@ -416,20 +416,20 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
-    int constant = (1 << 4) - 1;
+    int constant = 15;
     float dotProd = 0;
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
       value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      value = inverseKumaraswamy(value, a, b);
 
       dotProd += vector.get(2 * d) * value;
 
       value = quantizedValue >> 4;
       value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      value = inverseKumaraswamy(value, a, b);
 
       dotProd += vector.get(2 * d + 1) * value;
     }
@@ -440,7 +440,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
     float squareSum = 0;
 
-    int constant = (1 << 8) - 1;
+    int constant = 255;
     float value;
 
     for (int d = 0; d < bytes.length(); d++) {
@@ -456,14 +456,14 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
-    int constant = (1 << 4) - 1;
+    int constant = 15;
     float squareSum = 0;
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
       value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      value = inverseKumaraswamy(value, a, b);
       value = scale * value + bias;
 
       value -= vector.get(2 * d);
@@ -471,7 +471,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
       value = quantizedValue >> 4;
       value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      value = inverseKumaraswamy(value, a, b);
       value = scale * value + bias;
 
       value -= vector.get(2 * d + 1);
@@ -485,19 +485,17 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     float sum = 0;
     float normDQ = 0;
 
-    int constant = (1 << 8) - 1;
+    int constant = 255;
     float elem2;
 
     for (int d = 0; d < bytes.length(); d++) {
-      float elem1 = vector.get(d);
-
       elem2 = Byte.toUnsignedInt(bytes.get(d));
       elem2 /= constant;
-      elem2 = (float) Math.pow(1. - Math.pow(1 - elem2, 1.f / b), 1.f / a);
-      elem2 = scale * elem2 + bias;
+      elem2 = inverseKumaraswamy(elem2, a, b);
+      elem2 = scale * elem2 + bias + centroid.get(d);
 
-      sum += elem1 * elem2;
-      normDQ += elem2 * elem2;
+      sum += vector.get(d) * elem2;
+      normDQ += MathUtil.square(elem2);
     }
     return new float[]{sum, normDQ};
   }
@@ -507,28 +505,24 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     float sum = 0;
     float normDQ = 0;
 
-    int constant = (1 << 4) - 1;
-    float elem1, elem2;
+    int constant = 15;
+    float elem2;
     for (int d = 0; d < bytes.length(); d++) {
-      elem1 = vector.get(2 * d);
-
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       elem2 = quantizedValue & constant;
       elem2 /= constant;
-      elem2 = (float) Math.pow(1. - Math.pow(1 - elem2, 1.f / b), 1.f / a);
-      elem2 = scale * elem2 + bias;
+      elem2 = inverseKumaraswamy(elem2, a, b);
+      elem2 = scale * elem2 + bias + centroid.get(2 * d);
 
-      sum += elem1 * elem2;
+      sum += vector.get(2 * d) * elem2;
       normDQ += elem2 * elem2;
-
-      elem1 = vector.get(2 * d + 1);
 
       elem2 = quantizedValue >> 4;
       elem2 /= constant;
-      elem2 = (float) Math.pow(1. - Math.pow(1 - elem2, 1.f / b), 1.f / a);
-      elem2 = scale * elem2 + bias;
+      elem2 = inverseKumaraswamy(elem2, a, b);
+      elem2 = scale * elem2 + bias + centroid.get(2 * d + 1);
 
-      sum += elem1 * elem2;
+      sum += vector.get(2 * d + 1) * elem2;
       normDQ += elem2 * elem2;
     }
     return new float[]{sum, normDQ};
@@ -548,7 +542,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-    int constant = (1 << 8) - 1;
+    int constant = 255;
 
     float value;
     for (int d = 0; d < bytes.length(); d++) {
@@ -560,7 +554,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   private void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
-    int constant = (1 << 4) - 1;
+    int constant = 15;
 
     float value;
     for (int d = 0; d < bytes.length(); d++) {
@@ -613,7 +607,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
-    int constant = (1 << 8) - 1;
+    int constant = 255;
     for (int d = 0; d < vector.length(); d++) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
@@ -625,7 +619,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   @Override
   public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
-    int constant = (1 << 4) - 1;
+    int constant = 15;
     for (int d = 0; d < vector.length(); d += 2) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
@@ -644,8 +638,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   public float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
-    float invA = 1.f / a;
-    float invB = 1.f / b;
     float constant = (1 << nBits) - 1;
 
     float squaredSum = 0.f;
