@@ -789,6 +789,15 @@ final class SimdOps {
     }
 
     static FloatVector nvqDequantizeUnnormalized4bitPart1(ByteVector bytes, float a, float b) {
+        /*
+         * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
+         * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
+         *
+         * Part1: 1st pass of original array (this is returned)
+         * & 0xf:      | 0    | 2    | 4    | 6    | 8    | 10     | 12     | 14     |
+         * Part2: 2nd pass of original array
+         * lS 4:       | 1    | 3    | 5    | 7    | 9    | 11     | 13     | 15     |
+         */
         var arr = bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
                 .lanewise(VectorOperators.AND, 0xf)
                 .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
@@ -798,6 +807,15 @@ final class SimdOps {
     }
 
     static FloatVector nvqDequantizeUnnormalized4bitPart2(ByteVector bytes, float a, float b) {
+        /*
+         * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
+         * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
+         *
+         * Part1: 1st pass of original array
+         * & 0xf:      | 0    | 2    | 4    | 6    | 8    | 10     | 12     | 14     |
+         * Part2: 2nd pass of original array (this is returned)
+         * lS 4:       | 1    | 3    | 5    | 7    | 9    | 11     | 13     | 15     |
+         */
         var arr = bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
                 .lanewise(VectorOperators.AND, 0xff)
                 .lanewise(VectorOperators.LSHR, 4)
@@ -805,6 +823,18 @@ final class SimdOps {
                 .reinterpretAsFloats()
                 .div(15.f);
         return inverseKumaraswamy(arr, a, b);
+    }
+
+    static float nvqDequantizeUnnormalized4bitTailPart1(Byte byteValue, float a, float b) {
+        var intValue = Byte.toUnsignedInt(byteValue);
+        float value = intValue & 0xf;
+        return inverseKumaraswamy(value / 15.f, a, b);
+    }
+
+    static float nvqDequantizeUnnormalized4bitTailPart2(Byte byteValue, float a, float b) {
+        var intValue = Byte.toUnsignedInt(byteValue);
+        float value = intValue << 4;
+        return inverseKumaraswamy(value / 15.f, a, b);
     }
 
     static void nvqDequantizeUnnormalized4bit(ArrayByteSequence bytes, float a, float b, ArrayVectorFloat res) {
@@ -834,17 +864,11 @@ final class SimdOps {
 
         // Process the tail
         if (vectorizedLength < bytes.length()) {
-            for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
-                var intValue = Byte.toUnsignedInt(bytes.get(i));
-                resArr[2 * i] = inverseKumaraswamy(intValue & 0xf, a, b);
-                resArr[2 * i + 1] = inverseKumaraswamy(intValue << 4, a, b);
-            }
-
-            vectorizedLength = bytes.length() - 1;
-            var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
-            resArr[2 * vectorizedLength] = inverseKumaraswamy(intValue & 0xf, a, b);
-            if (vectorizedLength * 2 == resArr.length) {
-                resArr[2 * vectorizedLength + 1] = inverseKumaraswamy(intValue << 4, a, b);
+            for (int i = vectorizedLength; i < bytes.length(); i++) {
+                resArr[2 * i] = nvqDequantizeUnnormalized4bitTailPart1(bytes.get(i), a, b);
+                if (2 * i + 1 < resArr.length) {
+                    resArr[2 * i + 1] = nvqDequantizeUnnormalized4bitTailPart2(bytes.get(i), a, b);
+                }
             }
         }
     }
@@ -871,7 +895,8 @@ final class SimdOps {
 
         // Process the tail
         for (int i = vectorizedLength; i < bytes.length(); i++) {
-            resArr[i] = inverseKumaraswamy(bytes.get(i), a, b);
+            float value = bytes.get(i);
+            resArr[i] = inverseKumaraswamy(value / 255.f, a, b);
         }
     }
 
@@ -899,8 +924,10 @@ final class SimdOps {
         }
 
         // Process the tail
+        float value;
         for (int i = vectorizedLength; i < bytes.length(); i++) {
-            resArr[i] = scale * inverseKumaraswamy(bytes.get(i), a, b) + bias;
+            value = bytes.get(i);
+            resArr[i] = scale * inverseKumaraswamy(value / 255.f, a, b) + bias;
         }
     }
 
@@ -933,17 +960,11 @@ final class SimdOps {
 
         // Process the tail
         if (vectorizedLength < bytes.length()) {
-            for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
-                var intValue = Byte.toUnsignedInt(bytes.get(i));
-                resArr[2 * i] = scale * inverseKumaraswamy(intValue & 0xf, a, b) + bias;
-                resArr[2 * i + 1] = scale * inverseKumaraswamy(intValue << 4, a, b) + bias;
-            }
-
-            vectorizedLength = bytes.length() - 1;
-            var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
-            resArr[2 * vectorizedLength] = scale * inverseKumaraswamy(intValue & 0xf, a, b) + bias;
-            if (vectorizedLength * 2 == resArr.length) {
-                resArr[2 * vectorizedLength + 1] = scale * inverseKumaraswamy(intValue << 4, a, b) + bias;
+            for (int i = vectorizedLength; i < bytes.length(); i++) {
+                resArr[2 * i] = scale * nvqDequantizeUnnormalized4bitTailPart1(bytes.get(i), a, b) + bias;
+                if (2 * i + 1 < resArr.length) {
+                    resArr[2 * i + 1] = scale * nvqDequantizeUnnormalized4bitTailPart2(bytes.get(i), a, b) + bias;
+                }
             }
         }
     }
@@ -1058,7 +1079,7 @@ final class SimdOps {
      *
      * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
      *
-     * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
+     * |query - vector|^2 \approx |query - (scale * quantized + bias + globalMean)|^2
      *                          = |(query - globalMean) - scale * quantized + bias|^2
      *
      * @param vector The shifted query (precomputed query - globalMean)
@@ -1066,10 +1087,33 @@ final class SimdOps {
      * @return The square L2 distance
      */
     static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias) {
-        ArrayVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, vector.length(), a, b, scale, bias);
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_256);
 
-        // Assumes global mean removed from vector
-        return squareDistance(vector, dequantizedVector);
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            var v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+
+            // dequantize
+            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i), a, b);
+            v2 = v2.mul(scale).add(bias);
+
+            var diff = v1.sub(v2);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2, diff;
+        for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+            value2 = quantizedVector.get(i);
+            value2 = scale * inverseKumaraswamy(value2 / 255.f, a, b) + bias;
+            diff = vector.get(i) - value2;
+            squaredSum += MathUtil.square(diff);
+        }
+
+        return squaredSum;
     }
 
     /**
@@ -1087,25 +1131,117 @@ final class SimdOps {
      * @return The square L2 distance
      */
     static float nvqSquareDistance4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias) {
-        ArrayVectorFloat dequantizedVector = nvqDequantize4bit(quantizedVector, vector.length(), a, b, scale, bias);
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_256);
 
-        // Assumes global mean removed from vector
-        return squareDistance(vector, dequantizedVector);
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
+        FloatVector v1, v2, diff;
+        ByteVector bv2;
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            bv2 = ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i);
+
+            // 1st pass
+            v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), 2 * i);
+
+            v2 = nvqDequantizeUnnormalized4bitPart1(bv2, a, b);
+            v2 = v2.mul(scale).add(bias);
+
+            diff = v1.sub(v2);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+
+            // 2nd pass
+            v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), 2 * i + ByteVector.SPECIES_64.length());
+
+            v2 = nvqDequantizeUnnormalized4bitPart2(bv2, a, b);
+            v2 = v2.mul(scale).add(bias);
+
+            diff = v1.sub(v2);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        if (vectorizedLength < quantizedVector.length()) {
+            float value2;
+            for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+                value2 = scale * nvqDequantizeUnnormalized4bitTailPart1(quantizedVector.get(i), a, b) + bias;
+                squaredSum += MathUtil.square(vector.get(2 * i) - value2);
+                if (2 * i + 1 < quantizedVector.length()) {
+                    value2 = scale * nvqDequantizeUnnormalized4bitTailPart2(quantizedVector.get(i), a, b) + bias;
+                    squaredSum += MathUtil.square(vector.get(2 * i + 1) - value2);
+                }
+            }
+        }
+
+        return squaredSum;
     }
 
     static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, float vectorSum) {
-        ArrayVectorFloat dequantizedVector = new ArrayVectorFloat(new float[vector.length()]);
-        nvqDequantizeUnnormalized8bit(quantizedVector, a, b, dequantizedVector);
+        FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_256);
 
-        float dotProd = dotProduct(vector, dequantizedVector);
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            var v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+
+            // dequantize
+            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i), a, b);
+
+            dotProdVec = v1.fma(v2, dotProdVec);
+        }
+
+        float dotProd = dotProdVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2;
+        for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+            value2 = quantizedVector.get(i);
+            value2 = inverseKumaraswamy(value2 / 255.f, a, b);
+            dotProd += vector.get(i) - value2;
+        }
+
         return scale * dotProd + bias * vectorSum;
     }
 
     static float nvqDotProduct4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, float vectorSum) {
-        ArrayVectorFloat dequantizedVector = new ArrayVectorFloat(new float[vector.length()]);
-        nvqDequantizeUnnormalized4bit(quantizedVector, a, b, dequantizedVector);
+        FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_256);
 
-        float dotProd = dotProduct(vector, dequantizedVector);
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
+        FloatVector v1, v2;
+        ByteVector bv2;
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            bv2 = ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i);
+
+            // 1st pass
+            v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), 2 * i);
+            v2 = nvqDequantizeUnnormalized4bitPart1(bv2, a, b);
+
+            dotProdVec = v1.fma(v2, dotProdVec);
+
+            // 2nd pass
+            v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), 2 * i + ByteVector.SPECIES_64.length());
+            v2 = nvqDequantizeUnnormalized4bitPart2(bv2, a, b);
+
+            dotProdVec = v1.fma(v2, dotProdVec);
+        }
+
+        float dotProd = dotProdVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        if (vectorizedLength < quantizedVector.length()) {
+            float value2;
+            for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+                value2 = nvqDequantizeUnnormalized4bitTailPart1(quantizedVector.get(i), a, b);
+                dotProd += vector.get(2 * i) * value2;
+                if (2 * i + 1 < quantizedVector.length()) {
+                    value2 = nvqDequantizeUnnormalized4bitTailPart2(quantizedVector.get(i), a, b);
+                    dotProd += vector.get(2 * i + 1) * value2;
+                }
+            }
+        }
+
         return scale * dotProd + bias * vectorSum;
     }
 
@@ -1114,16 +1250,20 @@ final class SimdOps {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        ArrayVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, vector.length(), a, b, scale, bias);
-        addInPlace(dequantizedVector, centroid);
+        var vsum = FloatVector.zero(FloatVector.SPECIES_256);
+        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
 
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        int vectorizedLength = FloatVector.SPECIES_256.loopBound(vector.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
+            var va = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
 
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var vb = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i);
+            // dequantize
+            var vb = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i), a, b);
+            vb = vb.mul(scale).add(bias);
+
+            var vCentroid = FloatVector.fromArray(FloatVector.SPECIES_256, centroid.get(), i);
+            vb = vb.add(vCentroid);
+
             vsum = va.fma(vb, vsum);
             vbMagnitude = vb.fma(vb, vbMagnitude);
         }
@@ -1132,9 +1272,12 @@ final class SimdOps {
         float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
+        float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
-            sum += vector.get(i) * dequantizedVector.get(i);
-            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+            value2 = quantizedVector.get(i);
+            value2 = scale * inverseKumaraswamy(value2 / 255.f, a, b) + bias + centroid.get(i);
+            sum += vector.get(i) * value2;
+            bMagnitude += value2 * value2;
         }
 
         return new float[]{sum, bMagnitude};
@@ -1145,30 +1288,60 @@ final class SimdOps {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        ArrayVectorFloat dequantizedVector = nvqDequantize4bit(quantizedVector, vector.length(), a, b, scale, bias);
-        addInPlace(dequantizedVector, centroid);
+        var vDotProduct = FloatVector.zero(FloatVector.SPECIES_256);
+        var vbNorm = FloatVector.zero(FloatVector.SPECIES_256);
 
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var vb = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i);
-            vsum = va.fma(vb, vsum);
-            vbMagnitude = vb.fma(vb, vbMagnitude);
+        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
+        FloatVector v1, v2, vCentroid;
+        ByteVector bv2;
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
+            bv2 = ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i);
+
+            // 1st pass
+            v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), 2 * i);
+            vCentroid = FloatVector.fromArray(FloatVector.SPECIES_256, centroid.get(), 2 * i);
+
+            v2 = nvqDequantizeUnnormalized4bitPart1(bv2, a, b);
+            v2 = v2.mul(scale).add(bias);
+            v2 = v2.add(vCentroid);
+
+            vDotProduct = v1.fma(v2, vDotProduct);
+            vbNorm = v2.fma(v2, vbNorm);
+
+            // 2nd pass
+            v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), 2 * i + ByteVector.SPECIES_64.length());
+            vCentroid = FloatVector.fromArray(FloatVector.SPECIES_256, centroid.get(), 2 * i + ByteVector.SPECIES_64.length());
+
+            v2 = nvqDequantizeUnnormalized4bitPart2(bv2, a, b);
+            v2 = v2.mul(scale).add(bias);
+            v2 = v2.add(vCentroid);
+
+            vDotProduct = v1.fma(v2, vDotProduct);
+            vbNorm = v2.fma(v2, vbNorm);
         }
 
-        float sum = vsum.reduceLanes(VectorOperators.ADD);
-        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+        float dotProduct = vDotProduct.reduceLanes(VectorOperators.ADD);
+        float quantizedSquaredNorm = vbNorm.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            sum += vector.get(i) * dequantizedVector.get(i);
-            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+        if (vectorizedLength < quantizedVector.length()) {
+            float value2;
+            for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+                value2 = scale * nvqDequantizeUnnormalized4bitTailPart1(quantizedVector.get(i), a, b) + bias;
+                value2 += centroid.get(2 * i);
+                dotProduct += vector.get(2 * i) * value2;
+                quantizedSquaredNorm += value2 * value2;
+                if (2 * i + 1 < quantizedVector.length()) {
+                    value2 = scale * nvqDequantizeUnnormalized4bitTailPart2(quantizedVector.get(i), a, b) + bias;
+                    value2 += centroid.get(2 * i + 1);
+                    dotProduct += vector.get(2 * i + 1) * value2;
+                    quantizedSquaredNorm += value2 * value2;
+                }
+            }
         }
-
-        return new float[]{sum, bMagnitude};
+        return new float[]{dotProduct, quantizedSquaredNorm};
     }
 
     static void nvqShuffleQueryInPlace4bit(ArrayVectorFloat vector) {
