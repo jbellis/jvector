@@ -407,7 +407,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
       value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      value = inverseKumaraswamy(value, a, b);
 
       dotProd += vector.get(d) * value;
     }
