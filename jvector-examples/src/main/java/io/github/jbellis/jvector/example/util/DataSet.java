@@ -63,7 +63,7 @@ public class DataSet {
 
         this.name = name;
         this.similarityFunction = similarityFunction;
-        this.baseVectors = baseVectors.subList(0, 10000); // TODO TEMP for testing sift-128 this.baseVectors = baseVectors;
+        this.baseVectors = baseVectors;
         this.queryVectors = queryVectors;
         this.groundTruth = groundTruth;
 
