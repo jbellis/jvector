@@ -21,15 +21,15 @@ import io.github.jbellis.jvector.vector.types.ByteSequence;
 import java.util.Arrays;
 
 /**
- * A read only {@link ByteSequence} implementation that wraps an array and provides a view into a slice of it.
+ * A {@link ByteSequence} implementation that represents a slice of another {@link ByteSequence}.
  */
 public class ArraySliceByteSequence implements ByteSequence<byte[]> {
-    private final byte[] data;
+    private final ByteSequence<byte[]> data;
     private final int offset;
     private final int length;
 
-    public ArraySliceByteSequence(byte[] data, int offset, int length) {
-        if (offset < 0 || length < 0 || offset + length > data.length) {
+    public ArraySliceByteSequence(ByteSequence<byte[]> data, int offset, int length) {
+        if (offset < 0 || length < 0 || offset + length > data.length()) {
             throw new IllegalArgumentException("Invalid offset or length");
         }
         this.data = data;
@@ -39,7 +39,7 @@ public class ArraySliceByteSequence implements ByteSequence<byte[]> {
 
     @Override
     public byte[] get() {
-        return data;
+        return data.get();
     }
 
     @Override
@@ -49,28 +49,24 @@ public class ArraySliceByteSequence implements ByteSequence<byte[]> {
 
     @Override
     public byte get(int n) {
-        if (n < 0 || n >= length) {
-            throw new IndexOutOfBoundsException("Index: " + n + ", Length: " + length);
-        }
-        return data[offset + n];
+        return data.get(offset + n);
     }
 
     @Override
     public void set(int n, byte value) {
-        if (n < 0 || n >= length) {
-            throw new IndexOutOfBoundsException("Index: " + n + ", Length: " + length);
-        }
-        data[offset + n] = value;
+        data.set(offset + n, value);
     }
 
     @Override
     public void setLittleEndianShort(int shortIndex, short value) {
-        throw new UnsupportedOperationException("Not supported on slices");
+        data.setLittleEndianShort(offset + shortIndex, value);
     }
 
     @Override
     public void zero() {
-        throw new UnsupportedOperationException("Not supported on slices");
+        for (int i = 0; i < length; i++) {
+            data.set(offset + i, (byte) 0);
+        }
     }
 
     @Override
@@ -80,7 +76,7 @@ public class ArraySliceByteSequence implements ByteSequence<byte[]> {
 
     @Override
     public ByteSequence<byte[]> copy() {
-        byte[] newData = Arrays.copyOfRange(data, offset, offset + length);
+        byte[] newData = Arrays.copyOfRange(data.get(), offset, offset + length);
         return new ArrayByteSequence(newData);
     }
 
@@ -99,13 +95,21 @@ public class ArraySliceByteSequence implements ByteSequence<byte[]> {
     public long ramBytesUsed() {
         // Only count the overhead of this slice object, not the underlying array
         // since that's shared and counted elsewhere
-        return RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + 
-               (3 * Integer.BYTES); // offset, length, and reference to data
+        return RamUsageEstimator.NUM_BYTES_OBJECT_HEADER +
+                data.ramBytesUsed() +
+                (2 * Integer.BYTES); // offset, length
     }
 
     @Override
     public void copyFrom(ByteSequence<?> src, int srcOffset, int destOffset, int copyLength) {
-        throw new UnsupportedOperationException("Not supported on slices");
+        if (src instanceof ArraySliceByteSequence) {
+            ArraySliceByteSequence srcSlice = (ArraySliceByteSequence) src;
+            data.copyFrom(srcSlice.data, srcSlice.offset + srcOffset, offset + destOffset, copyLength);
+        } else {
+            for (int i = 0; i < copyLength; i++) {
+                data.set(offset + destOffset + i, src.get(srcOffset + i));
+            }
+        }
     }
 
     @Override

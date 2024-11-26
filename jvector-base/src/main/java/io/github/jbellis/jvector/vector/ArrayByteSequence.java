@@ -82,7 +82,7 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
         if (offset == 0 && length == data.length) {
             return this;
         }
-        return new ArraySliceByteSequence(data, offset, length);
+        return new ArraySliceByteSequence(this, offset, length);
     }
 
     @Override

@@ -81,7 +81,13 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
     public long[] encode(VectorFloat<?> v) {
         int M = (int) Math.ceil(v.length() / 64.0);
         long[] encoded = new long[M];
-        for (int i = 0; i < M; i++) {
+        encodeTo(v, encoded);
+        return encoded;
+    }
+
+    @Override
+    public void encodeTo(VectorFloat<?> v, long[] dest) {
+        for (int i = 0; i < dest.length; i++) {
             long bits = 0;
             for (int j = 0; j < 64; j++) {
                 int idx = i * 64 + j;
@@ -92,9 +98,8 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
                     bits |= 1L << j;
                 }
             }
-            encoded[i] = bits;
+            dest[i] = bits;
         }
-        return encoded;
     }
 
     @Override

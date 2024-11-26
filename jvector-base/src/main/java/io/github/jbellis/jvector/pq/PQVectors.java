@@ -246,7 +246,12 @@ public class PQVectors implements CompressedVectors {
         return compressedDataChunks[chunkIndex].slice(start, pq.getSubspaceCount());
     }
 
-    public void set(int ordinal, ByteSequence<?> byteSequence)
+    /**
+     * Encode the given vector and set it at the given ordinal. Done without unnecessary copying.
+     * @param ordinal the ordinal to set
+     * @param vector the vector to encode and set
+     */
+    public void encodeAndSet(int ordinal, VectorFloat<?> vector)
     {
         if (!mutable)
         {
@@ -255,8 +260,8 @@ public class PQVectors implements CompressedVectors {
         int chunkIndex = ordinal / vectorsPerChunk;
         int vectorIndexInChunk = ordinal % vectorsPerChunk;
         int start = vectorIndexInChunk * pq.getSubspaceCount();
-        assert byteSequence.length() == pq.getSubspaceCount() : "ByteSequence length mismatch " + byteSequence.length() + " != " + pq.getSubspaceCount();
-        compressedDataChunks[chunkIndex].copyFrom(byteSequence, 0, start, pq.getSubspaceCount());
+        var slice = compressedDataChunks[chunkIndex].slice(start, pq.getSubspaceCount());
+        pq.encodeTo(vector, slice);
     }
 
     public ProductQuantization getProductQuantization() {

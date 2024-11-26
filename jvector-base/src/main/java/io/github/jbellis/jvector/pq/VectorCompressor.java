@@ -41,6 +41,8 @@ public interface VectorCompressor<T> {
 
     T encode(VectorFloat<?> v);
 
+    void encodeTo(VectorFloat<?> v, T dest);
+
     /**
      * @param out DataOutput to write to
      * @param version serialization version.  Versions 2 and 3 are supported

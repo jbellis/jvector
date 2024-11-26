@@ -46,7 +46,6 @@ import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
-import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
@@ -233,7 +232,7 @@ public class SiftSmall {
             for (int ordinal = 0; ordinal < baseVectors.size(); ordinal++) {
                 VectorFloat<?> v = baseVectors.get(ordinal);
                 // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
-                pqv.set(ordinal, pq.encode(v));
+                pqv.encodeAndSet(ordinal, v);
                 // write the full vector to disk
                 writer.writeInline(ordinal, Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(v)));
                 // now add it to the graph -- the previous steps must be completed first since the PQVectors
