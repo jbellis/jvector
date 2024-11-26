@@ -225,14 +225,21 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
     }
 
     /**
-     * Encodes the given vectors in parallel using the PQ codebooks.
+     * Encodes the given vectors in parallel using the PQ codebooks. If a vector is missing (null), it will be encoded
+     * as a zero vector.
      */
     @Override
     public PQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
         final PQVectors pqv = new PQVectors(this, ravv.size());
         simdExecutor.submit(() -> IntStream.range(0, ravv.size())
                 .parallel()
-                .forEach(ordinal -> pqv.encodeAndSet(ordinal, ravv.getVector(ordinal))))
+                .forEach(ordinal -> {
+                    var vector = ravv.getVector(ordinal);
+                    if (vector != null)
+                        pqv.encodeAndSet(ordinal, vector);
+                    else
+                        pqv.setZero(ordinal);
+                }))
                 .join();
         return pqv;
     }
@@ -240,9 +247,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
     /**
      * Encodes the input vector using the PQ codebooks, weighing parallel loss more than orthogonal loss, into
      * the given ByteSequence.
-     * @return one byte per subspace
      */
-    private ByteSequence<?> encodeAnisotropic(VectorFloat<?> vector, ByteSequence<?> result) {
+    private void encodeAnisotropic(VectorFloat<?> vector, ByteSequence<?> result) {
         // compute the residuals from each subvector to each corresponding codebook centroid
         Residual[][] residuals = computeResiduals(vector);
         assert residuals.length == M : "Residuals length mismatch " + residuals.length + " != " + M;
@@ -278,8 +284,6 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
                 break;
             }
         }
-
-        return result;
     }
 
     private CoordinateDescentResult optimizeSingleSubspace(Residual[] residuals, int oldIdx, float oldParallelResidualSum) {

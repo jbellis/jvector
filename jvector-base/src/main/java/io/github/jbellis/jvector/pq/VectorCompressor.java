@@ -37,6 +37,13 @@ public interface VectorCompressor<T> {
         return encodeAll(ravv, PhysicalCoreExecutor.pool());
     }
 
+    /**
+     * Encode all vectors in the RandomAccessVectorValues. If the RandomAccessVectorValues
+     * has a missing vector for a given ordinal, the value will be encoded as a zero vector.
+     * @param ravv RandomAccessVectorValues to encode
+     * @param simdExecutor ForkJoinPool to use for SIMD operations
+     * @return CompressedVectors containing the encoded vectors
+     */
     CompressedVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor);
 
     T encode(VectorFloat<?> v);

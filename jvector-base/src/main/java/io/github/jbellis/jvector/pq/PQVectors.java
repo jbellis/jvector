@@ -238,6 +238,8 @@ public class PQVectors implements CompressedVectors {
     }
 
     public ByteSequence<?> get(int ordinal) {
+        if (ordinal < 0 || ordinal >= vectorCount)
+            throw new IndexOutOfBoundsException("Ordinal " + ordinal + " out of bounds for vector count " + vectorCount);
         int chunkIndex = ordinal / vectorsPerChunk;
         int vectorIndexInChunk = ordinal % vectorsPerChunk;
         int start = vectorIndexInChunk * pq.getSubspaceCount();
@@ -252,14 +254,21 @@ public class PQVectors implements CompressedVectors {
     public void encodeAndSet(int ordinal, VectorFloat<?> vector)
     {
         if (!mutable)
-        {
             throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
-        }
-        int chunkIndex = ordinal / vectorsPerChunk;
-        int vectorIndexInChunk = ordinal % vectorsPerChunk;
-        int start = vectorIndexInChunk * pq.getSubspaceCount();
-        var slice = compressedDataChunks[chunkIndex].slice(start, pq.getSubspaceCount());
-        pq.encodeTo(vector, slice);
+
+        pq.encodeTo(vector, get(ordinal));
+    }
+
+    /**
+     * Set the vector at the given ordinal to zero.
+     * @param ordinal the ordinal to set
+     */
+    public void setZero(int ordinal)
+    {
+        if (!mutable)
+            throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
+
+        get(ordinal).zero();
     }
 
     public ProductQuantization getProductQuantization() {
