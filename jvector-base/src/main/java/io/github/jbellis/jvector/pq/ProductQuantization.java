@@ -230,18 +230,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
      */
     @Override
     public PQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        final PQVectors pqv = new PQVectors(this, ravv.size());
-        simdExecutor.submit(() -> IntStream.range(0, ravv.size())
-                .parallel()
-                .forEach(ordinal -> {
-                    var vector = ravv.getVector(ordinal);
-                    if (vector != null)
-                        pqv.encodeAndSet(ordinal, vector);
-                    else
-                        pqv.setZero(ordinal);
-                }))
-                .join();
-        return pqv;
+        return PQVectors.encodeAndBuild(this, ravv.size(), ravv, simdExecutor);
     }
 
     /**
