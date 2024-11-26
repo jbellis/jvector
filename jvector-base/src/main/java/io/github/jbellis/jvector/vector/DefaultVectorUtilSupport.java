@@ -537,8 +537,10 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   static float inverseKumaraswamy(float value, float a, float b) {
-    var temp = (float) Math.pow(1 - value, 1.f / b);  // (1 - v) ** (1 / a)
-    return (float) Math.pow(1 - temp, 1.f / a);       // (1 - v) ** (1 / a)
+//    var temp = (float) Math.pow(1 - value, 1.f / b);  // (1 - v) ** (1 / a)
+//    return (float) Math.pow(1 - temp, 1.f / a);       // (1 - v) ** (1 / a)
+    var temp = MathUtil.fastExp(MathUtil.fastLog(1.f - value) / b);   // (1 - v) ** (1 / b)
+    return MathUtil.fastExp(MathUtil.fastLog(1.f - temp) / a);        // (1 - v) ** (1 / a)
   }
 
   private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
