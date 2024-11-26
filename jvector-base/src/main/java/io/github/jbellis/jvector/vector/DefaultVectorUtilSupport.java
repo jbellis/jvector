@@ -446,7 +446,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
       value /= constant;
-      value = (float) Math.pow(1. - Math.pow(1 - value, 1.f / b), 1.f / a);
+      value = inverseKumaraswamy(value, a, b);
       value = scale * value + bias;
 
       squareSum += MathUtil.square(value - vector.get(d));
@@ -617,7 +617,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < vector.length(); d++) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
-      value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+      value = forwardKumaraswamy(value, a, b);
       int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
       destination.set(d, (byte) quantizedValue);
     }
@@ -629,12 +629,12 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < vector.length(); d += 2) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
-      value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+      value = forwardKumaraswamy(value, a, b);
       int quantizedValue0 = Math.min(Math.max(0, Math.round(constant * value)), constant);
       int quantizedValue1;
       if (d + 1 < vector.length()) {
         value = vector.get(d + 1);
-        value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
+        value = forwardKumaraswamy(value, a, b);
         quantizedValue1 = Math.min(Math.max(0, Math.round(constant * value)), constant);
       } else {
         quantizedValue1 = 0;
@@ -653,9 +653,9 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < vector.length(); d++) {
       originalValue = vector.get(d);
 
-      reconstructedValue = 1.f - (float) Math.pow(1. - Math.pow(originalValue, a), b);
+      reconstructedValue = forwardKumaraswamy(originalValue, a, b);
       reconstructedValue = Math.min(Math.max(0, Math.round(constant * reconstructedValue)), constant) / constant;
-      reconstructedValue = (float) Math.pow(1. - Math.pow(1. - reconstructedValue, invB), invA);
+      reconstructedValue = inverseKumaraswamy(reconstructedValue, a, b);
 
       squaredSum += MathUtil.square(originalValue - reconstructedValue);
     }
