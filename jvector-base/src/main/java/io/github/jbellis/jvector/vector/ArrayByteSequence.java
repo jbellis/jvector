@@ -117,15 +117,12 @@ final public class ArrayByteSequence implements ByteSequence<byte[]>
     @Override
     public boolean equals(Object o)
     {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ArrayByteSequence that = (ArrayByteSequence) o;
-        return Arrays.equals(data, that.data);
+        return this.equalTo(o);
     }
 
     @Override
     public int hashCode()
     {
-        return Arrays.hashCode(data);
+        return this.getHashCode();
     }
 }

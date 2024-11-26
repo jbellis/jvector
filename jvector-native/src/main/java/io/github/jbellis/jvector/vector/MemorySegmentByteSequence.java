@@ -133,14 +133,11 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        MemorySegmentByteSequence that = (MemorySegmentByteSequence) o;
-        return segment.mismatch(that.segment) == -1;
+        return this.equalTo(o);
     }
 
     @Override
     public int hashCode() {
-        return segment.hashCode();
+        return this.getHashCode();
     }
 }

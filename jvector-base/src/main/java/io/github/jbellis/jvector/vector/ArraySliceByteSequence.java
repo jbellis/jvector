@@ -131,22 +131,11 @@ public class ArraySliceByteSequence implements ByteSequence<byte[]> {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ArraySliceByteSequence that = (ArraySliceByteSequence) o;
-        if (this.length != that.length) return false;
-        for (int i = 0; i < length; i++) {
-            if (this.get(i) != that.get(i)) return false;
-        }
-        return true;
+        return this.equalTo(o);
     }
 
     @Override
     public int hashCode() {
-        int result = 1;
-        for (int i = 0; i < length; i++) {
-            result = 31 * result + get(i);
-        }
-        return result;
+        return this.getHashCode();
     }
 }

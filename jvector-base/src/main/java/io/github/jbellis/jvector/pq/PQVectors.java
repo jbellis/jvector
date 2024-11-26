@@ -145,28 +145,26 @@ public class PQVectors implements CompressedVectors {
         PQVectors that = (PQVectors) o;
         if (!Objects.equals(pq, that.pq)) return false;
         if (this.count() != that.count()) return false;
-        // TODO how do we want to determine equality? With the current change, we are willing to write one
-        // thing and materialize another. It seems like the real concern should be whether the compressedVectors have
-        // the same data, not whether they are in a MemorySegment or a byte[] and not whether there is one chunk of many
-        // vectors or many chunks of one vector. This technically goes against the implementation of each of the
-        // ByteSequence#equals methods, which raises the question of whether this is valid. I primarily updated this
-        // code to get testSaveLoadPQ to pass.
         for (int i = 0; i < this.count(); i++) {
             var thisNode = this.get(i);
             var thatNode = that.get(i);
-            if (thisNode.length() != thatNode.length()) return false;
-            for (int j = 0; j < thisNode.length(); j++) {
-                if (thisNode.get(j) != thatNode.get(j)) return false;
-            }
+            if (!thisNode.equals(thatNode)) return false;
         }
         return true;
     }
 
     @Override
     public int hashCode() {
+        int result = 1;
+        result = 31 * result + pq.hashCode();
+        result = 31 * result + count();
+
         // We don't use the array structure in the hash code calculation because we allow for different chunking
         // strategies. Instead, we use the first entry in the first chunk to provide a stable hash code.
-        return Objects.hash(pq, count(), count() > 0 ? get(0).get(0) : 0);
+        for (int i = 0; i < count(); i++)
+            result = 31 * result + get(i).hashCode();
+
+        return result;
     }
 
     @Override
