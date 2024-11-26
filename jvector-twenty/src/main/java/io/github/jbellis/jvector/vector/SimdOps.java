@@ -766,26 +766,59 @@ final class SimdOps {
     // NVQ quantization instructions start here
     //---------------------------------------------
 
-    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b) {
-        var res = vector.pow(a).neg().add(1.f);   // 1 - v ** a
-        res = res.pow(b).neg().add(1.f);          // 1 - v ** b
-        return res;
+    /*
+     Fast exponential
+     https://codingforspeed.com/using-faster-exponential-approximation/
+     */
+    public static FloatVector fastExp(FloatVector x) {
+        x = x.div(1024).add(1.f);
+        x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
+        x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
+        x = x.mul(x); x = x.mul(x);
+        return x;
+    }
+
+    /*
+     Fast natural logarithm on [0x1.f7a5ecp-127, 0x1.fffffep127]. Maximum relative error 9.4529e-5
+     https://stackoverflow.com/questions/39821367/very-fast-approximate-logarithm-natural-log-function-in-c
+     */
+    public static FloatVector fastLog(FloatVector x, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+        IntVector temp = x.reinterpretAsInts();
+        var e = temp.sub(0x3f2aaaab).and(0xff800000);
+        var m = temp.sub(e).reinterpretAsFloats();
+        var i = e.castShape(fSpecies, 0).reinterpretAsFloats().mul(1.19209290e-7f);  // 0x1.0p-23
+
+        /* m in [2/3, 4/3] */
+        var f = m.sub(1.f);
+        var s = f.mul(f);
+
+        /* Compute log1p(f) for f in [-1/3, 1/3] */
+        var r = f.fma(0.230836749f, -0.279208571f);  // 0x1.d8c0f0p-3, -0x1.1de8dap-2
+        var t = f.fma(0.331826031f, -0.498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2)
+        r = r.fma(s, t);
+        r = r.fma(s, f);
+        r = i.fma(FloatVector.broadcast(fSpecies, 0.693147182f), r); // 0x1.62e430p-1 // log(2)
+        return r;
+    }
+
+    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+        var temp = fastExp(fastLog(vector, fSpecies, iSpecies).mul(a)).neg().add(1.f);   // 1 - v ** a
+        return fastExp(fastLog(temp, fSpecies, iSpecies).mul(b)).neg().add(1.f);        // 1 - v ** b
     }
 
     static float forwardKumaraswamy(float value, float a, float b) {
-        var temp = 1.f - (float) Math.pow(value, a);   // 1 - v ** a
-        return 1.f - (float) Math.pow(temp, b);        // 1 - v ** b
+        var temp = 1.f - MathUtil.fastExp(MathUtil.fastLog(value) * a);   // 1 - v ** a
+        return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b
     }
 
-    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
-        var res = vector.neg().add(1.f).pow(1.f / b);   // (1 - v) ** (1 / b)
-        res = res.neg().add(1.f).pow(1.f / a);          // (1 - v) ** (1 / a)
-        return res;
+    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+        var temp = fastExp(fastLog(vector.neg().add(1.f), fSpecies, iSpecies).div(b));  // (1 - v) ** (1 / b)
+        return fastExp(fastLog(temp.neg().add(1.f), fSpecies, iSpecies).div(a));        // (1 - v) ** (1 / a)
     }
 
     static float inverseKumaraswamy(float value, float a, float b) {
-        var temp = (float) Math.pow(1 - value, 1.f / b);   // (1 - v) ** (1 / b)
-        return (float) Math.pow(1 - temp, 1.f / a);        // (1 - v) ** (1 / a)
+        var temp = MathUtil.fastExp(MathUtil.fastLog(1.f - value) / b);   // (1 - v) ** (1 / b)
+        return MathUtil.fastExp(MathUtil.fastLog(1.f - temp) / a);        // (1 - v) ** (1 / a)
     }
 
     static FloatVector nvqDequantizeUnnormalized4bitPart1(ByteVector bytes, float a, float b) {
@@ -803,7 +836,7 @@ final class SimdOps {
                 .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
                 .reinterpretAsFloats()
                 .div(15.f);
-        return inverseKumaraswamy(arr, a, b);
+        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
     }
 
     static FloatVector nvqDequantizeUnnormalized4bitPart2(ByteVector bytes, float a, float b) {
@@ -822,7 +855,7 @@ final class SimdOps {
                 .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
                 .reinterpretAsFloats()
                 .div(15.f);
-        return inverseKumaraswamy(arr, a, b);
+        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
     }
 
     static float nvqDequantizeUnnormalized4bitTailPart1(Byte byteValue, float a, float b) {
@@ -880,7 +913,7 @@ final class SimdOps {
                 .reinterpretAsFloats()
                 .div(255.f);
 
-        return inverseKumaraswamy(arr, a, b);
+        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
     }
 
     static void nvqDequantizeUnnormalized8bit(ArrayByteSequence bytes, float a, float b, ArrayVectorFloat res) {
@@ -976,7 +1009,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
             var bytes = arr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2B, ByteVector.SPECIES_256, 0)
                     .reinterpretAsBytes();
@@ -1004,7 +1037,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
             arr = arr.mul(constant).add(0.5f);
 
             var bytesEven = arr.convertShape(VectorOperators.F2B, ByteVector.SPECIES_64, 0)
@@ -1043,14 +1076,14 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var recArr = forwardKumaraswamy(arr, a, b);
+            var recArr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED, IntVector.SPECIES_PREFERRED);
             recArr = recArr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsInts()
                     .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsFloats()
                     .div(constant);
-            recArr = inverseKumaraswamy(recArr, a, b);
+            recArr = inverseKumaraswamy(recArr, a, b, FloatVector.SPECIES_PREFERRED, IntVector.SPECIES_PREFERRED);
 
             var diff = arr.sub(recArr);
             squaredSum += diff.mul(diff).reduceLanes(VectorOperators.ADD);

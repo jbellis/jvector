@@ -43,11 +43,11 @@ public class MathUtil {
      Fast natural logarithm on [0x1.f7a5ecp-127, 0x1.fffffep127]. Maximum relative error 9.4529e-5
      https://stackoverflow.com/questions/39821367/very-fast-approximate-logarithm-natural-log-function-in-c
      */
-    public static float fastLog(float a) {
+    public static float fastLog(float x) {
         float m, r, s, t, i, f;
         int e;
 
-        int temp = Float.floatToIntBits(a);
+        int temp = Float.floatToIntBits(x);
         e = (temp - 0x3f2aaaab) & 0xff800000;
         m = Float.intBitsToFloat(temp - e);
         i = (float)e * 1.19209290e-7f; // 0x1.0p-23
