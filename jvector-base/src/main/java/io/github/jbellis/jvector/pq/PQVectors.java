@@ -256,6 +256,8 @@ public class PQVectors implements CompressedVectors {
     }
 
     public ByteSequence<?> get(int ordinal) {
+        if (ordinal < 0 || ordinal >= vectorCount)
+            throw new IndexOutOfBoundsException("Ordinal " + ordinal + " out of bounds for vector count " + vectorCount);
         return get(compressedDataChunks, ordinal, vectorsPerChunk, pq.getSubspaceCount());
     }
 
