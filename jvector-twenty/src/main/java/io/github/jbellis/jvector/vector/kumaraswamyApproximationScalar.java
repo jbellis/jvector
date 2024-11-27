@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.example;
+package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.util.MathUtil;
 
