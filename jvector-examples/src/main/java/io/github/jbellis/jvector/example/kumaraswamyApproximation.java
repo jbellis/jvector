@@ -31,6 +31,8 @@ public class kumaraswamyApproximation {
         double error;
         float dummyAccum;
 
+        System.out.println("a=" + a + " b=" + b);
+
         //---------------------------------------------------
         // Original
         //---------------------------------------------------
@@ -41,8 +43,7 @@ public class kumaraswamyApproximation {
         }
         endTime = System.nanoTime();
         duration = (double) (endTime - startTime) / trials;
-        System.out.println("Traditional inverse Kumaraswamy took " + duration + " nanoseconds");
-        System.out.println(dummyAccum / trials);
+        System.out.println("\tTraditional inverse Kumaraswamy took " + duration + " nanoseconds");
         //---------------------------------------------------
 
         //---------------------------------------------------
@@ -55,8 +56,7 @@ public class kumaraswamyApproximation {
         }
         endTime = System.nanoTime();
         duration = (double) (endTime - startTime) / trials;
-        System.out.println("Exp/Log inverse Kumaraswamy took " + duration + " nanoseconds");
-        System.out.println(dummyAccum / trials);
+        System.out.println("\tExp/Log inverse Kumaraswamy took " + duration + " nanoseconds");
 
         error = 0f;
         for (int i = 0; i < errorTrials; i++) {
@@ -77,8 +77,7 @@ public class kumaraswamyApproximation {
         }
         endTime = System.nanoTime();
         duration = (double) (endTime - startTime) / trials;
-        System.out.println("Exp/Log approx inverse Kumaraswamy took " + duration + " nanoseconds");
-        System.out.println(dummyAccum / trials);
+        System.out.println("\tExp/Log approx inverse Kumaraswamy took " + duration + " nanoseconds");
 
         error = 0;
         for (int i = 0; i < errorTrials; i++) {
@@ -88,10 +87,7 @@ public class kumaraswamyApproximation {
         error /= trials;
         System.out.println("\tError " + error);
 
-//        float exact = (float) Math.log(v);
-//        System.out.println(exact);
-//        float approx = my_faster_logf(v);
-//        System.out.println(approx);
+        System.out.println(dummyAccum);
     }
 
     public static void main(String[] args) {
