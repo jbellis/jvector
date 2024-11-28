@@ -255,8 +255,6 @@ public class Grid {
                     var nvq = NVQuantization.compute(floatVectors, 8, NVQuantization.BitsPerDimension.EIGHT);
                     builder.with(new NVQ(nvq));
                     suppliers.put(FeatureId.NVQ_VECTORS, ordinal -> new NVQ.State(nvq.encode(floatVectors.getVector(ordinal))));
-                    var testvar = new NVQ.State(nvq.encode(floatVectors.getVector(0)));
-                    System.out.print(testvar);
                     break;
 
             }
