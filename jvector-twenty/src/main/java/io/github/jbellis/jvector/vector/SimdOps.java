@@ -801,7 +801,7 @@ final class SimdOps {
         return r;
     }
 
-    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies) {
         var temp = fastExp(fastLog(vector, fSpecies).mul(a)).neg().add(1.f);   // 1 - v ** a
         return fastExp(fastLog(temp, fSpecies).mul(b)).neg().add(1.f);        // 1 - v ** b
     }
@@ -1009,7 +1009,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
             var bytes = arr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2B, ByteVector.SPECIES_256, 0)
                     .reinterpretAsBytes();
@@ -1037,7 +1037,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
             arr = arr.mul(constant).add(0.5f);
 
             var bytesEven = arr.convertShape(VectorOperators.F2B, ByteVector.SPECIES_64, 0)
@@ -1076,7 +1076,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var recArr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED, IntVector.SPECIES_PREFERRED);
+            var recArr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED);
             recArr = recArr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsInts()
