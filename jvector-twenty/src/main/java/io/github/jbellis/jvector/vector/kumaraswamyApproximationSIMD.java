@@ -93,7 +93,7 @@ public class kumaraswamyApproximationSIMD {
             inverseKumaraswamy(v, a, b);
         }
         endTime = System.nanoTime();
-        duration = (double) (endTime - startTime) / trials;
+        duration = (double) (endTime - startTime) / (trials * nDims);
         System.out.println("\tTraditional inverse Kumaraswamy took " + duration + " nanoseconds");
         //---------------------------------------------------
 
@@ -106,7 +106,7 @@ public class kumaraswamyApproximationSIMD {
             inverseKumaraswamyExpLogApprox(v, a, b);
         }
         endTime = System.nanoTime();
-        duration = (double) (endTime - startTime) / trials;
+        duration = (double) (endTime - startTime) / (trials * nDims);
         System.out.println("\tExp/Log approx inverse Kumaraswamy took " + duration + " nanoseconds");
 
 //        error = 0;
