@@ -31,6 +31,18 @@ final class SimdOps {
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
 
+    static VectorSpecies<Byte> byteSpecies;
+    // Dynamically set species for ByteVector based on the platform's SIMD width
+    static {
+        if (FloatVector.SPECIES_PREFERRED == FloatVector.SPECIES_512) {
+            byteSpecies = ByteVector.SPECIES_128;  // 512-bit SIMD width: 16 lanes, each a byte
+        } else if (FloatVector.SPECIES_PREFERRED == FloatVector.SPECIES_256) {
+            byteSpecies = ByteVector.SPECIES_64;   // 256-bit SIMD width: 8 lanes
+        } else {
+            throw new IllegalStateException("Unsupported SIMD width for ByteVector species.");
+        }
+    }
+
     static float sum(ArrayVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
@@ -811,9 +823,27 @@ final class SimdOps {
         return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b
     }
 
+//    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies) {
+//        var temp = fastExp(fastLog(vector.neg().add(1.f), fSpecies).div(b));  // (1 - v) ** (1 / b)
+//        return fastExp(fastLog(temp.neg().add(1.f), fSpecies).div(a));        // (1 - v) ** (1 / a)
+//    }
+
     static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies) {
-        var temp = fastExp(fastLog(vector.neg().add(1.f), fSpecies).div(b));  // (1 - v) ** (1 / b)
-        return fastExp(fastLog(temp.neg().add(1.f), fSpecies).div(a));        // (1 - v) ** (1 / a)
+        float invA = 1.0f / a; // precompute
+        float invB = 1.0f / b;
+
+        // Store intermediates in registers
+        var oneMinusV = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(vector);
+
+        // Use broadcasting
+        FloatVector exponentB = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invB);
+        oneMinusV = oneMinusV.pow(exponentB);  // In-place operation (no heap allocation)
+
+        var oneMinusVToBSub = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(oneMinusV);
+
+        // Compute (1 - (1 - v) ** (1/b)) ** (1/a) and store to register
+        FloatVector exponentA = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invA);
+        return oneMinusVToBSub.pow(exponentA);
     }
 
     static float inverseKumaraswamy(float value, float a, float b) {
@@ -907,13 +937,13 @@ final class SimdOps {
     }
 
     static FloatVector nvqDequantizeUnnormalized8bit(ByteVector bytes, float a, float b) {
-        var arr = bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
+        var arr = bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_PREFERRED, 0)
                 .lanewise(VectorOperators.AND, 0xff)
-                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
+                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0)
                 .reinterpretAsFloats()
-                .div(255.f);
+                .lanewise(VectorOperators.DIV, 255.0f);
 
-        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
+        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED);
     }
 
     static void nvqDequantizeUnnormalized8bit(ArrayByteSequence bytes, float a, float b, ArrayVectorFloat res) {
@@ -948,10 +978,10 @@ final class SimdOps {
     static void nvqDequantize8bit(ArrayByteSequence bytes, float a, float b, float scale, float bias, ArrayVectorFloat destination) {
         var resArr = destination.get();
 
-        int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
+        int vectorizedLength = ByteVector.SPECIES_128.loopBound(bytes.length());
 
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var arr = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i), a, b);
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_128.length()) {
+            var arr = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_128, bytes.get(), i), a, b);
             arr = arr.mul(scale).add(bias);
             arr.intoArray(resArr, i);
         }
@@ -1004,14 +1034,14 @@ final class SimdOps {
 
     static void nvqQuantizeNormalized8bit(ArrayVectorFloat vector, float a, float b, ArrayByteSequence destination) {
         final int constant = (1 << 8) - 1;
-        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(vector.length());
-        final var mask = ByteVector.SPECIES_256.indexInRange(0, FloatVector.SPECIES_256.length());
+        final int vectorizedLength = FloatVector.SPECIES_512.loopBound(vector.length());
+        final var mask = ByteVector.SPECIES_128.indexInRange(0, FloatVector.SPECIES_512.length());
 
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            var arr = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
+            var arr = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_512);
             var bytes = arr.mul(constant).add(0.5f)
-                    .convertShape(VectorOperators.F2B, ByteVector.SPECIES_256, 0)
+                    .convertShape(VectorOperators.F2B, ByteVector.SPECIES_128, 0)
                     .reinterpretAsBytes();
             bytes.intoArray(destination.get(), i, mask);
         }
@@ -1120,15 +1150,15 @@ final class SimdOps {
      * @return The square L2 distance
      */
     static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias) {
-        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_256);
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_512);
 
-        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
+        int vectorizedLength = ByteVector.SPECIES_128.loopBound(quantizedVector.length());
 
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_128.length()) {
+            var v1 = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
 
             // dequantize
-            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i), a, b);
+            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_128, quantizedVector.get(), i), a, b);
             v2 = v2.mul(scale).add(bias);
 
             var diff = v1.sub(v2);
@@ -1283,18 +1313,18 @@ final class SimdOps {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        var vsum = FloatVector.zero(FloatVector.SPECIES_256);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
+        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
-        int vectorizedLength = FloatVector.SPECIES_256.loopBound(vector.length());
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            var va = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
 
             // dequantize
-            var vb = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i), a, b);
+            var vb = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(byteSpecies, quantizedVector.get(), i), a, b);
             vb = vb.mul(scale).add(bias);
 
-            var vCentroid = FloatVector.fromArray(FloatVector.SPECIES_256, centroid.get(), i);
+            var vCentroid = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, centroid.get(), i);
             vb = vb.add(vCentroid);
 
             vsum = va.fma(vb, vsum);
