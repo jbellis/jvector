@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.example.util.SiftLoader;
-import io.github.jbellis.jvector.graph.*;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.NVQVectors;
 import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.util.*;
 
 import static java.lang.Math.abs;
-import static java.lang.Math.min;
 
 // this class uses explicit typing instead of `var` for easier reading when excerpted for instructional use
 public class distancesNVQ {
