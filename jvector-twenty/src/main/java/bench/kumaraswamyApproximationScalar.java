@@ -39,8 +39,6 @@ public class kumaraswamyApproximationScalar {
         int trials = 10_000_000;
         int errorTrials = 1_000_000;
 
-        float v = 0.2f;
-
         long startTime, endTime;
         double duration;
         double error;
@@ -53,7 +51,8 @@ public class kumaraswamyApproximationScalar {
         //---------------------------------------------------
         dummyAccum = 0;
         startTime = System.nanoTime();
-        for (int i = 0; i < trials; i++) {
+        for (long i = 0; i < trials; i++) {
+            float v = ((float) i) / trials;
             dummyAccum += inverseKumaraswamy(v, a, b);
         }
         endTime = System.nanoTime();
@@ -66,7 +65,8 @@ public class kumaraswamyApproximationScalar {
         //---------------------------------------------------
         dummyAccum = 0;
         startTime = System.nanoTime();
-        for (int i = 0; i < trials; i++) {
+        for (long i = 0; i < trials; i++) {
+            float v = ((float) i) / trials;
             dummyAccum += inverseKumaraswamyExpLog(v, a, b);
         }
         endTime = System.nanoTime();
@@ -87,7 +87,8 @@ public class kumaraswamyApproximationScalar {
         //---------------------------------------------------
         dummyAccum = 0;
         startTime = System.nanoTime();
-        for (int i = 0; i < trials; i++) {
+        for (long i = 0; i < trials; i++) {
+            float v = ((float) i) / trials;
             dummyAccum += inverseKumaraswamyExpLogApprox(v, a, b);
         }
         endTime = System.nanoTime();
