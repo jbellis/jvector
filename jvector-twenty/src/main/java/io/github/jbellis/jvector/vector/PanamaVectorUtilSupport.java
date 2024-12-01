@@ -243,7 +243,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-        return SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes, originalDimensions,  a, b, scale, bias);
+        var res = new ArrayVectorFloat(new float[originalDimensions]);
+        SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  a, b, scale, bias, res);
+        return res;
     }
 
     @Override
