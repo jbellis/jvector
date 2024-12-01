@@ -25,11 +25,12 @@ public class kumaraswamyApproximationSIMD {
      Vectorized fast exponential exp(x / c)
      https://codingforspeed.com/using-faster-exponential-approximation/
      */
-    public static FloatVector fastExp(FloatVector x, float c) {
-        x = x.div(c * 1024).add(const1f);
+    public static FloatVector fastExp(FloatVector x) {
+        x = x.div(1024).add(const1f);
         x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
         x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
-        x = x.mul(x); x = x.mul(x);
+        x = x.mul(x);
+        x = x.mul(x);
         return x;
     }
 
@@ -74,12 +75,10 @@ public class kumaraswamyApproximationSIMD {
     }
 
     static FloatVector inverseKumaraswamyExpLogApprox(FloatVector vector, float a, float b) {
-//        FloatVector oneOverA = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f / a);
-//        FloatVector oneOverB = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f / b);
-//        var temp = fastExp(fastLogPreferred(const1f.sub(vector)).mul(oneOverB));  // (1 - v) ** (1 / b)
-//        return fastExp(fastLogPreferred(const1f.sub(temp)).mul(oneOverA));        // (1 - v) ** (1 / a)
-        var temp = fastExp(fastLogPreferred(const1f.sub(vector)), b);  // (1 - v) ** (1 / b)
-        return fastExp(fastLogPreferred(const1f.sub(temp)), a);        // (1 - v) ** (1 / a)
+        FloatVector oneOverA = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f / a);
+        FloatVector oneOverB = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f / b);
+        var temp = fastExp(fastLogPreferred(const1f.sub(vector)).mul(oneOverB));  // (1 - v) ** (1 / b)
+        return fastExp(fastLogPreferred(const1f.sub(temp)).mul(oneOverA));        // (1 - v) ** (1 / a)
     }
 
     public static void testKumaraswamyApproximation(float a, float b) {
