@@ -31,15 +31,19 @@ final class SimdOps {
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
 
+    static VectorSpecies<Float> floatSpecies = FloatVector.SPECIES_PREFERRED;
+    static VectorSpecies<Integer> intSpecies = IntVector.SPECIES_PREFERRED;
     static VectorSpecies<Byte> byteSpecies;
-    // Dynamically set species for ByteVector based on the platform's SIMD width
     static {
+
         if (FloatVector.SPECIES_PREFERRED == FloatVector.SPECIES_512) {
             byteSpecies = ByteVector.SPECIES_128;  // 512-bit SIMD width: 16 lanes, each a byte
         } else if (FloatVector.SPECIES_PREFERRED == FloatVector.SPECIES_256) {
             byteSpecies = ByteVector.SPECIES_64;   // 256-bit SIMD width: 8 lanes
         } else {
-            throw new IllegalStateException("Unsupported SIMD width for ByteVector species.");
+            floatSpecies = FloatVector.SPECIES_512;
+            intSpecies = IntVector.SPECIES_512;
+            byteSpecies = ByteVector.SPECIES_128;
         }
     }
 
@@ -779,11 +783,13 @@ final class SimdOps {
     //---------------------------------------------
 
     /*
-     Vectorized fast exponential
+     Vectorized fast exponential exp(x / c)
      https://codingforspeed.com/using-faster-exponential-approximation/
      */
-    public static FloatVector fastExp(FloatVector x) {
-        x = x.div(1024).add(1.f);
+    public static FloatVector fastExp(FloatVector x, VectorSpecies<Float> fSpecies) {
+        final FloatVector const1f = FloatVector.broadcast(fSpecies, 1.f);
+
+        x = x.div(1024).add(const1f);
         x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
         x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
         x = x.mul(x); x = x.mul(x);
@@ -794,28 +800,51 @@ final class SimdOps {
      Vectorized fast natural logarithm on [0x1.f7a5ecp-127, 0x1.fffffep127]. Maximum relative error 9.4529e-5.
      https://stackoverflow.com/questions/39821367/very-fast-approximate-logarithm-natural-log-function-in-c
      */
-    public static FloatVector fastLog(FloatVector x, VectorSpecies<Float> fSpecies) {
+    public static FloatVector fastLog(FloatVector x, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+        final FloatVector const119209290e7f = FloatVector.broadcast(fSpecies, 1.19209290e-7f);
+        final IntVector const0x3f2aaaab = IntVector.broadcast(iSpecies, 0x3f2aaaab);
+        final IntVector const0xff800000 = IntVector.broadcast(iSpecies, 0xff800000);
+        final FloatVector const0230836749f = FloatVector.broadcast(fSpecies, 0.230836749f);
+        final FloatVector const0279208571f = FloatVector.broadcast(fSpecies, -0.279208571f);
+        final FloatVector const0331826031f = FloatVector.broadcast(fSpecies, 0.331826031f);
+        final FloatVector const0498910338f = FloatVector.broadcast(fSpecies, -0.498910338f);
+        final FloatVector const0693147182f = FloatVector.broadcast(fSpecies, 0.693147182f);
+        final FloatVector const1f = FloatVector.broadcast(fSpecies, 1.f);
+
         IntVector temp = x.reinterpretAsInts();
-        var e = temp.sub(0x3f2aaaab).and(0xff800000);
+        var e = temp.sub(const0x3f2aaaab).and(const0xff800000);
         var m = temp.sub(e).reinterpretAsFloats();
-        var i = e.castShape(fSpecies, 0).reinterpretAsFloats().mul(1.19209290e-7f);  // 0x1.0p-23
+        var i = e.castShape(fSpecies, 0).reinterpretAsFloats().mul(const119209290e7f);  // 0x1.0p-23
 
         /* m in [2/3, 4/3] */
-        var f = m.sub(1.f);
+        var f = m.sub(const1f);
         var s = f.mul(f);
 
         /* Compute log1p(f) for f in [-1/3, 1/3] */
-        var r = f.fma(0.230836749f, -0.279208571f);  // 0x1.d8c0f0p-3, -0x1.1de8dap-2
-        var t = f.fma(0.331826031f, -0.498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2)
+        var r = f.fma(const0230836749f, const0279208571f);  // 0x1.d8c0f0p-3, -0x1.1de8dap-2
+        var t = f.fma(const0331826031f, const0498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2)
         r = r.fma(s, t);
         r = r.fma(s, f);
-        r = i.fma(FloatVector.broadcast(fSpecies, 0.693147182f), r); // 0x1.62e430p-1 // log(2)
+        r = i.fma(const0693147182f, r); // 0x1.62e430p-1 // log(2)
         return r;
     }
 
-    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies) {
-        var temp = fastExp(fastLog(vector, fSpecies).mul(a)).neg().add(1.f);   // 1 - v ** a
-        return fastExp(fastLog(temp, fSpecies).mul(b)).neg().add(1.f);        // 1 - v ** b
+//    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+//        var temp = fastExp(fastLog(vector, fSpecies, iSpecies).mul(a), fSpecies).neg().add(1.f);   // 1 - v ** a
+//        return fastExp(fastLog(temp, fSpecies, iSpecies).mul(b), fSpecies).neg().add(1.f);        // 1 - v ** b
+//    }
+
+    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
+        // Use broadcasting
+        FloatVector exponentA = FloatVector.broadcast(fSpecies, a);
+        var temp = vector.pow(exponentA);
+        temp = FloatVector.broadcast(fSpecies, 1.0f).sub(temp);
+
+        FloatVector exponentB = FloatVector.broadcast(fSpecies, b);
+        temp = temp.pow(exponentB);
+        temp = FloatVector.broadcast(fSpecies, 1.0f).sub(temp);
+
+        return temp;
     }
 
     static float forwardKumaraswamy(float value, float a, float b) {
@@ -823,26 +852,26 @@ final class SimdOps {
         return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b
     }
 
-//    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies) {
-//        var temp = fastExp(fastLog(vector.neg().add(1.f), fSpecies).div(b));  // (1 - v) ** (1 / b)
-//        return fastExp(fastLog(temp.neg().add(1.f), fSpecies).div(a));        // (1 - v) ** (1 / a)
+//    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies,  VectorSpecies<Integer> iSpecies) {
+//        var temp = fastExp(fastLog(vector.neg().add(1.f), fSpecies, iSpecies).div(b), fSpecies);  // (1 - v) ** (1 / b)
+//        return fastExp(fastLog(temp.neg().add(1.f), fSpecies, iSpecies).div(a), fSpecies);        // (1 - v) ** (1 / a)
 //    }
 
-    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies) {
+    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b, VectorSpecies<Float> fSpecies, VectorSpecies<Integer> iSpecies) {
         float invA = 1.0f / a; // precompute
         float invB = 1.0f / b;
 
         // Store intermediates in registers
-        var oneMinusV = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(vector);
+        var oneMinusV = FloatVector.broadcast(fSpecies, 1.0f).sub(vector);
 
         // Use broadcasting
-        FloatVector exponentB = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invB);
+        FloatVector exponentB = FloatVector.broadcast(fSpecies, invB);
         oneMinusV = oneMinusV.pow(exponentB);  // In-place operation (no heap allocation)
 
-        var oneMinusVToBSub = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(oneMinusV);
+        var oneMinusVToBSub = FloatVector.broadcast(fSpecies, 1.0f).sub(oneMinusV);
 
         // Compute (1 - (1 - v) ** (1/b)) ** (1/a) and store to register
-        FloatVector exponentA = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invA);
+        FloatVector exponentA = FloatVector.broadcast(fSpecies, invA);
         return oneMinusVToBSub.pow(exponentA);
     }
 
@@ -866,7 +895,7 @@ final class SimdOps {
                 .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
                 .reinterpretAsFloats()
                 .div(15.f);
-        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
+        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
     }
 
     static FloatVector nvqDequantizeUnnormalized4bitPart2(ByteVector bytes, float a, float b) {
@@ -885,7 +914,7 @@ final class SimdOps {
                 .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
                 .reinterpretAsFloats()
                 .div(15.f);
-        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
+        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
     }
 
     static float nvqDequantizeUnnormalized4bitTailPart1(Byte byteValue, float a, float b) {
@@ -936,37 +965,15 @@ final class SimdOps {
         }
     }
 
-    static FloatVector nvqDequantizeUnnormalized8bit(ByteVector bytes, float a, float b) {
-        var arr = bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_PREFERRED, 0)
+    static FloatVector nvqDequantizeUnnormalized8bit(ByteVector bytes, float a, float b, VectorSpecies<Float> fSpecies,
+                                                     VectorSpecies<Integer> iSpecies) {
+        var arr = bytes.convertShape(VectorOperators.B2I, iSpecies, 0)
                 .lanewise(VectorOperators.AND, 0xff)
-                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0)
+                .convertShape(VectorOperators.I2F, fSpecies, 0)
                 .reinterpretAsFloats()
                 .lanewise(VectorOperators.DIV, 255.0f);
 
-        return inverseKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED);
-    }
-
-    static void nvqDequantizeUnnormalized8bit(ArrayByteSequence bytes, float a, float b, ArrayVectorFloat res) {
-        var resArr = res.get();
-
-        int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
-
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var arr = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, bytes.get(), i), a, b);
-            arr.intoArray(resArr, i);
-        }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < bytes.length(); i++) {
-            float value = bytes.get(i);
-            resArr[i] = inverseKumaraswamy(value / 255.f, a, b);
-        }
-    }
-
-    static ArrayVectorFloat nvqDequantize8bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
-        var res = new ArrayVectorFloat(new float[originalDimensions]);
-        nvqDequantize8bit(bytes, a, b, scale, bias, res);
-        return res;
+        return inverseKumaraswamy(arr, a, b, fSpecies, iSpecies);
     }
 
     static ArrayVectorFloat nvqDequantize4bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
@@ -976,12 +983,29 @@ final class SimdOps {
     }
 
     static void nvqDequantize8bit(ArrayByteSequence bytes, float a, float b, float scale, float bias, ArrayVectorFloat destination) {
+        var fSpecies = FloatVector.SPECIES_PREFERRED;
+        var iSpecies = IntVector.SPECIES_PREFERRED;
+
+        VectorSpecies<Byte> bSpecies;
+        if (FloatVector.SPECIES_PREFERRED == FloatVector.SPECIES_512) {
+            bSpecies = ByteVector.SPECIES_128;  // 512-bit SIMD width: 16 lanes, each a byte
+        } else if (FloatVector.SPECIES_PREFERRED == FloatVector.SPECIES_256) {
+            bSpecies = ByteVector.SPECIES_64;   // 256-bit SIMD width: 8 lanes
+        } else {
+            throw new IllegalStateException("Unsupported SIMD width for ByteVector species.");
+        }
+
+        nvqDequantize8bit(bytes, a, b, scale, bias, destination, fSpecies, iSpecies, bSpecies);
+    }
+
+    static void nvqDequantize8bit(ArrayByteSequence bytes, float a, float b, float scale, float bias, ArrayVectorFloat destination, VectorSpecies<Float> fSpecies,
+                                  VectorSpecies<Integer> iSpecies, VectorSpecies<Byte> bSpecies) {
         var resArr = destination.get();
 
-        int vectorizedLength = ByteVector.SPECIES_128.loopBound(bytes.length());
+        int vectorizedLength = bSpecies.loopBound(bytes.length());
 
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_128.length()) {
-            var arr = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_128, bytes.get(), i), a, b);
+        for (int i = 0; i < vectorizedLength; i += bSpecies.length()) {
+            var arr = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(bSpecies, bytes.get(), i), a, b, fSpecies, iSpecies);
             arr = arr.mul(scale).add(bias);
             arr.intoArray(resArr, i);
         }
@@ -1039,7 +1063,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_512);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_512, IntVector.SPECIES_512);
             var bytes = arr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2B, ByteVector.SPECIES_128, 0)
                     .reinterpretAsBytes();
@@ -1067,7 +1091,7 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
-            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256);
+            arr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_256, IntVector.SPECIES_256);
             arr = arr.mul(constant).add(0.5f);
 
             var bytesEven = arr.convertShape(VectorOperators.F2B, ByteVector.SPECIES_64, 0)
@@ -1106,14 +1130,14 @@ final class SimdOps {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var recArr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED);
+            var recArr = forwardKumaraswamy(arr, a, b, FloatVector.SPECIES_PREFERRED, IntVector.SPECIES_PREFERRED);
             recArr = recArr.mul(constant).add(0.5f)
                     .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsInts()
                     .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsFloats()
                     .div(constant);
-            recArr = inverseKumaraswamy(recArr, a, b, FloatVector.SPECIES_PREFERRED);
+            recArr = inverseKumaraswamy(recArr, a, b, FloatVector.SPECIES_PREFERRED, IntVector.SPECIES_PREFERRED);
 
             var diff = arr.sub(recArr);
             squaredSum += diff.mul(diff).reduceLanes(VectorOperators.ADD);
@@ -1135,6 +1159,11 @@ final class SimdOps {
         return squaredSum;
     }
 
+    static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
+                                       float a, float b, float scale, float bias) {
+        return nvqSquareDistance8bit(vector, quantizedVector, a, b, scale, bias, floatSpecies, intSpecies, byteSpecies);
+    }
+
     /**
      * Compute the squared L2 distance for 8-bit NVQ
      * Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
@@ -1149,16 +1178,18 @@ final class SimdOps {
      * @param quantizedVector A quantized vector from the index
      * @return The square L2 distance
      */
-    static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias) {
-        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_512);
+    static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
+                                       float a, float b, float scale, float bias, VectorSpecies<Float> fSpecies,
+                                       VectorSpecies<Integer> iSpecies, VectorSpecies<Byte> bSpecies) {
+        FloatVector squaredSumVec = FloatVector.zero(fSpecies);
 
-        int vectorizedLength = ByteVector.SPECIES_128.loopBound(quantizedVector.length());
+        int vectorizedLength = bSpecies.loopBound(quantizedVector.length());
 
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_128.length()) {
-            var v1 = FloatVector.fromArray(FloatVector.SPECIES_512, vector.get(), i);
+        for (int i = 0; i < vectorizedLength; i += bSpecies.length()) {
+            var v1 = FloatVector.fromArray(fSpecies, vector.get(), i);
 
             // dequantize
-            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_128, quantizedVector.get(), i), a, b);
+            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(bSpecies, quantizedVector.get(), i), a, b, fSpecies, iSpecies);
             v2 = v2.mul(scale).add(bias);
 
             var diff = v1.sub(v2);
@@ -1240,16 +1271,26 @@ final class SimdOps {
         return squaredSum;
     }
 
-    static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, float vectorSum) {
-        FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_256);
+    static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
+                                   float a, float b, float scale, float bias, float vectorSum) {
 
-        int vectorizedLength = ByteVector.SPECIES_64.loopBound(quantizedVector.length());
 
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var v1 = FloatVector.fromArray(FloatVector.SPECIES_256, vector.get(), i);
+        return nvqDotProduct8bit(vector, quantizedVector, a, b, scale, bias, vectorSum, floatSpecies, intSpecies, byteSpecies);
+    }
+
+    static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
+                                   float a, float b, float scale, float bias, float vectorSum,
+                                   VectorSpecies<Float> fSpecies,
+                                   VectorSpecies<Integer> iSpecies, VectorSpecies<Byte> bSpecies) {
+        FloatVector dotProdVec = FloatVector.zero(fSpecies);
+
+        int vectorizedLength = bSpecies.loopBound(quantizedVector.length());
+
+        for (int i = 0; i < vectorizedLength; i += bSpecies.length()) {
+            var v1 = FloatVector.fromArray(fSpecies, vector.get(), i);
 
             // dequantize
-            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(ByteVector.SPECIES_64, quantizedVector.get(), i), a, b);
+            var v2 = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(bSpecies, quantizedVector.get(), i), a, b, fSpecies, iSpecies);
 
             dotProdVec = v1.fma(v2, dotProdVec);
         }
@@ -1308,23 +1349,34 @@ final class SimdOps {
         return scale * dotProd + bias * vectorSum;
     }
 
-    static float[] nvqCosine8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, ArrayVectorFloat centroid) {
+    static float[] nvqCosine8bit(ArrayVectorFloat vector,
+                               ArrayByteSequence quantizedVector, float a, float b, float scale, float bias,
+                               ArrayVectorFloat centroid) {
+
+
+        return nvqCosine8bit(vector, quantizedVector, a, b, scale, bias, centroid, floatSpecies, intSpecies, byteSpecies);
+    }
+
+    static float[] nvqCosine8bit(ArrayVectorFloat vector,
+                                 ArrayByteSequence quantizedVector, float a, float b, float scale, float bias,
+                                 ArrayVectorFloat centroid, VectorSpecies<Float> fSpecies,
+                                 VectorSpecies<Integer> iSpecies, VectorSpecies<Byte> bSpecies) {
         if (vector.length() != centroid.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vsum = FloatVector.zero(fSpecies);
+        var vbMagnitude = FloatVector.zero(fSpecies);
 
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+        int vectorizedLength = fSpecies.loopBound(vector.length());
+        for (int i = 0; i < vectorizedLength; i += fSpecies.length()) {
+            var va = FloatVector.fromArray(fSpecies, vector.get(), i);
 
             // dequantize
-            var vb = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(byteSpecies, quantizedVector.get(), i), a, b);
+            var vb = nvqDequantizeUnnormalized8bit(ByteVector.fromArray(bSpecies, quantizedVector.get(), i), a, b, fSpecies, iSpecies);
             vb = vb.mul(scale).add(bias);
 
-            var vCentroid = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, centroid.get(), i);
+            var vCentroid = FloatVector.fromArray(fSpecies, centroid.get(), i);
             vb = vb.add(vCentroid);
 
             vsum = va.fma(vb, vsum);
