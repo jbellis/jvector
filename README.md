@@ -163,9 +163,9 @@ Compressing the vectors with product quantization is done as follows:
                                                                  16, // number of subspaces
                                                                  256, // number of centroids per subspace
                                                                  true); // center the dataset
-            ByteSequence<?>[] compressed = pq.encodeAll(ravv);
+            // Note: before jvector 3.1.0, encodeAll returned an array of ByteSequence.
+            PQVectors pqv = pq.encodeAll(ravv);
             // write the compressed vectors to disk
-            PQVectors pqv = new PQVectors(pq, compressed);
             pqv.write(out);
         }
 ```

@@ -73,10 +73,10 @@ public class TestProductQuantization extends RandomizedTest {
     private static void assertPerfectQuantization(List<VectorFloat<?>> vectors) {
         var ravv = new ListRandomAccessVectorValues(vectors, 3);
         var pq = ProductQuantization.compute(ravv, 2, DEFAULT_CLUSTERS, false);
-        var encoded = pq.encodeAll(ravv);
+        var cv = (PQVectors) pq.encodeAll(ravv);
         var decodedScratch = vectorTypeSupport.createFloatVector(3);
         for (int i = 0; i < vectors.size(); i++) {
-            pq.decode(encoded[i], decodedScratch);
+            pq.decode(cv.get(i), decodedScratch);
             assertEquals(vectors.get(i), decodedScratch);
         }
     }
@@ -168,11 +168,11 @@ public class TestProductQuantization extends RandomizedTest {
                                          null,
                                          UNWEIGHTED);
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), vectors[0].length());
-        var encoded = pq.encodeAll(ravv);
+        var cv = (PQVectors) pq.encodeAll(ravv);
         var loss = 0.0;
         var decodedScratch = vectorTypeSupport.createFloatVector(vectors[0].length());
         for (int i = 0; i < vectors.length; i++) {
-            pq.decode(encoded[i], decodedScratch);
+            pq.decode(cv.get(i), decodedScratch);
             if (VectorUtil.dotProduct(vectors[i], decodedScratch) >= T) {
                 loss += 1 - VectorSimilarityFunction.EUCLIDEAN.compare(vectors[i], decodedScratch);
             }

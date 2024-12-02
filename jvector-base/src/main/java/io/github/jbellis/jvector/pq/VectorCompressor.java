@@ -33,19 +33,22 @@ import java.util.concurrent.ForkJoinPool;
  */
 public interface VectorCompressor<T> {
 
-    default T[] encodeAll(RandomAccessVectorValues ravv) {
+    default CompressedVectors encodeAll(RandomAccessVectorValues ravv) {
         return encodeAll(ravv, PhysicalCoreExecutor.pool());
     }
 
-    @Deprecated
-    default T[] encodeAll(List<VectorFloat<?>> vectors) {
-        return encodeAll(new ListRandomAccessVectorValues(vectors, vectors.get(0).length()),
-                         PhysicalCoreExecutor.pool());
-    }
-
-    T[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor);
+    /**
+     * Encode all vectors in the RandomAccessVectorValues. If the RandomAccessVectorValues
+     * has a missing vector for a given ordinal, the value will be encoded as a zero vector.
+     * @param ravv RandomAccessVectorValues to encode
+     * @param simdExecutor ForkJoinPool to use for SIMD operations
+     * @return CompressedVectors containing the encoded vectors
+     */
+    CompressedVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor);
 
     T encode(VectorFloat<?> v);
+
+    void encodeTo(VectorFloat<?> v, T dest);
 
     /**
      * @param out DataOutput to write to
@@ -63,6 +66,7 @@ public interface VectorCompressor<T> {
      *                          it is declared as Object because we want callers to be able to use this
      *                          without committing to a specific type T.
      */
+    @Deprecated
     CompressedVectors createCompressedVectors(Object[] compressedVectors);
 
     /** the size of the serialized compressor itself (NOT the size of compressed vectors) */

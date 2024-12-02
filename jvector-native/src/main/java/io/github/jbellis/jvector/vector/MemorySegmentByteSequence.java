@@ -49,6 +49,11 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
         this.length = data.length;
     }
 
+    private MemorySegmentByteSequence(MemorySegment segment) {
+        this.segment = segment;
+        this.length = Math.toIntExact(segment.byteSize());
+    }
+
     @Override
     public long ramBytesUsed() {
         int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
@@ -65,6 +70,11 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     @Override
     public MemorySegment get() {
         return segment;
+    }
+
+    @Override
+    public int offset() {
+        return 0;
     }
 
     @Override
@@ -100,6 +110,11 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
     }
 
     @Override
+    public MemorySegmentByteSequence slice(int offset, int length) {
+        return new MemorySegmentByteSequence(segment.asSlice(offset, length));
+    }
+
+    @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
@@ -118,14 +133,11 @@ public class MemorySegmentByteSequence implements ByteSequence<MemorySegment> {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        MemorySegmentByteSequence that = (MemorySegmentByteSequence) o;
-        return segment.mismatch(that.segment) == -1;
+        return this.equalTo(o);
     }
 
     @Override
     public int hashCode() {
-        return segment.hashCode();
+        return this.getHashCode();
     }
 }

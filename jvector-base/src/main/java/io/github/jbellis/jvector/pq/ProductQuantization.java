@@ -221,30 +221,28 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
 
     @Override
     public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
-        return new PQVectors(this, (ByteSequence<?>[]) compressedVectors);
+        return new PQVectors(this, (ByteSequence<?>[]) compressedVectors, compressedVectors.length, 1);
     }
 
     /**
-     * Encodes the given vectors in parallel using the PQ codebooks.
+     * Encodes the given vectors in parallel using the PQ codebooks. If a vector is missing (null), it will be encoded
+     * as a zero vector.
      */
     @Override
-    public ByteSequence<?>[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> IntStream.range(0, ravv.size())
-                        .parallel()
-                        .mapToObj(i -> encode(ravv.getVector(i)))
-                        .toArray(ByteSequence<?>[]::new))
-                .join();
+    public PQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        return PQVectors.encodeAndBuild(this, ravv.size(), ravv, simdExecutor);
     }
 
     /**
-     * Encodes the input vector using the PQ codebooks, weighing parallel loss more than orthogonal loss.
-     * @return one byte per subspace
+     * Encodes the input vector using the PQ codebooks, weighing parallel loss more than orthogonal loss, into
+     * the given ByteSequence.
      */
-    private ByteSequence<?> encodeAnisotropic(VectorFloat<?> vector) {
+    private void encodeAnisotropic(VectorFloat<?> vector, ByteSequence<?> result) {
         // compute the residuals from each subvector to each corresponding codebook centroid
         Residual[][] residuals = computeResiduals(vector);
+        assert residuals.length == M : "Residuals length mismatch " + residuals.length + " != " + M;
         // start with centroids that minimize the residual norms
-        var result = initializeToMinResidualNorms(residuals);
+        initializeToMinResidualNorms(residuals, result);
         // sum the initial parallel residual component
         float parallelResidualComponentSum = 0;
         for (int i = 0; i < result.length(); i++) {
@@ -275,8 +273,6 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
                 break;
             }
         }
-
-        return result;
     }
 
     private CoordinateDescentResult optimizeSingleSubspace(Residual[] residuals, int oldIdx, float oldParallelResidualSum) {
@@ -337,8 +333,7 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
     /**
      * @return codebook ordinals representing the cluster centroids for each subspace that minimize the residual norm
      */
-    private ByteSequence<?> initializeToMinResidualNorms(Residual[][] residualStats) {
-        var result = vectorTypeSupport.createByteSequence(residualStats.length);
+    private void initializeToMinResidualNorms(Residual[][] residualStats, ByteSequence<?> dest) {
         // for each subspace
         for (int i = 0; i < residualStats.length; i++) {
             int minIndex = -1;
@@ -350,9 +345,8 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
                     minIndex = j;
                 }
             }
-            result.set(i, (byte) minIndex);
+            dest.set(i, (byte) minIndex);
         }
-        return result;
     }
 
     /**
@@ -396,12 +390,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
         return new Residual(residualNormSquared, parallelResidualComponent);
     }
 
-    private ByteSequence<?> encodeUnweighted(VectorFloat<?> vector) {
-        var encoded = vectorTypeSupport.createByteSequence(M);
+    private void encodeUnweighted(VectorFloat<?> vector, ByteSequence<?> dest) {
         for (int m = 0; m < M; m++) {
-            encoded.set(m, (byte) closestCentroidIndex(vector, m, codebooks[m]));
+            dest.set(m, (byte) closestCentroidIndex(vector, m, codebooks[m]));
         }
-        return encoded;
     }
 
     /**
@@ -410,11 +402,21 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
      */
     @Override
     public ByteSequence<?> encode(VectorFloat<?> vector) {
+        var result = vectorTypeSupport.createByteSequence(M);
+        encodeTo(vector, result);
+        return result;
+    }
+
+    @Override
+    public void encodeTo(VectorFloat<?> vector, ByteSequence<?> dest) {
         if (globalCentroid != null) {
             vector = sub(vector, globalCentroid);
         }
 
-        return anisotropicThreshold > UNWEIGHTED ? encodeAnisotropic(vector) : encodeUnweighted(vector);
+        if (anisotropicThreshold > UNWEIGHTED)
+            encodeAnisotropic(vector, dest);
+        else
+            encodeUnweighted(vector, dest);
     }
 
     /**
