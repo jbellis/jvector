@@ -114,7 +114,7 @@ final public class ArrayVectorFloat implements VectorFloat<float[]>
     @Override
     public int hashCode()
     {
-        return Arrays.hashCode(data);
+        return this.getHashCode();
     }
 }
 

@@ -40,4 +40,14 @@ public interface VectorFloat<T> extends Accountable
     void set(int i, float value);
 
     void zero();
+
+    default int getHashCode() {
+        int result = 1;
+        for (int i = 0; i < length(); i++) {
+            if (get(i) != 0) {
+                result = 31 * result + Float.hashCode(get(i));
+            }
+        }
+        return result;
+    }
 }

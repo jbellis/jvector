@@ -130,6 +130,6 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
 
     @Override
     public int hashCode() {
-        return segment.hashCode();
+        return this.getHashCode();
     }
 }
