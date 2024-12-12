@@ -242,6 +242,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+        VectorSimdOps.nvqShuffleQueryInPlace8bit((MemorySegmentVectorFloat) vector);
+    }
+
+    @Override
     public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
         return VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, originalDimensions, a, b, scale, bias);
     }

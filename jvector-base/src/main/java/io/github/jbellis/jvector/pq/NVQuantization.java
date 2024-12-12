@@ -531,15 +531,28 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                  */
 
                 lossFunction.setVector(vectorCopy);
-                OptimizationResult sol;
-                int trials = 0;
-                do {
-                    sol = solverNES.optimize(lossFunction, solverinitialSolution, 0.5f);
-                    trials++;
-                } while (sol.lastLoss < 1 && trials < 10);
 
-                a = sol.x[0];
-                b = sol.x[1];
+//                OptimizationResult sol;
+//                int trials = 0;
+//                do {
+//                    sol = solverNES.optimize(lossFunction, solverinitialSolution, 0.5f);
+//                    trials++;
+//                } while (sol.lastLoss < 1 && trials < 10);
+//
+//                a = sol.x[0];
+//                b = sol.x[1];
+
+                float bestLossValue = Float.MIN_VALUE;
+                float[] aCandidates = {1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2.0f};
+                for (float aTest : aCandidates) {
+                    float lossValue = lossFunction.compute(new float[]{aTest, aTest});
+                    if (lossValue > bestLossValue) {
+                        bestLossValue = lossValue;
+                        a = aTest;
+                    }
+                }
+                b = a;
+
             }
             //---------------------------------------------------------------------------
 

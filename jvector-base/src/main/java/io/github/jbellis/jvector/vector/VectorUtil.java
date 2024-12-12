@@ -248,6 +248,10 @@ public final class VectorUtil {
     impl.nvqShuffleQueryInPlace4bit(vector);
   }
 
+  public static void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+    impl.nvqShuffleQueryInPlace8bit(vector);
+  }
+
   public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
     return impl.nvqDequantize8bit(bytes, originalDimensions, a, b, scale, bias);
   }

@@ -242,6 +242,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+        SimdOps.nvqShuffleQueryInPlace8bit((ArrayVectorFloat) vector);
+    }
+
+    @Override
     public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
         var res = new ArrayVectorFloat(new float[originalDimensions]);
         SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  a, b, scale, bias, res);

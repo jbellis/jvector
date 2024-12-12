@@ -21,6 +21,7 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.pq.NVQVectors;
 import io.github.jbellis.jvector.pq.NVQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -39,17 +40,15 @@ public class distancesNVQ {
 //        int nQueries = queries.size();
 //        int nVectors = vectors.size();
         int nQueries = 100;
-        int nVectors = 1_000;
+        int nVectors = 50_000;
 
         vectors = vectors.subList(0, nVectors);
 
         // Generate a NVQ for random vectors
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
-        var nvq = NVQuantization.compute(ravv, 4, NVQuantization.BitsPerDimension.EIGHT);
+        var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
 //        nvq.learn = false;
-//        var rec1 = nvq.encode(ravv.getVector(5)).subVectors[0].getDequantized();
         nvq.learn = true;
-//        var rec2 = nvq.encode(ravv.getVector(5)).subVectors[0].getDequantized();
 
         // Compress the vectors
         long startTime = System.nanoTime();
@@ -58,37 +57,58 @@ public class distancesNVQ {
         double duration = (double) (endTime - startTime) / 1_000_000_000;
         System.out.println("\tEncoding took " + duration + " seconds");
 
-        var cv = new NVQVectors(nvq, compressed);
+        var nvqVecs = new NVQVectors(nvq, compressed);
 
         // compare the encoded similarities to the raw
-        startTime = System.nanoTime();
         double distanceError = 0;
         for (int i = 0; i < nQueries; i++) {
             var q = queries.get(i);
-            var f = cv.scoreFunctionFor(q, vsf);
+            if (VectorUtil.dotProduct(q, q) == 0) {
+                continue;
+            }
+            var f = nvqVecs.scoreFunctionFor(q, vsf);
 
             for (int j = 0; j < nVectors; j++) {
                 var v = vectors.get(j);
-//                vsf.compare(q, v);
-
-//                var d2 = vsf.compare(q, v);
-//                var d1 = f.similarityTo(j);
-//                System.out.println((1. / d1 - 1) + "  " + (1. / d2 - 1));
-//                System.out.println(d1 + "  " + d2);
-
                 distanceError += abs(f.similarityTo(j) - vsf.compare(q, v));
-//                System.out.println(abs(f.similarityTo(j) - vsf.compare(q, v)));
-
             }
         }
-        endTime = System.nanoTime();
-        duration = (double) (endTime - startTime) / 1_000_000_000;
-        System.out.println("\tDistance computations took " + duration + " seconds");
-
         distanceError /= nQueries * nVectors;
 
         System.out.println(vsf + " error " + distanceError);
         System.out.println("--");
+
+        startTime = System.nanoTime();
+        for (int i = 0; i < nQueries; i++) {
+            var q = queries.get(i);
+            if (VectorUtil.dotProduct(q, q) == 0) {
+                continue;
+            }
+            var f = nvqVecs.scoreFunctionFor(q, vsf);
+
+            for (int j = 0; j < nVectors; j++) {
+                f.similarityTo(j);
+            }
+        }
+        endTime = System.nanoTime();
+        duration = (double) (endTime - startTime) / 1_000_000_000;
+        System.out.println("\tNVQ Distance computations took " + duration + " seconds");
+
+        startTime = System.nanoTime();
+        for (int i = 0; i < nQueries; i++) {
+            var q = queries.get(i);
+            if (VectorUtil.dotProduct(q, q) == 0) {
+                continue;
+            }
+
+            for (int j = 0; j < nVectors; j++) {
+                var v = vectors.get(j);
+                vsf.compare(q, v);
+            }
+        }
+        endTime = System.nanoTime();
+        duration = (double) (endTime - startTime) / 1_000_000_000;
+        System.out.println("\tFloat Distance computations took " + duration + " seconds");
     }
 
     public static void main(String[] args) throws IOException {
@@ -99,9 +119,15 @@ public class distancesNVQ {
         var baseVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/ada_002_100000_base_vectors.fvec");
         var queryVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec");
 
-        System.out.format("%d base and %d query vectors loaded, dimensions %d%n",
-                          baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
+//        var baseVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/1M/colbertv2.0_128_base_vectors_1000000.fvec");
+//        var queryVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/1M/colbertv2.0_128_query_vectors_100000.fvec");
 
-        testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.DOT_PRODUCT);
+//        var baseVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec");
+//        var queryVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec");
+
+        System.out.format("%d base and %d query vectors loaded, dimensions %d%n",
+                baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
+
+        testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.COSINE);
     }
 }

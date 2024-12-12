@@ -68,6 +68,10 @@ public class NVQScorer {
 
         switch (this.nvq.bitsPerDimension) {
             case EIGHT:
+                for (VectorFloat<?> querySubVector : querySubVectors) {
+                    VectorUtil.nvqShuffleQueryInPlace8bit(querySubVector);
+                }
+
                 return vector2 -> {
                     float nvqDot = 0;
                     for (int i = 0; i < querySubVectors.length; i++) {
@@ -123,6 +127,10 @@ public class NVQScorer {
 
         switch (this.nvq.bitsPerDimension) {
             case EIGHT:
+                for (VectorFloat<?> querySubVector : querySubVectors) {
+                    VectorUtil.nvqShuffleQueryInPlace8bit(querySubVector);
+                }
+
                 return vector2 -> {
                     float dist = 0;
                     for (int i = 0; i < querySubVectors.length; i++) {
@@ -165,6 +173,11 @@ public class NVQScorer {
 
         switch (this.nvq.bitsPerDimension) {
             case EIGHT:
+                for (var i = 0; i < querySubVectors.length; i++) {
+                    VectorUtil.nvqShuffleQueryInPlace8bit(querySubVectors[i]);
+                    VectorUtil.nvqShuffleQueryInPlace8bit(meanSubVectors[i]);
+                }
+
                 return vector2 -> {
                     float cos = 0;
                     float squaredNormalization = 0;

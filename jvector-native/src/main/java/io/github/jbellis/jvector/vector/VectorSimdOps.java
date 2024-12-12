@@ -1025,6 +1025,8 @@ final class VectorSimdOps {
         // There's no need to shuffle the tail
     }
 
+    static void nvqShuffleQueryInPlace8bit(MemorySegmentVectorFloat vector) {}
+
     //---------------------------------------------
     // NVQ quantization instructions end here
     //---------------------------------------------

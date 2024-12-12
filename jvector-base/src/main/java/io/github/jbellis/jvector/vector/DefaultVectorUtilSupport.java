@@ -531,6 +531,9 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {}
 
+  @Override
+  public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {}
+
   static float forwardKumaraswamy(float value, float a, float b) {
     var temp = 1.f - MathUtil.fastExp(MathUtil.fastLog(value) * a);   // 1 - v ** a
     return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b

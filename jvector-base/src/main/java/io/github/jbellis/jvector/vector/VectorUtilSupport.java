@@ -308,6 +308,14 @@ public interface VectorUtilSupport {
   void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector);
 
   /**
+   * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
+   * uneven entries within register. This method shuffles the query entries so that it matches this order.
+   * See: https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf
+   * @param vector
+   */
+  void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector);
+
+  /**
    * Dequantize an 8-bit quntized subvector.
    * @param bytes The byte sequence where the quantized vector is stored.
    * @param a The parameter a of the Generalized Kumaraswamy distribution
