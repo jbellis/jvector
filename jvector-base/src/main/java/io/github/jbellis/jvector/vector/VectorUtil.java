@@ -252,16 +252,16 @@ public final class VectorUtil {
     impl.nvqShuffleQueryInPlace8bit(vector);
   }
 
-  public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    return impl.nvqDequantize8bit(bytes, originalDimensions, a, b, scale, bias);
+  public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float scale, float bias) {
+    return impl.nvqDequantize8bit(bytes, originalDimensions, alpha, x0, scale, bias);
   }
 
   public static VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
     return impl.nvqDequantize4bit(bytes, originalDimensions, a, b, scale, bias);
   }
 
-  public static void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-    impl.nvqDequantize8bit(bytes, a, b, scale, bias, destination);
+  public static void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, VectorFloat<?> destination) {
+    impl.nvqDequantize8bit(bytes, alpha, x0, scale, bias, destination);
   }
 
   public static void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {

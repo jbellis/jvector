@@ -128,7 +128,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public final int[][] subvectorSizesAndOffsets;
 
     // Whether we want to skip the optimization of the Kumaraswamy parameters. Here for debug purposes only.
-    public boolean learn = true;
+    public boolean learn = false;
 
     /**
      * Class constructor.
@@ -467,8 +467,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         public BitsPerDimension bitsPerDimension;
 
         // The parameters of the Generalized Kumaraswamy distibution
-        public float kumaraswamyA;
-        public float kumaraswamyB;
+        public float logisticAlpha;
+        public float logisticX0;
         public float kumaraswamyBias;
         public float kumaraswamyScale;
 
@@ -515,9 +515,9 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             VectorUtil.scale(vectorCopy, 1.f / scale);
 
             //-----------------------------------------------------------------
-            // Optimization to find the hyperparameters of the Kumaraswamy quantization
-            float a = 1.f;
-            float b = 1.f;
+            // Optimization to find the hyperparameters of the logistic quantization
+            float alpha = 3.5f;  // TODO Temp hardcoding of alpha and X0 for testing and until the learner is in place.
+            float x0 = 0.5f;
 
             if (lossFunction != null) {
                 /*
@@ -542,35 +542,35 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 //                a = sol.x[0];
 //                b = sol.x[1];
 
-                float bestLossValue = Float.MIN_VALUE;
-                float[] aCandidates = {1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2.0f};
-                for (float aTest : aCandidates) {
-                    float lossValue = lossFunction.compute(new float[]{aTest, aTest});
-                    if (lossValue > bestLossValue) {
-                        bestLossValue = lossValue;
-                        a = aTest;
-                    }
-                }
-                b = a;
-
+//                float bestLossValue = Float.MIN_VALUE;
+//                float[] aCandidates = {1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2.0f};
+//                for (float aTest : aCandidates) {
+//                    float lossValue = lossFunction.compute(new float[]{aTest, aTest});
+//                    if (lossValue > bestLossValue) {
+//                        bestLossValue = lossValue;
+//                        a = aTest;
+//                    }
+//                }
+//                b = a;
+//
             }
             //---------------------------------------------------------------------------
 
             var quantized = bitsPerDimension.createByteSequence(vectorCopy.length());
             switch (bitsPerDimension) {
                 case FOUR:
-                    VectorUtil.nvqQuantizeNormalized4bit(vectorCopy, a, b, quantized);
+                    VectorUtil.nvqQuantizeNormalized4bit(vectorCopy, alpha, x0, quantized);
                     break;
                 case EIGHT:
-                    VectorUtil.nvqQuantizeNormalized8bit(vectorCopy, a, b, quantized);
+                    VectorUtil.nvqQuantizeNormalized8bit(vectorCopy, alpha, x0, quantized);
                     break;
             }
 
             this.bitsPerDimension = bitsPerDimension;
             this.kumaraswamyBias = bias;
             this.kumaraswamyScale = scale;
-            this.kumaraswamyA = a;
-            this.kumaraswamyB = b;
+            this.logisticAlpha = alpha;
+            this.logisticX0 = x0;
             this.bytes = quantized;
             this.originalDimensions = vectorCopy.length();
         }
@@ -580,13 +580,13 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          */
         private QuantizedSubVector(ByteSequence<?> bytes, int originalDimensions, BitsPerDimension bitsPerDimension,
                                    float kumaraswamyBias, float kumaraswamyScale,
-                                   float kumaraswamyA, float kumaraswamyB) {
+                                   float logisticAlpha, float logisticX0) {
             this.bitsPerDimension = bitsPerDimension;
             this.bytes = bytes;
             this.kumaraswamyBias = kumaraswamyBias;
             this.kumaraswamyScale = kumaraswamyScale;
-            this.kumaraswamyA = kumaraswamyA;
-            this.kumaraswamyB = kumaraswamyB;
+            this.logisticAlpha = logisticAlpha;
+            this.logisticX0 = logisticX0;
             this.originalDimensions = originalDimensions;
         }
 
@@ -598,9 +598,9 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         public VectorFloat<?> getDequantized() {
             switch (bitsPerDimension) {
                 case EIGHT:
-                    return VectorUtil.nvqDequantize8bit(bytes, this.originalDimensions, kumaraswamyA, kumaraswamyB, kumaraswamyScale, kumaraswamyBias);
+                    return VectorUtil.nvqDequantize8bit(bytes, this.originalDimensions, logisticAlpha, logisticX0, kumaraswamyScale, kumaraswamyBias);
                 case FOUR:
-                    return VectorUtil.nvqDequantize4bit(bytes, this.originalDimensions, kumaraswamyA, kumaraswamyB, kumaraswamyScale, kumaraswamyBias);
+                    return VectorUtil.nvqDequantize4bit(bytes, this.originalDimensions, logisticAlpha, logisticX0, kumaraswamyScale, kumaraswamyBias);
                 default:
                     throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
             }
@@ -615,8 +615,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             bitsPerDimension.write(out);
             out.writeFloat(kumaraswamyBias);
             out.writeFloat(kumaraswamyScale);
-            out.writeFloat(kumaraswamyA);
-            out.writeFloat(kumaraswamyB);
+            out.writeFloat(logisticAlpha);
+            out.writeFloat(logisticX0);
             out.writeInt(originalDimensions);
             out.writeInt(bytes.length());
 
@@ -643,14 +643,14 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             BitsPerDimension bitsPerDimension = BitsPerDimension.load(in);
             float kumaraswamyBias = in.readFloat();
             float kumaraswamyScale = in.readFloat();
-            float kumaraswamyA = in.readFloat();
-            float kumaraswamyB = in.readFloat();
+            float logisticAlpha = in.readFloat();
+            float logisticX0 = in.readFloat();
             int originalDimensions = in.readInt();
             int compressedDimension = in.readInt();
 
             ByteSequence<?> bytes = vectorTypeSupport.readByteSequence(in, compressedDimension);
 
-            return new QuantizedSubVector(bytes, originalDimensions, bitsPerDimension, kumaraswamyBias, kumaraswamyScale, kumaraswamyA, kumaraswamyB);
+            return new QuantizedSubVector(bytes, originalDimensions, bitsPerDimension, kumaraswamyBias, kumaraswamyScale, logisticAlpha, logisticX0);
         }
 
         /**
@@ -662,8 +662,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             quantizedSubVector.bitsPerDimension = BitsPerDimension.load(in);;
             quantizedSubVector.kumaraswamyBias = in.readFloat();
             quantizedSubVector.kumaraswamyScale = in.readFloat();
-            quantizedSubVector.kumaraswamyA = in.readFloat();
-            quantizedSubVector.kumaraswamyB = in.readFloat();
+            quantizedSubVector.logisticAlpha = in.readFloat();
+            quantizedSubVector.logisticX0 = in.readFloat();
             quantizedSubVector.originalDimensions = in.readInt();
             in.readInt();
 
@@ -678,8 +678,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             QuantizedSubVector that = (QuantizedSubVector) o;
             return (kumaraswamyBias == that.kumaraswamyBias)
                     && (kumaraswamyScale == that.kumaraswamyScale)
-                    && (kumaraswamyA == that.kumaraswamyA)
-                    && (kumaraswamyB == that.kumaraswamyB)
+                    && (logisticAlpha == that.logisticAlpha)
+                    && (logisticX0 == that.logisticX0)
                     && (bitsPerDimension == that.bitsPerDimension)
                     && bytes.equals(that.bytes);
         }
