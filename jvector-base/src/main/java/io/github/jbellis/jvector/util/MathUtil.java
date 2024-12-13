@@ -29,14 +29,34 @@ public class MathUtil {
 
     /*
      Fast exponential
-     https://codingforspeed.com/using-faster-exponential-approximation/
+     https://stackoverflow.com/questions/47025373/fastest-implementation-of-the-natural-exponential-function-using-sse
      */
-    public static float fastExp(float x) {
-        x = 1.f + x / 1024;
-        x *= x; x *= x; x *= x; x *= x;
-        x *= x; x *= x; x *= x; x *= x;
-        x *= x; x *= x;
-        return x;
+    public static float fastExp(float x){
+        // approximation of exp(x)
+
+        final float invlog2e = 1.442695041f;  // 1 / log2(e)
+        final float expCvt = 12582912.0f;  // 1.5 * (1 << 23)
+        // Remez polynomial: A0 + x * (A1 + x * (A2 + x * (a3 + x * a4)));
+        final float expA0 = 0.9999993887682104f;
+        final float expA1 = 0.6931186232012877f;
+        final float expA2 = 0.2402301551437674f;
+        final float expA3 = 0.05593479631997887f;
+        final float expA4 = 0.009651907610706037f;
+
+        /* exp(x) = 2^i * 2^f; i = rint (log2(e) * x), -0.5 <= f <= 0.5 */
+        final float t = x * invlog2e;  // t = x / log2(e)
+        final float r = (t + expCvt) - expCvt;  // r = round(t)
+        final float f = t - r;  // f = t - round(t)
+        final int i = (int) r; // i = (int) r
+
+        // Compute Remez polynomial
+        float temp = f * expA4 + expA3;
+        temp = temp * f + expA2;
+        temp = temp * f + expA1;
+        temp = temp * f + expA0;
+
+        temp = Float.intBitsToFloat(Float.floatToIntBits(temp) + (i << 23));  // temp = temp * 2^i
+        return temp;
     }
 
     /*
