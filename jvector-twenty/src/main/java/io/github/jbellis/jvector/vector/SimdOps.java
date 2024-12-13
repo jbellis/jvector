@@ -766,7 +766,6 @@ final class SimdOps {
     // NVQ quantization instructions start here
     //---------------------------------------------
 
-    static FloatVector const1024 = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1024);
     static FloatVector const0693147182f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.693147182f);
     static FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
     static FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
@@ -774,15 +773,36 @@ final class SimdOps {
     static FloatVector const15f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 15f);
 
     /*
-     Vectorized fast exponential exp(x / c)
-     https://codingforspeed.com/using-faster-exponential-approximation/
+     Fast exponential based on:
+     https://stackoverflow.com/questions/47025373/fastest-implementation-of-the-natural-exponential-function-using-sse
+     The Remez polynomial has been modified for higher accuracy
      */
-    public static FloatVector fastExp(FloatVector x) {
-        x = x.div(const1024).add(const1f);
-        x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
-        x = x.mul(x); x = x.mul(x); x = x.mul(x); x = x.mul(x);
-        x = x.mul(x); x = x.mul(x);
-        return x;
+    public static FloatVector fastExp(FloatVector x){
+        // approximation of exp(x)
+        // A0 + x * (A1 + x * (A2 + x * (a3 + x * (a4 + x * (a5 + x * (a6 + x * a7))))));
+        final float invlog2e = 1.442695041f;  // 1 / log2(e)
+        final float expCvt = 12582912.0f;  // 1.5 * (1 << 23)
+        final float expA0 = 0.9999993887682104f;
+        final float expA1 = 0.6931186232012877f;
+        final float expA2 = 0.2402301551437674f;
+        final float expA3 = 0.05593479631997887f;
+        final float expA4 = 0.009651907610706037f;
+
+        /* exp(x) = 2^i * 2^f; i = rint (log2(e) * x), -0.5 <= f <= 0.5 */
+        var t = x.mul(FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invlog2e));  // t = x / log2(e)
+        var r = t.add(expCvt).sub(expCvt);  // r = round(t)
+        var f = t.sub(r);  // f = t - round(t)
+        var i = r.castShape(IntVector.SPECIES_PREFERRED, 0).reinterpretAsInts(); // i = (int) r
+
+        var temp = f.fma(FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA4), FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA3));
+        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA2));
+        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA1));
+        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA0));
+
+        i = i.lanewise(VectorOperators.MAX, -126);
+        var j = i.lanewise(VectorOperators.LSHL, 23);
+        temp = temp.reinterpretAsInts().add(j).reinterpretAsFloats();  // temp = temp * 2^i
+        return temp;
     }
 
     /*
@@ -813,19 +833,6 @@ final class SimdOps {
         var temp = const1f.sub(fastExp(fastLog(vector).mul(a)));  // 1 - v ** a
         return const1f.sub(fastExp(fastLog(temp).mul(b)));        // 1 - v ** b
     }
-
-//    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b) {
-//        // Use broadcasting
-//        FloatVector exponentA = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, a);
-//        var temp = vector.pow(exponentA);
-//        temp = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(temp);
-//
-//        FloatVector exponentB = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, b);
-//        temp = temp.pow(exponentB);
-//        temp = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(temp);
-//
-//        return temp;
-//    }
 
     static float forwardKumaraswamy(float value, float a, float b) {
         var temp = 1.f - MathUtil.fastExp(MathUtil.fastLog(value) * a);   // 1 - v ** a
