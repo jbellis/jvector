@@ -40,13 +40,13 @@ public class distancesNVQ {
 //        int nQueries = queries.size();
 //        int nVectors = vectors.size();
         int nQueries = 100;
-        int nVectors = 1_000;
+        int nVectors = 50_000;
 
         vectors = vectors.subList(0, nVectors);
 
         // Generate a NVQ for random vectors
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
-        var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
+        var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
 //        nvq.learn = false;
         nvq.learn = true;
 
