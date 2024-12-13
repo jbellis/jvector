@@ -28,8 +28,9 @@ public class MathUtil {
     }
 
     /*
-     Fast exponential
+     Fast exponential based on:
      https://stackoverflow.com/questions/47025373/fastest-implementation-of-the-natural-exponential-function-using-sse
+     The Remez polynomial has been modified for higher accuracy
      */
     public static float fastExp(float x){
         // approximation of exp(x)
@@ -50,10 +51,10 @@ public class MathUtil {
         final int i = (int) r; // i = (int) r
 
         // Compute Remez polynomial
-        float temp = f * expA4 + expA3;
-        temp = temp * f + expA2;
-        temp = temp * f + expA1;
-        temp = temp * f + expA0;
+        float temp = Math.fma(f, expA4, expA3);
+        temp = Math.fma(temp, f, expA2);
+        temp = Math.fma(temp, f, expA1);
+        temp = Math.fma(temp, f, expA0);
 
         temp = Float.intBitsToFloat(Float.floatToIntBits(temp) + (i << 23));  // temp = temp * 2^i
         return temp;
