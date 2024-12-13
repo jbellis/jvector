@@ -220,28 +220,28 @@ public final class VectorUtil {
     return impl.min(v);
   }
 
-  public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
-    return impl.nvqDotProduct8bit(vector, bytes, a, b, scale, bias, vectorSum);
+  public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, float vectorSum) {
+    return impl.nvqDotProduct8bit(vector, bytes, growthRate, midpoint, scale, bias, vectorSum);
   }
 
-  public static float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
-    return impl.nvqDotProduct4bit(vector, bytes, a, b, scale, bias, vectorSum);
+  public static float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, float vectorSum) {
+    return impl.nvqDotProduct4bit(vector, bytes, growthRate, midpoint, scale, bias, vectorSum);
   }
 
-  public static float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
-    return impl.nvqSquareL2Distance8bit(vector, bytes, a, b, scale, bias);
+  public static float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias) {
+    return impl.nvqSquareL2Distance8bit(vector, bytes, growthRate, midpoint, scale, bias);
   }
 
-  public static float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
-    return impl.nvqSquareL2Distance4bit(vector, bytes, a, b, scale, bias);
+  public static float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias) {
+    return impl.nvqSquareL2Distance4bit(vector, bytes, growthRate, midpoint, scale, bias);
   }
 
-  public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
-    return impl.nvqCosine8bit(vector, bytes, a, b, scale, bias, centroid);
+  public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> centroid) {
+    return impl.nvqCosine8bit(vector, bytes, growthRate, midpoint, scale, bias, centroid);
   }
 
-  public static float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
-    return impl.nvqCosine4bit(vector, bytes, a, b, scale, bias, centroid);
+  public static float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> centroid) {
+    return impl.nvqCosine4bit(vector, bytes, growthRate, midpoint, scale, bias, centroid);
   }
 
   public static void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {
@@ -252,31 +252,31 @@ public final class VectorUtil {
     impl.nvqShuffleQueryInPlace8bit(vector);
   }
 
-  public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    return impl.nvqDequantize8bit(bytes, originalDimensions, a, b, scale, bias);
+  public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float scale, float bias) {
+    return impl.nvqDequantize8bit(bytes, originalDimensions, growthRate, midpoint, scale, bias);
   }
 
-  public static VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-    return impl.nvqDequantize4bit(bytes, originalDimensions, a, b, scale, bias);
+  public static VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float scale, float bias) {
+    return impl.nvqDequantize4bit(bytes, originalDimensions, growthRate, midpoint, scale, bias);
   }
 
-  public static void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-    impl.nvqDequantize8bit(bytes, a, b, scale, bias, destination);
+  public static void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> destination) {
+    impl.nvqDequantize8bit(bytes, growthRate, midpoint, scale, bias, destination);
   }
 
-  public static void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-    impl.nvqDequantize4bit(bytes, a, b, scale, bias, destination);
+  public static void nvqDequantize4bit(ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> destination) {
+    impl.nvqDequantize4bit(bytes, growthRate, midpoint, scale, bias, destination);
   }
 
-  public static void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
-    impl.nvqQuantizeNormalized8bit(vector, a, b, destination);
+  public static void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float growthRate, float midpoint, ByteSequence<?> destination) {
+    impl.nvqQuantizeNormalized8bit(vector, growthRate, midpoint, destination);
   }
 
-  public static void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
-    impl.nvqQuantizeNormalized4bit(vector, a, b, destination);
+  public static void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float growthRate, float midpoint, ByteSequence<?> destination) {
+    impl.nvqQuantizeNormalized4bit(vector, growthRate, midpoint, destination);
   }
 
-  public static float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
-    return impl.nvqLoss(vector, a, b, nBits);
+  public static float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, int nBits) {
+    return impl.nvqLoss(vector, growthRate, midpoint, nBits);
   }
 }

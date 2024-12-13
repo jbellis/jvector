@@ -77,8 +77,8 @@ public class NVQScorer {
                     for (int i = 0; i < querySubVectors.length; i++) {
                         var svDB = vector2.subVectors[i];
                         nvqDot += VectorUtil.nvqDotProduct8bit(querySubVectors[i],
-                                svDB.bytes, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                svDB.scale, svDB.bias,
                                 querySum[i]
                         );
                     }
@@ -95,8 +95,8 @@ public class NVQScorer {
                     for (int i = 0; i < querySubVectors.length; i++) {
                         var svDB = vector2.subVectors[i];
                         nvqDot += VectorUtil.nvqDotProduct4bit(querySubVectors[i],
-                                svDB.bytes, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                svDB.scale, svDB.bias,
                                 querySum[i]
                         );
                     }
@@ -137,8 +137,8 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         dist += VectorUtil.nvqSquareL2Distance8bit(
                                 querySubVectors[i],
-                                svDB.bytes, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias
+                                svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                svDB.scale, svDB.bias
                         );
                     }
 
@@ -154,8 +154,8 @@ public class NVQScorer {
                     for (int i = 0; i < querySubVectors.length; i++) {
                         var svDB = vector2.subVectors[i];
                         dist += VectorUtil.nvqSquareL2Distance4bit(querySubVectors[i],
-                                svDB.bytes, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias
+                                svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                svDB.scale, svDB.bias
                         );
                     }
 
@@ -184,8 +184,8 @@ public class NVQScorer {
                     for (int i = 0; i < querySubVectors.length; i++) {
                         var svDB = vector2.subVectors[i];
                         var partialCosSim = VectorUtil.nvqCosine8bit(querySubVectors[i],
-                                svDB.bytes, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                svDB.scale, svDB.bias,
                                 meanSubVectors[i]);
                         cos += partialCosSim[0];
                         squaredNormalization += partialCosSim[1];
@@ -206,8 +206,8 @@ public class NVQScorer {
                     for (int i = 0; i < querySubVectors.length; i++) {
                         var svDB = vector2.subVectors[i];
                         var partialCosSim = VectorUtil.nvqCosine4bit(querySubVectors[i],
-                                svDB.bytes, svDB.kumaraswamyA, svDB.kumaraswamyB,
-                                svDB.kumaraswamyScale, svDB.kumaraswamyBias,
+                                svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                svDB.scale, svDB.bias,
                                 meanSubVectors[i]);
                         dotProduct += partialCosSim[0];
                         squaredNormalization += partialCosSim[1];

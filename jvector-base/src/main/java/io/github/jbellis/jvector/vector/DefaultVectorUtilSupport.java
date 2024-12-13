@@ -400,14 +400,14 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+  public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, float vectorSum) {
     int constant = 255;
     float dotProd = 0;
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
 
       dotProd += vector.get(d) * value;
     }
@@ -415,7 +415,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+  public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, float vectorSum) {
     int constant = 15;
     float dotProd = 0;
     float value;
@@ -423,13 +423,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
 
       dotProd += vector.get(2 * d) * value;
 
       value = quantizedValue >> 4;
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
 
       dotProd += vector.get(2 * d + 1) * value;
     }
@@ -437,7 +437,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+  public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias) {
     float squareSum = 0;
 
     int constant = 255;
@@ -446,7 +446,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
       value = scale * value + bias;
 
       squareSum += MathUtil.square(value - vector.get(d));
@@ -455,7 +455,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+  public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias) {
     int constant = 15;
     float squareSum = 0;
     float value;
@@ -463,7 +463,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
       value = scale * value + bias;
 
       value -= vector.get(2 * d);
@@ -471,7 +471,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
       value = quantizedValue >> 4;
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
       value = scale * value + bias;
 
       value -= vector.get(2 * d + 1);
@@ -481,7 +481,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+  public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> centroid) {
     float sum = 0;
     float normDQ = 0;
 
@@ -491,7 +491,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       elem2 = Byte.toUnsignedInt(bytes.get(d));
       elem2 /= constant;
-      elem2 = inverseKumaraswamy(elem2, a, b);
+      elem2 = scaled_logit_function(elem2, growthRate, midpoint);
       elem2 = scale * elem2 + bias + centroid.get(d);
 
       sum += vector.get(d) * elem2;
@@ -501,7 +501,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+  public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> centroid) {
     float sum = 0;
     float normDQ = 0;
 
@@ -511,7 +511,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       elem2 = quantizedValue & constant;
       elem2 /= constant;
-      elem2 = inverseKumaraswamy(elem2, a, b);
+      elem2 = scaled_logit_function(elem2, growthRate, midpoint);
       elem2 = scale * elem2 + bias + centroid.get(2 * d);
 
       sum += vector.get(2 * d) * elem2;
@@ -519,7 +519,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
       elem2 = quantizedValue >> 4;
       elem2 /= constant;
-      elem2 = inverseKumaraswamy(elem2, a, b);
+      elem2 = scaled_logit_function(elem2, growthRate, midpoint);
       elem2 = scale * elem2 + bias + centroid.get(2 * d + 1);
 
       sum += vector.get(2 * d + 1) * elem2;
@@ -534,29 +534,47 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {}
 
-  static float forwardKumaraswamy(float value, float a, float b) {
-    var temp = 1.f - MathUtil.fastExp(MathUtil.fastLog(value) * a);   // 1 - v ** a
-    return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b
+  static float logistic_function(float value, float growthRate, float midpoint) {
+    return 1.f  / (1.f + MathUtil.fastExp(-growthRate * (value - midpoint)));
   }
 
-  static float inverseKumaraswamy(float value, float a, float b) {
-    var temp = MathUtil.fastExp(MathUtil.fastLog(1.f - value) / b);   // (1 - v) ** (1 / b)
-    return MathUtil.fastExp(MathUtil.fastLog(1.f - temp) / a);        // (1 - v) ** (1 / a)
+  static float scaled_logistic_function(float value, float growthRate, float midpoint) {
+    var bias = logistic_function(0, growthRate, midpoint);
+    var scale = logistic_function(1, growthRate, midpoint) - bias;
+
+    var y = logistic_function(value, growthRate, midpoint);
+    if (scale == 0) {
+      return y - bias;
+    } else {
+      return (y - bias) / scale;
+    }
   }
 
-  private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+  static float scaled_logit_function(float value, float growthRate, float midpoint) {
+    var bias = logistic_function(0, growthRate, midpoint);
+    var scale = logistic_function(1, growthRate, midpoint) - bias;
+
+    var valued_scaled = scale * value + bias;
+    if (valued_scaled != 0 && valued_scaled != 1) {
+      return MathUtil.fastLog(valued_scaled / (1 - valued_scaled)) / growthRate + midpoint;
+    } else {
+      return valued_scaled / growthRate + midpoint;
+    }
+  }
+
+  private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float growthRate, float midpoint, VectorFloat<?> destination) {
     int constant = 255;
 
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
       destination.set(d, value);
     }
   }
 
-  private void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float a, float b, VectorFloat<?> destination) {
+  private void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float growthRate, float midpoint, VectorFloat<?> destination) {
     int constant = 15;
 
     float value;
@@ -564,74 +582,74 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
       value /= constant;
-      value = inverseKumaraswamy(value, a, b);
+      value = scaled_logit_function(value, growthRate, midpoint);
       destination.set(2 * d, value);
 
       if (2 * d + 1 < destination.length()) {
         value = quantizedValue >> 4;
         value /= constant;
-        value = inverseKumaraswamy(value, a, b);
+        value = scaled_logit_function(value, growthRate, midpoint);
         destination.set(2 * d + 1, value);
       }
     }
   }
 
   @Override
-  public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+  public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float scale, float bias) {
     VectorFloat<?> vec = new ArrayVectorFloat(originalDimensions);
-    nvqDequantizeUnnormalized8bit(bytes, a, b, vec);
+    nvqDequantizeUnnormalized8bit(bytes, growthRate, midpoint, vec);
     scale(vec, scale);
     addInPlace(vec, bias);
     return vec;
   }
 
   @Override
-  public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
+  public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float scale, float bias) {
     VectorFloat<?> vec = new ArrayVectorFloat(originalDimensions);
-    nvqDequantizeUnnormalized4bit(bytes, a, b, vec);
+    nvqDequantizeUnnormalized4bit(bytes, growthRate, midpoint, vec);
     scale(vec, scale);
     addInPlace(vec, bias);
     return vec;
   }
 
   @Override
-  public void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-    nvqDequantizeUnnormalized8bit(bytes, a, b, destination);
+  public void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> destination) {
+    nvqDequantizeUnnormalized8bit(bytes, growthRate, midpoint, destination);
     scale(destination, scale);
     addInPlace(destination, bias);
   }
 
   @Override
-  public void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-    nvqDequantizeUnnormalized4bit(bytes, a, b, destination);
+  public void nvqDequantize4bit(ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> destination) {
+    nvqDequantizeUnnormalized4bit(bytes, growthRate, midpoint, destination);
     scale(destination, scale);
     addInPlace(destination, bias);
   }
 
   @Override
-  public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+  public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float growthRate, float midpoint, ByteSequence<?> destination) {
     int constant = 255;
     for (int d = 0; d < vector.length(); d++) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
-      value = forwardKumaraswamy(value, a, b);
+      value = scaled_logistic_function(value, growthRate, midpoint);
       int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
       destination.set(d, (byte) quantizedValue);
     }
   }
 
   @Override
-  public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
+  public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float growthRate, float midpoint, ByteSequence<?> destination) {
     int constant = 15;
     for (int d = 0; d < vector.length(); d += 2) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
-      value = forwardKumaraswamy(value, a, b);
+      value = scaled_logistic_function(value, growthRate, midpoint);
       int quantizedValue0 = Math.min(Math.max(0, Math.round(constant * value)), constant);
       int quantizedValue1;
       if (d + 1 < vector.length()) {
         value = vector.get(d + 1);
-        value = forwardKumaraswamy(value, a, b);
+        value = scaled_logistic_function(value, growthRate, midpoint);
         quantizedValue1 = Math.min(Math.max(0, Math.round(constant * value)), constant);
       } else {
         quantizedValue1 = 0;
@@ -640,7 +658,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
-  public float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
+  public float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, int nBits) {
     float constant = (1 << nBits) - 1;
 
     float squaredSum = 0.f;
@@ -648,11 +666,12 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < vector.length(); d++) {
       originalValue = vector.get(d);
 
-      reconstructedValue = forwardKumaraswamy(originalValue, a, b);
+      reconstructedValue = scaled_logistic_function(originalValue, growthRate, midpoint);
       reconstructedValue = Math.min(Math.max(0, Math.round(constant * reconstructedValue)), constant) / constant;
-      reconstructedValue = inverseKumaraswamy(reconstructedValue, a, b);
+      reconstructedValue = scaled_logit_function(reconstructedValue, growthRate, midpoint);
 
       squaredSum += MathUtil.square(originalValue - reconstructedValue);
+//      squaredSum += (originalValue - reconstructedValue) * (originalValue - reconstructedValue);
     }
 
     return squaredSum;
