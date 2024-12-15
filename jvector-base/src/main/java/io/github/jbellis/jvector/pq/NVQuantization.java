@@ -540,6 +540,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
                 growthRate = sol.x[0];
 //                midpoint = sol.x[1];
+//                growthRate = 1.38f; // TODO temp for debug
                 midpoint = 0.5f;
 
 //                float bestLossValue = Float.MIN_VALUE;

@@ -252,7 +252,7 @@ public class Grid {
                     builder.with(new FusedADC(onHeapGraph.maxDegree(), pq));
                     break;
                 case NVQ_VECTORS:
-                    var nvq = NVQuantization.compute(floatVectors, 8, NVQuantization.BitsPerDimension.EIGHT);
+                    var nvq = NVQuantization.compute(floatVectors, 4, NVQuantization.BitsPerDimension.EIGHT);
                     builder.with(new NVQ(nvq));
                     suppliers.put(FeatureId.NVQ_VECTORS, ordinal -> new NVQ.State(nvq.encode(floatVectors.getVector(ordinal))));
                     break;
