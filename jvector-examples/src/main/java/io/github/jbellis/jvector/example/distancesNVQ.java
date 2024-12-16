@@ -78,6 +78,8 @@ public class distancesNVQ {
         System.out.println(vsf + " error " + distanceError);
         System.out.println("--");
 
+        float dummyAccumulator = 0;
+
         startTime = System.nanoTime();
         for (int i = 0; i < nQueries; i++) {
             var q = queries.get(i);
@@ -87,7 +89,7 @@ public class distancesNVQ {
             var f = nvqVecs.scoreFunctionFor(q, vsf);
 
             for (int j = 0; j < nVectors; j++) {
-                f.similarityTo(j);
+                dummyAccumulator += f.similarityTo(j);
             }
         }
         endTime = System.nanoTime();
@@ -103,12 +105,14 @@ public class distancesNVQ {
 
             for (int j = 0; j < nVectors; j++) {
                 var v = vectors.get(j);
-                vsf.compare(q, v);
+                dummyAccumulator += vsf.compare(q, v);
             }
         }
         endTime = System.nanoTime();
         duration = (double) (endTime - startTime) / 1_000_000_000;
         System.out.println("\tFloat Distance computations took " + duration + " seconds");
+
+        System.out.println("dummyAccumulator: " + dummyAccumulator);
     }
 
     public static void main(String[] args) throws IOException {
