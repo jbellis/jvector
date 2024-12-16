@@ -402,15 +402,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, float vectorSum) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 255;
     var inverseGrowthRate = 1 / growthRate;
 
-    int constant = 255;
     float dotProd = 0;
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
 
       dotProd = Math.fma(vector.get(d), value, dotProd);
@@ -421,7 +419,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, float vectorSum) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 15;
     var inverseGrowthRate = 1 / growthRate;
 
     int constant = 15;
@@ -430,13 +428,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
 
       dotProd += vector.get(2 * d) * value;
 
       value = quantizedValue >> 4;
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
 
       dotProd += vector.get(2 * d + 1) * value;
@@ -447,17 +443,15 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 255;
     var inverseGrowthRate = 1 / growthRate;
 
     float squareSum = 0;
 
-    int constant = 255;
     float value;
 
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       value = Math.fma(scale, value, bias);
 
@@ -470,7 +464,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 15;
     var inverseGrowthRate = 1 / growthRate;
 
     int constant = 15;
@@ -479,7 +473,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       value = Math.fma(scale, value, bias);
 
@@ -487,7 +480,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       squareSum = Math.fma(value, value, squareSum);
 
       value = quantizedValue >> 4;
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       value = scale * value + bias;
 
@@ -500,18 +492,16 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> centroid) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 255;
     var inverseGrowthRate = 1 / growthRate;
 
     float sum = 0;
     float normDQ = 0;
 
-    int constant = 255;
     float elem2;
 
     for (int d = 0; d < bytes.length(); d++) {
       elem2 = Byte.toUnsignedInt(bytes.get(d));
-      elem2 /= constant;
       elem2 = scaled_logit_function(elem2, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       elem2 = Math.fma(elem2, scale, bias + centroid.get(d));
 
@@ -524,7 +514,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float scale, float bias, VectorFloat<?> centroid) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 15;
     var inverseGrowthRate = 1 / growthRate;
 
     float sum = 0;
@@ -535,7 +525,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       elem2 = quantizedValue & constant;
-      elem2 /= constant;
       elem2 = scaled_logit_function(elem2, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       elem2 = scale * elem2 + bias + centroid.get(2 * d);
 
@@ -543,7 +532,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       normDQ += elem2 * elem2;
 
       elem2 = quantizedValue >> 4;
-      elem2 /= constant;
       elem2 = scaled_logit_function(elem2, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       elem2 = scale * elem2 + bias + centroid.get(2 * d + 1);
 
@@ -575,7 +563,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   private void nvqDequantizeUnnormalized8bit(ByteSequence<?> bytes, float growthRate, float midpoint, VectorFloat<?> destination) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 255;
     var inverseGrowthRate = 1 / growthRate;
 
     int constant = 255;
@@ -583,7 +571,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       destination.set(d, value);
     }
@@ -591,7 +578,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
   private void nvqDequantizeUnnormalized4bit(ByteSequence<?> bytes, float growthRate, float midpoint, VectorFloat<?> destination) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 15;
     var inverseGrowthRate = 1 / growthRate;
 
     int constant = 15;
@@ -600,13 +587,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < bytes.length(); d++) {
       int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
       value = quantizedValue & constant;
-      value /= constant;
       value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
       destination.set(2 * d, value);
 
       if (2 * d + 1 < destination.length()) {
         value = quantizedValue >> 4;
-        value /= constant;
         value = scaled_logit_function(value, inverseGrowthRate, midpoint, logisticScale, logisticBias);
         destination.set(2 * d + 1, value);
       }
@@ -648,14 +633,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float growthRate, float midpoint, ByteSequence<?> destination) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 255;
 
-    int constant = 255;
     for (int d = 0; d < vector.length(); d++) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
       value = scaled_logistic_function(value, growthRate, midpoint, logisticScale, logisticBias);
-      int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
+      int quantizedValue = Math.round(value);
       destination.set(d, (byte) quantizedValue);
     }
   }
@@ -663,19 +647,19 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float growthRate, float midpoint, ByteSequence<?> destination) {
     var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / 15;
 
     int constant = 15;
     for (int d = 0; d < vector.length(); d += 2) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
       value = scaled_logistic_function(value, growthRate, midpoint, logisticScale, logisticBias);
-      int quantizedValue0 = Math.min(Math.max(0, Math.round(constant * value)), constant);
+      int quantizedValue0 = Math.round(value);
       int quantizedValue1;
       if (d + 1 < vector.length()) {
         value = vector.get(d + 1);
         value = scaled_logistic_function(value, growthRate, midpoint, logisticScale, logisticBias);
-        quantizedValue1 = Math.min(Math.max(0, Math.round(constant * value)), constant);
+        quantizedValue1 = Math.round(value);
       } else {
         quantizedValue1 = 0;
       }
@@ -684,11 +668,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   public float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, int nBits) {
-    var logisticBias = logistic_function(0, growthRate, midpoint);
-    var logisticScale = logistic_function(1, growthRate, midpoint) - logisticBias;
-    var inverseGrowthRate = 1 / growthRate;
-
     float constant = (1 << nBits) - 1;
+
+    var logisticBias = logistic_function(0, growthRate, midpoint);
+    var logisticScale = (logistic_function(1, growthRate, midpoint) - logisticBias) / constant;
+    var inverseGrowthRate = 1 / growthRate;
 
     float squaredSum = 0.f;
     float originalValue, reconstructedValue;
@@ -696,7 +680,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       originalValue = vector.get(d);
 
       reconstructedValue = scaled_logistic_function(originalValue, growthRate, midpoint, logisticScale, logisticBias);
-      reconstructedValue = Math.round(constant * reconstructedValue) / constant;
+      reconstructedValue = Math.round(reconstructedValue);
       reconstructedValue = scaled_logit_function(reconstructedValue, inverseGrowthRate, midpoint, logisticScale, logisticBias);
 
       var diff = originalValue - reconstructedValue;
