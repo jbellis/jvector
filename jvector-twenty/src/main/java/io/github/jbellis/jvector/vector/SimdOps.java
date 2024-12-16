@@ -1179,7 +1179,7 @@ final class SimdOps {
             for (int j = 0; j < 4; j++) {
                 var v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
                 var v2 = nvqDequantizeUnnormalized8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
-                v2 = v2.mul(scale).add(bias);
+                v2 = v2.fma(scale, bias);
 
                 var diff = v1.sub(v2);
                 squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -1296,7 +1296,7 @@ final class SimdOps {
             dotProd += vector.get(i) - value2;
         }
 
-        return scale * dotProd + bias * vectorSum;
+        return Math.fma(scale, dotProd, bias * vectorSum);
     }
 
     static float nvqDotProduct4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, float vectorSum) {
