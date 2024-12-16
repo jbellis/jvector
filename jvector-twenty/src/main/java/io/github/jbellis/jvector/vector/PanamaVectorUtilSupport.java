@@ -249,7 +249,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float scale, float bias) {
         var res = new ArrayVectorFloat(new float[originalDimensions]);
-        SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  alpha, x0, scale, bias, res);
+        // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
+        var logisticBias = SimdOps.logistic(0, alpha, x0);
+        var logisticScale = SimdOps.logistic(1, alpha, x0) - logisticBias;
+        var invAlpha = 1 / alpha;
+
+        SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  alpha, x0, scale, bias, logisticScale, logisticBias, res);
         return res;
     }
 
@@ -260,8 +265,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, VectorFloat<?> destination) {
-        SimdOps.nvqDequantize8bit(
-                (ArrayByteSequence) bytes,  alpha, x0, scale, bias,
+        // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
+        var logisticBias = SimdOps.logistic(0, alpha, x0);
+        var logisticScale = SimdOps.logistic(1, alpha, x0) - logisticBias;
+        var invAlpha = 1 / alpha;
+
+        SimdOps. nvqDequantize8bit(
+                (ArrayByteSequence) bytes,  alpha, x0, scale, bias, logisticScale, logisticBias,
                 (ArrayVectorFloat) destination
         );
     }
