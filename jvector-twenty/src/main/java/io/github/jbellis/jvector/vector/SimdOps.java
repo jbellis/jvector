@@ -946,8 +946,7 @@ final class SimdOps {
                 .lanewise(VectorOperators.LSHR, 8 * part)
                 .lanewise(VectorOperators.AND, 0xff)
                 .convert(VectorOperators.I2F, 0)
-                .reinterpretAsFloats()
-                .lanewise(VectorOperators.DIV, 255.0f);
+                .reinterpretAsFloats();
 
         arr = arr.fma(logisticScale, logisticBias);
         return logit(arr, alpha, x0);
@@ -1110,20 +1109,19 @@ final class SimdOps {
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
         var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = logistic(1, alpha, x0) - logisticBias;
+        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / constant;
         var invAlpha = 1 / alpha;
         var invLogisticScale = 1 / logisticScale;
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
             var recArr = logistic(arr, alpha, x0);
-            recArr = recArr.add(-logisticBias).mul(invLogisticScale);
-            recArr = recArr.mul(constant).add(const05f)
+            recArr = recArr.sub(logisticBias).mul(invLogisticScale);
+            recArr = recArr.add(const05f)
                     .convert(VectorOperators.F2I, 0)
                     .reinterpretAsInts()
                     .convert(VectorOperators.I2F, 0)
-                    .reinterpretAsFloats()
-                    .div(constant);
+                    .reinterpretAsFloats();
             recArr = recArr.fma(logisticScale, logisticBias);
             recArr = logit(recArr, alpha, x0);
 
@@ -1173,7 +1171,7 @@ final class SimdOps {
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
 
         var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = logistic(1, alpha, x0) - logisticBias;
+        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / 255;
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
             var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
@@ -1275,7 +1273,7 @@ final class SimdOps {
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
 
         var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = logistic(1, alpha, x0) - logisticBias;
+        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / 255;
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
             var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
@@ -1293,8 +1291,8 @@ final class SimdOps {
         float value2;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = quantizedVector.get(i);
-            value2 = logisticScale * value2 + logisticBias;
-            value2 = logit(value2 / 255.f, alpha, x0);
+            value2 = logisticScale * value2 / 255.f + logisticBias;
+            value2 = logit(value2, alpha, x0);
             dotProd += vector.get(i) - value2;
         }
 
@@ -1355,7 +1353,7 @@ final class SimdOps {
         }
 
         var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = logistic(1, alpha, x0) - logisticBias;
+        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / 255;
 
         var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -1387,7 +1385,7 @@ final class SimdOps {
         float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value2 = quantizedVector.get(i);
-            value2 = logisticScale * value2 + logisticBias;
+            value2 = logisticScale * value2 / 255.f + logisticBias;
             value2 = scale * logit(value2, alpha, x0) + bias + centroid.get(i);
             sum += vector.get(i) * value2;
             bMagnitude += value2 * value2;
