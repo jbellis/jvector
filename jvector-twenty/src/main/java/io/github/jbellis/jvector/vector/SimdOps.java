@@ -780,23 +780,6 @@ final class SimdOps {
         return i.fma(const0693147182f, r); // 0x1.62e430p-1 // log(2)
     }
 
-    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b) {
-        var temp = const1f.sub(fastExp(fastLog(vector).mul(a)));  // 1 - v ** a
-        return const1f.sub(fastExp(fastLog(temp).mul(b)));        // 1 - v ** b
-    }
-
-    static float forwardKumaraswamy(float value, float a, float b) {
-        var temp = 1.f - MathUtil.fastExp(MathUtil.fastLog(value) * a);   // 1 - v ** a
-        return 1.f - MathUtil.fastExp(MathUtil.fastLog(temp) * b);        // 1 - v ** b
-    }
-
-    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
-        float invA = 1.0f / a;
-        float invB = 1.0f / b;
-        var temp = fastExp(fastLog(const1f.sub(vector)).mul(invB));  // (1 - v) ** (1 / b)
-        return fastExp(fastLog(const1f.sub(temp)).mul(invA));        // (1 - v) ** (1 / a)
-    }
-
     static FloatVector logistic(FloatVector vector, float alpha, float x0) {
        var temp = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -alpha).mul(vector.sub(x0));
        temp = fastExp(temp);
@@ -818,29 +801,6 @@ final class SimdOps {
     static float logit(float value, float alpha, float x0) {
         var temp = value / (1 - value);
         return MathUtil.fastLog(temp) / alpha + x0;
-    }
-
-//    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
-//        float invA = 1.0f / a; // precompute
-//        float invB = 1.0f / b;
-//
-//        // Store intermediates in registers
-//        var oneMinusV = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(vector);
-//
-//        // Use broadcasting
-//        FloatVector exponentB = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invB);
-//        oneMinusV = oneMinusV.pow(exponentB);  // In-place operation (no heap allocation)
-//
-//        var oneMinusVToBSub = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.0f).sub(oneMinusV);
-//
-//        // Compute (1 - (1 - v) ** (1/b)) ** (1/a) and store to register
-//        FloatVector exponentA = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invA);
-//        return oneMinusVToBSub.pow(exponentA);
-//    }
-
-    static float inverseKumaraswamy(float value, float a, float b) {
-        var temp = MathUtil.fastExp(MathUtil.fastLog(1.f - value) / b);   // (1 - v) ** (1 / b)
-        return MathUtil.fastExp(MathUtil.fastLog(1.f - temp) / a);        // (1 - v) ** (1 / a)
     }
 
     static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
