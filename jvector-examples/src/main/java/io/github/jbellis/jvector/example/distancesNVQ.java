@@ -40,13 +40,13 @@ public class distancesNVQ {
 //        int nQueries = queries.size();
 //        int nVectors = vectors.size();
         int nQueries = 100;
-        int nVectors = 50_000;
+        int nVectors = 10_000;
 
         vectors = vectors.subList(0, nVectors);
 
         // Generate a NVQ for random vectors
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
-        var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
+        var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
 //        nvq.learn = false;
         nvq.learn = true;
 
@@ -116,12 +116,11 @@ public class distancesNVQ {
     }
 
     public static void main(String[] args) throws IOException {
-//        var siftPath = "siftsmall";
-//        var baseVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_base.fvecs", siftPath));
-//        var queryVectors = SiftLoader.readFvecs(String.format("%s/siftsmall_query.fvecs", siftPath));
+        var baseVectors = SiftLoader.readFvecs("siftsmall/siftsmall_base.fvecs");
+        var queryVectors = SiftLoader.readFvecs("siftsmall/siftsmall_query.fvecs");
 
-        var baseVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/ada_002_100000_base_vectors.fvec");
-        var queryVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec");
+//        var baseVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/ada_002_100000_base_vectors.fvec");
+//        var queryVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec");
 
 //        var baseVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/1M/colbertv2.0_128_base_vectors_1000000.fvec");
 //        var queryVectors = SiftLoader.readFvecs("./fvec/wikipedia_squad/1M/colbertv2.0_128_query_vectors_100000.fvec");

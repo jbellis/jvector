@@ -47,24 +47,9 @@ public class NVQScorer {
     private NVQScoreFunction dotProductScoreFunctionFor(VectorFloat<?> query) {
         /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
          * first de-meaned by subtracting the global mean.
-         * The dot product is calculated between the query and quantized sub-vectors as follows:
-         *
-         * <query, vector> \approx <query, scale * quantized + bias + globalMean>
-         *                       = scale * <query, quantized> + bias <query, broadcast(1)> + <query, globalMean>
-         *
-         * where scale and bias are scalars.
-         *
-         * The following terms can be precomputed:
-         *     queryGlobalBias = <query, globalMean>
-         *     querySum = <query, broadcast(1)>
          */
         var queryGlobalBias = VectorUtil.dotProduct(query, this.nvq.globalMean);
         var querySubVectors = this.nvq.getSubVectors(query);
-
-        var querySum = new float[querySubVectors.length];
-        for (int i = 0; i < querySubVectors.length; i++) {
-            querySum[i] = VectorUtil.sum(querySubVectors[i]);
-        }
 
         switch (this.nvq.bitsPerDimension) {
             case EIGHT:
@@ -78,8 +63,7 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         nvqDot += VectorUtil.nvqDotProduct8bit(querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.scale, svDB.bias,
-                                querySum[i]
+                                svDB.minValue, svDB.maxValue
                         );
                     }
                     // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
@@ -96,8 +80,7 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         nvqDot += VectorUtil.nvqDotProduct4bit(querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.scale, svDB.bias,
-                                querySum[i]
+                                svDB.minValue, svDB.maxValue
                         );
                     }
                     // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
@@ -111,16 +94,6 @@ public class NVQScorer {
     private NVQScoreFunction euclideanScoreFunctionFor(VectorFloat<?> query) {
         /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
          * first de-meaned by subtracting the global mean.
-         *
-         * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
-         *
-         * |query - vector|^2 \approx |query - (scale * quantized + bias + globalMean)|^2
-         *                          = |(query - globalMean) - scale * quantized + bias|^2
-         *
-         * where scale and bias are scalars.
-         *
-         * The following term can be precomputed:
-         *     shiftedQuery = query - globalMean
          */
         var shiftedQuery = VectorUtil.sub(query, this.nvq.globalMean);
         var querySubVectors = this.nvq.getSubVectors(shiftedQuery);
@@ -138,7 +111,7 @@ public class NVQScorer {
                         dist += VectorUtil.nvqSquareL2Distance8bit(
                                 querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.scale, svDB.bias
+                                svDB.minValue, svDB.maxValue
                         );
                     }
 
@@ -155,7 +128,7 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         dist += VectorUtil.nvqSquareL2Distance4bit(querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.scale, svDB.bias
+                                svDB.minValue, svDB.maxValue
                         );
                     }
 
@@ -185,7 +158,7 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         var partialCosSim = VectorUtil.nvqCosine8bit(querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.scale, svDB.bias,
+                                svDB.minValue, svDB.maxValue,
                                 meanSubVectors[i]);
                         cos += partialCosSim[0];
                         squaredNormalization += partialCosSim[1];
@@ -207,7 +180,7 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         var partialCosSim = VectorUtil.nvqCosine4bit(querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.scale, svDB.bias,
+                                svDB.minValue, svDB.maxValue,
                                 meanSubVectors[i]);
                         dotProduct += partialCosSim[0];
                         squaredNormalization += partialCosSim[1];

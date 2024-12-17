@@ -191,47 +191,47 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue) {
         return SimdOps.nvqDotProduct8bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                alpha, x0, scale, bias, vectorSum);
+                alpha, x0, minValue, maxValue);
     }
 
     @Override
-    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue) {
         return SimdOps.nvqDotProduct4bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                alpha, x0, scale, bias, vectorSum);
+                alpha, x0, minValue, maxValue);
     }
 
     @Override
-    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float scale, float bias) {
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue) {
         return SimdOps.nvqSquareDistance8bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                alpha, x0, scale, bias);
+                alpha, x0, minValue, maxValue);
     }
 
     @Override
-    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float scale, float bias) {
+    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue) {
         return SimdOps.nvqSquareDistance4bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                alpha, x0, scale, bias);
+                alpha, x0, minValue, maxValue);
     }
 
     @Override
-    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> centroid) {
         return SimdOps.nvqCosine8bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                alpha, x0, scale, bias,
+                alpha, x0, minValue, maxValue,
                 (ArrayVectorFloat) centroid
         );
     }
 
     @Override
-    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> centroid) {
         return SimdOps.nvqCosine4bit(
                 (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
-                alpha, x0, scale, bias,
+                alpha, x0, minValue, maxValue,
                 (ArrayVectorFloat) centroid
         );
     }
@@ -247,56 +247,59 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float scale, float bias) {
+    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float minValue, float maxValue) {
         var res = new ArrayVectorFloat(new float[originalDimensions]);
         // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
         var logisticBias = SimdOps.logistic(0, alpha, x0);
         var logisticScale = SimdOps.logistic(1, alpha, x0) - logisticBias;
-        var invAlpha = 1 / alpha;
 
-        SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  alpha, x0, scale, bias, logisticScale, logisticBias, res);
+        SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  alpha, x0, logisticScale, logisticBias, res);
         return res;
     }
 
     @Override
-    public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float scale, float bias) {
-        return SimdOps.nvqDequantize4bit((ArrayByteSequence) bytes, originalDimensions,  alpha, x0, scale, bias);
+    public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float minValue, float maxValue) {
+        return SimdOps.nvqDequantize4bit((ArrayByteSequence) bytes, originalDimensions,  alpha, x0, minValue, maxValue);
     }
 
     @Override
-    public void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, VectorFloat<?> destination) {
+    public void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> destination) {
         // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
-        var logisticBias = SimdOps.logistic(0, alpha, x0);
-        var logisticScale = SimdOps.logistic(1, alpha, x0) - logisticBias;
-        var invAlpha = 1 / alpha;
+        var logisticBias = SimdOps.logistic(minValue, alpha, x0);
+        var logisticScale = SimdOps.logistic(maxValue, alpha, x0) - logisticBias;
 
         SimdOps. nvqDequantize8bit(
-                (ArrayByteSequence) bytes,  alpha, x0, scale, bias, logisticScale, logisticBias,
+                (ArrayByteSequence) bytes,  alpha, x0, logisticScale, logisticBias,
                 (ArrayVectorFloat) destination
         );
     }
 
     @Override
-    public void nvqDequantize4bit(ByteSequence<?> bytes, float alpha, float x0, float scale, float bias, VectorFloat<?> destination) {
+    public void nvqDequantize4bit(ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> destination) {
         SimdOps.nvqDequantize4bit(
-                (ArrayByteSequence) bytes,  alpha, x0, scale, bias,
+                (ArrayByteSequence) bytes,  alpha, x0, minValue, maxValue,
                 (ArrayVectorFloat) destination
         );
     }
 
     @Override
-    public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float alpha, float x0, ByteSequence<?> destination) {
-        SimdOps.nvqQuantizeNormalized8bit((ArrayVectorFloat) vector, alpha, x0, (ArrayByteSequence) destination);
+    public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
+        SimdOps.nvqQuantize8bit((ArrayVectorFloat) vector, alpha, x0, minValue, maxValue,(ArrayByteSequence) destination);
     }
 
     @Override
-    public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float alpha, float x0, ByteSequence<?> destination) {
-        SimdOps.nvqQuantizeNormalized4bit((ArrayVectorFloat) vector, alpha, x0, (ArrayByteSequence) destination);
+    public void nvqQuantize4bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
+        SimdOps.nvqQuantize8bit((ArrayVectorFloat) vector, alpha, x0, minValue, maxValue,(ArrayByteSequence) destination);
     }
 
     @Override
-    public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, int nBits) {
-        return SimdOps.nvqLoss((ArrayVectorFloat) vector, alpha, x0, nBits);
+    public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
+        return SimdOps.nvqLoss((ArrayVectorFloat) vector, alpha, x0, minValue, maxValue, nBits);
+    }
+
+    @Override
+    public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        return SimdOps.nvqUniformLoss((ArrayVectorFloat) vector, minValue, maxValue, nBits);
     }
 }
 

@@ -823,7 +823,7 @@ final class VectorSimdOps {
         addInPlace(res, bias);
     }
 
-    static void nvqQuantizeNormalized8bit(MemorySegmentVectorFloat vector, float a, float b, MemorySegmentByteSequence destination) {
+    static void nvqQuantize8bit(MemorySegmentVectorFloat vector, float a, float b, float minValue, float maxValue, MemorySegmentByteSequence destination) {
         final int constant = (1 << 8) - 1;
         final int vectorizedLength = FloatVector.SPECIES_256.loopBound(vector.length());
         final var mask = ByteVector.SPECIES_256.indexInRange(0, FloatVector.SPECIES_256.length());
@@ -847,7 +847,7 @@ final class VectorSimdOps {
         }
     }
 
-    static void nvqQuantizeNormalized4bit(MemorySegmentVectorFloat vector, float a, float b, MemorySegmentByteSequence destination) {
+    static void nvqQuantize4bit(MemorySegmentVectorFloat vector, float a, float b, float minValue, float maxValue, MemorySegmentByteSequence destination) {
         final int constant = (1 << 4) - 1;
 
         final var shuffle = VectorShuffle.fromValues(FloatVector.SPECIES_256, 1, 0, 3, 2, 5, 4, 7, 6);
@@ -889,7 +889,7 @@ final class VectorSimdOps {
         }
     }
 
-    static float nvqLoss(MemorySegmentVectorFloat vector, float a, float b, int nBits) {
+    static float nvqLoss(MemorySegmentVectorFloat vector, float a, float b, float minValue, float maxValue, int nBits) {
         int constant = (1 << nBits) - 1;
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
@@ -926,6 +926,10 @@ final class VectorSimdOps {
         return squaredSum;
     }
 
+    static float nvqUniformLoss(MemorySegmentVectorFloat vector, float minValue, float maxValue, int nBits) {
+        return 0;
+    }
+
     static float nvqSquareDistance8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
         MemorySegmentVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, vector.length(), a, b, scale, bias);
 
@@ -940,20 +944,20 @@ final class VectorSimdOps {
         return squareDistance(vector, dequantizedVector);
     }
 
-    static float nvqDotProduct8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum) {
+    static float nvqDotProduct8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
         var dequantizedVector = new MemorySegmentVectorFloat(new float[vector.length()]);
         nvqDequantizeUnnormalized8bit(quantizedVector, a, b, dequantizedVector);
 
         float dotProd = dotProduct(vector, dequantizedVector);
-        return scale * dotProd + bias * vectorSum;
+        return dotProd;
     }
 
-    static float nvqDotProduct4bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, float vectorSum) {
+    static float nvqDotProduct4bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
         var dequantizedVector = new MemorySegmentVectorFloat(new float[vector.length()]);
         nvqDequantizeUnnormalized4bit(quantizedVector, a, b, dequantizedVector);
 
         float dotProd = dotProduct(vector, dequantizedVector);
-        return scale * dotProd + bias * vectorSum;
+        return dotProd;
     }
 
     static float[] nvqCosine8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, MemorySegmentVectorFloat centroid) {

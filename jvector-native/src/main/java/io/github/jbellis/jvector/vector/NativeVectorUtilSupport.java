@@ -187,51 +187,51 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
         return VectorSimdOps.nvqDotProduct8bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                a, b, scale, bias, vectorSum
+                growthRate, midpoint, minValue, maxValue
         );
     }
 
     @Override
-    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum) {
+    public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
         return VectorSimdOps.nvqDotProduct4bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                a, b, scale, bias, vectorSum
+                growthRate, midpoint, minValue, maxValue
         );
     }
 
     @Override
-    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
         return VectorSimdOps.nvqSquareDistance8bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                a, b, scale, bias
+                growthRate, midpoint, minValue, maxValue
         );
     }
 
     @Override
-    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias) {
+    public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
         return VectorSimdOps.nvqSquareDistance4bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                a, b, scale, bias
+                growthRate, midpoint, minValue, maxValue
         );
     }
 
     @Override
-    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
         return VectorSimdOps.nvqCosine8bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                a, b, scale, bias,
+                growthRate, midpoint, minValue, maxValue,
                 (MemorySegmentVectorFloat) centroid
         );
     }
 
     @Override
-    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid) {
+    public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
         return VectorSimdOps.nvqCosine4bit(
                 (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
-                a, b, scale, bias,
+                growthRate, midpoint, minValue, maxValue,
                 (MemorySegmentVectorFloat) centroid
         );
     }
@@ -247,37 +247,42 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-        return VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, originalDimensions, a, b, scale, bias);
+    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
+        return VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, originalDimensions, growthRate, midpoint, minValue, maxValue);
     }
 
     @Override
-    public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias) {
-        return VectorSimdOps.nvqDequantize4bit((MemorySegmentByteSequence) bytes, originalDimensions, a, b, scale, bias);
+    public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
+        return VectorSimdOps.nvqDequantize4bit((MemorySegmentByteSequence) bytes, originalDimensions, growthRate, midpoint, minValue, maxValue);
     }
 
     @Override
-    public void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-        VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, a, b, scale, bias, (MemorySegmentVectorFloat) destination);
+    public void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
+        VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, growthRate, midpoint, minValue, maxValue, (MemorySegmentVectorFloat) destination);
     }
 
     @Override
-    public void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination) {
-        VectorSimdOps.nvqDequantize4bit((MemorySegmentByteSequence) bytes, a, b, scale, bias, (MemorySegmentVectorFloat) destination);
+    public void nvqDequantize4bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
+        VectorSimdOps.nvqDequantize4bit((MemorySegmentByteSequence) bytes, growthRate, midpoint, minValue, maxValue, (MemorySegmentVectorFloat) destination);
     }
 
     @Override
-    public void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
-        VectorSimdOps.nvqQuantizeNormalized8bit((MemorySegmentVectorFloat) vector, a, b, (MemorySegmentByteSequence) destination);
+    public void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
+        VectorSimdOps.nvqQuantize8bit((MemorySegmentVectorFloat) vector, growthRate, midpoint, minValue, maxValue, (MemorySegmentByteSequence) destination);
     }
 
     @Override
-    public void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination) {
-        VectorSimdOps.nvqQuantizeNormalized4bit((MemorySegmentVectorFloat) vector, a, b, (MemorySegmentByteSequence) destination);
+    public void nvqQuantize4bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
+        VectorSimdOps.nvqQuantize4bit((MemorySegmentVectorFloat) vector, growthRate, midpoint, minValue, maxValue, (MemorySegmentByteSequence) destination);
     }
 
     @Override
-    public float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits) {
-        return VectorSimdOps.nvqLoss((MemorySegmentVectorFloat) vector, a, b, nBits);
+    public float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits) {
+        return VectorSimdOps.nvqLoss((MemorySegmentVectorFloat) vector, growthRate, midpoint, minValue, maxValue, nBits);
+    }
+
+    @Override
+    public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        return VectorSimdOps.nvqUniformLoss((MemorySegmentVectorFloat) vector, minValue, maxValue, nBits);
     }
 }

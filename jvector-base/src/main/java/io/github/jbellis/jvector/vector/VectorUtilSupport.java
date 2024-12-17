@@ -222,82 +222,80 @@ public interface VectorUtilSupport {
    * We assume that the number of dimensions of the vector and the quantized vector match.
    * @param vector The query vector
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
-   * @param vectorSum the sum of the values of the vector (the dot product <vector, 1>)
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @return the dot product
    */
-  float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum);
+  float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue);
 
   /**
    * Computes the dot product between a vector and a 4-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.
    * @param vector The query vector
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
-   * @param vectorSum the sum of the values of the vector (the dot product <vector, 1>)
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @return the dot product
    */
-  float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, float vectorSum);
+  float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue);
 
   /**
    * Computes the squared Euclidean distance between a vector and a 8-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.
    * @param vector The query vector
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @return the squared Euclidean distance
    */
-  float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias);
+  float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue);
 
   /**
    * Computes the squared Euclidean distance between a vector and a 4-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.
    * @param vector The query vector
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @return the squared Euclidean distance
    */
-  float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias);
+  float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue);
 
   /**
    * Computes the cosine similarity between a vector and a 8-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.
    * @param vector The query vector
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param centroid the global mean vector used to re-center the quantized subvectors.
    * @return the cosine similarity
    */
-  float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid);
+  float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid);
 
   /**
    * Computes the cosine similarity between a vector and a 4-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.
    * @param vector The query vector
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param centroid the global mean vector used to re-center the quantized distribution.
    * @return the cosine similarity
    */
-  float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> centroid);
+  float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid);
 
   /**
    * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
@@ -318,76 +316,92 @@ public interface VectorUtilSupport {
   /**
    * Dequantize an 8-bit quntized subvector.
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @return the reconstructed vector
    */
-  VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+  VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue);
 
   /**
    * Dequantize a 4-bit quantized subvector.
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @return the reconstructed vector
    */
-  VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float a, float b, float scale, float bias);
+  VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue);
 
   /**
    * Dequantize an 8-bit quantized subvector into destination
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param destination The vector where the reconstructed values are stored
    */
-  void nvqDequantize8bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
+  void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination);
 
   /**
    * Dequantize a 4-bit quantized subvector into destination
    * @param bytes The byte sequence where the quantized vector is stored.
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
-   * @param scale The parameter scale of the Generalized Kumaraswamy distribution
-   * @param bias The parameter bias of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param destination The vector where the reconstructed values are stored
    */
-  void nvqDequantize4bit(ByteSequence<?> bytes, float a, float b, float scale, float bias, VectorFloat<?> destination);
+  void nvqDequantize4bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination);
 
   /**
    * Quantize a subvector as an 8-bit quantized subvector.
    * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
    * @param vector The vector to quantized
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param destination The vector where the reconstructed values are stored
    */
-  void nvqQuantizeNormalized8bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination);
+  void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination);
 
   /**
    * Quantize a subvector as a 4-bit quantized subvector.
    * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
    * @param vector The vector to quantized
-   * @param a The parameter a of the Generalized Kumaraswamy distribution
-   * @param b The parameter b of the Generalized Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param destination The vector where the reconstructed values are stored
    */
-  void nvqQuantizeNormalized4bit(VectorFloat<?> vector, float a, float b, ByteSequence<?> destination);
+  void nvqQuantize4bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination);
 
   /**
    * Compute the squared error of quantizing the vector using the Kumaraswamy distribution.
    * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
-   * @param a The parameter a of the Kumaraswamy distribution
-   * @param b The parameter b of the Kumaraswamy distribution
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
    * @param nBits the number of bits per dimension
    */
-  float nvqLoss(VectorFloat<?> vector, float a, float b, int nBits);
+  float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits);
+
+  /**
+   * Compute the squared error of quantizing the vector using the Kumaraswamy distribution.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @param nBits the number of bits per dimension
+   */
+  float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits);
 }
