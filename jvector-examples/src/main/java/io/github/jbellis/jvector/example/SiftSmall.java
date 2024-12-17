@@ -269,7 +269,7 @@ public class SiftSmall {
         // compute the codebook, but don't encode any vectors yet
         ProductQuantization pq = ProductQuantization.compute(ravv, 16, 256, true);
 
-        var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
+        var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
 
         // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
         // this is used to score the construction searches
