@@ -1213,20 +1213,6 @@ final class SimdOps {
         return squaredSum;
     }
 
-    /**
-     * Compute the squared L2 distance for 4-bit NVQ
-     * Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
-     * first de-meaned by subtracting the global mean.
-     *
-     * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
-     *
-     * |query - vector|^2 \approx |query - scale * quantized + bias + globalMean|^2
-     *                          = |(query - globalMean) - scale * quantized + bias|^2
-     *
-     * @param vector The shifted query (precomputed query - globalMean)
-     * @param quantizedVector A quantized vector from the index
-     * @return The square L2 distance
-     */
     static float nvqSquareDistance4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float minValue, float maxValue) {
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
