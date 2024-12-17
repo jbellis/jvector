@@ -126,7 +126,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     // A matrix that stores the size and starting point of each subvector:
     public final int[][] subvectorSizesAndOffsets;
 
-    // Whether we want to skip the optimization of the Kumaraswamy parameters. Here for debug purposes only.
+    // Whether we want to skip the optimization of the NVQ parameters. Here for debug purposes only.
     public boolean learn = true;
 
     /**
@@ -288,21 +288,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     public static NVQuantization load(RandomAccessReader in) throws IOException {
         int maybeMagic = in.readInt();
-        int version;
-        int globalMeanLength;
-        if (maybeMagic != MAGIC) {
-            // JVector 1+2 format, no magic or version, starts straight off with the centroid length
-            version = 0;
-            globalMeanLength = maybeMagic;
-        } else {
-            version = in.readInt();
-            globalMeanLength = in.readInt();
-        }
+        int version = in.readInt();
+        int globalMeanLength = in.readInt();
 
-        VectorFloat<?> globalMean = null;
-        if (globalMeanLength > 0) {
-            globalMean = vectorTypeSupport.readFloatVector(in, globalMeanLength);
-        }
+        VectorFloat<?> globalMean = vectorTypeSupport.readFloatVector(in, globalMeanLength);
 
         BitsPerDimension bitsPerDimension = BitsPerDimension.load(in);
 
@@ -459,7 +448,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         // The number of bits for each dimension of the input uncompressed subvector
         public BitsPerDimension bitsPerDimension;
 
-        // The parameters of the Generalized Kumaraswamy distibution
+        // The NVQ parameters
         public float growthRate;
         public float midpoint;
         public float maxValue;
@@ -468,20 +457,20 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         // The number of dimensions of the input uncompressed subvector
         public int originalDimensions;
 
-        // The NEW solver used to run the optimization
-        private static final NESOptimizer solverNES = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
-        // These parameters are set this way mostly for speed. Better reconstruction errors can be achieved
-        // by running the solver longer.
-        static {
-            solverNES.setTol(1e-6f);
-            solverNES.setMaxIterations(100);
-        }
+//        // The NEW solver used to run the optimization
+//        private static final NESOptimizer solverNES = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
+//        // These parameters are set this way mostly for speed. Better reconstruction errors can be achieved
+//        // by running the solver longer.
+//        static {
+//            solverNES.setTol(1e-6f);
+//            solverNES.setMaxIterations(100);
+//        }
 
         /**
          * Return the number of bytes occupied by the serialization of a QuantizedSubVector
-         * @param nDims
-         * @param bitsPerDimension
-         * @return
+         * @param nDims the number fof dimensions of the subvector
+         * @param bitsPerDimension the number of bits per dimensions
+         * @return the size in bytes of the quantized subvector
          */
         public static int compressedVectorSize(int nDims, BitsPerDimension bitsPerDimension) {
             // Here we assume that an enum takes 4 bytes
@@ -517,12 +506,12 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                 For the vast majority of vectors, we only need to run it once and only a handful of runs are needed
                 for the outliers.
                  */
-//                NonuniformQuantizationLossFunction lossFunction = new NonuniformQuantizationLossFunction(bitsPerDimension);
-//
+                NonuniformQuantizationLossFunction lossFunction = new NonuniformQuantizationLossFunction(bitsPerDimension);
 //                var delta = maxValue - minValue;
 //                lossFunction.setMinBounds(new float[]{1e-6f, minValue / delta});
 //                lossFunction.setMaxBounds(new float[]{Float.MAX_VALUE, maxValue / delta});
-//                lossFunction.setVector(vector, minValue, maxValue);
+                lossFunction.setVector(vector, minValue, maxValue);
+
 //                final float[] solverinitialSolution = {growthRate, 0};
 //
 //                OptimizationResult sol;
@@ -534,29 +523,31 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 //
 //                growthRate = sol.x[0];
 //                midpoint = sol.x[1];
-////                growthRate = 70f; // TODO temp for debug
 ////                midpoint = 0.f;
 
-                midpoint = 0.f;
-
                 float growthRateCoarse = 1e-2f;
-                float bestLossValue = Float.MAX_VALUE;
+                float bestLossValue = Float.MIN_VALUE;
+                float[] tempSolution = {growthRateCoarse, 0.f};
                 for (float gr = 1.e-6f; gr < 10.f; gr += 1f) {
-                    float lossValue = VectorUtil.nvqLoss(vector, gr, midpoint, minValue, maxValue, bitsPerDimension.getInt());
-                    if (lossValue < bestLossValue) {
+                    tempSolution[0] = gr;
+                    float lossValue = lossFunction.compute(tempSolution);
+                    if (lossValue > bestLossValue) {
                         bestLossValue = lossValue;
                         growthRateCoarse = gr;
                     }
                 }
                 float growthRateFineTuned = growthRateCoarse;
                 for (float gr = growthRateCoarse - 1; gr < growthRateCoarse + 1; gr += 0.1f) {
-                    float lossValue = VectorUtil.nvqLoss(vector, gr, midpoint, minValue, maxValue, bitsPerDimension.getInt());
-                    if (lossValue < bestLossValue) {
+                    tempSolution[0] = gr;
+                    float lossValue = lossFunction.compute(tempSolution);
+                    if (lossValue > bestLossValue) {
                         bestLossValue = lossValue;
                         growthRateFineTuned = gr;
                     }
                 }
+
                 growthRate = growthRateFineTuned;
+                midpoint = 0.f;
             }
             //---------------------------------------------------------------------------
 
@@ -631,7 +622,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          * Create an empty instance. Meant to be used as scratch space in conjunction with loadInto
          * @param bitsPerDimension the number of bits per dimension
          * @param length the number of dimensions
-         * @throws IOException fails if we cannot read from the RandomAccessReader
          */
         public static QuantizedSubVector createEmpty(BitsPerDimension bitsPerDimension, int length) {
             ByteSequence<?> bytes = bitsPerDimension.createByteSequence(length);
@@ -663,7 +653,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          * @throws IOException fails if we cannot read from the RandomAccessReader
          */
         public static void loadInto(RandomAccessReader in, QuantizedSubVector quantizedSubVector) throws IOException {
-            quantizedSubVector.bitsPerDimension = BitsPerDimension.load(in);;
+            quantizedSubVector.bitsPerDimension = BitsPerDimension.load(in);
             quantizedSubVector.minValue = in.readFloat();
             quantizedSubVector.maxValue = in.readFloat();
             quantizedSubVector.growthRate = in.readFloat();
@@ -690,9 +680,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     }
 
     /**
-     * The loss used to optimize for the parameters of the Kumaraswamy distribution.
-     * We use the ratio between the loss given by the uniform quantization (a=1 ad b=1) and
-     * the loss obtained with the non-uniform Kumaraswamy quantization.
+     * The loss used to optimize for the NVQ hyperparameters
+     * We use the ratio between the loss given by the uniform quantization and the NVQ loss.
      */
     private static class NonuniformQuantizationLossFunction extends LossFunction {
         final private BitsPerDimension bitsPerDimension;
