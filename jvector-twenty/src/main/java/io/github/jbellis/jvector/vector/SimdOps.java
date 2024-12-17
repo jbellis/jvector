@@ -859,9 +859,9 @@ final class SimdOps {
         return 1 / (1 + temp);
     }
 
-    static FloatVector logit(FloatVector vector, float alpha, float x0) {
+    static FloatVector logit(FloatVector vector, float inverseAlpha, float x0) {
         var temp = vector.div(const1f.sub(vector));
-        return fastLog(temp).fma(1 / alpha, x0);
+        return fastLog(temp).fma(inverseAlpha, x0);
     }
 
     static float logit(float value, float alpha, float x0) {
@@ -929,19 +929,19 @@ final class SimdOps {
         return inverseKumaraswamy(arr, a, b);
     }
 
-    static float nvqDequantizeUnnormalized4bitTailPart1(Byte byteValue, float a, float b) {
+    static float nvqDequantize4bitTailPart1(Byte byteValue, float a, float b) {
         var intValue = Byte.toUnsignedInt(byteValue);
         float value = intValue & 0xf;
         return inverseKumaraswamy(value / 15.f, a, b);
     }
 
-    static float nvqDequantizeUnnormalized4bitTailPart2(Byte byteValue, float a, float b) {
+    static float nvqDequantize4bitTailPart2(Byte byteValue, float a, float b) {
         var intValue = Byte.toUnsignedInt(byteValue);
         float value = intValue << 4;
         return inverseKumaraswamy(value / 15.f, a, b);
     }
 
-    static FloatVector nvqDequantizeUnnormalized8bit(ByteVector bytes, float alpha, float x0, float logisticScale, float logisticBias, int part) {
+    static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
         var arr = bytes.reinterpretAsInts()
                 .lanewise(VectorOperators.LSHR, 8 * part)
                 .lanewise(VectorOperators.AND, 0xff)
@@ -949,16 +949,16 @@ final class SimdOps {
                 .reinterpretAsFloats();
 
         arr = arr.fma(logisticScale, logisticBias);
-        return logit(arr, alpha, x0);
+        return logit(arr, inverseAlpha, x0);
     }
 
-    static ArrayVectorFloat nvqDequantize4bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
+    static ArrayVectorFloat nvqDequantize4bit(ArrayByteSequence bytes, int originalDimensions, float a, float b, float minValue, float maxValue) {
         var res = new ArrayVectorFloat(new float[originalDimensions]);
-        nvqDequantize4bit(bytes, a, b, scale, bias, res);
+        nvqDequantize4bit(bytes, a, b, minValue, maxValue, res);
         return res;
     }
 
-    static void nvqDequantize8bit(ArrayByteSequence bytes, float alpha, float x0, float scale, float bias, float logisticScale, float logisticBias, ArrayVectorFloat destination) {
+    static void nvqDequantize8bit(ArrayByteSequence bytes, float alpha, float x0, float logisticScale, float logisticBias, ArrayVectorFloat destination) {
         var resArr = destination.get();
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(bytes.length());
@@ -968,7 +968,7 @@ final class SimdOps {
             var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, bytes.get(), i);
 
             for (int j = 0; j < 4; j++) {
-                var arr = nvqDequantizeUnnormalized8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
+                var arr = nvqDequantize8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
                 arr.intoArray(resArr, i + floatStep * j);
             }
         }
@@ -977,11 +977,11 @@ final class SimdOps {
         float value;
         for (int i = vectorizedLength; i < bytes.length(); i++) {
             value = bytes.get(i);
-            resArr[i] = scale * logit(value / 255.f, alpha, x0) + bias;
+            resArr[i] = logit(value / 255.f, alpha, x0);
         }
     }
 
-    static void nvqDequantize4bit(ArrayByteSequence bytes, float a, float b, float scale, float bias, ArrayVectorFloat destination) {
+    static void nvqDequantize4bit(ArrayByteSequence bytes, float a, float b, float minValue, float maxValue, ArrayVectorFloat destination) {
         /*
          * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
          * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
@@ -1013,27 +1013,29 @@ final class SimdOps {
         // Process the tail
         if (vectorizedLength < bytes.length()) {
             for (int i = vectorizedLength; i < bytes.length(); i++) {
-                resArr[2 * i] = scale * nvqDequantizeUnnormalized4bitTailPart1(bytes.get(i), a, b) + bias;
+                resArr[2 * i] = nvqDequantize4bitTailPart1(bytes.get(i), a, b);
                 if (2 * i + 1 < resArr.length) {
-                    resArr[2 * i + 1] = scale * nvqDequantizeUnnormalized4bitTailPart2(bytes.get(i), a, b) + bias;
+                    resArr[2 * i + 1] = nvqDequantize4bitTailPart2(bytes.get(i), a, b);
                 }
             }
         }
     }
 
-    static void nvqQuantizeNormalized8bit(ArrayVectorFloat vector, float alpha, float x0, ArrayByteSequence destination) {
+    static void nvqQuantize8bit(ArrayVectorFloat vector, float alpha, float x0, float minValue, float maxValue, ArrayByteSequence destination) {
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
         final var mask = ByteVector.SPECIES_PREFERRED.indexInRange(0, FloatVector.SPECIES_PREFERRED.length());
 
-        var logisticBias = logistic(0, alpha, x0);
-        var invLogisticScale = 1 / (logistic(1, alpha, x0) - logisticBias);
-        var invAlpha = 1 / alpha;
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var invLogisticScale = 255 / (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias);
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            arr = logistic(arr, alpha, x0);
+            arr = logistic(arr, scaledAlpha, scaledX0);
             arr = arr.sub(logisticBias).mul(invLogisticScale);
-            var bytes = arr.mul(const255f).add(const05f)
+            var bytes = arr.add(const05f)
                     .convertShape(VectorOperators.F2B, ByteVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsBytes();
             bytes.intoArray(destination.get(), i, mask);
@@ -1043,9 +1045,9 @@ final class SimdOps {
         for (int d = vectorizedLength; d < vector.length(); d++) {
             // Ensure the quantized value is within the 0 to constant range
             float value = vector.get(d);
-            value = logistic(value, alpha, x0);
+            value = logistic(value, scaledAlpha, scaledX0);
             value = (value - logisticBias) * invLogisticScale;
-            int quantizedValue = Math.round(255 * value);
+            int quantizedValue = Math.round(value);
             destination.set(d, (byte) quantizedValue);
         }
     }
@@ -1065,7 +1067,7 @@ final class SimdOps {
 //        }
 //    }
 
-    static void nvqQuantizeNormalized4bit(ArrayVectorFloat vector, float a, float b, ArrayByteSequence destination) {
+    static void nvqQuantize4bit(ArrayVectorFloat vector, float a, float b, float minValue, float maxValue, ArrayByteSequence destination) {
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
         final var mask = ByteVector.SPECIES_PREFERRED.indexInRange(0, FloatVector.SPECIES_PREFERRED.length() / 2);
 
@@ -1102,20 +1104,23 @@ final class SimdOps {
         }
     }
 
-    static float nvqLoss(ArrayVectorFloat vector, float alpha, float x0, int nBits) {
+    static float nvqLoss(ArrayVectorFloat vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
         int constant = (1 << nBits) - 1;
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
-        var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / constant;
-        var invAlpha = 1 / alpha;
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / constant;
         var invLogisticScale = 1 / logisticScale;
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var recArr = logistic(arr, alpha, x0);
+            var recArr = logistic(arr, scaledAlpha, scaledX0);
             recArr = recArr.sub(logisticBias).mul(invLogisticScale);
             recArr = recArr.add(const05f)
                     .convert(VectorOperators.F2I, 0)
@@ -1123,7 +1128,7 @@ final class SimdOps {
                     .convert(VectorOperators.I2F, 0)
                     .reinterpretAsFloats();
             recArr = recArr.fma(logisticScale, logisticBias);
-            recArr = logit(recArr, alpha, x0);
+            recArr = logit(recArr, invScaledAlpha, scaledX0);
 
             var diff = arr.sub(recArr);
             squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -1136,12 +1141,48 @@ final class SimdOps {
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value = vector.get(i);
 
-            recValue = logistic(value, alpha, x0);
+            recValue = logistic(value, scaledAlpha, scaledX0);
             recValue = (recValue - logisticBias) * invLogisticScale;
-            recValue = Math.round(constant * recValue);
-            recValue /= constant;
+            recValue = Math.round(recValue);
             recValue = logisticScale * recValue + logisticBias;
-            recValue = logit(recValue, alpha, x0);
+            recValue = logit(recValue, scaledAlpha, scaledX0);
+
+            squaredSum += MathUtil.square(value - recValue);
+        }
+
+        return squaredSum;
+    }
+
+    static float nvqUniformLoss(ArrayVectorFloat vector, float minValue, float maxValue, int nBits) {
+        float constant = (1 << nBits) - 1;
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            var recArr = arr.sub(minValue).mul(constant / (maxValue - minValue));
+            recArr = recArr.add(const05f)
+                    .convert(VectorOperators.F2I, 0)
+                    .reinterpretAsInts()
+                    .convert(VectorOperators.I2F, 0)
+                    .reinterpretAsFloats();
+            recArr = recArr.fma((maxValue - minValue) / constant, minValue);
+
+            var diff = arr.sub(recArr);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value, recValue;
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            value = vector.get(i);
+
+            recValue = (value - minValue) / (maxValue - minValue);
+            recValue = Math.round(constant * recValue) / constant;
+            recValue = recValue / (maxValue - minValue) + minValue;
 
             squaredSum += MathUtil.square(value - recValue);
         }
@@ -1164,22 +1205,25 @@ final class SimdOps {
      * @return The square L2 distance
      */
     static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
-                                       float alpha, float x0, float scale, float bias) {
+                                       float alpha, float x0, float minValue, float maxValue) {
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
 
-        var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / 255;
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
             var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
 
             for (int j = 0; j < 4; j++) {
                 var v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
-                var v2 = nvqDequantizeUnnormalized8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
-                v2 = v2.fma(scale, bias);
+                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
 
                 var diff = v1.sub(v2);
                 squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -1193,7 +1237,7 @@ final class SimdOps {
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = quantizedVector.get(i);
             value2 = logisticScale * value2 + logisticBias;
-            value2 = scale * logit(value2 / 255.f, alpha, x0) + bias;
+            value2 = logit(value2, scaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
             squaredSum += MathUtil.square(diff);
         }
@@ -1215,7 +1259,7 @@ final class SimdOps {
      * @param quantizedVector A quantized vector from the index
      * @return The square L2 distance
      */
-    static float nvqSquareDistance4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias) {
+    static float nvqSquareDistance4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float minValue, float maxValue) {
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
@@ -1231,7 +1275,6 @@ final class SimdOps {
                 v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), 2 * (i + floatStep * j));
 
                 v2 = nvqDequantizeUnnormalized4bitPart1(bv2, a, b, j);
-                v2 = v2.mul(scale).add(bias);
 
                 diff = v1.sub(v2);
                 squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -1240,7 +1283,6 @@ final class SimdOps {
                 v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), 2 * (i + floatStep * j) + FloatVector.SPECIES_PREFERRED.length());
 
                 v2 = nvqDequantizeUnnormalized4bitPart2(bv2, a, b, j);
-                v2 = v2.mul(scale).add(bias);
 
                 diff = v1.sub(v2);
                 squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -1253,10 +1295,10 @@ final class SimdOps {
         if (vectorizedLength < quantizedVector.length()) {
             float value2;
             for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
-                value2 = scale * nvqDequantizeUnnormalized4bitTailPart1(quantizedVector.get(i), a, b) + bias;
+                value2 = nvqDequantize4bitTailPart1(quantizedVector.get(i), a, b);
                 squaredSum += MathUtil.square(vector.get(2 * i) - value2);
                 if (2 * i + 1 < quantizedVector.length()) {
-                    value2 = scale * nvqDequantizeUnnormalized4bitTailPart2(quantizedVector.get(i), a, b) + bias;
+                    value2 = nvqDequantize4bitTailPart2(quantizedVector.get(i), a, b);
                     squaredSum += MathUtil.square(vector.get(2 * i + 1) - value2);
                 }
             }
@@ -1266,21 +1308,26 @@ final class SimdOps {
     }
 
     static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
-                                   float alpha, float x0, float scale, float bias, float vectorSum) {
+                                   float alpha, float x0, float minValue, float maxValue) {
         FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
 
-        var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / 255;
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
             var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
 
             for (int j = 0; j < 4; j++) {
                 var v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
-                var v2 = nvqDequantizeUnnormalized8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
+                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
                 dotProdVec = v1.fma(v2, dotProdVec);
             }
         }
@@ -1291,15 +1338,15 @@ final class SimdOps {
         float value2;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = quantizedVector.get(i);
-            value2 = logisticScale * value2 / 255.f + logisticBias;
-            value2 = logit(value2, alpha, x0);
+            value2 = logisticScale * value2 + logisticBias;
+            value2 = logit(value2, scaledAlpha, scaledX0);
             dotProd += vector.get(i) - value2;
         }
 
-        return Math.fma(scale, dotProd, bias * vectorSum);
+        return dotProd;
     }
 
-    static float nvqDotProduct4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, float vectorSum) {
+    static float nvqDotProduct4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float minValue, float maxValue) {
         FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
@@ -1333,27 +1380,31 @@ final class SimdOps {
         if (vectorizedLength < quantizedVector.length()) {
             float value2;
             for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
-                value2 = nvqDequantizeUnnormalized4bitTailPart1(quantizedVector.get(i), a, b);
+                value2 = nvqDequantize4bitTailPart1(quantizedVector.get(i), a, b);
                 dotProd += vector.get(2 * i) * value2;
                 if (2 * i + 1 < quantizedVector.length()) {
-                    value2 = nvqDequantizeUnnormalized4bitTailPart2(quantizedVector.get(i), a, b);
+                    value2 = nvqDequantize4bitTailPart2(quantizedVector.get(i), a, b);
                     dotProd += vector.get(2 * i + 1) * value2;
                 }
             }
         }
 
-        return scale * dotProd + bias * vectorSum;
+        return dotProd;
     }
 
     static float[] nvqCosine8bit(ArrayVectorFloat vector,
-                                 ArrayByteSequence quantizedVector, float alpha, float x0, float scale, float bias,
+                                 ArrayByteSequence quantizedVector, float alpha, float x0, float minValue, float maxValue,
                                  ArrayVectorFloat centroid) {
         if (vector.length() != centroid.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        var logisticBias = logistic(0, alpha, x0);
-        var logisticScale = (logistic(1, alpha, x0) - logisticBias) / 255;
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
         var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -1366,8 +1417,7 @@ final class SimdOps {
 
             for (int j = 0; j < 4; j++) {
                 var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
-                var vb = nvqDequantizeUnnormalized8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
-                vb = vb.fma(scale, bias);
+                var vb = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
 
                 var vCentroid = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, centroid.get(), i + floatStep * j);
                 vb = vb.add(vCentroid);
@@ -1385,8 +1435,8 @@ final class SimdOps {
         float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value2 = quantizedVector.get(i);
-            value2 = logisticScale * value2 / 255.f + logisticBias;
-            value2 = scale * logit(value2, alpha, x0) + bias + centroid.get(i);
+            value2 = logisticScale * value2 + logisticBias;
+            value2 = logit(value2, scaledAlpha, scaledX0) + centroid.get(i);
             sum += vector.get(i) * value2;
             bMagnitude += value2 * value2;
         }
@@ -1394,7 +1444,7 @@ final class SimdOps {
         return new float[]{sum, bMagnitude};
     }
 
-    static float[] nvqCosine4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float scale, float bias, ArrayVectorFloat centroid) {
+    static float[] nvqCosine4bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector, float a, float b, float minValue, float maxValue, ArrayVectorFloat centroid) {
         if (vector.length() != centroid.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
@@ -1416,7 +1466,6 @@ final class SimdOps {
                 vCentroid = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, centroid.get(), 2 * (i + 4 * j));
 
                 v2 = nvqDequantizeUnnormalized4bitPart1(bv2, a, b, j);
-                v2 = v2.mul(scale).add(bias);
                 v2 = v2.add(vCentroid);
 
                 vDotProduct = v1.fma(v2, vDotProduct);
@@ -1427,7 +1476,6 @@ final class SimdOps {
                 vCentroid = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, centroid.get(), 2 * (i + 4 * j) + FloatVector.SPECIES_PREFERRED.length());
 
                 v2 = nvqDequantizeUnnormalized4bitPart2(bv2, a, b, j);
-                v2 = v2.mul(scale).add(bias);
                 v2 = v2.add(vCentroid);
 
                 vDotProduct = v1.fma(v2, vDotProduct);
@@ -1442,12 +1490,12 @@ final class SimdOps {
         if (vectorizedLength < quantizedVector.length()) {
             float value2;
             for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
-                value2 = scale * nvqDequantizeUnnormalized4bitTailPart1(quantizedVector.get(i), a, b) + bias;
+                value2 = nvqDequantize4bitTailPart1(quantizedVector.get(i), a, b);
                 value2 += centroid.get(2 * i);
                 dotProduct += vector.get(2 * i) * value2;
                 quantizedSquaredNorm += value2 * value2;
                 if (2 * i + 1 < quantizedVector.length()) {
-                    value2 = scale * nvqDequantizeUnnormalized4bitTailPart2(quantizedVector.get(i), a, b) + bias;
+                    value2 = nvqDequantize4bitTailPart2(quantizedVector.get(i), a, b);
                     value2 += centroid.get(2 * i + 1);
                     dotProduct += vector.get(2 * i + 1) * value2;
                     quantizedSquaredNorm += value2 * value2;
