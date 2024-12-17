@@ -722,7 +722,6 @@ final class SimdOps {
     static FloatVector const0693147182f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.693147182f);
     static FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
     static FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
-    static FloatVector const255f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 255f);
     static FloatVector const15f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 15f);
 
     /*
@@ -778,8 +777,7 @@ final class SimdOps {
         var t = f.fma(0.331826031f, -0.498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2)
         r = r.fma(s, t);
         r = r.fma(s, f);
-        var res = i.fma(const0693147182f, r); // 0x1.62e430p-1 // log(2)
-        return res;
+        return i.fma(const0693147182f, r); // 0x1.62e430p-1 // log(2)
     }
 
     static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b) {
@@ -1143,20 +1141,6 @@ final class SimdOps {
         return squaredSum;
     }
 
-    /**
-     * Compute the squared L2 distance for 8-bit NVQ
-     * Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
-     * first de-meaned by subtracting the global mean.
-     *
-     * The squared L2 distance is calculated between the query and quantized sub-vectors as follows:
-     *
-     * |query - vector|^2 \approx |query - (scale * quantized + bias + globalMean)|^2
-     *                          = |(query - globalMean) - scale * quantized + bias|^2
-     *
-     * @param vector The shifted query (precomputed query - globalMean)
-     * @param quantizedVector A quantized vector from the index
-     * @return The square L2 distance
-     */
     static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
                                        float alpha, float x0, float minValue, float maxValue) {
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
