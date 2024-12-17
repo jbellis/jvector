@@ -20,8 +20,6 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.optimization.LossFunction;
-import io.github.jbellis.jvector.optimization.NESOptimizer;
-import io.github.jbellis.jvector.optimization.OptimizationResult;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -457,15 +455,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         // The number of dimensions of the input uncompressed subvector
         public int originalDimensions;
 
-//        // The NEW solver used to run the optimization
-//        private static final NESOptimizer solverNES = new NESOptimizer(NESOptimizer.Distribution.SEPARABLE);
-//        // These parameters are set this way mostly for speed. Better reconstruction errors can be achieved
-//        // by running the solver longer.
-//        static {
-//            solverNES.setTol(1e-6f);
-//            solverNES.setMaxIterations(100);
-//        }
-
         /**
          * Return the number of bytes occupied by the serialization of a QuantizedSubVector
          * @param nDims the number fof dimensions of the subvector
@@ -497,33 +486,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             float midpoint = 0;
 
             if (learn) {
-                /*
-                We are optimizing a non-convex and discontinuous function.
-                As such, any optimizer will have trouble finding the optimum. The NES solver is pretty good and does a
-                reasonable job in most cases. However, since it computes natural gradients from random samples,
-                sometimes the sampling in the first few iterations ends up being suboptimal and the method fails to find
-                a good optimum. To avoid this, we simply reinitialize the optimization again until we succeed.
-                For the vast majority of vectors, we only need to run it once and only a handful of runs are needed
-                for the outliers.
-                 */
                 NonuniformQuantizationLossFunction lossFunction = new NonuniformQuantizationLossFunction(bitsPerDimension);
-//                var delta = maxValue - minValue;
-//                lossFunction.setMinBounds(new float[]{1e-6f, minValue / delta});
-//                lossFunction.setMaxBounds(new float[]{Float.MAX_VALUE, maxValue / delta});
                 lossFunction.setVector(vector, minValue, maxValue);
-
-//                final float[] solverinitialSolution = {growthRate, 0};
-//
-//                OptimizationResult sol;
-//                int trials = 0;
-//                do {
-//                    sol = solverNES.optimize(lossFunction, solverinitialSolution, 1 / (maxValue - minValue));
-//                    trials++;
-//                } while (sol.lastLoss < 1.5 && trials < 10);
-//
-//                growthRate = sol.x[0];
-//                midpoint = sol.x[1];
-////                midpoint = 0.f;
 
                 float growthRateCoarse = 1e-2f;
                 float bestLossValue = Float.MIN_VALUE;
