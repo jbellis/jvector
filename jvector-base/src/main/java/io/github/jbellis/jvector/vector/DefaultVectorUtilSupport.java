@@ -273,20 +273,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
-    for (int i = 0; i < vector.length(); i++) {
-      vector.set(i, constant - (float) Math.pow(vector.get(i), exponent));
-    }
-  }
-
-  @Override
-  public void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
-    for (int i = 0; i < vector.length(); i++) {
-      vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
-    }
-  }
-
-  @Override
   public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
     return sub(a, 0, b, 0, a.length());
   }

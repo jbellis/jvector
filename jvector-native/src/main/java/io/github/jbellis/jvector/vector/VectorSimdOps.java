@@ -586,40 +586,6 @@ final class VectorSimdOps {
 
     }
 
-    static void constantMinusExponentiatedVector(MemorySegmentVectorFloat vector, float constant, float exponent) {
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
-            var subResult = a.pow(exponent).neg().add(constant);
-            subResult.intoMemorySegment(vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
-        }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i, constant - (float) Math.pow(vector.get(i), exponent));
-        }
-
-    }
-
-    static void exponentiateConstantMinusVector(MemorySegmentVectorFloat vector, float constant, float exponent) {
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
-            var subResult = a.neg().add(constant).pow(exponent);
-            subResult.intoMemorySegment(vector.get(), vector.offset(i), ByteOrder.LITTLE_ENDIAN);
-        }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
-        }
-
-    }
-
     public static int hammingDistance(long[] a, long[] b) {
         var sum = LongVector.zero(LongVector.SPECIES_PREFERRED);
         int vectorizedLength = LongVector.SPECIES_PREFERRED.loopBound(a.length);

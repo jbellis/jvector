@@ -150,15 +150,6 @@ public final class VectorUtil {
     impl.subInPlace(vector, value);
   }
 
-  public static void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
-    impl.constantMinusExponentiatedVector(vector, constant, exponent);
-  }
-
-  public static void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
-    impl.exponentiateConstantMinusVector(vector, constant, exponent);
-  }
-
-
   public static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
     return impl.sub(lhs, rhs);
   }

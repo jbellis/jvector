@@ -546,38 +546,6 @@ final class SimdOps {
         }
     }
 
-    static void constantMinusExponentiatedVector(ArrayVectorFloat vector, float constant, float exponent) {
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var subResult = a.pow(exponent).neg().add(constant);
-            subResult.intoArray(vector.get(), i);
-        }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i, constant - (float) Math.pow(vector.get(i), exponent));
-        }
-    }
-
-    static void exponentiateConstantMinusVector(ArrayVectorFloat vector, float constant, float exponent) {
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var subResult = a.neg().add(constant).pow(exponent);
-            subResult.intoArray(vector.get(), i);
-        }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i, (float) Math.pow(constant - vector.get(i), exponent));
-        }
-    }
-
     static VectorFloat<?> sub(ArrayVectorFloat a, int aOffset, ArrayVectorFloat b, int bOffset, int length) {
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         float[] res = new float[length];

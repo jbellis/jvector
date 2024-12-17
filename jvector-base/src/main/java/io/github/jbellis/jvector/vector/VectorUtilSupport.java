@@ -76,12 +76,6 @@ public interface VectorUtilSupport {
   /** Subtracts value from each element of v1, in place (v1 will be modified) */
   void subInPlace(VectorFloat<?> vector, float value);
 
-  /** Computes constant - pow(vector, exponent), in place (v1 will be modified) */
-  void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent);
-
-  /** Computes pow(constant - vector, exponent), in place (v1 will be modified) */
-  void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent);
-
   /** @return a - b, element-wise */
   VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);
 

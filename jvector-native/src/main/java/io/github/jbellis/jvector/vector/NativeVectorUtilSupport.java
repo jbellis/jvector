@@ -98,16 +98,6 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
-        VectorSimdOps.constantMinusExponentiatedVector((MemorySegmentVectorFloat)vector, constant, exponent);
-    }
-
-    @Override
-    public void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
-        VectorSimdOps.exponentiateConstantMinusVector((MemorySegmentVectorFloat)vector, constant, exponent);
-    }
-
-    @Override
     public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
         if (a.length() != b.length()) {
             throw new IllegalArgumentException("Vectors must be the same length");

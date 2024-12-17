@@ -93,16 +93,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void constantMinusExponentiatedVector(VectorFloat<?> vector, float constant, float exponent) {
-        SimdOps.constantMinusExponentiatedVector((ArrayVectorFloat) vector, constant, exponent);
-    }
-
-    @Override
-    public void exponentiateConstantMinusVector(VectorFloat<?> vector, float constant, float exponent) {
-        SimdOps.exponentiateConstantMinusVector((ArrayVectorFloat) vector, constant, exponent);
-    }
-
-    @Override
     public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
         if (a.length() != b.length()) {
             throw new IllegalArgumentException("Vectors must be the same length");
