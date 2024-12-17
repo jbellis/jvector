@@ -286,10 +286,21 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     public static NVQuantization load(RandomAccessReader in) throws IOException {
         int maybeMagic = in.readInt();
-        int version = in.readInt();
-        int globalMeanLength = in.readInt();
+        int version;
+        int globalMeanLength;
+        if (maybeMagic != MAGIC) {
+            // JVector 1+2 format, no magic or version, starts straight off with the centroid length
+            version = 0;
+            globalMeanLength = maybeMagic;
+        } else {
+            version = in.readInt();
+            globalMeanLength = in.readInt();
+        }
 
-        VectorFloat<?> globalMean = vectorTypeSupport.readFloatVector(in, globalMeanLength);
+        VectorFloat<?> globalMean = null;
+        if (globalMeanLength > 0) {
+            globalMean = vectorTypeSupport.readFloatVector(in, globalMeanLength);
+        }
 
         BitsPerDimension bitsPerDimension = BitsPerDimension.load(in);
 
