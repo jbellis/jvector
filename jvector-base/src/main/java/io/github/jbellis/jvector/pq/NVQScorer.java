@@ -69,23 +69,6 @@ public class NVQScorer {
                     // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
                     return (1 + nvqDot + queryGlobalBias) / 2;
                 };
-            case FOUR:
-                for (VectorFloat<?> querySubVector : querySubVectors) {
-                    VectorUtil.nvqShuffleQueryInPlace4bit(querySubVector);
-                }
-
-                return vector2 -> {
-                    float nvqDot = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vector2.subVectors[i];
-                        nvqDot += VectorUtil.nvqDotProduct4bit(querySubVectors[i],
-                                svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.minValue, svDB.maxValue
-                        );
-                    }
-                    // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
-                    return (1 + nvqDot + queryGlobalBias) / 2;
-                };
             default:
                 throw new IllegalArgumentException("Unsupported bits per dimension " + this.nvq.bitsPerDimension);
         }
@@ -110,23 +93,6 @@ public class NVQScorer {
                         var svDB = vector2.subVectors[i];
                         dist += VectorUtil.nvqSquareL2Distance8bit(
                                 querySubVectors[i],
-                                svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.minValue, svDB.maxValue
-                        );
-                    }
-
-                    return 1 / (1 + dist);
-                };
-            case FOUR:
-                for (VectorFloat<?> querySubVector : querySubVectors) {
-                    VectorUtil.nvqShuffleQueryInPlace4bit(querySubVector);
-                }
-
-                return vector2 -> {
-                    float dist = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vector2.subVectors[i];
-                        dist += VectorUtil.nvqSquareL2Distance4bit(querySubVectors[i],
                                 svDB.bytes, svDB.growthRate, svDB.midpoint,
                                 svDB.minValue, svDB.maxValue
                         );
@@ -164,28 +130,6 @@ public class NVQScorer {
                         squaredNormalization += partialCosSim[1];
                     }
                     float cosine = (cos / queryNorm) / (float) Math.sqrt(squaredNormalization);
-
-                    return (1 + cosine) / 2;
-                };
-            case FOUR:
-                for (var i = 0; i < querySubVectors.length; i++) {
-                    VectorUtil.nvqShuffleQueryInPlace4bit(querySubVectors[i]);
-                    VectorUtil.nvqShuffleQueryInPlace4bit(meanSubVectors[i]);
-                }
-
-                return vector2 -> {
-                    float dotProduct = 0;
-                    float squaredNormalization = 0;
-                    for (int i = 0; i < querySubVectors.length; i++) {
-                        var svDB = vector2.subVectors[i];
-                        var partialCosSim = VectorUtil.nvqCosine4bit(querySubVectors[i],
-                                svDB.bytes, svDB.growthRate, svDB.midpoint,
-                                svDB.minValue, svDB.maxValue,
-                                meanSubVectors[i]);
-                        dotProduct += partialCosSim[0];
-                        squaredNormalization += partialCosSim[1];
-                    }
-                    float cosine = (dotProduct / queryNorm) / (float) Math.sqrt(squaredNormalization);
 
                     return (1 + cosine) / 2;
                 };

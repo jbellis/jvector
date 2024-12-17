@@ -98,8 +98,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         public static BitsPerDimension load(RandomAccessReader in) throws IOException {
             int nBitsPerDimension = in.readInt();
             switch (nBitsPerDimension) {
-                case 4:
-                    return BitsPerDimension.FOUR;
                 case 8:
                     return BitsPerDimension.EIGHT;
                 default:
@@ -153,6 +151,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * @param bitsPerDimension the number of bits to use for each dimension when quantizing the vector
      */
     public static NVQuantization compute(RandomAccessVectorValues ravv, int nSubVectors, BitsPerDimension bitsPerDimension) {
+        if (bitsPerDimension == BitsPerDimension.FOUR) {
+            throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
+        }
+
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), nSubVectors);
 
         var ravvCopy = ravv.threadLocalSupplier().get();
@@ -476,8 +478,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             // Here we assume that an enum takes 4 bytes
             switch (bitsPerDimension) {
                 case EIGHT: return nDims + 4 * Float.BYTES + 3 * Integer.BYTES;
-                case FOUR: return (int) Math.ceil(nDims / 2.) + 4 * Float.BYTES + 3 * Integer.BYTES;
-                default: return 0; // never realized
+                default: throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
             }
         }
 
@@ -528,12 +529,11 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
             var quantized = bitsPerDimension.createByteSequence(vector.length());
             switch (bitsPerDimension) {
-                case FOUR:
-                    VectorUtil.nvqQuantize4bit(vector, growthRate, midpoint, minValue, maxValue, quantized);
-                    break;
                 case EIGHT:
                     VectorUtil.nvqQuantize8bit(vector, growthRate, midpoint, minValue, maxValue, quantized);
                     break;
+                default:
+                    throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
             }
 
             this.bitsPerDimension = bitsPerDimension;
@@ -569,8 +569,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             switch (bitsPerDimension) {
                 case EIGHT:
                     return VectorUtil.nvqDequantize8bit(bytes, this.originalDimensions, growthRate, midpoint, minValue, maxValue);
-                case FOUR:
-                    return VectorUtil.nvqDequantize4bit(bytes, this.originalDimensions, growthRate, midpoint, minValue, maxValue);
                 default:
                     throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
             }

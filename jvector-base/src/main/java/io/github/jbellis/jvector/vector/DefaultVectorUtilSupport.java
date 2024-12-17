@@ -399,33 +399,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
-    var delta = maxValue - minValue;
-    var scaledGrowthRate = growthRate / delta;
-    var scaledMidpoint = midpoint * delta;
-    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 15;
-
-    int constant = 15;
-    float dotProd = 0;
-    float value;
-    for (int d = 0; d < bytes.length(); d++) {
-      int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-      value = quantizedValue & constant;
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-
-      dotProd += vector.get(2 * d) * value;
-
-      value = quantizedValue >> 4;
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-
-      dotProd += vector.get(2 * d + 1) * value;
-    }
-    return dotProd;
-  }
-
-  @Override
   public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
     var delta = maxValue - minValue;
     var scaledGrowthRate = growthRate / delta;
@@ -444,35 +417,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
       var temp = value - vector.get(d);
       squareSum = Math.fma(temp, temp, squareSum);
-    }
-    return squareSum;
-  }
-
-  @Override
-  public float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
-    var delta = maxValue - minValue;
-    var scaledGrowthRate = growthRate / delta;
-    var scaledMidpoint = midpoint * delta;
-    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 15;
-
-    int constant = 15;
-    float squareSum = 0;
-    float value;
-    for (int d = 0; d < bytes.length(); d++) {
-      int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-      value = quantizedValue & constant;
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-
-      value -= vector.get(2 * d);
-      squareSum = Math.fma(value, value, squareSum);
-
-      value = quantizedValue >> 4;
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-
-      value -= vector.get(2 * d + 1);
-      squareSum = Math.fma(value, value, squareSum);
     }
     return squareSum;
   }
@@ -503,42 +447,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
-    var delta = maxValue - minValue;
-    var scaledGrowthRate = growthRate / delta;
-    var scaledMidpoint = midpoint * delta;
-    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 15;
-
-    float sum = 0;
-    float normDQ = 0;
-
-    int constant = 15;
-    float elem2;
-    for (int d = 0; d < bytes.length(); d++) {
-      int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-      elem2 = quantizedValue & constant;
-      elem2 = scaled_logit_function(elem2, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-      elem2 += centroid.get(2 * d);
-
-      sum += vector.get(2 * d) * elem2;
-      normDQ += elem2 * elem2;
-
-      elem2 = quantizedValue >> 4;
-      elem2 = scaled_logit_function(elem2, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-      elem2 += centroid.get(2 * d + 1);
-
-      sum += vector.get(2 * d + 1) * elem2;
-      normDQ += elem2 * elem2;
-    }
-    return new float[]{sum, normDQ};
-  }
-
-  @Override
-  public void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {}
-
-  @Override
   public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {}
 
   static float logistic_function(float value, float growthRate, float midpoint) {
@@ -563,13 +471,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
-    VectorFloat<?> vec = new ArrayVectorFloat(originalDimensions);
-    nvqDequantize4bit(bytes, growthRate, midpoint, minValue, maxValue, vec);
-    return vec;
-  }
-
-  @Override
   public void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
     var delta = maxValue - minValue;
     var scaledGrowthRate = growthRate / delta;
@@ -588,32 +489,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void nvqDequantize4bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
-    var delta = maxValue - minValue;
-    var scaledGrowthRate = growthRate / delta;
-    var scaledMidpoint = midpoint * delta;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 15;
-    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-
-    int constant = 15;
-
-    float value;
-    for (int d = 0; d < bytes.length(); d++) {
-      int quantizedValue = Byte.toUnsignedInt(bytes.get(d));
-      value = quantizedValue & constant;
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-      destination.set(2 * d, value);
-
-      if (2 * d + 1 < destination.length()) {
-        value = quantizedValue >> 4;
-        value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-        destination.set(2 * d + 1, value);
-      }
-    }
-  }
-
-  @Override
   public void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
     var delta = maxValue - minValue;
     var scaledGrowthRate = growthRate / delta;
@@ -628,31 +503,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
       value = scaled_logistic_function(value, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
       int quantizedValue = Math.round(value);
       destination.set(d, (byte) quantizedValue);
-    }
-  }
-
-  @Override
-  public void nvqQuantize4bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
-    var delta = maxValue - minValue;
-    var scaledGrowthRate = growthRate / delta;
-    var scaledMidpoint = midpoint * delta;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 15;
-
-    for (int d = 0; d < vector.length(); d += 2) {
-      // Ensure the quantized value is within the 0 to constant range
-      float value = vector.get(d);
-      value = scaled_logistic_function(value, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-      int quantizedValue0 = Math.round(value);
-      int quantizedValue1;
-      if (d + 1 < vector.length()) {
-        value = vector.get(d + 1);
-        value = scaled_logistic_function(value, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-        quantizedValue1 = Math.round(value);
-      } else {
-        quantizedValue1 = 0;
-      }
-      destination.set(d / 2, (byte) ((quantizedValue1 << 4) + quantizedValue0));
     }
   }
 

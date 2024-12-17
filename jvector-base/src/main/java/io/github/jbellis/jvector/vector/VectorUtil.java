@@ -211,28 +211,12 @@ public final class VectorUtil {
     return impl.nvqDotProduct8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
   }
 
-  public static float nvqDotProduct4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
-    return impl.nvqDotProduct4bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
-  }
-
   public static float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
     return impl.nvqSquareL2Distance8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
   }
 
-  public static float nvqSquareL2Distance4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
-    return impl.nvqSquareL2Distance4bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
-  }
-
   public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
     return impl.nvqCosine8bit(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
-  }
-
-  public static float[] nvqCosine4bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
-    return impl.nvqCosine4bit(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
-  }
-
-  public static void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector) {
-    impl.nvqShuffleQueryInPlace4bit(vector);
   }
 
   public static void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
@@ -243,24 +227,12 @@ public final class VectorUtil {
     return impl.nvqDequantize8bit(bytes, originalDimensions, alpha, x0, minValue, maxValue);
   }
 
-  public static VectorFloat<?> nvqDequantize4bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
-    return impl.nvqDequantize4bit(bytes, originalDimensions, growthRate, midpoint, minValue, maxValue);
-  }
-
   public static void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> destination) {
     impl.nvqDequantize8bit(bytes, alpha, x0, minValue, maxValue, destination);
   }
 
-  public static void nvqDequantize4bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
-    impl.nvqDequantize4bit(bytes, growthRate, midpoint, minValue, maxValue, destination);
-  }
-
   public static void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
     impl.nvqQuantize8bit(vector, growthRate, midpoint, minValue, maxValue, destination);
-  }
-
-  public static void nvqQuantize4bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
-    impl.nvqQuantize4bit(vector, growthRate, midpoint, minValue, maxValue, destination);
   }
 
   public static float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits) {

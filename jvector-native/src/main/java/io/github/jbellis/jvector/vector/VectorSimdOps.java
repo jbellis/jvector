@@ -670,61 +670,6 @@ final class VectorSimdOps {
         return (float) Math.pow(1 - temp, 1.f / a);       // (1 - v) ** (1 / a)
     }
 
-
-    static void nvqDequantizeUnnormalized4bit(MemorySegmentByteSequence bytes, float a, float b, MemorySegmentVectorFloat res) {
-        /*
-         * bytes:      |  0   |  1   |  2   |  3   |  4   |  5     |  6     |  7     |
-         * half-bytes: | 0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10  11 | 12  13 | 14  15 |
-         *
-         * 1st pass of original array:
-         * & 0xf:      | 0    | 2    | 4    | 6    | 8    | 10     | 12     | 14     |
-         * 2nd pass of original array:
-         * lS 4:       | 1    | 3    | 5    | 7    | 9    | 11     | 13     | 15     |
-         */
-        int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
-
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var arr = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, bytes.get(), i, ByteOrder.LITTLE_ENDIAN);
-            // 1st pass
-            var subResult = arr.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, 0xf)
-                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, i)
-                    .reinterpretAsFloats()
-                    .div(15.f);
-
-            subResult = inverseKumaraswamy(subResult, a, b);
-            subResult.intoMemorySegment(res.get(), 2 * i, ByteOrder.LITTLE_ENDIAN);
-
-            // 2nd pass
-            subResult = arr.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, 0xff)
-                    .lanewise(VectorOperators.LSHR, 4)
-                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0)
-                    .reinterpretAsFloats()
-                    .div(15.f);
-
-            subResult = inverseKumaraswamy(subResult, a, b);
-            subResult.intoMemorySegment(res.get(), 2 * i + 8, ByteOrder.LITTLE_ENDIAN);
-
-        }
-
-        // Process the tail
-        if (vectorizedLength < bytes.length()) {
-            for (int i = vectorizedLength; i < bytes.length() - 1; i++) {
-                var intValue = Byte.toUnsignedInt(bytes.get(i));
-                res.set(2 * i, inverseKumaraswamy(intValue & 0xf, a, b));
-                res.set(2 * i + 1, inverseKumaraswamy(intValue << 4, a, b));
-            }
-
-            vectorizedLength = bytes.length() - 1;
-            var intValue = Byte.toUnsignedInt(bytes.get(vectorizedLength));
-            res.set(2 * vectorizedLength, inverseKumaraswamy(intValue & 0xf, a, b));
-            if (vectorizedLength * 2 == res.length()) {
-                res.set(2 * vectorizedLength + 1, inverseKumaraswamy(intValue << 4, a, b));
-            }
-        }
-    }
-
     static void nvqDequantizeUnnormalized8bit(MemorySegmentByteSequence bytes, float a, float b, MemorySegmentVectorFloat res) {
         int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
 
@@ -754,22 +699,8 @@ final class VectorSimdOps {
         return res;
     }
 
-    static MemorySegmentVectorFloat nvqDequantize4bit(MemorySegmentByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
-        var res = new MemorySegmentVectorFloat(new float[originalDimensions]);
-        nvqDequantizeUnnormalized4bit(bytes, a, b, res);
-        scale(res, scale);
-        addInPlace(res, bias);
-        return res;
-    }
-
     static void nvqDequantize8bit(MemorySegmentByteSequence bytes, float a, float b, float scale, float bias, MemorySegmentVectorFloat res) {
         nvqDequantizeUnnormalized8bit(bytes, a, b, res);
-        scale(res, scale);
-        addInPlace(res, bias);
-    }
-
-    static void nvqDequantize4bit(MemorySegmentByteSequence bytes, float a, float b, float scale, float bias, MemorySegmentVectorFloat res) {
-        nvqDequantizeUnnormalized4bit(bytes, a, b, res);
         scale(res, scale);
         addInPlace(res, bias);
     }
@@ -795,48 +726,6 @@ final class VectorSimdOps {
             value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
             int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
             destination.set(d, (byte) quantizedValue);
-        }
-    }
-
-    static void nvqQuantize4bit(MemorySegmentVectorFloat vector, float a, float b, float minValue, float maxValue, MemorySegmentByteSequence destination) {
-        final int constant = (1 << 4) - 1;
-
-        final var shuffle = VectorShuffle.fromValues(FloatVector.SPECIES_256, 1, 0, 3, 2, 5, 4, 7, 6);
-        final var finalShuffle = VectorShuffle.fromValues(ByteVector.SPECIES_64, 0, 2, 4, 6, 1, 3, 5, 7);
-
-        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(vector.length());
-        final var mask = ByteVector.SPECIES_64.indexInRange(0, FloatVector.SPECIES_256.length() / 2);
-
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            var arr = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            arr = forwardKumaraswamy(arr, a, b);
-            arr = arr.mul(constant).add(0.5f);
-
-            var bytesEven = arr.convertShape(VectorOperators.F2B, ByteVector.SPECIES_64, 0)
-                    .reinterpretAsBytes();
-            var arrOdd = arr.rearrange(shuffle);
-            var bytesOdd = arrOdd.convertShape(VectorOperators.F2B, ByteVector.SPECIES_64, 0)
-                    .reinterpretAsBytes();
-            bytesOdd = bytesOdd.lanewise(VectorOperators.LSHL, 4);
-
-            bytesEven.add(bytesOdd).rearrange(finalShuffle).intoMemorySegment(destination.get(), i / 2, ByteOrder.LITTLE_ENDIAN, mask);
-        }
-
-        // Process the tail
-        for (int d = vectorizedLength; d < vector.length(); d += 2) {
-            // Ensure the quantized value is within the 0 to constant range
-            float value = vector.get(d);
-            value = forwardKumaraswamy(value, a, b);
-            int quantizedValue0 = Math.min(Math.max(0, Math.round(constant * value)), constant);
-            int quantizedValue1;
-            if (d + 1 < vector.length()) {
-                value = vector.get(d + 1);
-                value = forwardKumaraswamy(value, a, b);
-                quantizedValue1 = Math.min(Math.max(0, Math.round(constant * value)), constant);
-            } else {
-                quantizedValue1 = 0;
-            }
-            destination.set(d / 2, (byte) ((quantizedValue1 << 4) + quantizedValue0));
         }
     }
 
@@ -888,24 +777,9 @@ final class VectorSimdOps {
         return squareDistance(vector, dequantizedVector);
     }
 
-    static float nvqSquareDistance4bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize4bit(quantizedVector, vector.length(), a, b, scale, bias);
-
-        // Assumes global mean removed from vector
-        return squareDistance(vector, dequantizedVector);
-    }
-
     static float nvqDotProduct8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
         var dequantizedVector = new MemorySegmentVectorFloat(new float[vector.length()]);
         nvqDequantizeUnnormalized8bit(quantizedVector, a, b, dequantizedVector);
-
-        float dotProd = dotProduct(vector, dequantizedVector);
-        return dotProd;
-    }
-
-    static float nvqDotProduct4bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
-        var dequantizedVector = new MemorySegmentVectorFloat(new float[vector.length()]);
-        nvqDequantizeUnnormalized4bit(quantizedVector, a, b, dequantizedVector);
 
         float dotProd = dotProduct(vector, dequantizedVector);
         return dotProd;
@@ -936,48 +810,6 @@ final class VectorSimdOps {
         }
 
         return new float[]{sum, bMagnitude};
-    }
-
-    static float[] nvqCosine4bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, MemorySegmentVectorFloat centroid) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize4bit(quantizedVector, vector.length(), a, b, scale, bias);
-        addInPlace(dequantizedVector, centroid);
-
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var va = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            var vb = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            vsum = va.fma(vb, vsum);
-            vbMagnitude = vb.fma(vb, vbMagnitude);
-        }
-
-        float sum = vsum.reduceLanes(VectorOperators.ADD);
-        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            sum += vector.get(i) * dequantizedVector.get(i);
-            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
-        }
-
-        return new float[]{sum, bMagnitude};
-    }
-
-    static void nvqShuffleQueryInPlace4bit(MemorySegmentVectorFloat vector) {
-        // To understand this shuffle, see nvqDequantize4bit
-        var shuffle = VectorShuffle.fromValues(FloatVector.SPECIES_512,
-                0, 2, 4, 6, 8, 10, 12, 14,
-                1, 3, 5, 7, 9, 11, 13, 15);
-        int vectorizedLength = FloatVector.SPECIES_512.loopBound(vector.length());
-        var arr = vector.get();
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_512.length()) {
-            FloatVector.fromMemorySegment(FloatVector.SPECIES_512, arr, i, ByteOrder.LITTLE_ENDIAN)
-                    .rearrange(shuffle)
-                    .intoMemorySegment(arr, i, ByteOrder.LITTLE_ENDIAN);
-        }
-        // There's no need to shuffle the tail
     }
 
     static void nvqShuffleQueryInPlace8bit(MemorySegmentVectorFloat vector) {}

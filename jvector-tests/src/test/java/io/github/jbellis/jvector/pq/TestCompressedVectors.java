@@ -111,8 +111,6 @@ public class TestCompressedVectors extends RandomizedTest {
             NVQuantization.BitsPerDimension bpd;
             if (testConfigAndResult[2] == 8) {
                 bpd = NVQuantization.BitsPerDimension.EIGHT;
-            } else if (testConfigAndResult[2] == 4) {
-                bpd = NVQuantization.BitsPerDimension.FOUR;
             } else {
                 throw new RuntimeException("Unknown bits per dimension: " + testConfigAndResult[1]);
             }
