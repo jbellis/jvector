@@ -270,7 +270,6 @@ public class SiftSmall {
         ProductQuantization pq = ProductQuantization.compute(ravv, 16, 256, true);
 
         var nvq = NVQuantization.compute(ravv, 1, NVQuantization.BitsPerDimension.EIGHT);
-        nvq.learn = false;
 
         // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
         // this is used to score the construction searches
