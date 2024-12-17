@@ -378,7 +378,7 @@ public interface VectorUtilSupport {
   void nvqQuantize4bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination);
 
   /**
-   * Compute the squared error of quantizing the vector using the Kumaraswamy distribution.
+   * Compute the squared error of quantizing the vector with NVQ.
    * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
    * @param growthRate The growth rate of the logistic function
@@ -390,7 +390,7 @@ public interface VectorUtilSupport {
   float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits);
 
   /**
-   * Compute the squared error of quantizing the vector using the Kumaraswamy distribution.
+   * Compute the squared error of quantizing the vector with a uniform quantizer.
    * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.
    * @param minValue The minimum value of the subvector
