@@ -33,8 +33,6 @@ import static java.lang.Math.abs;
 
 // this class uses explicit typing instead of `var` for easier reading when excerpted for instructional use
 public class distancesNVQ {
-    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
-
     public static void testNVQEncodings(List<VectorFloat<?>> vectors, List<VectorFloat<?>> queries, VectorSimilarityFunction vsf) {
         int dimension = vectors.get(0).length();
 //        int nQueries = queries.size();
