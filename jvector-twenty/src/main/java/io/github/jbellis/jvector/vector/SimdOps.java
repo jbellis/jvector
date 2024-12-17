@@ -722,7 +722,6 @@ final class SimdOps {
     static FloatVector const0693147182f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.693147182f);
     static FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
     static FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
-    static FloatVector const15f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 15f);
 
     /*
      Fast exponential based on:
