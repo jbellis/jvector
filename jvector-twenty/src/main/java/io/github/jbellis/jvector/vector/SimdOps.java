@@ -1203,7 +1203,7 @@ final class SimdOps {
         // Process the tail
         float value2, diff;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
-            value2 = quantizedVector.get(i);
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = logisticScale * value2 + logisticBias;
             value2 = logit(value2, scaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
@@ -1305,10 +1305,10 @@ final class SimdOps {
         // Process the tail
         float value2;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
-            value2 = quantizedVector.get(i);
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = logisticScale * value2 + logisticBias;
             value2 = logit(value2, scaledAlpha, scaledX0);
-            dotProd += vector.get(i) - value2;
+            dotProd += vector.get(i) * value2;
         }
 
         return dotProd;
@@ -1377,7 +1377,7 @@ final class SimdOps {
         var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(vector.length());
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
@@ -1399,15 +1399,15 @@ final class SimdOps {
         float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
-        // TODO fix stride for small subvectors
         float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
-            value2 = quantizedVector.get(i);
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = logisticScale * value2 + logisticBias;
             value2 = logit(value2, scaledAlpha, scaledX0) + centroid.get(i);
             sum += vector.get(i) * value2;
             bMagnitude += value2 * value2;
         }
+
         // TODO can we avoid returning a new array?
         return new float[]{sum, bMagnitude};
     }
