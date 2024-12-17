@@ -291,16 +291,16 @@ public interface VectorUtilSupport {
   /**
    * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
    * uneven entries within register. This method shuffles the query entries so that it matches this order.
-   * See: https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf
-   * @param vector
+   * See <a href="https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf">this reference</a>
+   * @param vector the vector to be shuffled
    */
   void nvqShuffleQueryInPlace4bit(VectorFloat<?> vector);
 
   /**
    * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
    * uneven entries within register. This method shuffles the query entries so that it matches this order.
-   * See: https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf
-   * @param vector
+   * See <a href="https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf">this reference</a>
+   * @param vector the vector to be shuffled
    */
   void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector);
 
