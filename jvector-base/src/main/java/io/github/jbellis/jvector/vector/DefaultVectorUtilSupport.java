@@ -646,8 +646,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
     var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 15;
 
-
-    int constant = 15;
     for (int d = 0; d < vector.length(); d += 2) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
