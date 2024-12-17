@@ -61,9 +61,6 @@ public interface VectorUtilSupport {
   /** Multiply vector by multiplier, in place (vector will be modified) */
   void scale(VectorFloat<?> vector, float multiplier);
 
-  /** Raises this vector to a scalar power, in place (vector will be modified) */
-  void pow(VectorFloat<?> vector, float exponent);
-
   /** Adds v2 into v1, in place (v1 will be modified) */
   void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 

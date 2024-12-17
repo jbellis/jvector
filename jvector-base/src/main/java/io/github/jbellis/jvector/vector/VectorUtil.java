@@ -130,10 +130,6 @@ public final class VectorUtil {
     impl.scale(vector, multiplier);
   }
 
-  public static void pow(VectorFloat<?> vector, float exponent) {
-    impl.scale(vector, exponent);
-  }
-
   public static void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     impl.addInPlace(v1, v2);
   }

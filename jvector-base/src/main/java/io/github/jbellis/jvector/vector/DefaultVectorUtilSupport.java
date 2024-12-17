@@ -238,13 +238,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public void pow(VectorFloat<?> vector, float exponent) {
-    for (int i = 0; i < vector.length(); i++) {
-      vector.set(i, (float) Math.pow(vector.get(i), exponent));
-    }
-  }
-
-  @Override
   public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     for (int i = 0; i < v1.length(); i++) {
       v1.set(i, v1.get(i) + v2.get(i));

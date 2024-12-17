@@ -73,11 +73,6 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public void pow(VectorFloat<?> vector, float exponent) {
-        VectorSimdOps.pow((MemorySegmentVectorFloat) vector, exponent);
-    }
-
-    @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         VectorSimdOps.addInPlace((MemorySegmentVectorFloat)v1, (MemorySegmentVectorFloat)v2);
     }

@@ -83,21 +83,6 @@ final class SimdOps {
         }
     }
 
-    static void pow(ArrayVectorFloat vector, float exponent) {
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            a.pow(exponent).intoArray(vector.get(), i);
-        }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i, (float) Math.pow(vector.get(i), exponent));
-        }
-    }
-
     static float dot64(ArrayVectorFloat v1, int offset1, ArrayVectorFloat v2, int offset2) {
         var a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.get(), offset1);
         var b = FloatVector.fromArray(FloatVector.SPECIES_64, v2.get(), offset2);

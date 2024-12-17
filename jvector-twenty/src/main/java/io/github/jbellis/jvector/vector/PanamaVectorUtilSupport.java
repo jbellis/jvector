@@ -68,11 +68,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public void pow(VectorFloat<?> vector, float exponent) {
-        SimdOps.pow((ArrayVectorFloat) vector, exponent);
-    }
-
-    @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         SimdOps.addInPlace((ArrayVectorFloat)v1, (ArrayVectorFloat)v2);
     }
