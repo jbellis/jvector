@@ -72,12 +72,10 @@ public abstract class CompressorParameters {
     }
 
     public static class NVQParameters extends CompressorParameters {
-        private final NVQuantization.BitsPerDimension bitsPerDimension;
         private final int nSubVectors;
 
-        public NVQParameters(int nSubVectors, NVQuantization.BitsPerDimension bitsPerDimension) {
+        public NVQParameters(int nSubVectors) {
             this.nSubVectors = nSubVectors;
-            this.bitsPerDimension = bitsPerDimension;
         }
 
         @Override
@@ -87,7 +85,7 @@ public abstract class CompressorParameters {
 
         @Override
         public String idStringFor(DataSet ds) {
-            return String.format("NVQ_%s_%d_%s", ds.name, nSubVectors, bitsPerDimension);
+            return String.format("NVQ_%s_%d_%s", ds.name, nSubVectors);
         }
 
         @Override
