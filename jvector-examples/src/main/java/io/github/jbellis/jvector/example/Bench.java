@@ -44,7 +44,7 @@ public class Bench {
 
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
         var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var efSearchGrid = List.of(1.0); // List.of(1.0, 2.0);
+        var efSearchGrid = List.of(1.0, 2.0);
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
                 __ -> CompressorParameters.NONE
@@ -55,9 +55,8 @@ public class Bench {
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
-                // EnumSet.of(FeatureId.INLINE_VECTORS)
+                EnumSet.of(FeatureId.INLINE_VECTORS),
                 EnumSet.of(FeatureId.NVQ_VECTORS)
-                // , EnumSet.of(FeatureId.INLINE_VECTORS, FeatureId.FUSED_ADC)
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.

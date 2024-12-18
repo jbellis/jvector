@@ -77,14 +77,4 @@ public enum VectorSimilarityFunction {
    * @return the value of the similarity function applied to the two vectors
    */
   public abstract float compare(VectorFloat<?> v1, VectorFloat<?> v2);
-
-  // TODO Do we need compareMulti?
-//  /**
-//   * Calculates similarity scores between a query vector and multiple vectors with a specified function. Higher
-//   * similarity scores correspond to closer vectors.
-//   *
-//   * @param v1 a vector
-//   * @param packedVectors N vectors packed into a single vector, of N * v1.length() dimension
-//   */
-//  public abstract void compareMulti(VectorFloat<?> v1, VectorFloat<?> packedVectors, VectorFloat<?> results);
 }

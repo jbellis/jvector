@@ -66,7 +66,6 @@ public class NVQScorer {
                                 svDB.minValue, svDB.maxValue
                         );
                     }
-                    // TODO This won't work without some kind of normalization.  Intend to scale [0, 1]
                     return (1 + nvqDot + queryGlobalBias) / 2;
                 };
             default:
