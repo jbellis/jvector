@@ -138,7 +138,7 @@ public class distancesNVQ {
         testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.COSINE, true);
     }
 
-    public static void main() throws IOException {
+    public static void main(String[] args) throws IOException {
         runSIFT();
         runADA();
         runColbert();
