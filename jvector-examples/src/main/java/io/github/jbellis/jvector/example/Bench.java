@@ -33,7 +33,7 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.quantization.KMeansPlusPlusClusterer.UNWEIGHTED;
 
 /**
  * Tests GraphIndexes against vectors from various datasets

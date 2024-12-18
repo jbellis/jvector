@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -32,18 +32,16 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
 import static io.github.jbellis.jvector.TestUtil.randomVector;
-import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
-import static io.github.jbellis.jvector.pq.ProductQuantization.DEFAULT_CLUSTERS;
-import static io.github.jbellis.jvector.pq.ProductQuantization.getSubvectorSizesAndOffsets;
+import static io.github.jbellis.jvector.quantization.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.quantization.ProductQuantization.DEFAULT_CLUSTERS;
+import static io.github.jbellis.jvector.quantization.ProductQuantization.getSubvectorSizesAndOffsets;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;

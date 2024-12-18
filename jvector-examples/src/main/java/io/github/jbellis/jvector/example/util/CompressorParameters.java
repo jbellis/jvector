@@ -16,13 +16,10 @@
 
 package io.github.jbellis.jvector.example.util;
 
-import io.github.jbellis.jvector.pq.BinaryQuantization;
-import io.github.jbellis.jvector.pq.NVQuantization;
-import io.github.jbellis.jvector.pq.ProductQuantization;
-import io.github.jbellis.jvector.pq.VectorCompressor;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
-
-import java.util.Arrays;
+import io.github.jbellis.jvector.quantization.BinaryQuantization;
+import io.github.jbellis.jvector.quantization.NVQuantization;
+import io.github.jbellis.jvector.quantization.ProductQuantization;
+import io.github.jbellis.jvector.quantization.VectorCompressor;
 
 public abstract class CompressorParameters {
     public static final CompressorParameters NONE = new NoCompressionParameters();

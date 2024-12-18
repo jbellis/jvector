@@ -18,9 +18,9 @@ package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
-import io.github.jbellis.jvector.pq.NVQScorer;
-import io.github.jbellis.jvector.pq.NVQuantization;
-import io.github.jbellis.jvector.pq.NVQuantization.QuantizedVector;
+import io.github.jbellis.jvector.quantization.NVQScorer;
+import io.github.jbellis.jvector.quantization.NVQuantization;
+import io.github.jbellis.jvector.quantization.NVQuantization.QuantizedVector;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
