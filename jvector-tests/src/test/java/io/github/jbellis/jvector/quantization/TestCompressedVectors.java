@@ -95,19 +95,15 @@ public class TestCompressedVectors extends RandomizedTest {
 
         int[][] testsConfigAndResults = {
                 //Tuples of: nDimensions, nSubvectors, number of bots per dimension, and the expected number of bytes
-                {64, 1, 8, 88},
-                {64, 2, 8, 108},
-                {64, 1, 4, 56},
-                {64, 2, 4, 76},
-                {65, 1, 8, 89},
-                {65, 1, 4, 57},
-                {63, 1, 4, 56},
+                {64, 1, 96},
+                {64, 2, 124},
+                {65, 1, 97},
         };
 
         for (int[] testConfigAndResult : testsConfigAndResults) {
             var nDimensions = testConfigAndResult[0];
             var nSubvectors = testConfigAndResult[1];
-            var expectedSize = testConfigAndResult[3];
+            var expectedSize = testConfigAndResult[2];
 
             // Generate an NVQ for random vectors
             var vectors = createRandomVectors(512, nDimensions);
