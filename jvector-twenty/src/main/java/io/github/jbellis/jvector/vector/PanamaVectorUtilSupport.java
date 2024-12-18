@@ -206,7 +206,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float minValue, float maxValue) {
         var res = new ArrayVectorFloat(new float[originalDimensions]);
-        // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
+
         var logisticBias = SimdOps.logistic(0, alpha, x0);
         var logisticScale = SimdOps.logistic(1, alpha, x0) - logisticBias;
 
@@ -216,7 +216,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> destination) {
-        // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
         var logisticBias = SimdOps.logistic(minValue, alpha, x0);
         var logisticScale = SimdOps.logistic(maxValue, alpha, x0) - logisticBias;
 

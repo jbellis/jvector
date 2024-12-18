@@ -204,7 +204,7 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     @Override
     public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
         var res = new MemorySegmentVectorFloat(new float[originalDimensions]);
-        // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
+
         var logisticBias = VectorSimdOps.logistic(0, growthRate, midpoint);
         var logisticScale = VectorSimdOps.logistic(1, growthRate, midpoint) - logisticBias;
 
@@ -214,7 +214,6 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
 
     @Override
     public void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
-        // These are defined here for testing purposes and to contain the signature changes to SimdOps for now.
         var logisticBias = VectorSimdOps.logistic(minValue, growthRate, midpoint);
         var logisticScale = VectorSimdOps.logistic(maxValue, growthRate, midpoint) - logisticBias;
 
