@@ -56,7 +56,8 @@ public class Bench {
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
                 EnumSet.of(FeatureId.INLINE_VECTORS),
-                EnumSet.of(FeatureId.NVQ_VECTORS)
+                EnumSet.of(FeatureId.NVQ_VECTORS),
+                EnumSet.of(FeatureId.INLINE_VECTORS, FeatureId.FUSED_ADC)
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.
