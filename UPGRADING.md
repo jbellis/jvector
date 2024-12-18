@@ -1,3 +1,17 @@
+# Upgrading from 3.0.x to 3.1.x
+
+## Critical API changes
+
+- `VectorCompressor.encodeAll()` now returns a `CompressedVectors` object instead of a `ByteSequence<?>[]`.
+  This provides better encapsulation of the compression functionality while also allowing for more efficient
+  creation of the `CompressedVectors` object.
+- The `ByteSequence` interface now includes an `offset()` method to provide offset information for the sequence.
+  any time the method `ByteSequence::get` is called, the full backing data is returned, and as such, the `offset()`
+  method is necessary to determine the offset of the data in the backing array.
+- `PQVectors` constructor has been updated to support immutable instances and explicit chunking parameters.
+- The `VectorCompressor.createCompressedVectors(Object[])` method is now deprecated in favor of the new API that returns
+  `CompressedVectors` directly from `encodeAll()`.
+
 # Upgrading from 2.0.x to 3.0.x
 
 ## Critical API changes

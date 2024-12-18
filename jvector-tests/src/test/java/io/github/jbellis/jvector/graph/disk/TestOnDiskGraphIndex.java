@@ -323,7 +323,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         // write incrementally and add Fused ADC Feature
         var incrementalFadcPath = testDirectory.resolve("incremental_graph");
         var pq = ProductQuantization.compute(ravv, 64, 256, false);
-        var pqv = (PQVectors) pq.createCompressedVectors(pq.encodeAll(ravv));
+        var pqv = (PQVectors) pq.encodeAll(ravv);
         try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalFadcPath)
                 .with(new InlineVectors(ravv.dimension()))
                 .with(new FusedADC(graph.maxDegree(), pq))

@@ -208,6 +208,20 @@ public interface VectorUtilSupport {
   float max(VectorFloat<?> v);
   float min(VectorFloat<?> v);
 
+  default float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
+  {
+    float sum = 0.0f;
+    float aMag = 0.0f;
+
+    for (int m = 0; m < encoded.length(); ++m) {
+      int centroidIndex = Byte.toUnsignedInt(encoded.get(m));
+      var index = m * clusterCount + centroidIndex;
+      sum += partialSums.get(index);
+      aMag += aMagnitude.get(index);
+    }
+
+    return (float) (sum / Math.sqrt(aMag * bMagnitude));
+  }
   /**
    * Computes the dot product between a vector and a 8-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.

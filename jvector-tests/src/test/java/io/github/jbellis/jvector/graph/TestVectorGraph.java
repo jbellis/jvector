@@ -166,8 +166,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var graph = builder.build(vectors);
 
         var pq = ProductQuantization.compute(vectors, 2, 256, false);
-        var encoded = pq.encodeAll(vectors);
-        var pqv = new PQVectors(pq, encoded);
+        var pqv = pq.encodeAll(vectors);
 
         int topK = 10;
         int rerankK = 30;

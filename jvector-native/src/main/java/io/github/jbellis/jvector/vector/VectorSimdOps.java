@@ -239,7 +239,7 @@ final class VectorSimdOps {
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
             var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(i), ByteOrder.LITTLE_ENDIAN);
-            vsum = vsum.add(a.mul(b));
+            vsum = a.fma(b, vsum);
             vaMagnitude = a.fma(a, vaMagnitude);
             vbMagnitude = b.fma(b, vbMagnitude);
         }
@@ -266,7 +266,7 @@ final class VectorSimdOps {
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(v1offset + i), ByteOrder.LITTLE_ENDIAN);
             var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(v2offset + i), ByteOrder.LITTLE_ENDIAN);
-            vsum = vsum.add(a.mul(b));
+            vsum = a.fma(b, vsum);
             vaMagnitude = a.fma(a, vaMagnitude);
             vbMagnitude = b.fma(b, vbMagnitude);
         }
