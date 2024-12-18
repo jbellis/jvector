@@ -25,7 +25,6 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 
 public class NVQVectors implements CompressedVectors {
