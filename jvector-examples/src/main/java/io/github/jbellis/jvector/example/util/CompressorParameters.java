@@ -82,7 +82,7 @@ public abstract class CompressorParameters {
 
         @Override
         public VectorCompressor<?> computeCompressor(DataSet ds) {
-            return NVQuantization.compute(ds.getBaseRavv(), nSubVectors, bitsPerDimension);
+            return NVQuantization.compute(ds.getBaseRavv(), nSubVectors);
         }
 
         @Override

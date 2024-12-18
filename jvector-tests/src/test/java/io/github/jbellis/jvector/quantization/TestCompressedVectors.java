@@ -107,19 +107,13 @@ public class TestCompressedVectors extends RandomizedTest {
         for (int[] testConfigAndResult : testsConfigAndResults) {
             var nDimensions = testConfigAndResult[0];
             var nSubvectors = testConfigAndResult[1];
-            NVQuantization.BitsPerDimension bpd;
-            if (testConfigAndResult[2] == 8) {
-                bpd = NVQuantization.BitsPerDimension.EIGHT;
-            } else {
-                throw new RuntimeException("Unknown bits per dimension: " + testConfigAndResult[1]);
-            }
             var expectedSize = testConfigAndResult[3];
 
             // Generate an NVQ for random vectors
             var vectors = createRandomVectors(512, nDimensions);
             var ravv = new ListRandomAccessVectorValues(vectors, nDimensions);
 
-            var nvq = NVQuantization.compute(ravv, nSubvectors, bpd);
+            var nvq = NVQuantization.compute(ravv, nSubvectors);
 
             // Compress the vectors
             var compressed = nvq.encodeAll(ravv);
@@ -189,7 +183,7 @@ public class TestCompressedVectors extends RandomizedTest {
 
         // Generate a NVQ for random vectors
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
-        var nvq = NVQuantization.compute(ravv, nSubvectors, bitsPerDimension);
+        var nvq = NVQuantization.compute(ravv, nSubvectors);
         nvq.learn = learn;
 
         // Compress the vectors

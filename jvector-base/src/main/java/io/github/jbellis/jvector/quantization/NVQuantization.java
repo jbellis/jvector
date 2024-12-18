@@ -129,10 +129,9 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * Class constructor.
      * @param subvectorSizesAndOffsets a matrix that stores the size and starting point of each subvector
      * @param globalMean the mean of the database (its average vector)
-     * @param bitsPerDimension the number of bits to use for each dimension when quantizing the vector
      */
-    private NVQuantization(int[][] subvectorSizesAndOffsets, VectorFloat<?> globalMean, BitsPerDimension bitsPerDimension) {
-        this.bitsPerDimension = bitsPerDimension;
+    private NVQuantization(int[][] subvectorSizesAndOffsets, VectorFloat<?> globalMean) {
+        this.bitsPerDimension = BitsPerDimension.EIGHT;
         this.globalMean = globalMean;
         this.subvectorSizesAndOffsets = subvectorSizesAndOffsets;
         this.originalDimension = Arrays.stream(subvectorSizesAndOffsets).mapToInt(m -> m[0]).sum();
@@ -148,13 +147,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      *
      * @param ravv the vectors to quantize
      * @param nSubVectors number of subvectors
-     * @param bitsPerDimension the number of bits to use for each dimension when quantizing the vector
      */
-    public static NVQuantization compute(RandomAccessVectorValues ravv, int nSubVectors, BitsPerDimension bitsPerDimension) {
-        if (bitsPerDimension == BitsPerDimension.FOUR) {
-            throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
-        }
-
+    public static NVQuantization compute(RandomAccessVectorValues ravv, int nSubVectors) {
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), nSubVectors);
 
         var ravvCopy = ravv.threadLocalSupplier().get();
@@ -166,7 +160,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             VectorUtil.addInPlace(globalMean, ravvCopy.getVector(i));
         }
         VectorUtil.scale(globalMean, 1.0f / ravvCopy.size());
-        return new NVQuantization(subvectorSizesAndOffsets, globalMean, bitsPerDimension);
+        return new NVQuantization(subvectorSizesAndOffsets, globalMean);
     }
 
 
@@ -317,7 +311,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             offset += size;
         }
 
-        return new NVQuantization(subvectorSizes, globalMean, bitsPerDimension);
+        return new NVQuantization(subvectorSizes, globalMean);
     }
 
     @Override

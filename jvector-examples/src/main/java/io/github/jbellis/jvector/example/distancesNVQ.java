@@ -42,7 +42,7 @@ public class distancesNVQ {
 
         // Generate a NVQ for random vectors
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
-        var nvq = NVQuantization.compute(ravv, 2, NVQuantization.BitsPerDimension.EIGHT);
+        var nvq = NVQuantization.compute(ravv, 2);
 //        nvq.learn = false;
         nvq.learn = true;
 
