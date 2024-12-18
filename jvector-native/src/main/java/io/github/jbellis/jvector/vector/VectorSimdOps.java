@@ -649,72 +649,140 @@ final class VectorSimdOps {
     //---------------------------------------------
     // NVQ quantization instructions start here
     //---------------------------------------------
-    static FloatVector forwardKumaraswamy(FloatVector vector, float a, float b) {
-        var res = vector.pow(a).neg().add(1.f);   // 1 - v ** a
-        res = res.pow(b).neg().add(1.f);          // 1 - v ** b
-        return res;
+    static FloatVector const0693147182f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.693147182f);
+    static FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
+    static FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
+
+    /*
+     Fast exponential based on:
+     https://stackoverflow.com/questions/47025373/fastest-implementation-of-the-natural-exponential-function-using-sse
+     The Remez polynomial has been modified for higher accuracy
+     */
+    public static FloatVector fastExp(FloatVector x){
+        // approximation of exp(x)
+        // A0 + x * (A1 + x * (A2 + x * (a3 + x * (a4 + x * (a5 + x * (a6 + x * a7))))));
+        final float invlog2e = 1.442695041f;  // 1 / log2(e)
+        final float expCvt = 12582912.0f;  // 1.5 * (1 << 23)
+        final float expA0 = 0.9999993887682104f;
+        final float expA1 = 0.6931186232012877f;
+        final float expA2 = 0.2402301551437674f;
+        final float expA3 = 0.05593479631997887f;
+        final float expA4 = 0.009651907610706037f;
+
+        /* exp(x) = 2^i * 2^f; i = rint (log2(e) * x), -0.5 <= f <= 0.5 */
+        var t = x.mul(FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invlog2e));  // t = x / log2(e)
+        var r = t.add(expCvt).sub(expCvt);  // r = round(t)
+        var f = t.sub(r);  // f = t - round(t)
+        var i = r.castShape(IntVector.SPECIES_PREFERRED, 0).reinterpretAsInts(); // i = (int) r
+
+        var temp = f.fma(FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA4), FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA3));
+        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA2));
+        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA1));
+        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA0));
+
+        i = i.lanewise(VectorOperators.MAX, -126);
+        var j = i.lanewise(VectorOperators.LSHL, 23);
+        temp = temp.reinterpretAsInts().add(j).reinterpretAsFloats();  // temp = temp * 2^i
+        return temp;
     }
 
-    static float forwardKumaraswamy(float value, float a, float b) {
-        var temp = 1.f - (float) Math.pow(value, a);   // 1 - v ** a
-        return 1.f - (float) Math.pow(temp, b);        // 1 - v ** b
+    /*
+     Vectorized fast natural logarithm on [0x1.f7a5ecp-127, 0x1.fffffep127]. Maximum relative error 9.4529e-5.
+     https://stackoverflow.com/questions/39821367/very-fast-approximate-logarithm-natural-log-function-in-c
+     */
+    public static FloatVector fastLog(FloatVector x) {
+        IntVector temp = x.reinterpretAsInts();
+        var e = temp.sub(0x3f2aaaab).and(0xff800000);
+        FloatVector m = temp.sub(e).reinterpretAsFloats();
+        var i = e.castShape(FloatVector.SPECIES_PREFERRED, 0).reinterpretAsFloats();
+        i = i.mul(1.19209290e-7f);  // 0x1.0p-23
+
+        /* m in [2/3, 4/3] */
+        var f = m.sub(1.f);
+        var s = f.mul(f);
+
+        /* Compute log1p(f) for f in [-1/3, 1/3] */
+        var r = f.fma(0.230836749f, -0.279208571f);  // 0x1.d8c0f0p-3, -0x1.1de8dap-2
+        var t = f.fma(0.331826031f, -0.498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2)
+        r = r.fma(s, t);
+        r = r.fma(s, f);
+        return i.fma(const0693147182f, r); // 0x1.62e430p-1 // log(2)
     }
 
-    static FloatVector inverseKumaraswamy(FloatVector vector, float a, float b) {
-        vector = vector.neg().add(1.f).pow(1.f / b);  // (1 - v) ** (1 / b)
-        return vector.neg().add(1.f).pow(1.f / a);      // (1 - v) ** (1 / a)
+    static FloatVector logistic(FloatVector vector, float alpha, float x0) {
+        var temp = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -alpha).mul(vector.sub(x0));
+        temp = fastExp(temp);
+        temp = const1f.add(temp);
+        return const1f.div(temp);
     }
 
-    static float inverseKumaraswamy(float value, float a, float b) {
-        var temp = (float) Math.pow(1 - value, 1.f / b);  // (1 - v) ** (1 / a)
-        return (float) Math.pow(1 - temp, 1.f / a);       // (1 - v) ** (1 / a)
+    static float logistic(float value, float alpha, float x0) {
+        var temp = -alpha * (value - x0);
+        temp = MathUtil.fastExp(temp);
+        return 1 / (1 + temp);
     }
 
-    static void nvqDequantizeUnnormalized8bit(MemorySegmentByteSequence bytes, float a, float b, MemorySegmentVectorFloat res) {
-        int vectorizedLength = ByteVector.SPECIES_64.loopBound(bytes.length());
+    static FloatVector logit(FloatVector vector, float inverseAlpha, float x0) {
+        var temp = vector.div(const1f.sub(vector));
+        return fastLog(temp).fma(inverseAlpha, x0);
+    }
 
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_64.length()) {
-            var arr = ByteVector.fromMemorySegment(ByteVector.SPECIES_64, bytes.get(), i, ByteOrder.LITTLE_ENDIAN)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, 0xff)
-                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, i)
-                    .reinterpretAsFloats()
-                    .div(255.f);
+    static float logit(float value, float alpha, float x0) {
+        var temp = value / (1 - value);
+        return MathUtil.fastLog(temp) / alpha + x0;
+    }
 
-            arr = inverseKumaraswamy(arr, a, b);
-            arr.intoMemorySegment(res.get(), i, ByteOrder.LITTLE_ENDIAN);
+    static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
+        var arr = bytes.reinterpretAsInts()
+                .lanewise(VectorOperators.LSHR, 8 * part)
+                .lanewise(VectorOperators.AND, 0xff)
+                .convert(VectorOperators.I2F, 0)
+                .reinterpretAsFloats();
+
+        arr = arr.fma(logisticScale, logisticBias);
+        return logit(arr, inverseAlpha, x0);
+    }
+
+    static void nvqDequantize8bit(MemorySegmentByteSequence bytes, float alpha, float x0, float logisticScale, float logisticBias, MemorySegmentVectorFloat destination) {
+        var resArr = destination.get();
+
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(bytes.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, bytes.get(), i, ByteOrder.LITTLE_ENDIAN);
+
+            for (int j = 0; j < 4; j++) {
+                var arr = nvqDequantize8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
+                arr.intoMemorySegment(resArr, i + floatStep * j, ByteOrder.LITTLE_ENDIAN);
+            }
         }
 
         // Process the tail
+        float value;
         for (int i = vectorizedLength; i < bytes.length(); i++) {
-            res.set(i, inverseKumaraswamy(bytes.get(i), a, b));
+            value = bytes.get(i);
+            value = logit(value / 255.f, alpha, x0);
+            destination.set(i, (byte) value);
         }
     }
 
-    static MemorySegmentVectorFloat nvqDequantize8bit(MemorySegmentByteSequence bytes, int originalDimensions, float a, float b, float scale, float bias) {
-        var res = new MemorySegmentVectorFloat(new float[originalDimensions]);
-        nvqDequantizeUnnormalized8bit(bytes, a, b, res);
-        scale(res, scale);
-        addInPlace(res, bias);
-        return res;
-    }
+    static void nvqQuantize8bit(MemorySegmentVectorFloat vector, float alpha, float x0, float minValue, float maxValue, MemorySegmentByteSequence destination) {
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        final var mask = ByteVector.SPECIES_PREFERRED.indexInRange(0, FloatVector.SPECIES_PREFERRED.length());
 
-    static void nvqDequantize8bit(MemorySegmentByteSequence bytes, float a, float b, float scale, float bias, MemorySegmentVectorFloat res) {
-        nvqDequantizeUnnormalized8bit(bytes, a, b, res);
-        scale(res, scale);
-        addInPlace(res, bias);
-    }
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var invLogisticScale = 255 / (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias);
 
-    static void nvqQuantize8bit(MemorySegmentVectorFloat vector, float a, float b, float minValue, float maxValue, MemorySegmentByteSequence destination) {
-        final int constant = (1 << 8) - 1;
-        final int vectorizedLength = FloatVector.SPECIES_256.loopBound(vector.length());
-        final var mask = ByteVector.SPECIES_256.indexInRange(0, FloatVector.SPECIES_256.length());
-
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            var arr = FloatVector.fromMemorySegment(FloatVector.SPECIES_256, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            arr = forwardKumaraswamy(arr, a, b);
-            var bytes = arr.mul(constant).add(0.5f)
-                    .convertShape(VectorOperators.F2B, ByteVector.SPECIES_256, 0)
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var arr = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
+            arr = logistic(arr, scaledAlpha, scaledX0);
+            arr = arr.sub(logisticBias).mul(invLogisticScale);
+            var bytes = arr.add(const05f)
+                    .convertShape(VectorOperators.F2B, ByteVector.SPECIES_PREFERRED, 0)
                     .reinterpretAsBytes();
             bytes.intoMemorySegment(destination.get(), i, ByteOrder.LITTLE_ENDIAN, mask);
         }
@@ -723,42 +791,55 @@ final class VectorSimdOps {
         for (int d = vectorizedLength; d < vector.length(); d++) {
             // Ensure the quantized value is within the 0 to constant range
             float value = vector.get(d);
-            value = 1.f - (float) Math.pow(1. - Math.pow(value, a), b);
-            int quantizedValue = Math.min(Math.max(0, Math.round(constant * value)), constant);
+            value = logistic(value, scaledAlpha, scaledX0);
+            value = (value - logisticBias) * invLogisticScale;
+            int quantizedValue = Math.round(value);
             destination.set(d, (byte) quantizedValue);
         }
     }
 
-    static float nvqLoss(MemorySegmentVectorFloat vector, float a, float b, float minValue, float maxValue, int nBits) {
+    static float nvqLoss(MemorySegmentVectorFloat vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
         int constant = (1 << nBits) - 1;
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
-        float squaredSum = 0.f;
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / constant;
+        var invLogisticScale = 1 / logisticScale;
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            var recArr = forwardKumaraswamy(arr, a, b);
-            recArr = recArr.mul(constant).add(0.5f)
-                    .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0)
+            var recArr = logistic(arr, scaledAlpha, scaledX0);
+            recArr = recArr.sub(logisticBias).mul(invLogisticScale);
+            recArr = recArr.add(const05f)
+                    .convert(VectorOperators.F2I, 0)
                     .reinterpretAsInts()
-                    .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0)
-                    .reinterpretAsFloats()
-                    .div(constant);
-            recArr = inverseKumaraswamy(recArr, a, b);
+                    .convert(VectorOperators.I2F, 0)
+                    .reinterpretAsFloats();
+            recArr = recArr.fma(logisticScale, logisticBias);
+            recArr = logit(recArr, invScaledAlpha, scaledX0);
 
             var diff = arr.sub(recArr);
-            squaredSum += diff.mul(diff).reduceLanes(VectorOperators.ADD);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
         }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
         float value, recValue;
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value = vector.get(i);
 
-            recValue = forwardKumaraswamy(value, a, b);
-            recValue = Math.min(Math.max(0, Math.round(constant * recValue)), constant);
-            recValue /= constant;
-            recValue = inverseKumaraswamy(recValue, a, b);
+            recValue = logistic(value, scaledAlpha, scaledX0);
+            recValue = (recValue - logisticBias) * invLogisticScale;
+            recValue = Math.round(recValue);
+            recValue = logisticScale * recValue + logisticBias;
+            recValue = logit(recValue, scaledAlpha, scaledX0);
 
             squaredSum += MathUtil.square(value - recValue);
         }
@@ -767,52 +848,204 @@ final class VectorSimdOps {
     }
 
     static float nvqUniformLoss(MemorySegmentVectorFloat vector, float minValue, float maxValue, int nBits) {
-        return 0;
+        float constant = (1 << nBits) - 1;
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var arr = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
+            var recArr = arr.sub(minValue).mul(constant / (maxValue - minValue));
+            recArr = recArr.add(const05f)
+                    .convert(VectorOperators.F2I, 0)
+                    .reinterpretAsInts()
+                    .convert(VectorOperators.I2F, 0)
+                    .reinterpretAsFloats();
+            recArr = recArr.fma((maxValue - minValue) / constant, minValue);
+
+            var diff = arr.sub(recArr);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value, recValue;
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            value = vector.get(i);
+
+            recValue = (value - minValue) / (maxValue - minValue);
+            recValue = Math.round(constant * recValue) / constant;
+            recValue = recValue / (maxValue - minValue) + minValue;
+
+            squaredSum += MathUtil.square(value - recValue);
+        }
+
+        return squaredSum;
     }
 
-    static float nvqSquareDistance8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, vector.length(), a, b, scale, bias);
+    static float nvqSquareDistance8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector,
+                                       float alpha, float x0, float minValue, float maxValue) {
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
-        // Assumes global mean removed from vector
-        return squareDistance(vector, dequantizedVector);
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i, ByteOrder.LITTLE_ENDIAN);
+
+            for (int j = 0; j < 4; j++) {
+                var v1 = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j, ByteOrder.LITTLE_ENDIAN);
+                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+
+                var diff = v1.sub(v2);
+                squaredSumVec = diff.fma(diff, squaredSumVec);
+            }
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2, diff;
+        for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
+            value2 = logisticScale * value2 + logisticBias;
+            value2 = logit(value2, scaledAlpha, scaledX0);
+            diff = vector.get(i) - value2;
+            squaredSum += MathUtil.square(diff);
+        }
+
+        return squaredSum;
     }
 
-    static float nvqDotProduct8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b) {
-        var dequantizedVector = new MemorySegmentVectorFloat(new float[vector.length()]);
-        nvqDequantizeUnnormalized8bit(quantizedVector, a, b, dequantizedVector);
 
-        float dotProd = dotProduct(vector, dequantizedVector);
+    static float nvqDotProduct8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector,
+                                   float alpha, float x0, float minValue, float maxValue) {
+        FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i, ByteOrder.LITTLE_ENDIAN);
+
+            for (int j = 0; j < 4; j++) {
+                var v1 = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j, ByteOrder.LITTLE_ENDIAN);
+                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+                dotProdVec = v1.fma(v2, dotProdVec);
+            }
+        }
+
+        float dotProd = dotProdVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2;
+        for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
+            value2 = logisticScale * value2 + logisticBias;
+            value2 = logit(value2, scaledAlpha, scaledX0);
+            dotProd += vector.get(i) * value2;
+        }
+
         return dotProd;
     }
 
-    static float[] nvqCosine8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector, float scale, float bias, float a, float b, MemorySegmentVectorFloat centroid) {
-        MemorySegmentVectorFloat dequantizedVector = nvqDequantize8bit(quantizedVector, vector.length(), a, b, scale, bias);
-        addInPlace(dequantizedVector, centroid);
+    static float[] nvqCosine8bit(MemorySegmentVectorFloat vector, MemorySegmentByteSequence quantizedVector,
+                                 float alpha, float x0, float minValue, float maxValue,
+                                 MemorySegmentVectorFloat centroid) {
+        if (vector.length() != centroid.length()) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
         var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var va = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            var vb = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, dequantizedVector.get(), i, ByteOrder.LITTLE_ENDIAN);
-            vsum = va.fma(vb, vsum);
-            vbMagnitude = vb.fma(vb, vbMagnitude);
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(vector.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i, ByteOrder.LITTLE_ENDIAN);
+
+            for (int j = 0; j < 4; j++) {
+                var va = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j, ByteOrder.LITTLE_ENDIAN);
+                var vb = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+
+                var vCentroid = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, centroid.get(), i + floatStep * j, ByteOrder.LITTLE_ENDIAN);
+                vb = vb.add(vCentroid);
+
+                vsum = va.fma(vb, vsum);
+                vbMagnitude = vb.fma(vb, vbMagnitude);
+            }
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
         float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
 
         // Process the tail
+        float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
-            sum += vector.get(i) * dequantizedVector.get(i);
-            bMagnitude += dequantizedVector.get(i) * dequantizedVector.get(i);
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
+            value2 = logisticScale * value2 + logisticBias;
+            value2 = logit(value2, scaledAlpha, scaledX0) + centroid.get(i);
+            sum += vector.get(i) * value2;
+            bMagnitude += value2 * value2;
         }
 
+        // TODO can we avoid returning a new array?
         return new float[]{sum, bMagnitude};
     }
 
-    static void nvqShuffleQueryInPlace8bit(MemorySegmentVectorFloat vector) {}
+    static void transpose(MemorySegmentVectorFloat arr, int first, int last, int nRows) {
+        final int mn1 = (last - first - 1);
+        final int n   = (last - first) / nRows;
+        boolean[] visited = new boolean[last - first];
+        float temp;
+        int cycle = first;
+        while (++cycle != last) {
+            if (visited[cycle - first])
+                continue;
+            int a = cycle - first;
+            do  {
+                a = a == mn1 ? mn1 : (n * a) % mn1;
+                temp = arr.get(first + a);
+                arr.set(first + a, arr.get(cycle));
+                arr.set(cycle, temp);
+                visited[a] = true;
+            } while ((first + a) != cycle);
+        }
+    }
+
+    static void nvqShuffleQueryInPlace8bit(MemorySegmentVectorFloat vector) {
+        // To understand this shuffle, see nvqDequantize8bit
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        final int step = FloatVector.SPECIES_PREFERRED.length() * 4;
+
+        for (int i = 0; i + step <= vectorizedLength; i += step) {
+            transpose(vector, i, i + step, 4);
+        }
+    }
 
     //---------------------------------------------
     // NVQ quantization instructions end here
