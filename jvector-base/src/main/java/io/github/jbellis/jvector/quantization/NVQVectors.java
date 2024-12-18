@@ -34,13 +34,9 @@ public class NVQVectors implements CompressedVectors {
     final NVQuantization.QuantizedVector[] compressedVectors;
 
     /**
-     * Initialize the PQVectors with an initial List of vectors.  This list may be
+     * Initialize the NVQVectors with an initial array of vectors.  This array may be
      * mutated, but caller is responsible for thread safety issues when doing so.
      */
-    public NVQVectors(NVQuantization nvq, List<NVQuantization.QuantizedVector> compressedVectors) {
-        this(nvq, compressedVectors.toArray(new NVQuantization.QuantizedVector[0]));
-    }
-
     public NVQVectors(NVQuantization nvq, NVQuantization.QuantizedVector[] compressedVectors) {
         this.nvq = nvq;
         this.scorer = new NVQScorer(nvq);
@@ -55,7 +51,7 @@ public class NVQVectors implements CompressedVectors {
     @Override
     public void write(DataOutput out, int version) throws IOException
     {
-        // pq codebooks
+        // serialization version
         nvq.write(out, version);
 
         // compressed vectors
@@ -66,7 +62,6 @@ public class NVQVectors implements CompressedVectors {
     }
 
     public static NVQVectors load(RandomAccessReader in) throws IOException {
-        // pq codebooks
         var nvq = NVQuantization.load(in);
 
         // read the vectors
