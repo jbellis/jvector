@@ -41,7 +41,7 @@ public class distancesNVQ {
 
         vectors = vectors.subList(0, nVectors);
 
-        System.out.format("%d base and %d query vectors loaded, dimensions %d%n",
+        System.out.format("\t%d base and %d query vectors loaded, dimensions %d%n",
                 vectors.size(), queries.size(), vectors.get(0).length());
 
         // Generate a NVQ for random vectors
@@ -71,8 +71,8 @@ public class distancesNVQ {
         }
         distanceError /= nQueries * nVectors;
 
-        System.out.println(vsf + " error " + distanceError);
-        System.out.println("--");
+        System.out.println("\t" + vsf + " error " + distanceError);
+
 
         float dummyAccumulator = 0;
 
@@ -108,28 +108,37 @@ public class distancesNVQ {
         duration = (double) (endTime - startTime) / 1_000_000_000;
         System.out.println("\tFloat Distance computations took " + duration + " seconds");
 
-        System.out.println("dummyAccumulator: " + dummyAccumulator);
+        System.out.println("\tdummyAccumulator: " + dummyAccumulator);
+        System.out.println("--");
     }
 
     public static void runSIFT() throws IOException {
+        System.out.println("Running siftsmall");
+
         var baseVectors = "siftsmall/siftsmall_base.fvecs";
         var queryVectors = "siftsmall/siftsmall_query.fvecs";
         testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.COSINE);
     }
 
     public static void runADA() throws IOException {
+        System.out.println("Running ada_002");
+
         var baseVectors = "./fvec/wikipedia_squad/100k/ada_002_100000_base_vectors.fvec";
         var queryVectors = "./fvec/wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec";
         testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.COSINE);
     }
 
     public static void runColbert() throws IOException {
+        System.out.println("Running colbertv2");
+
         var baseVectors = "./fvec/wikipedia_squad/1M/colbertv2.0_128_base_vectors_1000000.fvec";
         var queryVectors = "./fvec/wikipedia_squad/1M/colbertv2.0_128_query_vectors_100000.fvec";
         testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.COSINE);
     }
 
     public static void runOpenai3072() throws IOException {
+        System.out.println("Running text-embedding-3-large_3072");
+
         var baseVectors = "./fvec/wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec";
         var queryVectors = "./fvec/wikipedia_squad/100k/text-embedding-3-large_3072_100000_base_vectors.fvec";
         testNVQEncodings(baseVectors, queryVectors, VectorSimilarityFunction.COSINE);
