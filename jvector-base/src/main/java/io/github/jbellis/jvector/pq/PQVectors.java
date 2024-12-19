@@ -34,6 +34,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 
+import static java.lang.Math.max;
+
 public class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
@@ -270,6 +272,10 @@ public class PQVectors implements CompressedVectors {
 
     /**
      * Encode the given vector and set it at the given ordinal. Done without unnecessary copying.
+     *
+     * It's the caller's responsibility to ensure there are no "holes" in the ordinals that are
+     * neither encoded nor set to zero.
+     *
      * @param ordinal the ordinal to set
      * @param vector the vector to encode and set
      */
@@ -278,12 +284,16 @@ public class PQVectors implements CompressedVectors {
         if (!mutable)
             throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
 
-        vectorCount++;
+        vectorCount = max(vectorCount, ordinal + 1);
         pq.encodeTo(vector, get(ordinal));
     }
 
     /**
      * Set the vector at the given ordinal to zero.
+     *
+     * It's the caller's responsibility to ensure there are no "holes" in the ordinals that are
+     * neither encoded nor set to zero.
+     *
      * @param ordinal the ordinal to set
      */
     public void setZero(int ordinal)
@@ -291,7 +301,7 @@ public class PQVectors implements CompressedVectors {
         if (!mutable)
             throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
 
-        vectorCount++;
+        vectorCount = max(vectorCount, ordinal + 1);
         get(ordinal).zero();
     }
 
