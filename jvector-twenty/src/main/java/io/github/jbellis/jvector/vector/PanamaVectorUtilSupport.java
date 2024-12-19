@@ -206,28 +206,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float minValue, float maxValue) {
-        var res = new ArrayVectorFloat(new float[originalDimensions]);
-
-        var logisticBias = SimdOps.logistic(0, alpha, x0);
-        var logisticScale = SimdOps.logistic(1, alpha, x0) - logisticBias;
-
-        SimdOps.nvqDequantize8bit((ArrayByteSequence) bytes,  alpha, x0, logisticScale, logisticBias, res);
-        return res;
-    }
-
-    @Override
-    public void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> destination) {
-        var logisticBias = SimdOps.logistic(minValue, alpha, x0);
-        var logisticScale = SimdOps.logistic(maxValue, alpha, x0) - logisticBias;
-
-        SimdOps. nvqDequantize8bit(
-                (ArrayByteSequence) bytes,  alpha, x0, logisticScale, logisticBias,
-                (ArrayVectorFloat) destination
-        );
-    }
-
-    @Override
     public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
         SimdOps.nvqQuantize8bit((ArrayVectorFloat) vector, alpha, x0, minValue, maxValue,(ArrayByteSequence) destination);
     }

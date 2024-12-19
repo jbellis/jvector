@@ -567,20 +567,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
 
         /**
-         * Returns a dequantized subvector. Since the quantization process is lossy, this subvector will only be an
-         * approximation of the origingal subvector used to build this QuantizedSubVector
-         * @return the reconstructed subvector
-         */
-        public VectorFloat<?> getDequantized() {
-            switch (bitsPerDimension) {
-                case EIGHT:
-                    return VectorUtil.nvqDequantize8bit(bytes, this.originalDimensions, growthRate, midpoint, minValue, maxValue);
-                default:
-                    throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
-            }
-        }
-
-        /**
          * Write the instance to a DataOutput
          * @param out the DataOutput
          * @throws IOException fails if we cannot write to the DataOutput

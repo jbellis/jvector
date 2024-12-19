@@ -212,28 +212,6 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
-    public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
-        var res = new MemorySegmentVectorFloat(new float[originalDimensions]);
-
-        var logisticBias = VectorSimdOps.logistic(0, growthRate, midpoint);
-        var logisticScale = VectorSimdOps.logistic(1, growthRate, midpoint) - logisticBias;
-
-        VectorSimdOps.nvqDequantize8bit((MemorySegmentByteSequence) bytes, growthRate, midpoint, logisticScale, logisticBias, res);
-        return res;
-    }
-
-    @Override
-    public void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
-        var logisticBias = VectorSimdOps.logistic(minValue, growthRate, midpoint);
-        var logisticScale = VectorSimdOps.logistic(maxValue, growthRate, midpoint) - logisticBias;
-
-        VectorSimdOps. nvqDequantize8bit(
-                (MemorySegmentByteSequence) bytes, growthRate, midpoint, logisticScale, logisticBias,
-                (MemorySegmentVectorFloat) destination
-        );
-    }
-
-    @Override
     public void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
         VectorSimdOps.nvqQuantize8bit((MemorySegmentVectorFloat) vector, growthRate, midpoint, minValue, maxValue, (MemorySegmentByteSequence) destination);
     }

@@ -743,30 +743,6 @@ final class VectorSimdOps {
         return logit(arr, inverseAlpha, x0);
     }
 
-    static void nvqDequantize8bit(MemorySegmentByteSequence bytes, float alpha, float x0, float logisticScale, float logisticBias, MemorySegmentVectorFloat destination) {
-        var resArr = destination.get();
-
-        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(bytes.length());
-        int floatStep = FloatVector.SPECIES_PREFERRED.length();
-
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
-            var byteArr = ByteVector.fromMemorySegment(ByteVector.SPECIES_PREFERRED, bytes.get(), i, ByteOrder.LITTLE_ENDIAN);
-
-            for (int j = 0; j < 4; j++) {
-                var arr = nvqDequantize8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
-                arr.intoMemorySegment(resArr, i + floatStep * j, ByteOrder.LITTLE_ENDIAN);
-            }
-        }
-
-        // Process the tail
-        float value;
-        for (int i = vectorizedLength; i < bytes.length(); i++) {
-            value = bytes.get(i);
-            value = logit(value / 255.f, alpha, x0);
-            destination.set(i, (byte) value);
-        }
-    }
-
     static void nvqQuantize8bit(MemorySegmentVectorFloat vector, float alpha, float x0, float minValue, float maxValue, MemorySegmentByteSequence destination) {
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
         final var mask = ByteVector.SPECIES_PREFERRED.indexInRange(0, FloatVector.SPECIES_PREFERRED.length());
@@ -838,7 +814,7 @@ final class VectorSimdOps {
             recValue = logistic(value, scaledAlpha, scaledX0);
             recValue = (recValue - logisticBias) * invLogisticScale;
             recValue = Math.round(recValue);
-            recValue = logisticScale * recValue + logisticBias;
+            recValue = Math.fma(logisticScale, recValue, logisticBias);
             recValue = logit(recValue, scaledAlpha, scaledX0);
 
             squaredSum += MathUtil.square(value - recValue);
@@ -916,7 +892,7 @@ final class VectorSimdOps {
         float value2, diff;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
             value2 = logit(value2, scaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
             squaredSum += MathUtil.square(diff);
@@ -957,9 +933,9 @@ final class VectorSimdOps {
         float value2;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
             value2 = logit(value2, scaledAlpha, scaledX0);
-            dotProd += vector.get(i) * value2;
+            dotProd = Math.fma(vector.get(i), value2, dotProd);
         }
 
         return dotProd;
@@ -1007,10 +983,10 @@ final class VectorSimdOps {
         float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
             value2 = logit(value2, scaledAlpha, scaledX0) + centroid.get(i);
-            sum += vector.get(i) * value2;
-            bMagnitude += value2 * value2;
+            sum = Math.fma(vector.get(i), value2, sum);
+            bMagnitude = Math.fma(value2, value2, bMagnitude);
         }
 
         // TODO can we avoid returning a new array?

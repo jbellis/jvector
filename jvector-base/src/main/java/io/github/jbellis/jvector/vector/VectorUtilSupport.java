@@ -271,28 +271,6 @@ public interface VectorUtilSupport {
   void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector);
 
   /**
-   * Dequantize an 8-bit quntized subvector.
-   * @param bytes The byte sequence where the quantized vector is stored.
-   * @param growthRate The growth rate of the logistic function
-   * @param midpoint the midpoint of the logistic function
-   * @param minValue The minimum value of the subvector
-   * @param maxValue The maximum value of the subvector
-   * @return the reconstructed vector
-   */
-  VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue);
-
-  /**
-   * Dequantize an 8-bit quantized subvector into destination
-   * @param bytes The byte sequence where the quantized vector is stored.
-   * @param growthRate The growth rate of the logistic function
-   * @param midpoint the midpoint of the logistic function
-   * @param minValue The minimum value of the subvector
-   * @param maxValue The maximum value of the subvector
-   * @param destination The vector where the reconstructed values are stored
-   */
-  void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination);
-
-  /**
    * Quantize a subvector as an 8-bit quantized subvector.
    * All values of the vector must be in [0, 1]. For example, the input vector has been
    * normalized by subtracting the bias and dividing by the scale.

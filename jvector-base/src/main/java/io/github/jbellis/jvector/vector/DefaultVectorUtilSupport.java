@@ -464,31 +464,6 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
-  public VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float growthRate, float midpoint, float minValue, float maxValue) {
-    VectorFloat<?> vec = new ArrayVectorFloat(originalDimensions);
-    nvqDequantize8bit(bytes, growthRate, midpoint, minValue, maxValue, vec);
-    return vec;
-  }
-
-  @Override
-  public void nvqDequantize8bit(ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> destination) {
-    var delta = maxValue - minValue;
-    var scaledGrowthRate = growthRate / delta;
-    var scaledMidpoint = midpoint * delta;
-    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
-
-
-    float value;
-    for (int d = 0; d < bytes.length(); d++) {
-      value = Byte.toUnsignedInt(bytes.get(d));
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
-      destination.set(d, value);
-    }
-  }
-
-  @Override
   public void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
     var delta = maxValue - minValue;
     var scaledGrowthRate = growthRate / delta;

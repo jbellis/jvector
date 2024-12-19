@@ -227,14 +227,6 @@ public final class VectorUtil {
     impl.nvqShuffleQueryInPlace8bit(vector);
   }
 
-  public static VectorFloat<?> nvqDequantize8bit(ByteSequence<?> bytes, int originalDimensions, float alpha, float x0, float minValue, float maxValue) {
-    return impl.nvqDequantize8bit(bytes, originalDimensions, alpha, x0, minValue, maxValue);
-  }
-
-  public static void nvqDequantize8bit(ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> destination) {
-    impl.nvqDequantize8bit(bytes, alpha, x0, minValue, maxValue, destination);
-  }
-
   public static void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
     impl.nvqQuantize8bit(vector, growthRate, midpoint, minValue, maxValue, destination);
   }

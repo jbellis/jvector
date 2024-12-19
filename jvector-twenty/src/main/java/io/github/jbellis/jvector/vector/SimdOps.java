@@ -885,9 +885,9 @@ final class SimdOps {
         return fastLog(temp).fma(inverseAlpha, x0);
     }
 
-    static float logit(float value, float alpha, float x0) {
+    static float logit(float value, float inverseAlpha, float x0) {
         var temp = value / (1 - value);
-        return MathUtil.fastLog(temp) / alpha + x0;
+        return Math.fma(MathUtil.fastLog(temp), inverseAlpha, x0);
     }
 
     static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
@@ -899,29 +899,6 @@ final class SimdOps {
 
         arr = arr.fma(logisticScale, logisticBias);
         return logit(arr, inverseAlpha, x0);
-    }
-
-    static void nvqDequantize8bit(ArrayByteSequence bytes, float alpha, float x0, float logisticScale, float logisticBias, ArrayVectorFloat destination) {
-        var resArr = destination.get();
-
-        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(bytes.length());
-        int floatStep = FloatVector.SPECIES_PREFERRED.length();
-
-        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
-            var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, bytes.get(), i);
-
-            for (int j = 0; j < 4; j++) {
-                var arr = nvqDequantize8bit(byteArr, alpha, x0, logisticScale, logisticBias, j);
-                arr.intoArray(resArr, i + floatStep * j);
-            }
-        }
-
-        // Process the tail
-        float value;
-        for (int i = vectorizedLength; i < bytes.length(); i++) {
-            value = bytes.get(i);
-            resArr[i] = logit(value / 255.f, alpha, x0);
-        }
     }
 
     static void nvqQuantize8bit(ArrayVectorFloat vector, float alpha, float x0, float minValue, float maxValue, ArrayByteSequence destination) {
@@ -995,8 +972,8 @@ final class SimdOps {
             recValue = logistic(value, scaledAlpha, scaledX0);
             recValue = (recValue - logisticBias) * invLogisticScale;
             recValue = Math.round(recValue);
-            recValue = logisticScale * recValue + logisticBias;
-            recValue = logit(recValue, scaledAlpha, scaledX0);
+            recValue = Math.fma(logisticScale, recValue, logisticBias);
+            recValue = logit(recValue, invScaledAlpha, scaledX0);
 
             squaredSum += MathUtil.square(value - recValue);
         }
@@ -1074,7 +1051,7 @@ final class SimdOps {
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = logisticScale * value2 + logisticBias;
-            value2 = logit(value2, scaledAlpha, scaledX0);
+            value2 = logit(value2, invScaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
             squaredSum += MathUtil.square(diff);
         }
@@ -1113,9 +1090,9 @@ final class SimdOps {
         float value2;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
-            value2 = logit(value2, scaledAlpha, scaledX0);
-            dotProd += vector.get(i) * value2;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
+            value2 = logit(value2, invScaledAlpha, scaledX0);
+            dotProd = Math.fma(vector.get(i), value2, dotProd);
         }
 
         return dotProd;
@@ -1163,10 +1140,10 @@ final class SimdOps {
         float value2;
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
-            value2 = logit(value2, scaledAlpha, scaledX0) + centroid.get(i);
-            sum += vector.get(i) * value2;
-            bMagnitude += value2 * value2;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
+            value2 = logit(value2, invScaledAlpha, scaledX0) + centroid.get(i);
+            sum = Math.fma(vector.get(i), value2, sum);
+            bMagnitude = Math.fma(value2, value2, bMagnitude);
         }
 
         // TODO can we avoid returning a new array?
