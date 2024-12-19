@@ -34,63 +34,101 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 
-import static java.lang.Math.max;
-
-public class PQVectors implements CompressedVectors {
+public abstract class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
+    
     final ProductQuantization pq;
-    private final ByteSequence<?>[] compressedDataChunks;
-    private int vectorCount;
-    private final int vectorsPerChunk;
-    private final boolean mutable;
+    protected ByteSequence<?>[] compressedDataChunks;
+    protected int vectorCount;
+    protected int vectorsPerChunk;
 
-    /**
-     * Construct a PQVectors instance with the given ProductQuantization and maximum number of vectors that will be
-     * stored in this instance. The vectors are split into chunks to avoid exceeding the maximum array size.
-     * The instance is mutable and is not thread-safe.
-     * @param pq the ProductQuantization to use
-     * @param maximumVectorCount the maximum number of vectors that will be stored in this instance
-     */
-    public PQVectors(ProductQuantization pq, int maximumVectorCount)
-    {
+    protected PQVectors(ProductQuantization pq) {
         this.pq = pq;
-        this.mutable = true;
-        this.vectorCount = 0;
+    }
+
+    public static ImmutablePQVectors load(RandomAccessReader in) throws IOException {
+        // pq codebooks
+        var pq = ProductQuantization.load(in);
+
+        // read the vectors
+        int vectorCount = in.readInt();
+        if (vectorCount < 0) {
+            throw new IOException("Invalid compressed vector count " + vectorCount);
+        }
+
+        int compressedDimension = in.readInt();
+        if (compressedDimension < 0) {
+            throw new IOException("Invalid compressed vector dimension " + compressedDimension);
+        }
 
         // Calculate if we need to split into multiple chunks
-        int compressedDimension = pq.compressedVectorSize();
-        long totalSize = (long) maximumVectorCount * compressedDimension;
-        this.vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? maximumVectorCount : MAX_CHUNK_SIZE / compressedDimension;
+        long totalSize = (long) vectorCount * compressedDimension;
+        int vectorsPerChunk = totalSize <= PQVectors.MAX_CHUNK_SIZE ? vectorCount : PQVectors.MAX_CHUNK_SIZE / compressedDimension;
 
-        int numChunks = maximumVectorCount / vectorsPerChunk;
+        int numChunks = vectorCount / vectorsPerChunk;
         ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
+
+        for (int i = 0; i < numChunks - 1; i++) {
+            int chunkSize = vectorsPerChunk * compressedDimension;
+            chunks[i] = vectorTypeSupport.readByteSequence(in, chunkSize);
+        }
+
+        // Last chunk might be smaller
+        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
+        chunks[numChunks - 1] = vectorTypeSupport.readByteSequence(in, remainingVectors * compressedDimension);
+
+        return new ImmutablePQVectors(pq, chunks, vectorCount, vectorsPerChunk);
+    }
+
+    public static PQVectors load(RandomAccessReader in, long offset) throws IOException {
+        in.seek(offset);
+        return load(in);
+    }
+
+    /**
+     * Build a PQVectors instance from the given RandomAccessVectorValues. The vectors are encoded in parallel
+     * and split into chunks to avoid exceeding the maximum array size.
+     *
+     * @param pq           the ProductQuantization to use
+     * @param vectorCount  the number of vectors to encode
+     * @param ravv         the RandomAccessVectorValues to encode
+     * @param simdExecutor the ForkJoinPool to use for SIMD operations
+     * @return the PQVectors instance
+     */
+    public static ImmutablePQVectors encodeAndBuild(ProductQuantization pq, int vectorCount, RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        // Calculate if we need to split into multiple chunks
+        int compressedDimension = pq.compressedVectorSize();
+        long totalSize = (long) vectorCount * compressedDimension;
+        int vectorsPerChunk = totalSize <= PQVectors.MAX_CHUNK_SIZE ? vectorCount : PQVectors.MAX_CHUNK_SIZE / compressedDimension;
+
+        int numChunks = vectorCount / vectorsPerChunk;
+        final ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
         int chunkSize = vectorsPerChunk * compressedDimension;
         for (int i = 0; i < numChunks - 1; i++)
             chunks[i] = vectorTypeSupport.createByteSequence(chunkSize);
 
         // Last chunk might be smaller
-        int remainingVectors = maximumVectorCount - (vectorsPerChunk * (numChunks - 1));
+        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
         chunks[numChunks - 1] = vectorTypeSupport.createByteSequence(remainingVectors * compressedDimension);
 
-        compressedDataChunks = chunks;
-    }
+        // Encode the vectors in parallel into the compressed data chunks
+        // The changes are concurrent, but because they are coordinated and do not overlap, we can use parallel streams
+        // and then we are guaranteed safe publication because we join the thread after completion.
+        simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+                        .parallel()
+                        .forEach(ordinal -> {
+                            // Retrieve the slice and mutate it.
+                            var slice = PQVectors.get(chunks, ordinal, vectorsPerChunk, pq.getSubspaceCount());
+                            var vector = ravv.getVector(ordinal);
+                            if (vector != null)
+                                pq.encodeTo(vector, slice);
+                            else
+                                slice.zero();
+                        }))
+                .join();
 
-    /**
-     * Construct a PQVectors instance with the given ProductQuantization and compressed data chunks. The instance is
-     * immutable and thread-safe, though the underlying vectors may be mutable.
-     * @param pq the ProductQuantization to use
-     * @param compressedDataChunks the compressed data chunks
-     * @param vectorCount the number of vectors
-     * @param vectorsPerChunk the number of vectors per chunk
-     */
-    public PQVectors(ProductQuantization pq, ByteSequence<?>[] compressedDataChunks, int vectorCount, int vectorsPerChunk)
-    {
-        this.pq = pq;
-        this.mutable = false;
-        this.compressedDataChunks = compressedDataChunks;
-        this.vectorCount = vectorCount;
-        this.vectorsPerChunk = vectorsPerChunk;
+        return new ImmutablePQVectors(pq, chunks, vectorCount, vectorsPerChunk);
     }
 
     @Override
@@ -110,45 +148,6 @@ public class PQVectors implements CompressedVectors {
         for (ByteSequence<?> chunk : compressedDataChunks) {
             vectorTypeSupport.writeByteSequence(out, chunk);
         }
-    }
-
-    public static PQVectors load(RandomAccessReader in) throws IOException {
-        // pq codebooks
-        var pq = ProductQuantization.load(in);
-
-        // read the vectors
-        int vectorCount = in.readInt();
-        if (vectorCount < 0) {
-            throw new IOException("Invalid compressed vector count " + vectorCount);
-        }
-
-        int compressedDimension = in.readInt();
-        if (compressedDimension < 0) {
-            throw new IOException("Invalid compressed vector dimension " + compressedDimension);
-        }
-
-        // Calculate if we need to split into multiple chunks
-        long totalSize = (long) vectorCount * compressedDimension;
-        int vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? vectorCount : MAX_CHUNK_SIZE / compressedDimension;
-
-        int numChunks = vectorCount / vectorsPerChunk;
-        ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
-
-        for (int i = 0; i < numChunks - 1; i++) {
-            int chunkSize = vectorsPerChunk * compressedDimension;
-            chunks[i] = vectorTypeSupport.readByteSequence(in, chunkSize);
-        }
-
-        // Last chunk might be smaller
-        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
-        chunks[numChunks - 1] = vectorTypeSupport.readByteSequence(in, remainingVectors * compressedDimension);
-
-        return new PQVectors(pq, chunks, vectorCount, vectorsPerChunk);
-    }
-
-    public static PQVectors load(RandomAccessReader in, long offset) throws IOException {
-        in.seek(offset);
-        return load(in);
     }
 
     /**
@@ -263,51 +262,13 @@ public class PQVectors implements CompressedVectors {
         return get(compressedDataChunks, ordinal, vectorsPerChunk, pq.getSubspaceCount());
     }
 
-    private static ByteSequence<?> get(ByteSequence<?>[] chunks, int ordinal, int vectorsPerChunk, int subspaceCount) {
+    static ByteSequence<?> get(ByteSequence<?>[] chunks, int ordinal, int vectorsPerChunk, int subspaceCount) {
         int chunkIndex = ordinal / vectorsPerChunk;
         int vectorIndexInChunk = ordinal % vectorsPerChunk;
         int start = vectorIndexInChunk * subspaceCount;
         return chunks[chunkIndex].slice(start, subspaceCount);
     }
 
-    /**
-     * Encode the given vector and set it at the given ordinal. Done without unnecessary copying.
-     *
-     * It's the caller's responsibility to ensure there are no "holes" in the ordinals that are
-     * neither encoded nor set to zero.
-     *
-     * @param ordinal the ordinal to set
-     * @param vector the vector to encode and set
-     */
-    public void encodeAndSet(int ordinal, VectorFloat<?> vector)
-    {
-        if (!mutable)
-            throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
-
-        vectorCount = max(vectorCount, ordinal + 1);
-        pq.encodeTo(vector, get(ordinal));
-    }
-
-    /**
-     * Set the vector at the given ordinal to zero.
-     *
-     * It's the caller's responsibility to ensure there are no "holes" in the ordinals that are
-     * neither encoded nor set to zero.
-     *
-     * @param ordinal the ordinal to set
-     */
-    public void setZero(int ordinal)
-    {
-        if (!mutable)
-            throw new UnsupportedOperationException("Cannot set values on an immutable PQVectors instance");
-
-        vectorCount = max(vectorCount, ordinal + 1);
-        get(ordinal).zero();
-    }
-
-    public ProductQuantization getProductQuantization() {
-        return pq;
-    }
 
     VectorFloat<?> reusablePartialSums() {
         return pq.reusablePartialSums();
@@ -355,48 +316,4 @@ public class PQVectors implements CompressedVectors {
                 '}';
     }
 
-    /**
-     * Build a PQVectors instance from the given RandomAccessVectorValues. The vectors are encoded in parallel
-     * and split into chunks to avoid exceeding the maximum array size.
-     * @param pq the ProductQuantization to use
-     * @param vectorCount the number of vectors to encode
-     * @param ravv the RandomAccessVectorValues to encode
-     * @param simdExecutor the ForkJoinPool to use for SIMD operations
-     * @return the PQVectors instance
-     */
-    public static PQVectors encodeAndBuild(ProductQuantization pq, int vectorCount, RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-
-        // Calculate if we need to split into multiple chunks
-        int compressedDimension = pq.compressedVectorSize();
-        long totalSize = (long) vectorCount * compressedDimension;
-        int vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? vectorCount : MAX_CHUNK_SIZE / compressedDimension;
-
-        int numChunks = vectorCount / vectorsPerChunk;
-        final ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
-        int chunkSize = vectorsPerChunk * compressedDimension;
-        for (int i = 0; i < numChunks - 1; i++)
-            chunks[i] = vectorTypeSupport.createByteSequence(chunkSize);
-
-        // Last chunk might be smaller
-        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
-        chunks[numChunks - 1] = vectorTypeSupport.createByteSequence(remainingVectors * compressedDimension);
-
-        // Encode the vectors in parallel into the compressed data chunks
-        // The changes are concurrent, but because they are coordinated and do not overlap, we can use parallel streams
-        // and then we are guaranteed safe publication because we join the thread after completion.
-        simdExecutor.submit(() -> IntStream.range(0, ravv.size())
-                        .parallel()
-                        .forEach(ordinal -> {
-                            // Retrieve the slice and mutate it.
-                            var slice = get(chunks, ordinal, vectorsPerChunk, pq.getSubspaceCount());
-                            var vector = ravv.getVector(ordinal);
-                            if (vector != null)
-                                pq.encodeTo(vector, slice);
-                            else
-                                slice.zero();
-                        }))
-                .join();
-
-        return new PQVectors(pq, chunks, vectorCount, vectorsPerChunk);
-    }
 }

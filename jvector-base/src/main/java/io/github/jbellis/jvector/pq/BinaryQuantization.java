@@ -59,7 +59,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
 
     @Override
     public CompressedVectors createCompressedVectors(Object[] compressedVectors) {
-        return new BQVectors(this, (long[][]) compressedVectors);
+        return new ImmutableBQVectors(this, (long[][]) compressedVectors);
     }
 
     @Override
@@ -74,7 +74,7 @@ public class BinaryQuantization implements VectorCompressor<long[]> {
                 })
                 .toArray(long[][]::new))
                 .join();
-        return new BQVectors(this, cv);
+        return new ImmutableBQVectors(this, cv);
     }
 
     /**

@@ -28,18 +28,18 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
 
-public class BQVectors implements CompressedVectors {
-    private final BinaryQuantization bq;
-    private final long[][] compressedVectors;
+public abstract class BQVectors implements CompressedVectors {
+    protected final BinaryQuantization bq;
+    protected long[][] compressedVectors;
+    protected int vectorCount;
 
-    public BQVectors(BinaryQuantization bq, long[][] compressedVectors) {
+    protected BQVectors(BinaryQuantization bq) {
         this.bq = bq;
-        this.compressedVectors = compressedVectors;
     }
 
     @Override
     public int count() {
-        return compressedVectors.length;
+        return vectorCount;
     }
 
     @Override
@@ -73,7 +73,7 @@ public class BQVectors implements CompressedVectors {
         }
         var compressedVectors = new long[size][];
         if (size == 0) {
-            return new BQVectors(bq, compressedVectors);
+            return new ImmutableBQVectors(bq, compressedVectors);
         }
         int compressedLength = in.readInt();
         if (compressedLength < 0) {
@@ -88,7 +88,7 @@ public class BQVectors implements CompressedVectors {
             compressedVectors[i] = vector;
         }
 
-        return new BQVectors(bq, compressedVectors);
+        return new ImmutableBQVectors(bq, compressedVectors);
     }
 
     @Override
