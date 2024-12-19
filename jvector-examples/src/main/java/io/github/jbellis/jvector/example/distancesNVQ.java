@@ -50,12 +50,10 @@ public class distancesNVQ {
 
         // Compress the vectors
         long startTime = System.nanoTime();
-        var compressed = nvq.encodeAll(ravv);
+        var nvqVecs = nvq.encodeAll(ravv);
         long endTime = System.nanoTime();
         double duration = (double) (endTime - startTime) / 1_000_000_000;
         System.out.println("\tEncoding took " + duration + " seconds");
-
-        var nvqVecs = new NVQVectors(nvq, compressed);
 
         // compare the encoded similarities to the raw
         double distanceError = 0;

@@ -111,8 +111,7 @@ public class TestCompressedVectors extends RandomizedTest {
             var nvq = NVQuantization.compute(ravv, nSubvectors);
 
             // Compress the vectors
-            var compressed = nvq.encodeAll(ravv);
-            var cv = new NVQVectors(nvq, compressed);
+            var cv = nvq.encodeAll(ravv);
             assertEquals(nDimensions * Float.BYTES, cv.getOriginalSize());
             assertEquals(expectedSize, cv.getCompressedSize());
 
@@ -181,8 +180,7 @@ public class TestCompressedVectors extends RandomizedTest {
         nvq.learn = learn;
 
         // Compress the vectors
-        var compressed = nvq.encodeAll(ravv);
-        var cv = new NVQVectors(nvq, compressed);
+        var cv = nvq.encodeAll(ravv);
 
         // compare the encoded similarities to the raw
         for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {

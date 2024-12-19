@@ -173,12 +173,13 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * Encodes the given vectors in parallel using NVQ.
      */
     @Override
-    public QuantizedVector[] encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        return simdExecutor.submit(() -> IntStream.range(0, ravv.size())
-                        .parallel()
-                        .mapToObj(i -> encode(ravv.getVector(i)))
-                        .toArray(QuantizedVector[]::new))
-                .join();
+    public NVQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+        return new NVQVectors(this,
+                simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+                                .parallel()
+                                .mapToObj(i -> encode(ravv.getVector(i)))
+                                .toArray(QuantizedVector[]::new))
+                        .join());
     }
 
     /**
@@ -187,8 +188,17 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     @Override
     public QuantizedVector encode(VectorFloat<?> vector) {
-        vector = VectorUtil.sub(vector, globalMean);
-        return new QuantizedVector(getSubVectors(vector), bitsPerDimension, learn);
+        var tempVector = VectorUtil.sub(vector, globalMean);
+        return new QuantizedVector(getSubVectors(tempVector), bitsPerDimension, learn);
+    }
+
+    /**
+     * Encodes the input vector using NVQ.
+     * @return one subvector per subspace
+     */
+    @Override
+    public void encodeTo(VectorFloat<?> v, NVQuantization.QuantizedVector dest) {
+
     }
 
     /**
