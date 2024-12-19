@@ -162,16 +162,23 @@ public class GraphIndexBuilder implements Closeable {
                              ForkJoinPool simdExecutor,
                              ForkJoinPool parallelExecutor)
     {
-        this.scoreProvider = scoreProvider;
-        this.dimension = dimension;
-        this.neighborOverflow = neighborOverflow;
-        this.alpha = alpha;
         if (M <= 0) {
             throw new IllegalArgumentException("maxConn must be positive");
         }
         if (beamWidth <= 0) {
             throw new IllegalArgumentException("beamWidth must be positive");
         }
+        if (neighborOverflow < 1.0f) {
+            throw new IllegalArgumentException("neighborOverflow must be >= 1.0");
+        }
+        if (alpha <= 0) {
+            throw new IllegalArgumentException("alpha must be positive");
+        }
+
+        this.scoreProvider = scoreProvider;
+        this.dimension = dimension;
+        this.neighborOverflow = neighborOverflow;
+        this.alpha = alpha;
         this.beamWidth = beamWidth;
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
@@ -205,7 +212,7 @@ public class GraphIndexBuilder implements Closeable {
             var sf = newProvider.searchProviderFor(i).scoreFunction();
             var newNeighbors = new NodeArray(neighbors.size());
             
-            // Copy neighbors with new scores
+            // Copy edges, compute new scores
             for (var it = neighbors.iterator(); it.hasNext(); ) {
                 int neighbor = it.nextInt();
                 // since we're using a different score provider, use insertSorted instead of addInOrder
