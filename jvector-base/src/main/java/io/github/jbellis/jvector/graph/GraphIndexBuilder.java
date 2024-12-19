@@ -185,6 +185,42 @@ public class GraphIndexBuilder implements Closeable {
         this.concurrentScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
     }
 
+    public static GraphIndexBuilder rescore(GraphIndexBuilder other, BuildScoreProvider newProvider) {
+        var newBuilder = new GraphIndexBuilder(newProvider,
+                                               other.dimension,
+                                               other.graph.maxDegree(),
+                                               other.beamWidth,
+                                               other.neighborOverflow,
+                                               other.alpha,
+                                               other.simdExecutor,
+                                               other.parallelExecutor);
+
+        // Copy each node and its neighbors from the old graph to the new one
+        for (int i = 0; i < other.graph.getIdUpperBound(); i++) {
+            if (!other.graph.containsNode(i)) {
+                continue;
+            }
+
+            var neighbors = other.graph.getNeighbors(i);
+            var sf = newProvider.searchProviderFor(i).scoreFunction();
+            var newNeighbors = new NodeArray(neighbors.size());
+            
+            // Copy neighbors with new scores
+            for (var it = neighbors.iterator(); it.hasNext(); ) {
+                int neighbor = it.nextInt();
+                // since we're using a different score provider, use insertSorted instead of addInOrder
+                newNeighbors.insertSorted(neighbor, sf.similarityTo(neighbor));
+            }
+            
+            newBuilder.graph.addNode(i, newNeighbors);
+        }
+
+        // Set the entry node
+        newBuilder.graph.updateEntryNode(other.graph.entry());
+        
+        return newBuilder;
+    }
+
     public OnHeapGraphIndex build(RandomAccessVectorValues ravv) {
         var vv = ravv.threadLocalSupplier();
         int size = ravv.size();
