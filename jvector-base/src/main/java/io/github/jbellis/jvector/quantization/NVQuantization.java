@@ -189,16 +189,18 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     @Override
     public QuantizedVector encode(VectorFloat<?> vector) {
         var tempVector = VectorUtil.sub(vector, globalMean);
-        return new QuantizedVector(getSubVectors(tempVector), bitsPerDimension, learn);
+        var qv = QuantizedVector.createEmpty(subvectorSizesAndOffsets, bitsPerDimension);
+        QuantizedVector.quantizeTo(getSubVectors(tempVector), bitsPerDimension, learn, qv);
+        return qv;
     }
 
     /**
-     * Encodes the input vector using NVQ.
-     * @return one subvector per subspace
+     * Encodes the input vector using NVQ into dest
      */
     @Override
     public void encodeTo(VectorFloat<?> v, NVQuantization.QuantizedVector dest) {
-
+        var tempVector = VectorUtil.sub(v, globalMean);
+        QuantizedVector.quantizeTo(getSubVectors(tempVector), bitsPerDimension, learn, dest);
     }
 
     /**
@@ -373,10 +375,9 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          * @param bitsPerDimension the number of bits per dimension
          * @param learn whether to use optimization to find the parameters of the nonlinearity
          */
-        public QuantizedVector(VectorFloat<?>[] subVectors, BitsPerDimension bitsPerDimension, boolean learn) {
-            this.subVectors = new QuantizedSubVector[subVectors.length];
+        public static void quantizeTo(VectorFloat<?>[] subVectors, BitsPerDimension bitsPerDimension, boolean learn, QuantizedVector dest) {
             for (int i = 0; i < subVectors.length; i++) {
-                this.subVectors[i] = new QuantizedSubVector(subVectors[i], bitsPerDimension, learn);
+                QuantizedSubVector.quantizeTo(subVectors[i], bitsPerDimension, learn, dest.subVectors[i]);
             }
         }
 
@@ -487,12 +488,13 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
 
         /**
-         * Class constructor.
+         * Quantize the vector using NVQ into dest
          * @param vector the subvector to quantize
          * @param bitsPerDimension the number of bits per dimension
          * @param learn whether to use optimization to find the parameters of the nonlinearity
+         * @param dest the destination subvector
          */
-        public QuantizedSubVector(VectorFloat<?> vector, BitsPerDimension bitsPerDimension, boolean learn) {
+        public static void quantizeTo(VectorFloat<?> vector, BitsPerDimension bitsPerDimension, boolean learn, QuantizedSubVector dest) {
             var minValue = VectorUtil.min(vector);
             var maxValue = VectorUtil.max(vector);
             
@@ -540,13 +542,13 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                     throw new IllegalArgumentException("Unsupported bits per dimension: " + bitsPerDimension);
             }
 
-            this.bitsPerDimension = bitsPerDimension;
-            this.minValue = minValue;
-            this.maxValue = maxValue;
-            this.growthRate = growthRate;
-            this.midpoint = midpoint;
-            this.bytes = quantized;
-            this.originalDimensions = vector.length();
+            dest.bitsPerDimension = bitsPerDimension;
+            dest.minValue = minValue;
+            dest.maxValue = maxValue;
+            dest.growthRate = growthRate;
+            dest.midpoint = midpoint;
+            dest.bytes = quantized;
+            dest.originalDimensions = vector.length();
         }
 
         /**
