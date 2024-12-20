@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph.similarity;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.pq.BQVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -178,4 +179,44 @@ public interface BuildScoreProvider {
         };
     }
 
+    static BuildScoreProvider bqBuildScoreProvider(BQVectors bqv) {
+        return new BuildScoreProvider() {
+            @Override
+            public boolean isExact() {
+                return false;
+            }
+
+            @Override
+            public VectorFloat<?> approximateCentroid() {
+                // centroid = zeros is actually a decent approximation
+                return vts.createFloatVector(bqv.getCompressor().getOriginalDimension());
+            }
+
+            @Override
+            public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
+                return new SearchScoreProvider(bqv.scoreFunctionFor(vector, null));
+            }
+
+            @Override
+            public SearchScoreProvider searchProviderFor(int node1) {
+                var encoded1 = bqv.get(node1);
+                return new SearchScoreProvider(new ScoreFunction() {
+                    @Override
+                    public boolean isExact() {
+                        return false;
+                    }
+
+                    @Override
+                    public float similarityTo(int node2) {
+                        return bqv.similarityBetween(encoded1, bqv.get(node2));
+                    }
+                });
+            }
+
+            @Override
+            public SearchScoreProvider diversityProviderFor(int node1) {
+                return searchProviderFor(node1);
+            }
+        };
+    }
 }
