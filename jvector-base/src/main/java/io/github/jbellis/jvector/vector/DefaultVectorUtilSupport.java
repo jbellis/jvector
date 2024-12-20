@@ -390,7 +390,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     float value;
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      value = scaledLogitFunctionNQT(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
 
       dotProd = Math.fma(vector.get(d), value, dotProd);
     }
@@ -412,7 +412,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
     for (int d = 0; d < bytes.length(); d++) {
       value = Byte.toUnsignedInt(bytes.get(d));
-      value = scaled_logit_function(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      value = scaledLogitFunctionNQT(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
 
       var temp = value - vector.get(d);
       squareSum = Math.fma(temp, temp, squareSum);
@@ -436,7 +436,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
     for (int d = 0; d < bytes.length(); d++) {
       elem2 = Byte.toUnsignedInt(bytes.get(d));
-      elem2 = scaled_logit_function(elem2, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      elem2 = scaledLogitFunctionNQT(elem2, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
       elem2 += centroid.get(d);
 
       sum = Math.fma(vector.get(d), elem2, sum);
@@ -473,7 +473,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     return (y - logisticBias) * (1 / logisticScale);
   }
 
-  static float scaled_logit_function(float value, float inverseGrowthRate, float midpoint, float logisticScale, float logisticBias) {
+  static float scaledLogitFunctionNQT(float value, float inverseGrowthRate, float midpoint, float logisticScale, float logisticBias) {
     var scaledValue = Math.fma(value, logisticScale, logisticBias);
 //    return Math.fma(MathUtil.fastLog(scaledValue / (1 - scaledValue)), inverseGrowthRate, midpoint);
     return logitNQT(scaledValue, inverseGrowthRate, midpoint);
@@ -515,7 +515,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
       reconstructedValue = scaled_logistic_function(originalValue, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
       reconstructedValue = Math.round(reconstructedValue);
-      reconstructedValue = scaled_logit_function(reconstructedValue, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      reconstructedValue = scaledLogitFunctionNQT(reconstructedValue, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
 
       var diff = originalValue - reconstructedValue;
       squaredSum = Math.fma(diff, diff, squaredSum);
