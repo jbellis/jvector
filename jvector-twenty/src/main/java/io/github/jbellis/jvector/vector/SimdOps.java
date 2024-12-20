@@ -19,12 +19,7 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import jdk.incubator.vector.ByteVector;
-import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.IntVector;
-import jdk.incubator.vector.LongVector;
-import jdk.incubator.vector.ShortVector;
-import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.*;
 
 import java.util.List;
 
@@ -578,7 +573,7 @@ final class SimdOps {
 
     static float assembleAndSum(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
         return HAS_AVX512 ? assembleAndSum512(data, dataBase, baseOffsets)
-               : assembleAndSum256(data, dataBase, baseOffsets);
+                : assembleAndSum256(data, dataBase, baseOffsets);
     }
 
     static float assembleAndSum512(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
@@ -756,7 +751,7 @@ final class SimdOps {
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
         float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
 
-            for (; i < baseOffsets.length(); i++) {
+        for (; i < baseOffsets.length(); i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i));
             sumResult += partialSumsArray[offset];
             aMagnitudeResult += aMagnitudeArray[offset];
@@ -807,87 +802,53 @@ final class SimdOps {
     // NVQ quantization instructions start here
     //---------------------------------------------
 
-    static FloatVector const0693147182f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.693147182f);
     static FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
     static FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
 
-    /*
-     Fast exponential based on:
-     https://stackoverflow.com/questions/47025373/fastest-implementation-of-the-natural-exponential-function-using-sse
-     The Remez polynomial has been modified for higher accuracy
-     */
-    public static FloatVector fastExp(FloatVector x){
-        // approximation of exp(x)
-        // A0 + x * (A1 + x * (A2 + x * (a3 + x * (a4 + x * (a5 + x * (a6 + x * a7))))));
-        final float invlog2e = 1.442695041f;  // 1 / log2(e)
-        final float expCvt = 12582912.0f;  // 1.5 * (1 << 23)
-        final float expA0 = 0.9999993887682104f;
-        final float expA1 = 0.6931186232012877f;
-        final float expA2 = 0.2402301551437674f;
-        final float expA3 = 0.05593479631997887f;
-        final float expA4 = 0.009651907610706037f;
+    static FloatVector logisticNQT(FloatVector vector, float alpha, float x0) {
+        FloatVector temp = vector.fma(alpha, -alpha * x0);
+        VectorMask<Float> isPositive = temp.test(VectorOperators.IS_NEGATIVE).not();
+        IntVector p = temp.add(1, isPositive)
+                .convert(VectorOperators.F2I, 0)
+                .reinterpretAsInts();
+        FloatVector e = p.convert(VectorOperators.I2F, 0).reinterpretAsFloats();
+        IntVector m = temp.sub(e).fma(0.5f, 1).reinterpretAsInts();
 
-        /* exp(x) = 2^i * 2^f; i = rint (log2(e) * x), -0.5 <= f <= 0.5 */
-        var t = x.mul(FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, invlog2e));  // t = x / log2(e)
-        var r = t.add(expCvt).sub(expCvt);  // r = round(t)
-        var f = t.sub(r);  // f = t - round(t)
-        var i = r.castShape(IntVector.SPECIES_PREFERRED, 0).reinterpretAsInts(); // i = (int) r
-
-        var temp = f.fma(FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA4), FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA3));
-        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA2));
-        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA1));
-        temp = temp.fma(f, FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, expA0));
-
-        i = i.lanewise(VectorOperators.MAX, -126);
-        var j = i.lanewise(VectorOperators.LSHL, 23);
-        temp = temp.reinterpretAsInts().add(j).reinterpretAsFloats();  // temp = temp * 2^i
-        return temp;
+        temp = m.add(p.lanewise(VectorOperators.LSHL, 23)).reinterpretAsFloats();  // temp = m * 2^p
+        return temp.div(temp.add(1));
     }
 
-    /*
-     Vectorized fast natural logarithm on [0x1.f7a5ecp-127, 0x1.fffffep127]. Maximum relative error 9.4529e-5.
-     https://stackoverflow.com/questions/39821367/very-fast-approximate-logarithm-natural-log-function-in-c
-     */
-    public static FloatVector fastLog(FloatVector x) {
-        IntVector temp = x.reinterpretAsInts();
-        var e = temp.sub(0x3f2aaaab).and(0xff800000);
-        FloatVector m = temp.sub(e).reinterpretAsFloats();
-        var i = e.castShape(FloatVector.SPECIES_PREFERRED, 0).reinterpretAsFloats();
-        i = i.mul(1.19209290e-7f);  // 0x1.0p-23
+    static float logisticNQT(float value, float alpha, float x0) {
+        float temp = Math.fma(value, alpha, -alpha * x0);
+        int p = (int) Math.floor(temp + 1);
+        int m = Float.floatToIntBits(Math.fma(temp - p, 0.5f, 1));
 
-        /* m in [2/3, 4/3] */
-        var f = m.sub(1.f);
-        var s = f.mul(f);
-
-        /* Compute log1p(f) for f in [-1/3, 1/3] */
-        var r = f.fma(0.230836749f, -0.279208571f);  // 0x1.d8c0f0p-3, -0x1.1de8dap-2
-        var t = f.fma(0.331826031f, -0.498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2)
-        r = r.fma(s, t);
-        r = r.fma(s, f);
-        return i.fma(const0693147182f, r); // 0x1.62e430p-1 // log(2)
+        temp = Float.intBitsToFloat(m + (p << 23));  // temp = m * 2^p
+        return temp / (temp + 1);
     }
 
-    static FloatVector logistic(FloatVector vector, float alpha, float x0) {
-       var temp = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -alpha).mul(vector.sub(x0));
-       temp = fastExp(temp);
-       temp = const1f.add(temp);
-       return const1f.div(temp);
+    static FloatVector logitNQT(FloatVector vector, float inverseAlpha, float x0) {
+        FloatVector z = vector.div(const1f.sub(vector));
+
+        IntVector temp = z.reinterpretAsInts();
+        FloatVector p = temp.and(0x7f800000)
+                .lanewise(VectorOperators.LSHR, 23).sub(128)
+                .convert(VectorOperators.I2F, 0)
+                .reinterpretAsFloats();
+        FloatVector m = temp.lanewise(VectorOperators.AND, 0x007fffff).add(0x3f800000).reinterpretAsFloats();
+
+        return m.add(p).fma(inverseAlpha, x0);
     }
 
-    static float logistic(float value, float alpha, float x0) {
-        var temp = -alpha * (value - x0);
-        temp = MathUtil.fastExp(temp);
-        return 1 / (1 + temp);
-    }
+    static float logitNQT(float value, float inverseAlpha, float x0) {
+        float z = value / (1 - value);
 
-    static FloatVector logit(FloatVector vector, float inverseAlpha, float x0) {
-        var temp = vector.div(const1f.sub(vector));
-        return fastLog(temp).fma(inverseAlpha, x0);
-    }
+        int temp = Float.floatToIntBits(z);
+        int e = temp & 0x7f800000;
+        float p = (float) ((e >> 23) - 128);
+        float m = Float.intBitsToFloat((temp & 0x007fffff) + 0x3f800000);
 
-    static float logit(float value, float inverseAlpha, float x0) {
-        var temp = value / (1 - value);
-        return Math.fma(MathUtil.fastLog(temp), inverseAlpha, x0);
+        return Math.fma(m + p, inverseAlpha, x0);
     }
 
     static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
@@ -898,7 +859,7 @@ final class SimdOps {
                 .reinterpretAsFloats();
 
         arr = arr.fma(logisticScale, logisticBias);
-        return logit(arr, inverseAlpha, x0);
+        return logitNQT(arr, inverseAlpha, x0);
     }
 
     static void nvqQuantize8bit(ArrayVectorFloat vector, float alpha, float x0, float minValue, float maxValue, ArrayByteSequence destination) {
@@ -908,12 +869,12 @@ final class SimdOps {
         var delta = maxValue - minValue;
         var scaledAlpha = alpha / delta;
         var scaledX0 = x0 * delta;
-        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
-        var invLogisticScale = 255 / (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias);
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var invLogisticScale = 255 / (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias);
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            arr = logistic(arr, scaledAlpha, scaledX0);
+            arr = logisticNQT(arr, scaledAlpha, scaledX0);
             arr = arr.sub(logisticBias).mul(invLogisticScale);
             var bytes = arr.add(const05f)
                     .convertShape(VectorOperators.F2B, ByteVector.SPECIES_PREFERRED, 0)
@@ -925,7 +886,7 @@ final class SimdOps {
         for (int d = vectorizedLength; d < vector.length(); d++) {
             // Ensure the quantized value is within the 0 to constant range
             float value = vector.get(d);
-            value = logistic(value, scaledAlpha, scaledX0);
+            value = logisticNQT(value, scaledAlpha, scaledX0);
             value = (value - logisticBias) * invLogisticScale;
             int quantizedValue = Math.round(value);
             destination.set(d, (byte) quantizedValue);
@@ -942,13 +903,13 @@ final class SimdOps {
         var scaledAlpha = alpha / delta;
         var invScaledAlpha = 1 / scaledAlpha;
         var scaledX0 = x0 * delta;
-        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
-        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / constant;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / constant;
         var invLogisticScale = 1 / logisticScale;
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var recArr = logistic(arr, scaledAlpha, scaledX0);
+            var recArr = logisticNQT(arr, scaledAlpha, scaledX0);
             recArr = recArr.sub(logisticBias).mul(invLogisticScale);
             recArr = recArr.add(const05f)
                     .convert(VectorOperators.F2I, 0)
@@ -956,7 +917,7 @@ final class SimdOps {
                     .convert(VectorOperators.I2F, 0)
                     .reinterpretAsFloats();
             recArr = recArr.fma(logisticScale, logisticBias);
-            recArr = logit(recArr, invScaledAlpha, scaledX0);
+            recArr = logitNQT(recArr, invScaledAlpha, scaledX0);
 
             var diff = arr.sub(recArr);
             squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -969,11 +930,11 @@ final class SimdOps {
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value = vector.get(i);
 
-            recValue = logistic(value, scaledAlpha, scaledX0);
+            recValue = logisticNQT(value, scaledAlpha, scaledX0);
             recValue = (recValue - logisticBias) * invLogisticScale;
             recValue = Math.round(recValue);
             recValue = Math.fma(logisticScale, recValue, logisticBias);
-            recValue = logit(recValue, invScaledAlpha, scaledX0);
+            recValue = logitNQT(recValue, invScaledAlpha, scaledX0);
 
             squaredSum += MathUtil.square(value - recValue);
         }
@@ -983,19 +944,21 @@ final class SimdOps {
 
     static float nvqUniformLoss(ArrayVectorFloat vector, float minValue, float maxValue, int nBits) {
         float constant = (1 << nBits) - 1;
+        float delta = maxValue - minValue;
+
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
         FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
-            var recArr = arr.sub(minValue).mul(constant / (maxValue - minValue));
+            var recArr = arr.sub(minValue).mul(constant / delta);
             recArr = recArr.add(const05f)
                     .convert(VectorOperators.F2I, 0)
                     .reinterpretAsInts()
                     .convert(VectorOperators.I2F, 0)
                     .reinterpretAsFloats();
-            recArr = recArr.fma((maxValue - minValue) / constant, minValue);
+            recArr = recArr.fma(delta / constant, minValue);
 
             var diff = arr.sub(recArr);
             squaredSumVec = diff.fma(diff, squaredSumVec);
@@ -1008,9 +971,9 @@ final class SimdOps {
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value = vector.get(i);
 
-            recValue = (value - minValue) / (maxValue - minValue);
+            recValue = (value - minValue) / delta;
             recValue = Math.round(constant * recValue) / constant;
-            recValue = recValue / (maxValue - minValue) + minValue;
+            recValue = recValue * delta + minValue;
 
             squaredSum += MathUtil.square(value - recValue);
         }
@@ -1029,8 +992,8 @@ final class SimdOps {
         var scaledAlpha = alpha / delta;
         var invScaledAlpha = 1 / scaledAlpha;
         var scaledX0 = x0 * delta;
-        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
-        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
             var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
@@ -1051,7 +1014,7 @@ final class SimdOps {
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = logisticScale * value2 + logisticBias;
-            value2 = logit(value2, invScaledAlpha, scaledX0);
+            value2 = logitNQT(value2, invScaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
             squaredSum += MathUtil.square(diff);
         }
@@ -1070,8 +1033,8 @@ final class SimdOps {
         var scaledAlpha = alpha / delta;
         var invScaledAlpha = 1 / scaledAlpha;
         var scaledX0 = x0 * delta;
-        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
-        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
@@ -1091,7 +1054,7 @@ final class SimdOps {
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = Math.fma(logisticScale, value2, logisticBias);
-            value2 = logit(value2, invScaledAlpha, scaledX0);
+            value2 = logitNQT(value2, invScaledAlpha, scaledX0);
             dotProd = Math.fma(vector.get(i), value2, dotProd);
         }
 
@@ -1109,8 +1072,8 @@ final class SimdOps {
         var scaledAlpha = alpha / delta;
         var invScaledAlpha = 1 / scaledAlpha;
         var scaledX0 = x0 * delta;
-        var logisticBias = logistic(minValue, scaledAlpha, scaledX0);
-        var logisticScale = (logistic(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
         var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -1141,7 +1104,7 @@ final class SimdOps {
         for (int i = vectorizedLength; i < vector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
             value2 = Math.fma(logisticScale, value2, logisticBias);
-            value2 = logit(value2, invScaledAlpha, scaledX0) + centroid.get(i);
+            value2 = logitNQT(value2, invScaledAlpha, scaledX0) + centroid.get(i);
             sum = Math.fma(vector.get(i), value2, sum);
             bMagnitude = Math.fma(value2, value2, bMagnitude);
         }

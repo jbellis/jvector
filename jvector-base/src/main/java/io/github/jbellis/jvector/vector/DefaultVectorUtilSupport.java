@@ -24,7 +24,6 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -384,8 +383,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var scaledGrowthRate = growthRate / delta;
     var scaledMidpoint = midpoint * delta;
     var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
 
     float dotProd = 0;
     float value;
@@ -404,8 +403,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var scaledGrowthRate = growthRate / delta;
     var scaledMidpoint = midpoint * delta;
     var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
 
     float squareSum = 0;
 
@@ -427,8 +426,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var scaledGrowthRate = growthRate / delta;
     var scaledMidpoint = midpoint * delta;
     var inverseScaledGrowthRate = 1 / scaledGrowthRate;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
 
     float sum = 0;
     float normDQ = 0;
@@ -449,18 +448,35 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   @Override
   public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {}
 
-  static float logistic_function(float value, float growthRate, float midpoint) {
-    return 1.f  / (1.f + MathUtil.fastExp(-growthRate * (value - midpoint)));
+  static float logisticFunctionNQT(float value, float alpha, float x0) {
+    float temp = Math.fma(value, alpha, -alpha * x0);
+    int p = Math.round(temp + 0.5f);
+    int m = Float.floatToIntBits(Math.fma(temp - p, 0.5f, 1));
+
+    temp = Float.intBitsToFloat(m + (p << 23));  // temp = m * 2^p
+    return temp / (temp + 1);
+  }
+
+  static float logitNQT(float value, float inverseAlpha, float x0) {
+    float z = value / (1 - value);
+
+    int temp = Float.floatToIntBits(z);
+    int e = temp & 0x7f800000;
+    float p = (float) ((e >> 23) - 128);
+    float m = Float.intBitsToFloat((temp & 0x007fffff) + 0x3f800000);
+
+    return Math.fma(m + p, inverseAlpha, x0);
   }
 
   static float scaled_logistic_function(float value, float growthRate, float midpoint, float logisticScale, float logisticBias) {
-    var y = logistic_function(value, growthRate, midpoint);
-    return (y - logisticBias) / logisticScale;
+    var y = logisticFunctionNQT(value, growthRate, midpoint);
+    return (y - logisticBias) * (1 / logisticScale);
   }
 
   static float scaled_logit_function(float value, float inverseGrowthRate, float midpoint, float logisticScale, float logisticBias) {
     var scaledValue = Math.fma(value, logisticScale, logisticBias);
-    return Math.fma(MathUtil.fastLog(scaledValue / (1 - scaledValue)), inverseGrowthRate, midpoint);
+//    return Math.fma(MathUtil.fastLog(scaledValue / (1 - scaledValue)), inverseGrowthRate, midpoint);
+    return logitNQT(scaledValue, inverseGrowthRate, midpoint);
   }
 
   @Override
@@ -468,8 +484,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var delta = maxValue - minValue;
     var scaledGrowthRate = growthRate / delta;
     var scaledMidpoint = midpoint * delta;
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
 
 
     for (int d = 0; d < vector.length(); d++) {
@@ -488,8 +504,8 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var scaledGrowthRate = growthRate / delta;
     var scaledMidpoint = midpoint * delta;
 
-    var logisticBias = logistic_function(minValue, scaledGrowthRate, scaledMidpoint);
-    var logisticScale = (logistic_function(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / constant;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / constant;
     var inverseScaledGrowthRate = 1 / scaledGrowthRate;
 
     float squaredSum = 0.f;

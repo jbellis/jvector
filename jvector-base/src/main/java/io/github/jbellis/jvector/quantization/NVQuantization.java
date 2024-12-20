@@ -497,7 +497,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         public static void quantizeTo(VectorFloat<?> vector, BitsPerDimension bitsPerDimension, boolean learn, QuantizedSubVector dest) {
             var minValue = VectorUtil.min(vector);
             var maxValue = VectorUtil.max(vector);
-            
+
             //-----------------------------------------------------------------
             // Optimization to find the hyperparameters of the logistic quantization
             float growthRate = 1e-2f;
@@ -510,7 +510,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                 float growthRateCoarse = 1e-2f;
                 float bestLossValue = Float.MIN_VALUE;
                 float[] tempSolution = {growthRateCoarse, 0.f};
-                for (float gr = 1.e-6f; gr < 10.f; gr += 1f) {
+                for (float gr = 1e-6f; gr < 20.f; gr += 1f) {
                     tempSolution[0] = gr;
                     float lossValue = lossFunction.compute(tempSolution);
                     if (lossValue > bestLossValue) {
