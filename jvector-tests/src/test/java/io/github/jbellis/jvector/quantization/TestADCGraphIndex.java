@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;

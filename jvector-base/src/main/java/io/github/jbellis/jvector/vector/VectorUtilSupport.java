@@ -64,11 +64,20 @@ public interface VectorUtilSupport {
   /** Adds v2 into v1, in place (v1 will be modified) */
   void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
+  /** Adds value to each element of v1, in place (v1 will be modified) */
+  void addInPlace(VectorFloat<?> v1, float value);
+
   /** Subtracts v2 from v1, in place (v1 will be modified) */
   void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 
+  /** Subtracts value from each element of v1, in place (v1 will be modified) */
+  void subInPlace(VectorFloat<?> vector, float value);
+
   /** @return a - b, element-wise */
   VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b);
+
+  /** Subtracts value from each element of a */
+  VectorFloat<?> sub(VectorFloat<?> a, float value);
 
   /** @return a - b, element-wise, starting at aOffset and bOffset respectively */
   VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length);
@@ -213,4 +222,86 @@ public interface VectorUtilSupport {
 
     return (float) (sum / Math.sqrt(aMag * bMagnitude));
   }
+  /**
+   * Computes the dot product between a vector and a 8-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @return the dot product
+   */
+  float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue);
+
+  /**
+   * Computes the squared Euclidean distance between a vector and a 8-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @return the squared Euclidean distance
+   */
+  float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue);
+
+  /**
+   * Computes the cosine similarity between a vector and a 8-bit quantized vector (described by its parameters).
+   * We assume that the number of dimensions of the vector and the quantized vector match.
+   * @param vector The query vector
+   * @param bytes The byte sequence where the quantized vector is stored.
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @param centroid the global mean vector used to re-center the quantized subvectors.
+   * @return the cosine similarity
+   */
+  float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid);
+
+  /**
+   * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
+   * uneven entries within register. This method shuffles the query entries so that it matches this order.
+   * See <a href="https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf">this reference</a>
+   * @param vector the vector to be shuffled
+   */
+  void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector);
+
+  /**
+   * Quantize a subvector as an 8-bit quantized subvector.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param vector The vector to quantized
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @param destination The vector where the reconstructed values are stored
+   */
+  void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination);
+
+  /**
+   * Compute the squared error of quantizing the vector with NVQ.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param growthRate The growth rate of the logistic function
+   * @param midpoint the midpoint of the logistic function
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @param nBits the number of bits per dimension
+   */
+  float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits);
+
+  /**
+   * Compute the squared error of quantizing the vector with a uniform quantizer.
+   * All values of the vector must be in [0, 1]. For example, the input vector has been
+   * normalized by subtracting the bias and dividing by the scale.
+   * @param minValue The minimum value of the subvector
+   * @param maxValue The maximum value of the subvector
+   * @param nBits the number of bits per dimension
+   */
+  float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits);
 }

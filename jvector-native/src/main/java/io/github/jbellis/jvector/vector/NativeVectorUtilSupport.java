@@ -78,8 +78,18 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public void addInPlace(VectorFloat<?> vector, float value) {
+        VectorSimdOps.addInPlace((MemorySegmentVectorFloat) vector, value);
+    }
+
+    @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         VectorSimdOps.subInPlace((MemorySegmentVectorFloat)v1, (MemorySegmentVectorFloat)v2);
+    }
+
+    @Override
+    public void subInPlace(VectorFloat<?> vector, float value) {
+        VectorSimdOps.subInPlace((MemorySegmentVectorFloat)vector, value);
     }
 
     @Override
@@ -88,6 +98,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
             throw new IllegalArgumentException("Vectors must be the same length");
         }
         return sub(a, 0, b, 0, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, float value) {
+        return VectorSimdOps.sub((MemorySegmentVectorFloat) a, 0, value, a.length());
     }
 
     @Override
@@ -164,5 +179,50 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     {
         assert encoded.offset() == 0 : "Bulk shuffle shuffles are expected to have an offset of 0. Found: " + encoded.offset();
         return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(((MemorySegmentByteSequence) encoded).get(), encoded.length(), clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
+    }
+
+    @Override
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
+        return VectorSimdOps.nvqDotProduct8bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                growthRate, midpoint, minValue, maxValue
+        );
+    }
+
+    @Override
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
+        return VectorSimdOps.nvqSquareDistance8bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                growthRate, midpoint, minValue, maxValue
+        );
+    }
+
+    @Override
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
+        return VectorSimdOps.nvqCosine8bit(
+                (MemorySegmentVectorFloat) vector, (MemorySegmentByteSequence) bytes,
+                growthRate, midpoint, minValue, maxValue,
+                (MemorySegmentVectorFloat) centroid
+        );
+    }
+
+    @Override
+    public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+        VectorSimdOps.nvqShuffleQueryInPlace8bit((MemorySegmentVectorFloat) vector);
+    }
+
+    @Override
+    public void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
+        VectorSimdOps.nvqQuantize8bit((MemorySegmentVectorFloat) vector, growthRate, midpoint, minValue, maxValue, (MemorySegmentByteSequence) destination);
+    }
+
+    @Override
+    public float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits) {
+        return VectorSimdOps.nvqLoss((MemorySegmentVectorFloat) vector, growthRate, midpoint, minValue, maxValue, nBits);
+    }
+
+    @Override
+    public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        return VectorSimdOps.nvqUniformLoss((MemorySegmentVectorFloat) vector, minValue, maxValue, nBits);
     }
 }

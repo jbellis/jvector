@@ -31,7 +31,8 @@ import java.util.function.BiFunction;
  */
 public enum FeatureId {
     INLINE_VECTORS(InlineVectors::load),
-    FUSED_ADC(FusedADC::load);
+    FUSED_ADC(FusedADC::load),
+    NVQ_VECTORS(NVQ::load);
 
     public static final Set<FeatureId> ALL = Collections.unmodifiableSet(EnumSet.allOf(FeatureId.class));
 

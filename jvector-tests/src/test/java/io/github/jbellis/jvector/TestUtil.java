@@ -28,7 +28,7 @@ import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
-import io.github.jbellis.jvector.pq.PQVectors;
+import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -132,6 +132,18 @@ public class TestUtil {
 
     public static List<VectorFloat<?>> createRandomVectors(int count, int dimension) {
         return IntStream.range(0, count).mapToObj(i -> TestUtil.randomVector(getRandom(), dimension)).collect(Collectors.toList());
+    }
+
+    public static VectorFloat<?> normalRandomVector(Random random, int dim) {
+        var vec = vectorTypeSupport.createFloatVector(dim);
+        for (int i = 0; i < dim; i++) {
+            vec.set(i, (float) random.nextGaussian());
+        }
+        return vec;
+    }
+
+    public static List<VectorFloat<?>> createNormalRandomVectors(int count, int dimension) {
+        return IntStream.range(0, count).mapToObj(i -> TestUtil.normalRandomVector(getRandom(), dimension)).collect(Collectors.toList());
     }
 
     public static void writeGraph(GraphIndex graph, RandomAccessVectorValues ravv, Path outputPath) throws IOException {

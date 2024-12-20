@@ -33,7 +33,7 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.quantization.KMeansPlusPlusClusterer.UNWEIGHTED;
 
 /**
  * Tests GraphIndexes against vectors from various datasets
@@ -56,6 +56,7 @@ public class Bench {
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
                 EnumSet.of(FeatureId.INLINE_VECTORS),
+                EnumSet.of(FeatureId.NVQ_VECTORS),
                 EnumSet.of(FeatureId.INLINE_VECTORS, FeatureId.FUSED_ADC)
         );
 

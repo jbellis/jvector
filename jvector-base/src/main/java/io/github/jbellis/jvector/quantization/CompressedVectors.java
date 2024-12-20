@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;

@@ -54,52 +54,52 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     }
     for (; i + 31 < a.length; i += 32) {
       res +=
-          b[i + 0] * a[i + 0]
-              + b[i + 1] * a[i + 1]
-              + b[i + 2] * a[i + 2]
-              + b[i + 3] * a[i + 3]
-              + b[i + 4] * a[i + 4]
-              + b[i + 5] * a[i + 5]
-              + b[i + 6] * a[i + 6]
-              + b[i + 7] * a[i + 7];
+              b[i + 0] * a[i + 0]
+                      + b[i + 1] * a[i + 1]
+                      + b[i + 2] * a[i + 2]
+                      + b[i + 3] * a[i + 3]
+                      + b[i + 4] * a[i + 4]
+                      + b[i + 5] * a[i + 5]
+                      + b[i + 6] * a[i + 6]
+                      + b[i + 7] * a[i + 7];
       res +=
-          b[i + 8] * a[i + 8]
-              + b[i + 9] * a[i + 9]
-              + b[i + 10] * a[i + 10]
-              + b[i + 11] * a[i + 11]
-              + b[i + 12] * a[i + 12]
-              + b[i + 13] * a[i + 13]
-              + b[i + 14] * a[i + 14]
-              + b[i + 15] * a[i + 15];
+              b[i + 8] * a[i + 8]
+                      + b[i + 9] * a[i + 9]
+                      + b[i + 10] * a[i + 10]
+                      + b[i + 11] * a[i + 11]
+                      + b[i + 12] * a[i + 12]
+                      + b[i + 13] * a[i + 13]
+                      + b[i + 14] * a[i + 14]
+                      + b[i + 15] * a[i + 15];
       res +=
-          b[i + 16] * a[i + 16]
-              + b[i + 17] * a[i + 17]
-              + b[i + 18] * a[i + 18]
-              + b[i + 19] * a[i + 19]
-              + b[i + 20] * a[i + 20]
-              + b[i + 21] * a[i + 21]
-              + b[i + 22] * a[i + 22]
-              + b[i + 23] * a[i + 23];
+              b[i + 16] * a[i + 16]
+                      + b[i + 17] * a[i + 17]
+                      + b[i + 18] * a[i + 18]
+                      + b[i + 19] * a[i + 19]
+                      + b[i + 20] * a[i + 20]
+                      + b[i + 21] * a[i + 21]
+                      + b[i + 22] * a[i + 22]
+                      + b[i + 23] * a[i + 23];
       res +=
-          b[i + 24] * a[i + 24]
-              + b[i + 25] * a[i + 25]
-              + b[i + 26] * a[i + 26]
-              + b[i + 27] * a[i + 27]
-              + b[i + 28] * a[i + 28]
-              + b[i + 29] * a[i + 29]
-              + b[i + 30] * a[i + 30]
-              + b[i + 31] * a[i + 31];
+              b[i + 24] * a[i + 24]
+                      + b[i + 25] * a[i + 25]
+                      + b[i + 26] * a[i + 26]
+                      + b[i + 27] * a[i + 27]
+                      + b[i + 28] * a[i + 28]
+                      + b[i + 29] * a[i + 29]
+                      + b[i + 30] * a[i + 30]
+                      + b[i + 31] * a[i + 31];
     }
     for (; i + 7 < a.length; i += 8) {
       res +=
-          b[i + 0] * a[i + 0]
-              + b[i + 1] * a[i + 1]
-              + b[i + 2] * a[i + 2]
-              + b[i + 3] * a[i + 3]
-              + b[i + 4] * a[i + 4]
-              + b[i + 5] * a[i + 5]
-              + b[i + 6] * a[i + 6]
-              + b[i + 7] * a[i + 7];
+              b[i + 0] * a[i + 0]
+                      + b[i + 1] * a[i + 1]
+                      + b[i + 2] * a[i + 2]
+                      + b[i + 3] * a[i + 3]
+                      + b[i + 4] * a[i + 4]
+                      + b[i + 5] * a[i + 5]
+                      + b[i + 6] * a[i + 6]
+                      + b[i + 7] * a[i + 7];
     }
     return res;
   }
@@ -183,13 +183,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     float diff6 = v1[index + 6] - v2[index + 6];
     float diff7 = v1[index + 7] - v2[index + 7];
     return diff0 * diff0
-        + diff1 * diff1
-        + diff2 * diff2
-        + diff3 * diff3
-        + diff4 * diff4
-        + diff5 * diff5
-        + diff6 * diff6
-        + diff7 * diff7;
+            + diff1 * diff1
+            + diff2 * diff2
+            + diff3 * diff3
+            + diff4 * diff4
+            + diff5 * diff5
+            + diff6 * diff6
+            + diff7 * diff7;
   }
 
   @Override
@@ -243,6 +243,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
+  /** Adds value to each element of v1, in place (v1 will be modified) */
+  public void addInPlace(VectorFloat<?> v1, float value) {
+    for (int i = 0; i < v1.length(); i++) {
+      v1.set(i, v1.get(i) + value);
+    }
+  }
+
   @Override
   public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     for (int i = 0; i < v1.length(); i++) {
@@ -251,8 +258,24 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void subInPlace(VectorFloat<?> vector, float value) {
+    for (int i = 0; i < vector.length(); i++) {
+      vector.set(i, vector.get(i) - value);
+    }
+  }
+
+  @Override
   public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
     return sub(a, 0, b, 0, a.length());
+  }
+
+  @Override
+  public VectorFloat<?> sub(VectorFloat<?> a, float value) {
+    VectorFloat<?> result = new ArrayVectorFloat(a.length());
+    for (int i = 0; i < a.length(); i++) {
+      result.set(i, a.get(i) - value);
+    }
+    return result;
   }
 
   @Override
@@ -328,29 +351,195 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     var codebookSize = partials.length() / partialBases.length();
     for (int i = 0; i < partialBases.length(); i++) {
       var localBest = partialBases.get(i);
-        for (int j = 0; j < codebookSize; j++) {
-            var val = partials.get(i * codebookSize + j);
-            var quantized = (short) Math.min((val - localBest) / delta, 65535);
-            quantizedPartials.setLittleEndianShort(i * codebookSize + j, quantized);
-        }
+      for (int j = 0; j < codebookSize; j++) {
+        var val = partials.get(i * codebookSize + j);
+        var quantized = (short) Math.min((val - localBest) / delta, 65535);
+        quantizedPartials.setLittleEndianShort(i * codebookSize + j, quantized);
+      }
     }
   }
 
   @Override
   public float max(VectorFloat<?> v) {
-      float max = -Float.MAX_VALUE;
-      for (int i = 0; i < v.length(); i++) {
-        max = Math.max(max, v.get(i));
-      }
-      return max;
+    float max = -Float.MAX_VALUE;
+    for (int i = 0; i < v.length(); i++) {
+      max = Math.max(max, v.get(i));
+    }
+    return max;
   }
 
   @Override
   public float min(VectorFloat<?> v) {
-      float min = Float.MAX_VALUE;
-      for (int i = 0; i < v.length(); i++) {
-        min = Math.min(min, v.get(i));
-      }
-      return min;
+    float min = Float.MAX_VALUE;
+    for (int i = 0; i < v.length(); i++) {
+      min = Math.min(min, v.get(i));
+    }
+    return min;
+  }
+
+  @Override
+  public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
+    var delta = maxValue - minValue;
+    var scaledGrowthRate = growthRate / delta;
+    var scaledMidpoint = midpoint * delta;
+    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+
+    float dotProd = 0;
+    float value;
+    for (int d = 0; d < bytes.length(); d++) {
+      value = Byte.toUnsignedInt(bytes.get(d));
+      value = scaledLogitFunctionNQT(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+
+      dotProd = Math.fma(vector.get(d), value, dotProd);
+    }
+    return dotProd;
+  }
+
+  @Override
+  public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
+    var delta = maxValue - minValue;
+    var scaledGrowthRate = growthRate / delta;
+    var scaledMidpoint = midpoint * delta;
+    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+
+    float squareSum = 0;
+
+    float value;
+
+    for (int d = 0; d < bytes.length(); d++) {
+      value = Byte.toUnsignedInt(bytes.get(d));
+      value = scaledLogitFunctionNQT(value, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+
+      var temp = value - vector.get(d);
+      squareSum = Math.fma(temp, temp, squareSum);
+    }
+    return squareSum;
+  }
+
+  @Override
+  public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
+    var delta = maxValue - minValue;
+    var scaledGrowthRate = growthRate / delta;
+    var scaledMidpoint = midpoint * delta;
+    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+
+    float sum = 0;
+    float normDQ = 0;
+
+    float elem2;
+
+    for (int d = 0; d < bytes.length(); d++) {
+      elem2 = Byte.toUnsignedInt(bytes.get(d));
+      elem2 = scaledLogitFunctionNQT(elem2, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      elem2 += centroid.get(d);
+
+      sum = Math.fma(vector.get(d), elem2, sum);
+      normDQ = Math.fma(elem2, elem2, normDQ);
+    }
+    return new float[]{sum, normDQ};
+  }
+
+  @Override
+  public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {}
+
+  static float logisticFunctionNQT(float value, float alpha, float x0) {
+    float temp = Math.fma(value, alpha, -alpha * x0);
+    int p = Math.round(temp + 0.5f);
+    int m = Float.floatToIntBits(Math.fma(temp - p, 0.5f, 1));
+
+    temp = Float.intBitsToFloat(m + (p << 23));  // temp = m * 2^p
+    return temp / (temp + 1);
+  }
+
+  static float logitNQT(float value, float inverseAlpha, float x0) {
+    float z = value / (1 - value);
+
+    int temp = Float.floatToIntBits(z);
+    int e = temp & 0x7f800000;
+    float p = (float) ((e >> 23) - 128);
+    float m = Float.intBitsToFloat((temp & 0x007fffff) + 0x3f800000);
+
+    return Math.fma(m + p, inverseAlpha, x0);
+  }
+
+  static float scaled_logistic_function(float value, float growthRate, float midpoint, float logisticScale, float logisticBias) {
+    var y = logisticFunctionNQT(value, growthRate, midpoint);
+    return (y - logisticBias) * (1 / logisticScale);
+  }
+
+  static float scaledLogitFunctionNQT(float value, float inverseGrowthRate, float midpoint, float logisticScale, float logisticBias) {
+    var scaledValue = Math.fma(value, logisticScale, logisticBias);
+//    return Math.fma(MathUtil.fastLog(scaledValue / (1 - scaledValue)), inverseGrowthRate, midpoint);
+    return logitNQT(scaledValue, inverseGrowthRate, midpoint);
+  }
+
+  @Override
+  public void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
+    var delta = maxValue - minValue;
+    var scaledGrowthRate = growthRate / delta;
+    var scaledMidpoint = midpoint * delta;
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / 255;
+
+
+    for (int d = 0; d < vector.length(); d++) {
+      // Ensure the quantized value is within the 0 to constant range
+      float value = vector.get(d);
+      value = scaled_logistic_function(value, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      int quantizedValue = Math.round(value);
+      destination.set(d, (byte) quantizedValue);
+    }
+  }
+
+  public float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits) {
+    float constant = (1 << nBits) - 1;
+
+    var delta = maxValue - minValue;
+    var scaledGrowthRate = growthRate / delta;
+    var scaledMidpoint = midpoint * delta;
+
+    var logisticBias = logisticFunctionNQT(minValue, scaledGrowthRate, scaledMidpoint);
+    var logisticScale = (logisticFunctionNQT(maxValue, scaledGrowthRate, scaledMidpoint) - logisticBias) / constant;
+    var inverseScaledGrowthRate = 1 / scaledGrowthRate;
+
+    float squaredSum = 0.f;
+    float originalValue, reconstructedValue;
+    for (int d = 0; d < vector.length(); d++) {
+      originalValue = vector.get(d);
+
+      reconstructedValue = scaled_logistic_function(originalValue, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      reconstructedValue = Math.round(reconstructedValue);
+      reconstructedValue = scaledLogitFunctionNQT(reconstructedValue, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+
+      var diff = originalValue - reconstructedValue;
+      squaredSum = Math.fma(diff, diff, squaredSum);
+    }
+
+    return squaredSum;
+  }
+
+  public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+    float constant = (1 << nBits) - 1;
+
+    float squaredSum = 0.f;
+    float originalValue, reconstructedValue;
+    for (int d = 0; d < vector.length(); d++) {
+      originalValue = vector.get(d);
+
+      reconstructedValue = (originalValue - minValue) / (maxValue - minValue);
+      reconstructedValue = Math.round(constant * reconstructedValue) / constant;
+      reconstructedValue = reconstructedValue * (maxValue - minValue) + minValue;
+
+      var diff = originalValue - reconstructedValue;
+      squaredSum = Math.fma(diff, diff, squaredSum);
+    }
+
+    return squaredSum;
   }
 }
