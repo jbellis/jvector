@@ -169,7 +169,7 @@ public class Grid {
         int n = 0;
         for (var features : featureSets) {
             var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors, pq.getProductQuantization());
+            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors, pq.getCompressor());
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);

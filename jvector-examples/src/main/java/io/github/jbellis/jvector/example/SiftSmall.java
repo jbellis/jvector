@@ -38,6 +38,7 @@ import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ApproximateScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction.ExactScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
+import io.github.jbellis.jvector.pq.MutablePQVectors;
 import io.github.jbellis.jvector.pq.PQVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
@@ -213,7 +214,7 @@ public class SiftSmall {
 
         // as we build the index we'll compress the new vectors and add them to this List backing a PQVectors;
         // this is used to score the construction searches
-        PQVectors pqv = new PQVectors(pq, baseVectors.size());
+        var pqv = new MutablePQVectors(pq, baseVectors.size());
         BuildScoreProvider bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, pqv);
 
         Path indexPath = Files.createTempFile("siftsmall", ".inline");
@@ -231,7 +232,7 @@ public class SiftSmall {
             // build the index vector-at-a-time (on disk)
             for (int ordinal = 0; ordinal < baseVectors.size(); ordinal++) {
                 VectorFloat<?> v = baseVectors.get(ordinal);
-                // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
+                // compress the new vector and add it to the PQVectors
                 pqv.encodeAndSet(ordinal, v);
                 // write the full vector to disk
                 writer.writeInline(ordinal, Feature.singleState(FeatureId.INLINE_VECTORS, new InlineVectors.State(v)));
