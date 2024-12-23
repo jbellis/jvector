@@ -250,4 +250,14 @@ public class TestProductQuantization extends RandomizedTest {
         var contents2 = Files.readAllBytes(fileOut.toPath());
         assertArrayEquals(contents1, contents2);
     }
+
+    @Test
+    public void testMutablePQVectors() {
+        // test that MPVQ gets the math right in an allocation edge case
+        var R = getRandom();
+        VectorFloat<?>[] vectors = generate(2 * DEFAULT_CLUSTERS, 2, 1_000);
+        var ravv = new ListRandomAccessVectorValues(List.of(vectors), vectors[0].length());
+        var pq = ProductQuantization.compute(ravv, 1, DEFAULT_CLUSTERS, false);
+        var pqv = new MutablePQVectors(pq, Integer.MAX_VALUE);
+    }
 }
