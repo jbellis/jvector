@@ -41,15 +41,18 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
         long totalSize = (long) maximumVectorCount * compressedDimension;
         this.vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? maximumVectorCount : MAX_CHUNK_SIZE / compressedDimension;
 
-        int numChunks = maximumVectorCount / vectorsPerChunk;
-        ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
-        int chunkSize = vectorsPerChunk * compressedDimension;
-        for (int i = 0; i < numChunks - 1; i++)
-            chunks[i] = vectorTypeSupport.createByteSequence(chunkSize);
+        int fullSizeChunks = maximumVectorCount / vectorsPerChunk;
+        int totalChunks = maximumVectorCount % vectorsPerChunk == 0 ? fullSizeChunks : fullSizeChunks + 1;
+        ByteSequence<?>[] chunks = new ByteSequence<?>[totalChunks];
+        int chunkBytes = vectorsPerChunk * compressedDimension;
+        for (int i = 0; i < fullSizeChunks; i++)
+            chunks[i] = vectorTypeSupport.createByteSequence(chunkBytes);
 
         // Last chunk might be smaller
-        int remainingVectors = maximumVectorCount - (vectorsPerChunk * (numChunks - 1));
-        chunks[numChunks - 1] = vectorTypeSupport.createByteSequence(remainingVectors * compressedDimension);
+        if (totalChunks > fullSizeChunks) {
+            int remainingVectors = maximumVectorCount % vectorsPerChunk;
+            chunks[fullSizeChunks] = vectorTypeSupport.createByteSequence(remainingVectors * compressedDimension);
+        }
 
         this.compressedDataChunks = chunks;
     }
