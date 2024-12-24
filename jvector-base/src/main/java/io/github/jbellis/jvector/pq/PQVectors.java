@@ -66,17 +66,20 @@ public abstract class PQVectors implements CompressedVectors {
         long totalSize = (long) vectorCount * compressedDimension;
         int vectorsPerChunk = totalSize <= PQVectors.MAX_CHUNK_SIZE ? vectorCount : PQVectors.MAX_CHUNK_SIZE / compressedDimension;
 
-        int numChunks = vectorCount / vectorsPerChunk;
-        ByteSequence<?>[] chunks = new ByteSequence<?>[numChunks];
-
-        for (int i = 0; i < numChunks - 1; i++) {
-            int chunkSize = vectorsPerChunk * compressedDimension;
-            chunks[i] = vectorTypeSupport.readByteSequence(in, chunkSize);
+        int fullSizeChunks = vectorCount / vectorsPerChunk;
+        int totalChunks = vectorCount % vectorsPerChunk == 0 ? fullSizeChunks : fullSizeChunks + 1;
+        ByteSequence<?>[] chunks = new ByteSequence<?>[totalChunks];
+        int chunkBytes = vectorsPerChunk * compressedDimension;
+        
+        for (int i = 0; i < fullSizeChunks; i++) {
+            chunks[i] = vectorTypeSupport.readByteSequence(in, chunkBytes);
         }
 
         // Last chunk might be smaller
-        int remainingVectors = vectorCount - (vectorsPerChunk * (numChunks - 1));
-        chunks[numChunks - 1] = vectorTypeSupport.readByteSequence(in, remainingVectors * compressedDimension);
+        if (totalChunks > fullSizeChunks) {
+            int remainingVectors = vectorCount % vectorsPerChunk;
+            chunks[fullSizeChunks] = vectorTypeSupport.readByteSequence(in, remainingVectors * compressedDimension);
+        }
 
         return new ImmutablePQVectors(pq, chunks, vectorCount, vectorsPerChunk);
     }
