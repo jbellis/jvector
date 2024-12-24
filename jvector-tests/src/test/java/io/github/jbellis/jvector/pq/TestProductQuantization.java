@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.pq;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
+import io.github.jbellis.jvector.disk.SimpleReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Assertions;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -252,12 +254,23 @@ public class TestProductQuantization extends RandomizedTest {
     }
 
     @Test
-    public void testMutablePQVectors() {
+    public void testPQVectorsAllocation() throws IOException {
         // test that MPVQ gets the math right in an allocation edge case
         var R = getRandom();
         VectorFloat<?>[] vectors = generate(2 * DEFAULT_CLUSTERS, 2, 1_000);
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), vectors[0].length());
         var pq = ProductQuantization.compute(ravv, 1, DEFAULT_CLUSTERS, false);
         var pqv = new MutablePQVectors(pq, Integer.MAX_VALUE);
+
+        // write it out and load it, it's okay that it's zeros
+        pqv.setZero(Integer.MAX_VALUE - 1); // sets internal count
+        var fileOut = File.createTempFile("pqtest", ".pq");
+        try (var out = new DataOutputStream(new FileOutputStream(fileOut))) {
+            pqv.write(out);
+        }
+        // exercise the load() allocation path
+        try (var in = new SimpleReader(fileOut.toPath())) {
+            var pqv2 = PQVectors.load(in);
+        }
     }
 }
