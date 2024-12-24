@@ -26,46 +26,61 @@ import static java.lang.Math.max;
 public class MutablePQVectors extends PQVectors implements MutableCompressedVectors<VectorFloat<?>> {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
+    private static final int VECTORS_PER_CHUNK = 1024;
+    private static final int INITIAL_CHUNKS = 10;
+    private static final float GROWTH_FACTOR = 1.5f;
+
     /**
-     * Construct a mutable PQVectors instance with the given ProductQuantization and maximum number of vectors that will be
-     * stored in this instance. The vectors are split into chunks to avoid exceeding the maximum array size.
+     * Construct a mutable PQVectors instance with the given ProductQuantization.
+     * The vectors storage will grow dynamically as needed.
      * @param pq the ProductQuantization to use
-     * @param maximumVectorCount the maximum number of vectors that will be stored in this instance
      */
-    public MutablePQVectors(ProductQuantization pq, int maximumVectorCount) {
+    public MutablePQVectors(ProductQuantization pq) {
         super(pq);
         this.vectorCount = 0;
-
-        // Calculate if we need to split into multiple chunks
-        int compressedDimension = pq.compressedVectorSize();
-        long totalSize = (long) maximumVectorCount * compressedDimension;
-        this.vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? maximumVectorCount : MAX_CHUNK_SIZE / compressedDimension;
-
-        int fullSizeChunks = maximumVectorCount / vectorsPerChunk;
-        int totalChunks = maximumVectorCount % vectorsPerChunk == 0 ? fullSizeChunks : fullSizeChunks + 1;
-        ByteSequence<?>[] chunks = new ByteSequence<?>[totalChunks];
-        int chunkBytes = vectorsPerChunk * compressedDimension;
-        for (int i = 0; i < fullSizeChunks; i++)
-            chunks[i] = vectorTypeSupport.createByteSequence(chunkBytes);
-
-        // Last chunk might be smaller
-        if (totalChunks > fullSizeChunks) {
-            int remainingVectors = maximumVectorCount % vectorsPerChunk;
-            chunks[fullSizeChunks] = vectorTypeSupport.createByteSequence(remainingVectors * compressedDimension);
-        }
-
-        this.compressedDataChunks = chunks;
+        this.vectorsPerChunk = VECTORS_PER_CHUNK;
+        this.compressedDataChunks = new ByteSequence<?>[INITIAL_CHUNKS];
     }
 
     @Override
     public void encodeAndSet(int ordinal, VectorFloat<?> vector) {
+        ensureChunkCapacity(ordinal);
         vectorCount = max(vectorCount, ordinal + 1);
         pq.encodeTo(vector, get(ordinal));
     }
 
     @Override
     public void setZero(int ordinal) {
+        ensureChunkCapacity(ordinal);
         vectorCount = max(vectorCount, ordinal + 1);
         get(ordinal).zero();
+    }
+
+    private void ensureChunkCapacity(int ordinal) {
+        int chunkOrdinal = ordinal / vectorsPerChunk;
+        
+        // Grow backing array if needed
+        if (chunkOrdinal >= compressedDataChunks.length) {
+            int newLength = max(chunkOrdinal + 1, (int)(compressedDataChunks.length * GROWTH_FACTOR));
+            ByteSequence<?>[] newChunks = new ByteSequence<?>[newLength];
+            System.arraycopy(compressedDataChunks, 0, newChunks, 0, compressedDataChunks.length);
+            compressedDataChunks = newChunks;
+        }
+
+        // Allocate all chunks up to and including the required one
+        int chunkBytes = VECTORS_PER_CHUNK * pq.compressedVectorSize();
+        for (int i = validChunkCount(); i <= chunkOrdinal; i++) {
+            if (compressedDataChunks[i] == null) {
+                compressedDataChunks[i] = vectorTypeSupport.createByteSequence(chunkBytes);
+            }
+        }
+    }
+
+    @Override
+    protected int validChunkCount() {
+        if (vectorCount == 0)
+            return 0;
+        int chunkOrdinal = (vectorCount - 1) / vectorsPerChunk;
+        return chunkOrdinal + 1;
     }
 }

@@ -32,4 +32,9 @@ public class ImmutablePQVectors extends PQVectors {
         this.vectorCount = vectorCount;
         this.vectorsPerChunk = vectorsPerChunk;
     }
+
+    @Override
+    protected int validChunkCount() {
+        return compressedDataChunks.length;
+    }
 }

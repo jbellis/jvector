@@ -260,10 +260,11 @@ public class TestProductQuantization extends RandomizedTest {
         VectorFloat<?>[] vectors = generate(2 * DEFAULT_CLUSTERS, 2, 1_000);
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), vectors[0].length());
         var pq = ProductQuantization.compute(ravv, 1, DEFAULT_CLUSTERS, false);
-        var pqv = new MutablePQVectors(pq, Integer.MAX_VALUE);
+        var pqv = new MutablePQVectors(pq);
+        // force allocation of a lot of backing storage
+        pqv.setZero(Integer.MAX_VALUE - 1);
 
         // write it out and load it, it's okay that it's zeros
-        pqv.setZero(Integer.MAX_VALUE - 1); // sets internal count
         var fileOut = File.createTempFile("pqtest", ".pq");
         try (var out = new DataOutputStream(new FileOutputStream(fileOut))) {
             pqv.write(out);

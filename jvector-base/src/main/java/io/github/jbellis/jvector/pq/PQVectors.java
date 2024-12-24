@@ -36,7 +36,7 @@ import java.util.stream.IntStream;
 
 public abstract class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
+    private static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
     
     final ProductQuantization pq;
     protected ByteSequence<?>[] compressedDataChunks;
@@ -148,10 +148,15 @@ public abstract class PQVectors implements CompressedVectors {
         // compressed vectors
         out.writeInt(vectorCount);
         out.writeInt(pq.getSubspaceCount());
-        for (ByteSequence<?> chunk : compressedDataChunks) {
-            vectorTypeSupport.writeByteSequence(out, chunk);
+        for (int i = 0; i < validChunkCount(); i++) {
+            vectorTypeSupport.writeByteSequence(out, compressedDataChunks[i]);
         }
     }
+
+    /**
+     * @return the number of chunks that have actually been allocated (<= compressedDataChunks.length)
+     */
+    protected abstract int validChunkCount();
 
     /**
      * We consider two PQVectors equal when their PQs are equal and their compressed data is equal. We ignore the
@@ -303,10 +308,10 @@ public abstract class PQVectors implements CompressedVectors {
         int AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
 
         long codebooksSize = pq.ramBytesUsed();
-        long chunksArraySize = OH_BYTES + AH_BYTES + (long) compressedDataChunks.length * REF_BYTES;
+        long chunksArraySize = OH_BYTES + AH_BYTES + (long) validChunkCount() * REF_BYTES;
         long dataSize = 0;
-        for (ByteSequence<?> chunk : compressedDataChunks) {
-            dataSize += chunk.ramBytesUsed();
+        for (int i = 0; i < validChunkCount(); i++) {
+            dataSize += compressedDataChunks[i].ramBytesUsed();
         }
         return codebooksSize + chunksArraySize + dataSize;
     }
@@ -318,5 +323,4 @@ public abstract class PQVectors implements CompressedVectors {
                 ", count=" + vectorCount +
                 '}';
     }
-
 }
