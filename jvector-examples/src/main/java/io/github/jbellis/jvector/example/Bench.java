@@ -55,8 +55,7 @@ public class Bench {
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED)
         );
         List<EnumSet<FeatureId>> featureSets = Arrays.asList(
-                EnumSet.of(FeatureId.INLINE_VECTORS),
-                EnumSet.of(FeatureId.INLINE_VECTORS, FeatureId.FUSED_ADC)
+                EnumSet.of(FeatureId.INLINE_VECTORS)
         );
 
         // args is list of regexes, possibly needing to be split by whitespace.
