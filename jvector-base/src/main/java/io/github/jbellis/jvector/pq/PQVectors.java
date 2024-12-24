@@ -173,7 +173,7 @@ public abstract class PQVectors implements CompressedVectors {
     }
 
     /**
-     * @return the number of chunks that have actually been allocated (<= compressedDataChunks.length)
+     * @return the number of chunks that have actually been allocated ({@code <= compressedDataChunks.length})
      */
     protected abstract int validChunkCount();
 
