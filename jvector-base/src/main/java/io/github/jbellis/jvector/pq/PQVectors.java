@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.pq;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
@@ -36,7 +37,7 @@ import java.util.stream.IntStream;
 
 public abstract class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
-    private static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
+    static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
     
     final ProductQuantization pq;
     protected ByteSequence<?>[] compressedDataChunks;
@@ -52,22 +53,15 @@ public abstract class PQVectors implements CompressedVectors {
         var pq = ProductQuantization.load(in);
 
         // read the vectors
-        int vectorCount = in.readInt();
-        if (vectorCount < 0) {
-            throw new IOException("Invalid compressed vector count " + vectorCount);
-        }
-
+        int vectorCount = in.readInt(); 
         int compressedDimension = in.readInt();
-        if (compressedDimension < 0) {
-            throw new IOException("Invalid compressed vector dimension " + compressedDimension);
-        }
-
-        // Calculate if we need to split into multiple chunks
-        long totalSize = (long) vectorCount * compressedDimension;
-        int vectorsPerChunk = totalSize <= PQVectors.MAX_CHUNK_SIZE ? vectorCount : PQVectors.MAX_CHUNK_SIZE / compressedDimension;
-
-        int fullSizeChunks = vectorCount / vectorsPerChunk;
-        int totalChunks = vectorCount % vectorsPerChunk == 0 ? fullSizeChunks : fullSizeChunks + 1;
+        
+        int[] params = calculateChunkParameters(vectorCount, compressedDimension);
+        int vectorsPerChunk = params[0];
+        int totalChunks = params[1];
+        int fullSizeChunks = params[2];
+        int remainingVectors = params[3];
+        
         ByteSequence<?>[] chunks = new ByteSequence<?>[totalChunks];
         int chunkBytes = vectorsPerChunk * compressedDimension;
         
@@ -77,11 +71,36 @@ public abstract class PQVectors implements CompressedVectors {
 
         // Last chunk might be smaller
         if (totalChunks > fullSizeChunks) {
-            int remainingVectors = vectorCount % vectorsPerChunk;
             chunks[fullSizeChunks] = vectorTypeSupport.readByteSequence(in, remainingVectors * compressedDimension);
         }
 
         return new ImmutablePQVectors(pq, chunks, vectorCount, vectorsPerChunk);
+    }
+
+    /**
+     * Calculate chunking parameters for the given vector count and compressed dimension
+     * @return array of [vectorsPerChunk, totalChunks, fullSizeChunks, remainingVectors]
+     */
+    @VisibleForTesting
+    static int[] calculateChunkParameters(int vectorCount, int compressedDimension) {
+        if (vectorCount < 0) {
+            throw new IllegalArgumentException("Invalid vector count " + vectorCount);
+        }
+        if (compressedDimension < 0) {
+            throw new IllegalArgumentException("Invalid compressed dimension " + compressedDimension);
+        }
+
+        long totalSize = (long) vectorCount * compressedDimension;
+        int vectorsPerChunk = totalSize <= MAX_CHUNK_SIZE ? vectorCount : MAX_CHUNK_SIZE / compressedDimension;
+        if (vectorsPerChunk == 0) {
+            throw new IllegalArgumentException("Compressed dimension " + compressedDimension + " too large for chunking");
+        }
+
+        int fullSizeChunks = vectorCount / vectorsPerChunk;
+        int totalChunks = vectorCount % vectorsPerChunk == 0 ? fullSizeChunks : fullSizeChunks + 1;
+
+        int remainingVectors = vectorCount % vectorsPerChunk;
+        return new int[] {vectorsPerChunk, totalChunks, fullSizeChunks, remainingVectors};
     }
 
     public static PQVectors load(RandomAccessReader in, long offset) throws IOException {
