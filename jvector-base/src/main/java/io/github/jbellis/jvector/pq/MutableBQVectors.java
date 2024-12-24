@@ -17,27 +17,47 @@
 package io.github.jbellis.jvector.pq;
 
 public class MutableBQVectors extends BQVectors implements MutableCompressedVectors<long[]> {
+    private static final int INITIAL_CAPACITY = 1024;
+    private static final float GROWTH_FACTOR = 1.5f;
+    
+    protected int vectorCount;
+
     /**
-     * Construct a mutable BQVectors instance with the given BinaryQuantization and maximum number of vectors
-     * that will be stored in this instance.
+     * Construct a mutable BQVectors instance with the given BinaryQuantization.
+     * The vectors storage will grow dynamically as needed.
      * @param bq the BinaryQuantization to use
-     * @param maximumVectorCount the maximum number of vectors that will be stored in this instance
      */
-    public MutableBQVectors(BinaryQuantization bq, int maximumVectorCount) {
+    public MutableBQVectors(BinaryQuantization bq) {
         super(bq);
-        this.compressedVectors = new long[maximumVectorCount][];
+        this.compressedVectors = new long[INITIAL_CAPACITY][];
         this.vectorCount = 0;
+    }
+
+    private void ensureCapacity(int ordinal) {
+        if (ordinal >= compressedVectors.length) {
+            int newCapacity = Math.max(ordinal + 1, (int)(compressedVectors.length * GROWTH_FACTOR));
+            long[][] newVectors = new long[newCapacity][];
+            System.arraycopy(compressedVectors, 0, newVectors, 0, compressedVectors.length);
+            compressedVectors = newVectors;
+        }
     }
 
     @Override
     public void encodeAndSet(int ordinal, long[] vector) {
+        ensureCapacity(ordinal);
         compressedVectors[ordinal] = vector;
         vectorCount = Math.max(vectorCount, ordinal + 1);
     }
 
     @Override
     public void setZero(int ordinal) {
+        ensureCapacity(ordinal);
         compressedVectors[ordinal] = new long[bq.compressedVectorSize()];
         vectorCount = Math.max(vectorCount, ordinal + 1);
+    }
+
+    @Override
+    public int count() {
+        return vectorCount;
     }
 }

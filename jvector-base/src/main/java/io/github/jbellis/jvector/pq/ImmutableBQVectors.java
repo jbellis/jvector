@@ -21,4 +21,9 @@ public class ImmutableBQVectors extends BQVectors {
         super(bq);
         this.compressedVectors = compressedVectors;
     }
+
+    @Override
+    public int count() {
+        return compressedVectors.length;
+    }
 }
