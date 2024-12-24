@@ -31,12 +31,10 @@ final class SimdOps {
     static final int PREFERRED_BIT_SIZE = FloatVector.SPECIES_PREFERRED.vectorBitSize();
     static final IntVector BYTE_TO_INT_MASK_512 = IntVector.broadcast(IntVector.SPECIES_512, 0xff);
     static final IntVector BYTE_TO_INT_MASK_256 = IntVector.broadcast(IntVector.SPECIES_256, 0xff);
-    static final IntVector BYTE_TO_INT_MASK_128 = IntVector.broadcast(IntVector.SPECIES_128, 0xff);
 
 
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
-    static final ThreadLocal<int[]> scratchInt128 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_128.length()]);
 
 
     static float sum(ArrayVectorFloat vector) {
@@ -587,41 +585,12 @@ final class SimdOps {
     }
 
     static float assembleAndSum128(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
-        int[] convOffsets = scratchInt128.get();
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_128);
-        int i = 0;
-        int limit = ByteVector.SPECIES_64.loopBound(baseOffsets.length());
-        var scalePart0 = IntVector.zero(IntVector.SPECIES_128).addIndex(dataBase);
-        var scalePart1 = scalePart0.add(dataBase * 4); // emulating the second half of an indexed SPECIES_256
-
-        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
-            var offset = i * dataBase;
-
-            var offsets = ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets.get(), i + baseOffsets.offset());
-            offsets.convertShape(VectorOperators.B2I, IntVector.SPECIES_128, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_128)
-                    .reinterpretAsInts()
-                    .add(scalePart0)
-                    .intoArray(convOffsets, 0);
-
-            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_128, data, offset, convOffsets, 0));
-
-            offsets.convertShape(VectorOperators.B2I, IntVector.SPECIES_128, 1)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_128)
-                    .reinterpretAsInts()
-                    .add(scalePart1)
-                    .intoArray(convOffsets, 0);
-
-            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_128, data, offset, convOffsets, 0));
+        // benchmarking a 128-bit SIMD implementation showed it performed worse than scalar
+        float sum = 0f;
+        for (int i = 0; i < baseOffsets.length(); i++) {
+            sum += data[dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i))];
         }
-
-        float res = sum.reduceLanes(VectorOperators.ADD);
-
-        // Process tail
-        for (; i < baseOffsets.length(); i++)
-            res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i))];
-
-        return res;
+        return sum;
     }
 
     /**
@@ -793,49 +762,17 @@ final class SimdOps {
     }
 
     public static float pqDecodedCosineSimilarity128(ByteSequence<byte[]> baseOffsets, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
-        var sum = FloatVector.zero(FloatVector.SPECIES_128);
-        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_128);
-        var partialSumsArray = partialSums.get();
-        var aMagnitudeArray = aMagnitude.get();
+        // benchmarking showed that a 128-bit SIMD implementation performed worse than scalar
+        float sum = 0.0f;
+        float aMag = 0.0f;
 
-        int[] convOffsets = scratchInt128.get();
-        int i = 0;
-        int limit = ByteVector.SPECIES_64.loopBound(baseOffsets.length());
-
-        var scalePart0 = IntVector.zero(IntVector.SPECIES_128).addIndex(clusterCount);
-        var scalePart1 = scalePart0.add(clusterCount * 4); // emulating the second half of an indexed SPECIES_256
-
-        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
-            var offset = i * clusterCount;
-            var offsets = ByteVector.fromArray(ByteVector.SPECIES_64, baseOffsets.get(), i + baseOffsets.offset());
-            offsets.convertShape(VectorOperators.B2I, IntVector.SPECIES_128, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_128)
-                    .reinterpretAsInts()
-                    .add(scalePart0)
-                    .intoArray(convOffsets,0);
-
-            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_128, partialSumsArray, offset, convOffsets, 0));
-            vaMagnitude = vaMagnitude.add(FloatVector.fromArray(FloatVector.SPECIES_128, aMagnitudeArray, offset, convOffsets, 0));
-
-            offsets.convertShape(VectorOperators.B2I, IntVector.SPECIES_128, 1)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_128)
-                    .reinterpretAsInts()
-                    .add(scalePart1)
-                    .intoArray(convOffsets,0);
-
-            sum = sum.add(FloatVector.fromArray(FloatVector.SPECIES_128, partialSumsArray, offset, convOffsets, 0));
-            vaMagnitude = vaMagnitude.add(FloatVector.fromArray(FloatVector.SPECIES_128, aMagnitudeArray, offset, convOffsets, 0));
+        for (int m = 0; m < baseOffsets.length(); ++m) {
+            int centroidIndex = Byte.toUnsignedInt(baseOffsets.get(m));
+            var index = m * clusterCount + centroidIndex;
+            sum += partialSums.get(index);
+            aMag += aMagnitude.get(index);
         }
 
-        float sumResult = sum.reduceLanes(VectorOperators.ADD);
-        float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
-
-        for (; i < baseOffsets.length(); i++) {
-            int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i));
-            sumResult += partialSumsArray[offset];
-            aMagnitudeResult += aMagnitudeArray[offset];
-        }
-
-        return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
+        return (float) (sum / Math.sqrt(aMag * bMagnitude));
     }
 }

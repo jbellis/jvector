@@ -30,8 +30,6 @@ import java.util.List;
  * Support class for vector operations using a mix of native and Panama SIMD.
  */
 final class VectorSimdOps {
-    static final boolean HAS_AVX512 = IntVector.SPECIES_PREFERRED == IntVector.SPECIES_512;
-
     static float sum(MemorySegmentVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
