@@ -20,7 +20,6 @@ import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.optimization.LossFunction;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
@@ -633,7 +632,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * The loss used to optimize for the NVQ hyperparameters
      * We use the ratio between the loss given by the uniform quantization and the NVQ loss.
      */
-    private static class NonuniformQuantizationLossFunction extends LossFunction {
+    private static class NonuniformQuantizationLossFunction {
         final private BitsPerDimension bitsPerDimension;
         private VectorFloat<?> vector;
         private float minValue;
@@ -641,7 +640,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         private float baseline;
 
         public NonuniformQuantizationLossFunction(BitsPerDimension bitsPerDimension) {
-            super(2);
             this.bitsPerDimension = bitsPerDimension;
         }
 
@@ -656,12 +654,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             return VectorUtil.nvqLoss(vector, x[0], x[1], minValue, maxValue, bitsPerDimension.getInt());
         }
 
-        @Override
         public float compute(float[] x) {
             return baseline / computeRaw(x);
         }
 
-        @Override
         public boolean minimumGoalAchieved(float lossValue) {
             // Used for early termination of the optimization. Return false to bypass its effect
             return lossValue > 1.5f;
