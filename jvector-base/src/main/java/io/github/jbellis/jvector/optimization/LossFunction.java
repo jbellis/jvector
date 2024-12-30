@@ -35,14 +35,12 @@ public abstract class LossFunction {
      */
     public LossFunction(int nDims) {
         if (nDims <= 0) {
-            throw new IllegalArgumentException("The standard deviation initSigma must be positive");
+            throw new IllegalArgumentException("The number of dimensions must be positive");
         }
         minBounds = new float[nDims];
         maxBounds = new float[nDims];
-        for (int d = 0; d < nDims; d++) {
-            minBounds[d] = Float.NEGATIVE_INFINITY;
-            maxBounds[d] = Float.POSITIVE_INFINITY;
-        }
+        Arrays.fill(minBounds, Float.NEGATIVE_INFINITY);
+        Arrays.fill(maxBounds, Float.POSITIVE_INFINITY);
 
         this.nDims = nDims;
     }
