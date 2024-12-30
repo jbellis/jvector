@@ -162,16 +162,23 @@ public class GraphIndexBuilder implements Closeable {
                              ForkJoinPool simdExecutor,
                              ForkJoinPool parallelExecutor)
     {
-        this.scoreProvider = scoreProvider;
-        this.dimension = dimension;
-        this.neighborOverflow = neighborOverflow;
-        this.alpha = alpha;
         if (M <= 0) {
             throw new IllegalArgumentException("maxConn must be positive");
         }
         if (beamWidth <= 0) {
             throw new IllegalArgumentException("beamWidth must be positive");
         }
+        if (neighborOverflow < 1.0f) {
+            throw new IllegalArgumentException("neighborOverflow must be >= 1.0");
+        }
+        if (alpha <= 0) {
+            throw new IllegalArgumentException("alpha must be positive");
+        }
+
+        this.scoreProvider = scoreProvider;
+        this.dimension = dimension;
+        this.neighborOverflow = neighborOverflow;
+        this.alpha = alpha;
         this.beamWidth = beamWidth;
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
@@ -183,6 +190,42 @@ public class GraphIndexBuilder implements Closeable {
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
         this.concurrentScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
+    }
+
+    public static GraphIndexBuilder rescore(GraphIndexBuilder other, BuildScoreProvider newProvider) {
+        var newBuilder = new GraphIndexBuilder(newProvider,
+                                               other.dimension,
+                                               other.graph.maxDegree(),
+                                               other.beamWidth,
+                                               other.neighborOverflow,
+                                               other.alpha,
+                                               other.simdExecutor,
+                                               other.parallelExecutor);
+
+        // Copy each node and its neighbors from the old graph to the new one
+        for (int i = 0; i < other.graph.getIdUpperBound(); i++) {
+            if (!other.graph.containsNode(i)) {
+                continue;
+            }
+
+            var neighbors = other.graph.getNeighbors(i);
+            var sf = newProvider.searchProviderFor(i).scoreFunction();
+            var newNeighbors = new NodeArray(neighbors.size());
+
+            // Copy edges, compute new scores
+            for (var it = neighbors.iterator(); it.hasNext(); ) {
+                int neighbor = it.nextInt();
+                // since we're using a different score provider, use insertSorted instead of addInOrder
+                newNeighbors.insertSorted(neighbor, sf.similarityTo(neighbor));
+            }
+
+            newBuilder.graph.addNode(i, newNeighbors);
+        }
+
+        // Set the entry node
+        newBuilder.graph.updateEntryNode(other.graph.entry());
+
+        return newBuilder;
     }
 
     public OnHeapGraphIndex build(RandomAccessVectorValues ravv) {

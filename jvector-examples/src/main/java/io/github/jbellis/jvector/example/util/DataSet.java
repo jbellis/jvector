@@ -112,11 +112,12 @@ public class DataSet {
                 }
             }
         }
-        // also remove zero query vectors
+        // also remove zero query vectors and query vectors that are present in the base set
         for (int i = 0; i < queryVectors.size(); i++) {
             VectorFloat<?> v = queryVectors.get(i);
             var valid = (vsf == VectorSimilarityFunction.EUCLIDEAN) || Math.abs(normOf(v)) > 1e-5;
-            if (valid) {
+            var dupe = uniqueVectors.contains(v);
+            if (valid && !dupe) {
                 scrubbedQueryVectors.add(v);
                 var gt = new HashSet<Integer>();
                 for (int j : groundTruth.get(i)) {

@@ -18,7 +18,13 @@ package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import jdk.incubator.vector.*;
+import jdk.incubator.vector.ByteVector;
+import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.LongVector;
+import jdk.incubator.vector.ShortVector;
+import jdk.incubator.vector.VectorMask;
+import jdk.incubator.vector.VectorOperators;
 
 import java.nio.ByteOrder;
 import java.util.List;

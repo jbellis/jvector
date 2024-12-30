@@ -153,7 +153,7 @@ public class TestUtil {
     public static void writeFusedGraph(GraphIndex graph, RandomAccessVectorValues ravv, PQVectors pqv, Path outputPath) throws IOException {
         try (var writer = new OnDiskGraphIndexWriter.Builder(graph, outputPath)
                 .with(new InlineVectors(ravv.dimension()))
-                .with(new FusedADC(graph.maxDegree(), pqv.getProductQuantization())).build())
+                .with(new FusedADC(graph.maxDegree(), pqv.getCompressor())).build())
         {
             var suppliers = new EnumMap<FeatureId, IntFunction<Feature.State>>(FeatureId.class);
             suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(ravv.getVector(ordinal)));

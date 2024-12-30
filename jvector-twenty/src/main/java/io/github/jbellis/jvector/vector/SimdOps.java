@@ -19,7 +19,13 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import jdk.incubator.vector.*;
+import jdk.incubator.vector.ByteVector;
+import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.LongVector;
+import jdk.incubator.vector.ShortVector;
+import jdk.incubator.vector.VectorMask;
+import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
 
@@ -573,7 +579,7 @@ final class SimdOps {
 
     static float assembleAndSum(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
         return HAS_AVX512 ? assembleAndSum512(data, dataBase, baseOffsets)
-                : assembleAndSum256(data, dataBase, baseOffsets);
+               : assembleAndSum256(data, dataBase, baseOffsets);
     }
 
     static float assembleAndSum512(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {

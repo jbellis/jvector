@@ -262,12 +262,9 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
         @Override
         public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
-
-            if (features.containsKey(FeatureId.INLINE_VECTORS))
-            {
+            if (features.containsKey(FeatureId.INLINE_VECTORS)) {
                 return RandomAccessVectorValues.super.rerankerFor(queryVector, vsf);
-            } else if (features.containsKey(FeatureId.NVQ_VECTORS))
-            {
+            } else if (features.containsKey(FeatureId.NVQ_VECTORS)) {
                 return ((NVQ) features.get(FeatureId.NVQ_VECTORS)).rerankerFor(queryVector, vsf, this);
             } else {
                 throw new UnsupportedOperationException("No reranker available for this graph");
