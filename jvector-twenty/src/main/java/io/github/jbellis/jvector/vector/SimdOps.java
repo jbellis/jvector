@@ -216,7 +216,8 @@ final class SimdOps {
 
         int i = 0;
         // unrolled vector loop
-        if (length >= vectorLength * 4)
+        final int unrolledLength = vectorLength * 4;
+        if (length >= unrolledLength)
         {
             FloatVector sum1 = sum0;
             FloatVector sum2 = sum0;
@@ -227,11 +228,11 @@ final class SimdOps {
             b0 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i + vectorLength * 0);
             a1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i + vectorLength * 1);
             b1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i + vectorLength * 1);
-            a2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i + vectorLength * 2);
-            b2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i + vectorLength * 2);
-            i += vectorLength * 4;
+            i += unrolledLength;
+            a2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i - vectorLength * 2);
+            b2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i - vectorLength * 2);
 
-            while (i + vectorLength * 4 <= length)
+            while (i + unrolledLength <= length)
             {
                 // in the main loop, interleave processing a vector with reading the next ones and only use after a few
                 // ops
@@ -244,10 +245,10 @@ final class SimdOps {
                 sum2 = a2.fma(b2, sum2);
                 a1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i + vectorLength * 1);
                 b1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i + vectorLength * 1);
+                i += unrolledLength;
                 sum3 = a3.fma(b3, sum3);
-                a2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i + vectorLength * 2);
-                b2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i + vectorLength * 2);
-                i += vectorLength * 4;
+                a2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i - vectorLength * 2);
+                b2 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i - vectorLength * 2);
             }
 
             sum0 = a0.fma(b0, sum0);
@@ -262,9 +263,10 @@ final class SimdOps {
         }
 
         // Process the remaining few vectors
-        for (; i + vectorLength <= length; i += vectorLength) {
+        while (i + vectorLength <= length) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + i);
             FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + i);
+            i += vectorLength;
             sum0 = a.fma(b, sum0);
         }
 
