@@ -32,8 +32,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 
@@ -656,11 +654,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
 
         public float compute(float[] x) {
             return baseline / computeRaw(x);
-        }
-
-        public boolean minimumGoalAchieved(float lossValue) {
-            // Used for early termination of the optimization. Return false to bypass its effect
-            return lossValue > 1.5f;
         }
     }
 }
