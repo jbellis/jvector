@@ -34,11 +34,6 @@ import java.util.stream.IntStream;
  * <a href="https://www.jmlr.org/papers/volume15/wierstra14a/wierstra14a.pdf">Link</a>
  */
 public class NESOptimizer {
-    public enum Distribution {
-        MULTINORMAL, // This is for adding future support for the multinormal case (Algorithm 5 in [1])
-        SEPARABLE
-    }
-
     // number of samples to estimate the natural gradient
     // This value can never be zero. Using zero to indicate that it has not been initialized.
     private int nSamples = 0; // using 0 to denote uni
@@ -57,20 +52,11 @@ public class NESOptimizer {
     // Using zero to indicate that maxIterations is infinite
     private int maxIterations = 0;
 
-    // the distribution to use
-    // private final Distribution distribution;
-
     /**
      * Constructs a NESOptimizer with the specified distribution.
      *
-     * @param dist The parameter distribution to be used for the optimization.
-     *             Currently, only SEPARABLE is supported.
      */
-    public NESOptimizer(Distribution dist) {
-        if (dist != Distribution.SEPARABLE) {
-            throw new UnsupportedOperationException("The multinormal case is not implemented yet.");
-        }
-        //this.distribution = dist;
+    public NESOptimizer() {
     }
 
     /**
