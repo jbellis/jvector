@@ -186,7 +186,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     @Override
     public QuantizedVector encode(VectorFloat<?> vector) {
         var qv = QuantizedVector.createEmpty(subvectorSizesAndOffsets, bitsPerDimension);
-        QuantizedVector.quantizeTo(getSubVectors(vector), bitsPerDimension, learn, qv);
+        encodeTo(vector, qv);
         return qv;
     }
 
