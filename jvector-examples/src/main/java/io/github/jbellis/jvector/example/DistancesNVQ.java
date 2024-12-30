@@ -18,7 +18,6 @@ package io.github.jbellis.jvector.example;
 
 import io.github.jbellis.jvector.example.util.SiftLoader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.quantization.NVQVectors;
 import io.github.jbellis.jvector.quantization.NVQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorUtil;
@@ -30,7 +29,7 @@ import java.util.*;
 import static java.lang.Math.abs;
 
 // this class uses explicit typing instead of `var` for easier reading when excerpted for instructional use
-public class distancesNVQ {
+public class DistancesNVQ {
     public static void testNVQEncodings(String filenameBase, String filenameQueries, VectorSimilarityFunction vsf) throws IOException {
         List<VectorFloat<?>> vectors = SiftLoader.readFvecs(filenameBase);
         List<VectorFloat<?>> queries = SiftLoader.readFvecs(filenameQueries);

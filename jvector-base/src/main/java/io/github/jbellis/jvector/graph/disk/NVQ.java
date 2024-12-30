@@ -90,17 +90,17 @@ public class NVQ implements Feature {
         var function = scorer.scoreFunctionFor(queryVector, vsf);
 
         return new ScoreFunction.ExactScoreFunction() {
-            private final QuantizedVector scratch = NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension);
+            private final ThreadLocal<QuantizedVector> scratch = ThreadLocal.withInitial(() -> NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension));
 
             @Override
             public float similarityTo(int node2) {
                 try {
                     var reader = source.inlineReaderForNode(node2, FeatureId.NVQ_VECTORS);
-                    QuantizedVector.loadInto(reader, scratch);
+                    QuantizedVector.loadInto(reader, scratch.get());
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                return function.similarityTo(scratch);
+                return function.similarityTo(scratch.get());
             }
         };
     }

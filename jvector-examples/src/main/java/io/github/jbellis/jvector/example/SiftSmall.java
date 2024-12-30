@@ -379,11 +379,11 @@ public class SiftSmall {
         System.out.format("%d base and %d query vectors loaded, dimensions %d%n",
                           baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
 
-//        siftInMemory(baseVectors);
-//        siftInMemoryWithSearcher(baseVectors);
-//        siftInMemoryWithRecall(baseVectors, queryVectors, groundTruth);
-//        siftPersisted(baseVectors, queryVectors, groundTruth);
-//        siftDiskAnn(baseVectors, queryVectors, groundTruth);
+        siftInMemory(baseVectors);
+        siftInMemoryWithSearcher(baseVectors);
+        siftInMemoryWithRecall(baseVectors, queryVectors, groundTruth);
+        siftPersisted(baseVectors, queryVectors, groundTruth);
+        siftDiskAnn(baseVectors, queryVectors, groundTruth);
         siftDiskAnnLTM(baseVectors, queryVectors, groundTruth);
         siftDiskAnnLTMWithNVQ(baseVectors, queryVectors, groundTruth);
     }

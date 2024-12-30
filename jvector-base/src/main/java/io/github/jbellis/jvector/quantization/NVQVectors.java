@@ -50,7 +50,7 @@ public class NVQVectors implements CompressedVectors {
     @Override
     public void write(DataOutput out, int version) throws IOException
     {
-        // serialization version
+        // serializing NVQ at the given version
         nvq.write(out, version);
 
         // compressed vectors

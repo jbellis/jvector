@@ -802,8 +802,8 @@ final class SimdOps {
     // NVQ quantization instructions start here
     //---------------------------------------------
 
-    static FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
-    static FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
+    static final FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
+    static final FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
 
     static FloatVector logisticNQT(FloatVector vector, float alpha, float x0) {
         FloatVector temp = vector.fma(alpha, -alpha * x0);
@@ -852,6 +852,24 @@ final class SimdOps {
     }
 
     static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
+        /*
+         * We unpack the vector using the FastLanes strategy:
+         * https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf?ref=blog.lancedb.com
+         *
+         * We treat the ByteVector bytes as a vector of integers.
+         * | Int0                    | Int1                    | ...
+         * | Byte3 Byte2 Byte1 Byte0 | Byte3 Byte2 Byte1 Byte0 | ...
+         *
+         * The argument part indicates which byte we want to extract from each integer.
+         * With part=0, we extract
+         *      Int0\Byte0, Int1\Byte0, etc.
+         * With part=1, we shift by 8 bits and then extract
+         *      Int0\Byte1, Int1\Byte1, etc.
+         * With part=2, we shift by 16 bits and then extract
+         *      Int0\Byte2, Int1\Byte2, etc.
+         * With part=3, we shift by 24 bits and then extract
+         *      Int0\Byte3, Int1\Byte3, etc.
+         */
         var arr = bytes.reinterpretAsInts()
                 .lanewise(VectorOperators.LSHR, 8 * part)
                 .lanewise(VectorOperators.AND, 0xff)

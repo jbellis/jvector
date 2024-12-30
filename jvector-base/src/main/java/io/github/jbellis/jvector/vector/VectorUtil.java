@@ -192,7 +192,7 @@ public final class VectorUtil {
   /**
    * Calculates the maximum value in the vector.
    * @param v vector
-   * @return the maximum value, or -Float.maxValue if the vector is empty
+   * @return the maximum value, or -Float.MAX_VALUE if the vector is empty
    */
   public static float max(VectorFloat<?> v) {
     return impl.max(v);
@@ -201,7 +201,7 @@ public final class VectorUtil {
   /**
    * Calculates the minimum value in the vector.
    * @param v vector
-   * @return the minimum value, or Float.maxValue if the vector is empty
+   * @return the minimum value, or Float.MAX_VALUE if the vector is empty
    */
   public static float min(VectorFloat<?> v) {
     return impl.min(v);

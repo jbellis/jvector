@@ -93,7 +93,7 @@ public class TestCompressedVectors extends RandomizedTest {
     public void testSaveLoadNVQ() throws Exception {
 
         int[][] testsConfigAndResults = {
-                //Tuples of: nDimensions, nSubvectors, number of bots per dimension, and the expected number of bytes
+                //Tuples of: nDimensions, nSubvectors, and the expected number of bytes
                 {64, 1, 96},
                 {64, 2, 124},
                 {65, 1, 97},
@@ -170,7 +170,7 @@ public class TestCompressedVectors extends RandomizedTest {
     }
 
     private void testNVQEncodings(List<VectorFloat<?>> vectors, List<VectorFloat<?>> queries, int nSubvectors,
-                                  boolean learn, NVQuantization.BitsPerDimension bitsPerDimension) {
+                                  boolean learn) {
         int dimension = vectors.get(0).length();
         int nQueries = queries.size();
 
@@ -201,12 +201,7 @@ public class TestCompressedVectors extends RandomizedTest {
             }
             error /= nQueries * vectors.size();
 
-            float tolerance;
-            if (bitsPerDimension == NVQuantization.BitsPerDimension.EIGHT) {
-                tolerance = 0.0005f * (dimension / 256.f);
-            } else {
-                tolerance = 0.005f * (dimension / 256.f);
-            }
+            float tolerance = 0.0005f * (dimension / 256.f);
             if (vsf == VectorSimilarityFunction.COSINE) {
                 tolerance *= 10;
             } else if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
@@ -224,12 +219,10 @@ public class TestCompressedVectors extends RandomizedTest {
             var vectors = createNormalRandomVectors(512, d);
             var queries = createNormalRandomVectors(10, d);
 
-            for (var bps : List.of(NVQuantization.BitsPerDimension.FOUR, NVQuantization.BitsPerDimension.EIGHT)) {
-                for (var nSubvectors : List.of(1, 2, 4, 8)) {
-                    for (var learn : List.of(false, true)) {
-                        System.out.println("dimensions: " + d + " bps: " + bps + " subvectors: " + nSubvectors + " learn: " + learn);
-                        testNVQEncodings(vectors, queries, nSubvectors, learn, bps);
-                    }
+            for (var nSubvectors : List.of(1, 2, 4, 8)) {
+                for (var learn : List.of(false, true)) {
+                    System.out.println("dimensions: " + d + " subvectors: " + nSubvectors + " learn: " + learn);
+                    testNVQEncodings(vectors, queries, nSubvectors, learn);
                 }
             }
         }

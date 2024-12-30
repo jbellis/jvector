@@ -468,14 +468,13 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     return Math.fma(m + p, inverseAlpha, x0);
   }
 
-  static float scaled_logistic_function(float value, float growthRate, float midpoint, float logisticScale, float logisticBias) {
+  static float scaledLogisticFunction(float value, float growthRate, float midpoint, float logisticScale, float logisticBias) {
     var y = logisticFunctionNQT(value, growthRate, midpoint);
     return (y - logisticBias) * (1 / logisticScale);
   }
 
   static float scaledLogitFunctionNQT(float value, float inverseGrowthRate, float midpoint, float logisticScale, float logisticBias) {
     var scaledValue = Math.fma(value, logisticScale, logisticBias);
-//    return Math.fma(MathUtil.fastLog(scaledValue / (1 - scaledValue)), inverseGrowthRate, midpoint);
     return logitNQT(scaledValue, inverseGrowthRate, midpoint);
   }
 
@@ -491,7 +490,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < vector.length(); d++) {
       // Ensure the quantized value is within the 0 to constant range
       float value = vector.get(d);
-      value = scaled_logistic_function(value, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      value = scaledLogisticFunction(value, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
       int quantizedValue = Math.round(value);
       destination.set(d, (byte) quantizedValue);
     }
@@ -513,7 +512,7 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
     for (int d = 0; d < vector.length(); d++) {
       originalValue = vector.get(d);
 
-      reconstructedValue = scaled_logistic_function(originalValue, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
+      reconstructedValue = scaledLogisticFunction(originalValue, scaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
       reconstructedValue = Math.round(reconstructedValue);
       reconstructedValue = scaledLogitFunctionNQT(reconstructedValue, inverseScaledGrowthRate, scaledMidpoint, logisticScale, logisticBias);
 

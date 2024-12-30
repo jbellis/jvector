@@ -24,8 +24,7 @@ public class NVQScorer {
     final NVQuantization nvq;
 
     /**
-     * Initialize the NVQ Vectors with an initial List of vectors.  This list may be
-     * mutated, but caller is responsible for thread safety issues when doing so.
+     * Initialize the NVQScorer with an instance of NVQuantization.
      */
     public NVQScorer(NVQuantization nvq) {
         this.nvq = nvq;

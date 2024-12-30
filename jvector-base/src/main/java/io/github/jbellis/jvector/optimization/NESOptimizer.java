@@ -140,8 +140,9 @@ public class NESOptimizer {
      * NES utilizes rank-based fitness shaping in order to render the algorithm invariant under
      * monotonically increasing (i.e., rank preserving) transformations of the loss function.
      * For this, the samples losses are transformed into a set of utility values using the method in Section 3.1 of [1].
+     * This function creates the set of utility values used throughout the optimization.
      *
-     * @param nSamples the loss function values for each sample
+     * @param nSamples the number of samples
      * @return the unsorted utilities to use throughout the iterations
      */
     private double[] computeUnsortedUtilities(int nSamples) {
@@ -154,6 +155,7 @@ public class NESOptimizer {
      * NES utilizes rank-based fitness shaping in order to render the algorithm invariant under
      * monotonically increasing (i.e., rank preserving) transformations of the loss function.
      * For this, the samples losses are transformed into a set of utility values using the method in Section 3.1 of [1].
+     * This function uses the function values to sort the set of utility values.
      *
      * @param unsortedUtilities the unsorted utility values to be assigned to each sample
      * @param funValues the loss function values for each sample
@@ -165,9 +167,7 @@ public class NESOptimizer {
     }
 
     /**
-     * Runs the Exponential Natural Evolution Strategies (xNES) solver for the following parameters distributions
-     * (1) separable and normal (Algorithm 6 in [1]).
-     * (2) multinormal (Algorithm 5 in [1]). The latter is not implemented yet.
+     * Runs the Exponential Natural Evolution Strategies (xNES) solver for the separable normal setting (Algorithm 6 in [1]).
      * It implements loss maximization.
      * We extended the algorithm to support box constraints (min/max values for each parameter) by projecting onto
      * the feasible set.
@@ -181,9 +181,7 @@ public class NESOptimizer {
     }
 
     /**
-     * Runs the Exponential Natural Evolution Strategies (xNES) solver for the following parameters distributions
-     * (1) separable and normal (Algorithm 6 in [1]).
-     * (2) multinormal (Algorithm 5 in [1]). The latter is not implemented yet.
+     * Runs the Exponential Natural Evolution Strategies (xNES) solver for the separable normal setting (Algorithm 6 in [1]).
      * It implements loss maximization.
      * We extended the algorithm to support box constraints (min/max values for each parameter) by projecting onto
      * the feasible set.
@@ -233,12 +231,9 @@ public class NESOptimizer {
 
         // Initialize mu and sigma
         var sample = new float[nDims];
-        var mu = new float[nDims];
+        var mu = Arrays.copyOf(initialSolution, initialSolution.length);
         var sigma = new float[nDims];
-        for (int d = 0; d < nDims; d++) {
-            mu[d] = initialSolution[d];
-            sigma[d] = initSigma;
-        }
+        Arrays.fill(sigma, initSigma);
 
         // create their natural gradient
         var deltaMu = new float[nDims];
@@ -306,4 +301,3 @@ public class NESOptimizer {
         return new OptimizationResult(mu, error, iter, oldFunVal);
     }
 }
-

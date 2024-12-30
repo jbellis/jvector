@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.quantization;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
@@ -32,6 +33,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 
@@ -56,11 +59,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             @Override
             public int getInt() {
                 return 4;
-            }
-
-            @Override
-            public void write(DataOutput out) throws IOException {
-                out.writeInt(4);
             }
 
             @Override
@@ -106,8 +104,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         }
     }
 
-    private static final int MAGIC = 0x75EC4012; // JVECTOR, with some imagination
-
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     // How many bits to use for each dimension when quantizing the vector:
@@ -123,6 +119,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public final int[][] subvectorSizesAndOffsets;
 
     // Whether we want to skip the optimization of the NVQ parameters. Here for debug purposes only.
+    @VisibleForTesting
     public boolean learn = true;
 
     /**
@@ -152,10 +149,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), nSubVectors);
 
         var ravvCopy = ravv.threadLocalSupplier().get();
-        // convert ravvCopy to list
         var dim = ravvCopy.getVector(0).length();
         var globalMean = vectorTypeSupport.createFloatVector(dim);
-        globalMean.zero();
         for (int i = 0; i < ravvCopy.size(); i++) {
             VectorUtil.addInPlace(globalMean, ravvCopy.getVector(i));
         }
@@ -173,11 +168,16 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * Encodes the given vectors in parallel using NVQ.
      */
     @Override
-    public NVQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
+    public NVQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool parallelExecutor) {
+        var ravvCopy = ravv.threadLocalSupplier();
         return new NVQVectors(this,
-                simdExecutor.submit(() -> IntStream.range(0, ravv.size())
+                parallelExecutor.submit(() -> IntStream.range(0, ravv.size())
                                 .parallel()
-                                .mapToObj(i -> encode(ravv.getVector(i)))
+                                .mapToObj(i -> {
+                                    var localRavv = ravvCopy.get();
+                                    VectorFloat<?> v = localRavv.getVector(i);
+                                    return encode(v);
+                                })
                                 .toArray(QuantizedVector[]::new))
                         .join());
     }
@@ -188,9 +188,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     @Override
     public QuantizedVector encode(VectorFloat<?> vector) {
-        var tempVector = VectorUtil.sub(vector, globalMean);
         var qv = QuantizedVector.createEmpty(subvectorSizesAndOffsets, bitsPerDimension);
-        QuantizedVector.quantizeTo(getSubVectors(tempVector), bitsPerDimension, learn, qv);
+        QuantizedVector.quantizeTo(getSubVectors(vector), bitsPerDimension, learn, qv);
         return qv;
     }
 
@@ -252,10 +251,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             throw new IllegalArgumentException("Unsupported serialization version " + version);
         }
 
-        if (version >= 3) {
-            out.writeInt(MAGIC);
-            out.writeInt(version);
-        }
+        out.writeInt(version);
 
         out.writeInt(globalMean.length());
         vectorTypeSupport.writeFloatVector(out, globalMean);
@@ -293,17 +289,8 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      * @throws IOException fails if we cannot read from the RandomAccessReader
      */
     public static NVQuantization load(RandomAccessReader in) throws IOException {
-        int maybeMagic = in.readInt();
-        int version;
-        int globalMeanLength;
-        if (maybeMagic != MAGIC) {
-            // JVector 1+2 format, no magic or version, starts straight off with the centroid length
-            version = 0;
-            globalMeanLength = maybeMagic;
-        } else {
-            version = in.readInt();
-            globalMeanLength = in.readInt();
-        }
+        int version = in.readInt();
+        int globalMeanLength = in.readInt();
 
         VectorFloat<?> globalMean = null;
         if (globalMeanLength > 0) {
@@ -409,7 +396,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          * @throws IOException fails if we cannot write to the DataOutput
          */
         public void write(DataOutput out) throws IOException {
-            // write the min and max
             out.writeInt(subVectors.length);
 
             for (var sv : subVectors) {
@@ -499,7 +485,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             var maxValue = VectorUtil.max(vector);
 
             //-----------------------------------------------------------------
-            // Optimization to find the hyperparameters of the logistic quantization
+            // Optimization to find the hyperparameters of the quantization
             float growthRate = 1e-2f;
             float midpoint = 0;
 
@@ -529,7 +515,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
                 }
 
                 growthRate = growthRateFineTuned;
-                midpoint = 0.f;
             }
             //---------------------------------------------------------------------------
 
