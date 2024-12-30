@@ -263,8 +263,8 @@ public interface VectorUtilSupport {
   float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid);
 
   /**
-   * When using 4-bit NVQ quantization and vector instructions, it is easier to unpack all even entries, and then all
-   * uneven entries within register. This method shuffles the query entries so that it matches this order.
+   * When computing distances, the unpacking of am NVQ quantized vector is faster if we do not do it in sequential order.
+   * Hence, we shuffle the query so that it matches this order
    * See <a href="https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf">this reference</a>
    * @param vector the vector to be shuffled
    */
