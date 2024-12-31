@@ -28,13 +28,14 @@ import jdk.incubator.vector.VectorOperators;
 import java.util.List;
 
 final class SimdOps {
-
-    static final boolean HAS_AVX512 = IntVector.SPECIES_PREFERRED == IntVector.SPECIES_512;
+    static final int PREFERRED_BIT_SIZE = FloatVector.SPECIES_PREFERRED.vectorBitSize();
     static final IntVector BYTE_TO_INT_MASK_512 = IntVector.broadcast(IntVector.SPECIES_512, 0xff);
     static final IntVector BYTE_TO_INT_MASK_256 = IntVector.broadcast(IntVector.SPECIES_256, 0xff);
 
+
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
+
 
     static float sum(ArrayVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -517,8 +518,13 @@ final class SimdOps {
     }
 
     static float assembleAndSum(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
-        return HAS_AVX512 ? assembleAndSum512(data, dataBase, baseOffsets)
-               : assembleAndSum256(data, dataBase, baseOffsets);
+        return switch (PREFERRED_BIT_SIZE)
+        {
+            case 512 -> assembleAndSum512(data, dataBase, baseOffsets);
+            case 256 -> assembleAndSum256(data, dataBase, baseOffsets);
+            case 128 -> assembleAndSum128(data, dataBase, baseOffsets);
+            default -> throw new IllegalStateException("Unsupported vector width: " + PREFERRED_BIT_SIZE);
+        };
     }
 
     static float assembleAndSum512(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
@@ -576,6 +582,15 @@ final class SimdOps {
             res += data[dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i))];
 
         return res;
+    }
+
+    static float assembleAndSum128(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
+        // benchmarking a 128-bit SIMD implementation showed it performed worse than scalar
+        float sum = 0f;
+        for (int i = 0; i < baseOffsets.length(); i++) {
+            sum += data[dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i))];
+        }
+        return sum;
     }
 
     /**
@@ -662,9 +677,12 @@ final class SimdOps {
     }
 
     public static float pqDecodedCosineSimilarity(ByteSequence<byte[]> encoded, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
-        return HAS_AVX512
-                ? pqDecodedCosineSimilarity512(encoded, clusterCount, partialSums, aMagnitude, bMagnitude)
-                : pqDecodedCosineSimilarity256(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+        return switch (PREFERRED_BIT_SIZE) {
+            case 512 -> pqDecodedCosineSimilarity512(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+            case 256 -> pqDecodedCosineSimilarity256(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+            case 128 -> pqDecodedCosineSimilarity128(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+            default -> throw new IllegalStateException("Unsupported vector width: " + PREFERRED_BIT_SIZE);
+        };
     }
 
     public static float pqDecodedCosineSimilarity512(ByteSequence<byte[]> baseOffsets, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
@@ -741,5 +759,20 @@ final class SimdOps {
         }
 
         return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
+    }
+
+    public static float pqDecodedCosineSimilarity128(ByteSequence<byte[]> baseOffsets, int clusterCount, ArrayVectorFloat partialSums, ArrayVectorFloat aMagnitude, float bMagnitude) {
+        // benchmarking showed that a 128-bit SIMD implementation performed worse than scalar
+        float sum = 0.0f;
+        float aMag = 0.0f;
+
+        for (int m = 0; m < baseOffsets.length(); ++m) {
+            int centroidIndex = Byte.toUnsignedInt(baseOffsets.get(m));
+            var index = m * clusterCount + centroidIndex;
+            sum += partialSums.get(index);
+            aMag += aMagnitude.get(index);
+        }
+
+        return (float) (sum / Math.sqrt(aMag * bMagnitude));
     }
 }
