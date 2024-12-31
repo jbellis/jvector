@@ -41,7 +41,7 @@ final class SimdOps {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
-        // Process the vectorized part
+        // Process the remainder
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
             sum = sum.add(a);
@@ -207,28 +207,64 @@ final class SimdOps {
         return res;
     }
 
-    static float dotProductPreferred(ArrayVectorFloat v1, int v1offset, ArrayVectorFloat v2, int v2offset, int length) {
+    static float dotProductPreferred(ArrayVectorFloat va, int vaoffset, ArrayVectorFloat vb, int vboffset, int length) {
         if (length == FloatVector.SPECIES_PREFERRED.length())
-            return dotPreferred(v1, v1offset, v2, v2offset);
+            return dotPreferred(va, vaoffset, vb, vboffset);
 
-        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector sum0 = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector sum1 = sum0;
+        FloatVector a0, a1, b0, b1;
 
-        int i = 0;
-        // Process the vectorized part
-        for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), v1offset + i);
-            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.get(), v2offset + i);
-            sum = a.fma(b, sum);
+        int vectorLength = FloatVector.SPECIES_PREFERRED.length();
+
+        // Unrolled vector loop; for dot product from L1 cache, an unroll factor of 2 generally suffices.
+        // If we are going to be getting data that's further down the hierarchy but not fetched off disk/network,
+        // we might want to unroll further, e.g. to 8 (4 sets of a,b,sum with 3-ahead reads seems to work best).
+        if (length >= vectorLength * 2)
+        {
+            length -= vectorLength * 2;
+            a0 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + vectorLength * 0);
+            b0 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + vectorLength * 0);
+            a1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + vectorLength * 1);
+            b1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + vectorLength * 1);
+            vaoffset += vectorLength * 2;
+            vboffset += vectorLength * 2;
+            while (length >= vectorLength * 2)
+            {
+                // All instructions in the main loop have no dependencies between them and can be executed in parallel.
+                length -= vectorLength * 2;
+                sum0 = a0.fma(b0, sum0);
+                a0 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + vectorLength * 0);
+                b0 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + vectorLength * 0);
+                sum1 = a1.fma(b1, sum1);
+                a1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset + vectorLength * 1);
+                b1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset + vectorLength * 1);
+                vaoffset += vectorLength * 2;
+                vboffset += vectorLength * 2;
+            }
+            sum0 = a0.fma(b0, sum0);
+            sum1 = a1.fma(b1, sum1);
+        }
+        sum0 = sum0.add(sum1);
+
+        // Process the remaining few vectors
+        while (length >= vectorLength) {
+            length -= vectorLength;
+            FloatVector a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, va.get(), vaoffset);
+            FloatVector b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vb.get(), vboffset);
+            vaoffset += vectorLength;
+            vboffset += vectorLength;
+            sum0 = a.fma(b, sum0);
         }
 
-        float res = sum.reduceLanes(VectorOperators.ADD);
+        float resVec = sum0.reduceLanes(VectorOperators.ADD);
+        float resTail = 0;
 
         // Process the tail
-        for (; i < length; ++i)
-            res += v1.get(v1offset + i) * v2.get(v2offset + i);
+        for (; length > 0; --length)
+            resTail += va.get(vaoffset++) * vb.get(vboffset++);
 
-        return res;
+        return resVec + resTail;
     }
 
     static float cosineSimilarity(ArrayVectorFloat v1, ArrayVectorFloat v2) {

@@ -22,53 +22,57 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
+@BenchmarkMode(Mode.Throughput)
+@OutputTimeUnit(TimeUnit.SECONDS)
 @Warmup(iterations = 2, time = 5)
-@Measurement(iterations = 3, time = 10)
-@Fork(warmups = 1, value = 1, jvmArgsAppend = {"--add-modules=jdk.incubator.vector", "--enable-preview", "-Djvector.experimental.enable_native_vectorization=true"})
+@Measurement(iterations = 3, time = 5)
+@Fork(value = 1, jvmArgsAppend = {"--add-modules=jdk.incubator.vector", "--enable-preview", "-Djvector.experimental.enable_native_vectorization=true"})
+@State(Scope.Thread)
 public class SimilarityBench {
 
-    static VectorFloat<?> A_4 = TestUtil.randomVector(new Random(), 4);
-    static VectorFloat<?> B_4 = TestUtil.randomVector(new Random(), 4);
-    static VectorFloat<?> A_8 = TestUtil.randomVector(new Random(), 8);
-    static VectorFloat<?> B_8 = TestUtil.randomVector(new Random(), 8);
-    static VectorFloat<?> A_16 = TestUtil.randomVector(new Random(), 16);
-    static VectorFloat<?> B_16 = TestUtil.randomVector(new Random(), 16);
+    @Param({"4", "8", "16", "1024"})
+    int size = 1024;
 
+    VectorFloat<?> A, B;
 
-    static
-
-    @Benchmark
-    @BenchmarkMode(Mode.Throughput)
-    @Threads(8)
-    public void testDotProduct_4(Blackhole bh) {
-        bh.consume(VectorUtil.dotProduct(A_4, B_4));
+    @Setup(Level.Trial)
+    public void setUp()
+    {
+        A = TestUtil.randomVector(new Random(), size);
+        B = TestUtil.randomVector(new Random(), size);
     }
 
-    @Benchmark
     @BenchmarkMode(Mode.Throughput)
+    @OutputTimeUnit(TimeUnit.SECONDS)
+    @Benchmark
     @Threads(8)
-    public void testDotProduct_8(Blackhole bh) {
-        bh.consume(VectorUtil.dotProduct(A_8, B_8));
+    public void testDotProduct8(Blackhole bh) {
+        bh.consume(VectorUtil.dotProduct(A, B));
     }
 
 
+    @BenchmarkMode(Mode.AverageTime)
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @Benchmark
-    @BenchmarkMode(Mode.Throughput)
-    @Threads(8)
-    public void testDotProduct_16(Blackhole bh) {
-        bh.consume(VectorUtil.dotProduct(A_16, B_16));
+    @Threads(1)
+    public void testDotProduct1(Blackhole bh) {
+        bh.consume(VectorUtil.dotProduct(A, B));
     }
-
-
-
 
     public static void main(String[] args) throws Exception {
         org.openjdk.jmh.Main.main(args);
