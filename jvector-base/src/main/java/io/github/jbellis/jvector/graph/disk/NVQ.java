@@ -34,10 +34,12 @@ import java.io.UncheckedIOException;
 public class NVQ implements Feature {
     private final NVQuantization nvq;
     private final NVQScorer scorer;
+    private final ThreadLocal<QuantizedVector> reusableQuantizedVector;
 
     public NVQ(NVQuantization nvq) {
         this.nvq = nvq;
         scorer = new NVQScorer(this.nvq);
+        reusableQuantizedVector = ThreadLocal.withInitial(() -> NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension));
     }
 
     @Override
@@ -89,19 +91,14 @@ public class NVQ implements Feature {
                                                  FeatureSource source) {
         var function = scorer.scoreFunctionFor(queryVector, vsf);
 
-        return new ScoreFunction.ExactScoreFunction() {
-            private final ThreadLocal<QuantizedVector> scratch = ThreadLocal.withInitial(() -> NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension));
-
-            @Override
-            public float similarityTo(int node2) {
-                try {
-                    var reader = source.inlineReaderForNode(node2, FeatureId.NVQ_VECTORS);
-                    QuantizedVector.loadInto(reader, scratch.get());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                return function.similarityTo(scratch.get());
+        return node2 -> {
+            try {
+                var reader = source.inlineReaderForNode(node2, FeatureId.NVQ_VECTORS);
+                QuantizedVector.loadInto(reader, reusableQuantizedVector.get());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
+            return function.similarityTo(reusableQuantizedVector.get());
         };
     }
 }
