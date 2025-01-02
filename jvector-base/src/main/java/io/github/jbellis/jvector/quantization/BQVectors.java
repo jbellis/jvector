@@ -31,15 +31,9 @@ import java.util.Objects;
 public abstract class BQVectors implements CompressedVectors {
     protected final BinaryQuantization bq;
     protected long[][] compressedVectors;
-    protected int vectorCount;
 
     protected BQVectors(BinaryQuantization bq) {
         this.bq = bq;
-    }
-
-    @Override
-    public int count() {
-        return vectorCount;
     }
 
     @Override
@@ -48,12 +42,13 @@ public abstract class BQVectors implements CompressedVectors {
         bq.write(out, version);
 
         // compressed vectors
-        out.writeInt(compressedVectors.length);
-        if (compressedVectors.length <= 0) {
+        out.writeInt(count());
+        if (count() <= 0) {
             return;
         }
         out.writeInt(compressedVectors[0].length);
-        for (var v : compressedVectors) {
+        for (int i = 0; i < count(); i++) {
+            var v = compressedVectors[i];
             for (long l : v) {
                 out.writeLong(l);
             }
@@ -134,7 +129,7 @@ public abstract class BQVectors implements CompressedVectors {
 
     @Override
     public long ramBytesUsed() {
-        return compressedVectors.length * RamUsageEstimator.sizeOf(compressedVectors[0]);
+        return count() * RamUsageEstimator.sizeOf(compressedVectors[0]);
     }
 
     @Override

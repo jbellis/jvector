@@ -1,6 +1,6 @@
-# Upgrading from 3.0.x to 3.1.x
+# Upgrading from 3.0.x to 3.0.6
 
-## Critical API changes
+## API changes
 
 - `VectorCompressor.encodeAll()` now returns a `CompressedVectors` object instead of a `ByteSequence<?>[]`.
   This provides better encapsulation of the compression functionality while also allowing for more efficient
@@ -8,9 +8,13 @@
 - The `ByteSequence` interface now includes an `offset()` method to provide offset information for the sequence.
   any time the method `ByteSequence::get` is called, the full backing data is returned, and as such, the `offset()`
   method is necessary to determine the offset of the data in the backing array.
-- `PQVectors` constructor has been updated to support immutable instances and explicit chunking parameters.
+- `PQVectors` has been split into `MutablePQVectors` and `ImmutablePQVectors`.  Generally you will use `new MutablePQVectors()`
+  directly, while `ImmutablePQVectors` will usually be accessed via `PQVectors.load` (whose signature has not changed).
+  These changes allow PQVectors to represent compressed vectors more efficiently under the hood.
+- `BQVectors` has similarly been split into mutable and immutable implementations.
 - The `VectorCompressor.createCompressedVectors(Object[])` method is now deprecated in favor of the new API that returns
   `CompressedVectors` directly from `encodeAll()`.
+- `PQVectors::getProductQuantization` is removed; it duplicated `CompressedVectors::getCompressor` unnecessarily
 
 ## New features
 - Support for Non-uniform Vector Quantization (NVQ, pronounced as "new vec"). This new technique quantizes the values

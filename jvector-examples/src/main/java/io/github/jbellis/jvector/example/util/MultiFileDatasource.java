@@ -50,7 +50,7 @@ public class MultiFileDatasource {
         var baseVectors = SiftLoader.readFvecs("fvec/" + basePath);
         var queryVectors = SiftLoader.readFvecs("fvec/" + queriesPath);
         var gtVectors = SiftLoader.readIvecs("fvec/" + groundTruthPath);
-        return DataSet.getScrubbedDataSet(name, VectorSimilarityFunction.COSINE, baseVectors, queryVectors, gtVectors);
+        return DataSet.getScrubbedDataSet(name, VectorSimilarityFunction.DOT_PRODUCT, baseVectors, queryVectors, gtVectors);
     }
 
     public static Map<String, MultiFileDatasource> byName = new HashMap<>() {{
@@ -83,24 +83,28 @@ public class MultiFileDatasource {
                                                             "wikipedia_squad/100k/text-embedding-3-small_1536_100000_query_vectors_10000.fvec",
                                                             "wikipedia_squad/100k/text-embedding-3-small_1536_100000_indices_query_10000.ivec"));
         put("ada002-100k", new MultiFileDatasource("ada002-100k",
-                                                      "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
-                                                      "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
-                                                      "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
+                                                   "wikipedia_squad/100k/ada_002_100000_base_vectors.fvec",
+                                                   "wikipedia_squad/100k/ada_002_100000_query_vectors_10000.fvec",
+                                                   "wikipedia_squad/100k/ada_002_100000_indices_query_10000.ivec"));
+        put("ada002-1M", new MultiFileDatasource("ada002-1M",
+                                                 "wikipedia_squad/1M/ada_002_1000000_base_vectors.fvec",
+                                                 "wikipedia_squad/1M/ada_002_1000000_query_vectors_10000.fvec",
+                                                 "wikipedia_squad/1M/ada_002_1000000_indices_query_10000.ivec"));
         put("e5-small-v2-100k", new MultiFileDatasource("e5-small-v2-100k",
-                                                                   "wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
-                                                                   "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
-                                                                   "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
+                                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_base_vectors.fvec",
+                                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_query_vectors_10000.fvec",
+                                                        "wikipedia_squad/100k/intfloat_e5-small-v2_100000_indices_query_10000.ivec"));
         put("e5-base-v2-100k", new MultiFileDatasource("e5-base-v2-100k",
-                                                                  "wikipedia_squad/100k/intfloat_e5-base-v2_100000_base_vectors.fvec",
-                                                                  "wikipedia_squad/100k/intfloat_e5-base-v2_100000_query_vectors_10000.fvec",
-                                                                  "wikipedia_squad/100k/intfloat_e5-base-v2_100000_indices_query_10000.ivec"));
+                                                       "wikipedia_squad/100k/intfloat_e5-base-v2_100000_base_vectors.fvec",
+                                                       "wikipedia_squad/100k/intfloat_e5-base-v2_100000_query_vectors_10000.fvec",
+                                                       "wikipedia_squad/100k/intfloat_e5-base-v2_100000_indices_query_10000.ivec"));
         put("e5-large-v2-100k", new MultiFileDatasource("e5-large-v2-100k",
-                                                                   "wikipedia_squad/100k/intfloat_e5-large-v2_100000_base_vectors.fvec",
-                                                                   "wikipedia_squad/100k/intfloat_e5-large-v2_100000_query_vectors_10000.fvec",
-                                                                   "wikipedia_squad/100k/intfloat_e5-large-v2_100000_indices_query_10000.ivec"));
+                                                        "wikipedia_squad/100k/intfloat_e5-large-v2_100000_base_vectors.fvec",
+                                                        "wikipedia_squad/100k/intfloat_e5-large-v2_100000_query_vectors_10000.fvec",
+                                                        "wikipedia_squad/100k/intfloat_e5-large-v2_100000_indices_query_10000.ivec"));
         put("gecko-100k", new MultiFileDatasource("gecko-100k",
-                                                                  "wikipedia_squad/100k/textembedding-gecko_100000_base_vectors.fvec",
-                                                                  "wikipedia_squad/100k/textembedding-gecko_100000_query_vectors_10000.fvec",
-                                                                  "wikipedia_squad/100k/textembedding-gecko_100000_indices_query_10000.ivec"));
+                                                  "wikipedia_squad/100k/textembedding-gecko_100000_base_vectors.fvec",
+                                                  "wikipedia_squad/100k/textembedding-gecko_100000_query_vectors_10000.fvec",
+                                                  "wikipedia_squad/100k/textembedding-gecko_100000_indices_query_10000.ivec"));
     }};
 }

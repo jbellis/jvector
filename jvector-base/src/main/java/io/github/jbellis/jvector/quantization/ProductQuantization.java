@@ -106,14 +106,13 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
      *                         the number of physical cores.
      * @param parallelExecutor ForkJoinPool instance for parallel stream operations
      */
-    public static ProductQuantization compute(
-            RandomAccessVectorValues ravv,
-            int M,
-            int clusterCount,
-            boolean globallyCenter,
-            float anisotropicThreshold,
-            ForkJoinPool simdExecutor,
-            ForkJoinPool parallelExecutor)
+    public static ProductQuantization compute(RandomAccessVectorValues ravv,
+                                              int M,
+                                              int clusterCount,
+                                              boolean globallyCenter,
+                                              float anisotropicThreshold,
+                                              ForkJoinPool simdExecutor,
+                                              ForkJoinPool parallelExecutor)
     {
         var subvectorSizesAndOffsets = getSubvectorSizesAndOffsets(ravv.dimension(), M);
         var vectors = extractTrainingVectors(ravv, parallelExecutor);
