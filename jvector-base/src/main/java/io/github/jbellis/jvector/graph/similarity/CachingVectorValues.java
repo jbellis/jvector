@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.graph.similarity;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.pq.PQVectors;
+import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
 

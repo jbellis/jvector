@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -39,9 +39,9 @@ import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
 import static io.github.jbellis.jvector.TestUtil.randomVector;
-import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
-import static io.github.jbellis.jvector.pq.ProductQuantization.DEFAULT_CLUSTERS;
-import static io.github.jbellis.jvector.pq.ProductQuantization.getSubvectorSizesAndOffsets;
+import static io.github.jbellis.jvector.quantization.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.quantization.ProductQuantization.DEFAULT_CLUSTERS;
+import static io.github.jbellis.jvector.quantization.ProductQuantization.getSubvectorSizesAndOffsets;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -286,7 +286,7 @@ public class TestProductQuantization extends RandomizedTest {
         assertEquals(1, params[1]);    // numChunks
         assertEquals(1, params[2]);    // fullSizeChunks
         assertEquals(0, params[3]);    // remainingVectors
-        
+
         // Test case requiring multiple chunks
         int bigVectorCount = Integer.MAX_VALUE - 1;
         int smallDim = 8;
@@ -294,14 +294,14 @@ public class TestProductQuantization extends RandomizedTest {
         validateChunkMath(params, bigVectorCount, smallDim);
         assertTrue(params[0] > 0);
         assertTrue(params[1] > 1);
-        
+
         // Test edge case with large dimension
         int smallVectorCount = 1000;
         int bigDim = Integer.MAX_VALUE / 2;
         params = PQVectors.calculateChunkParameters(smallVectorCount, bigDim);
         validateChunkMath(params, smallVectorCount, bigDim);
         assertTrue(params[0] > 0);
-        
+
         // Test invalid inputs
         assertThrows(IllegalArgumentException.class, () -> PQVectors.calculateChunkParameters(-1, 8));
         assertThrows(IllegalArgumentException.class, () -> PQVectors.calculateChunkParameters(100, -1));

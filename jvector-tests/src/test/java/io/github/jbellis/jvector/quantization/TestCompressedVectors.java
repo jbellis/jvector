@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorUtil;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
@@ -31,6 +32,7 @@ import java.io.FileOutputStream;
 import java.util.List;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
+import static io.github.jbellis.jvector.TestUtil.createNormalRandomVectors;
 import static io.github.jbellis.jvector.TestUtil.nextInt;
 import static java.lang.Math.abs;
 import static java.lang.Math.log;
@@ -87,7 +89,47 @@ public class TestCompressedVectors extends RandomizedTest {
         }
     }
 
-    private void testEncodings(int dimension, int codebooks) {
+    @Test
+    public void testSaveLoadNVQ() throws Exception {
+
+        int[][] testsConfigAndResults = {
+                //Tuples of: nDimensions, nSubvectors, and the expected number of bytes
+                {64, 1, 96},
+                {64, 2, 124},
+                {65, 1, 97},
+        };
+
+        for (int[] testConfigAndResult : testsConfigAndResults) {
+            var nDimensions = testConfigAndResult[0];
+            var nSubvectors = testConfigAndResult[1];
+            var expectedSize = testConfigAndResult[2];
+
+            // Generate an NVQ for random vectors
+            var vectors = createRandomVectors(512, nDimensions);
+            var ravv = new ListRandomAccessVectorValues(vectors, nDimensions);
+
+            var nvq = NVQuantization.compute(ravv, nSubvectors);
+
+            // Compress the vectors
+            var cv = nvq.encodeAll(ravv);
+            assertEquals(nDimensions * Float.BYTES, cv.getOriginalSize());
+            assertEquals(expectedSize, cv.getCompressedSize());
+
+            // Write compressed vectors
+            File cvFile = File.createTempFile("bqtest", ".cv");
+            try (var out = new DataOutputStream(new FileOutputStream(cvFile))) {
+                cv.write(out);
+            }
+            // Read compressed vectors
+            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
+                var cv2 = NVQVectors.load(in, 0);
+                assertEquals(cv, cv2);
+            }
+        }
+    }
+
+
+    private void testPQEncodings(int dimension, int codebooks) {
         // Generate a PQ for random vectors
         var vectors = createRandomVectors(512, dimension);
         var ravv = new ListRandomAccessVectorValues(vectors, dimension);
@@ -118,11 +160,70 @@ public class TestCompressedVectors extends RandomizedTest {
     }
 
     @Test
-    public void testEncodings() {
+    public void testPQEncodings() {
         // start with i=2 (dimension 4) b/c dimension 2 is an outlier for our error prediction
         for (int i = 2; i <= 8; i++) {
             for (int M = 1; M <= i; M++) {
-                testEncodings(2 * i, M);
+                testPQEncodings(2 * i, M);
+            }
+        }
+    }
+
+    private void testNVQEncodings(List<VectorFloat<?>> vectors, List<VectorFloat<?>> queries, int nSubvectors,
+                                  boolean learn) {
+        int dimension = vectors.get(0).length();
+        int nQueries = queries.size();
+
+        // Generate a NVQ for random vectors
+        var ravv = new ListRandomAccessVectorValues(vectors, dimension);
+        var nvq = NVQuantization.compute(ravv, nSubvectors);
+        nvq.learn = learn;
+
+        // Compress the vectors
+        var cv = nvq.encodeAll(ravv);
+
+        // compare the encoded similarities to the raw
+        for (var vsf : List.of(VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT, VectorSimilarityFunction.COSINE)) {
+            double error = 0;
+            for (int i = 0; i < nQueries; i++) {
+                var q = queries.get(i);
+                VectorUtil.l2normalize(q);
+                var f = cv.scoreFunctionFor(q, vsf);
+                for (int j = 0; j < vectors.size(); j++) {
+                    var v = vectors.get(j);
+                    vsf.compare(q, v);
+                    if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
+                        error += abs(f.similarityTo(j) - vsf.compare(q, v)) / abs(vsf.compare(v, v));
+                    } else {
+                        error += abs(f.similarityTo(j) - vsf.compare(q, v));
+                    }
+                }
+            }
+            error /= nQueries * vectors.size();
+
+            float tolerance = 0.0005f * (dimension / 256.f);
+            if (vsf == VectorSimilarityFunction.COSINE) {
+                tolerance *= 10;
+            } else if (vsf == VectorSimilarityFunction.DOT_PRODUCT) {
+                tolerance *= 4;
+            }
+            System.out.println(vsf + " error " + error + " tolerance " + tolerance);
+            assert error <= tolerance : String.format("%s > %s for %s with %d dimensions and %d subvectors", error, tolerance, vsf, dimension, nSubvectors);
+        }
+        System.out.println("--");
+    }
+
+    @Test
+    public void testNVQEncodings() {
+        for (int d = 256; d <= 2048; d += 256) {
+            var vectors = createNormalRandomVectors(512, d);
+            var queries = createNormalRandomVectors(10, d);
+
+            for (var nSubvectors : List.of(1, 2, 4, 8)) {
+                for (var learn : List.of(false, true)) {
+                    System.out.println("dimensions: " + d + " subvectors: " + nSubvectors + " learn: " + learn);
+                    testNVQEncodings(vectors, queries, nSubvectors, learn);
+                }
             }
         }
     }

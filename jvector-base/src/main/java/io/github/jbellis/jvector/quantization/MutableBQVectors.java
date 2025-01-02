@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 public class MutableBQVectors extends BQVectors implements MutableCompressedVectors<long[]> {
     private static final int INITIAL_CAPACITY = 1024;

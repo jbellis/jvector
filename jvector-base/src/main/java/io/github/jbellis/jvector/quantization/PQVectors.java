@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
@@ -38,7 +38,7 @@ import java.util.stream.IntStream;
 public abstract class PQVectors implements CompressedVectors {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     static final int MAX_CHUNK_SIZE = Integer.MAX_VALUE - 16; // standard Java array size limit with some headroom
-    
+
     final ProductQuantization pq;
     protected ByteSequence<?>[] compressedDataChunks;
     protected int vectorCount;
@@ -53,18 +53,18 @@ public abstract class PQVectors implements CompressedVectors {
         var pq = ProductQuantization.load(in);
 
         // read the vectors
-        int vectorCount = in.readInt(); 
+        int vectorCount = in.readInt();
         int compressedDimension = in.readInt();
-        
+
         int[] params = calculateChunkParameters(vectorCount, compressedDimension);
         int vectorsPerChunk = params[0];
         int totalChunks = params[1];
         int fullSizeChunks = params[2];
         int remainingVectors = params[3];
-        
+
         ByteSequence<?>[] chunks = new ByteSequence<?>[totalChunks];
         int chunkBytes = vectorsPerChunk * compressedDimension;
-        
+
         for (int i = 0; i < fullSizeChunks; i++) {
             chunks[i] = vectorTypeSupport.readByteSequence(in, chunkBytes);
         }

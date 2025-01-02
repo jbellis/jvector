@@ -211,20 +211,20 @@ public class GraphIndexBuilder implements Closeable {
             var neighbors = other.graph.getNeighbors(i);
             var sf = newProvider.searchProviderFor(i).scoreFunction();
             var newNeighbors = new NodeArray(neighbors.size());
-            
+
             // Copy edges, compute new scores
             for (var it = neighbors.iterator(); it.hasNext(); ) {
                 int neighbor = it.nextInt();
                 // since we're using a different score provider, use insertSorted instead of addInOrder
                 newNeighbors.insertSorted(neighbor, sf.similarityTo(neighbor));
             }
-            
+
             newBuilder.graph.addNode(i, newNeighbors);
         }
 
         // Set the entry node
         newBuilder.graph.updateEntryNode(other.graph.entry());
-        
+
         return newBuilder;
     }
 

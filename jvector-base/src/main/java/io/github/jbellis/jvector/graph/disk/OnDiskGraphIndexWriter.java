@@ -324,8 +324,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
             int dimension;
             if (features.containsKey(FeatureId.INLINE_VECTORS)) {
                 dimension = ((InlineVectors) features.get(FeatureId.INLINE_VECTORS)).dimension();
+            } else if (features.containsKey(FeatureId.NVQ_VECTORS)) {
+                dimension = ((NVQ) features.get(FeatureId.NVQ_VECTORS)).dimension();
             } else {
-                throw new IllegalArgumentException("Inline vectors must be provided.");
+                throw new IllegalArgumentException("Inline or NVQ vectors must be provided.");
             }
 
             if (ordinalMapper == null) {

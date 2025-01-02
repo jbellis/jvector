@@ -27,6 +27,7 @@ The graph is represented by an on-disk adjacency list per node, with additional 
 
 The second pass can be performed with
 * Full resolution float32 vectors
+* NVQ, which uses a non-uniform technique to quantize vectors with high-accuracy
 
 [This two-pass design reduces memory usage and reduces latency while preserving accuracy](https://thenewstack.io/why-vector-size-matters/).  
 

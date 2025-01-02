@@ -134,12 +134,24 @@ public final class VectorUtil {
     impl.addInPlace(v1, v2);
   }
 
+  public static void addInPlace(VectorFloat<?> v1, float value) {
+    impl.addInPlace(v1, value);
+  }
+
   public static void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
     impl.subInPlace(v1, v2);
   }
 
+  public static void subInPlace(VectorFloat<?> vector, float value) {
+    impl.subInPlace(vector, value);
+  }
+
   public static VectorFloat<?> sub(VectorFloat<?> lhs, VectorFloat<?> rhs) {
     return impl.sub(lhs, rhs);
+  }
+
+  public static VectorFloat<?> sub(VectorFloat<?> lhs, float value) {
+    return impl.sub(lhs, value);
   }
 
   public static VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
@@ -197,5 +209,33 @@ public final class VectorUtil {
 
   public static float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
     return impl.pqDecodedCosineSimilarity(encoded, clusterCount, partialSums, aMagnitude, bMagnitude);
+  }
+
+  public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
+    return impl.nvqDotProduct8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
+  }
+
+  public static float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
+    return impl.nvqSquareL2Distance8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
+  }
+
+  public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
+    return impl.nvqCosine8bit(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
+  }
+
+  public static void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+    impl.nvqShuffleQueryInPlace8bit(vector);
+  }
+
+  public static void nvqQuantize8bit(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, ByteSequence<?> destination) {
+    impl.nvqQuantize8bit(vector, growthRate, midpoint, minValue, maxValue, destination);
+  }
+
+  public static float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits) {
+    return impl.nvqLoss(vector, growthRate, midpoint, minValue, maxValue, nBits);
+  }
+
+  public static float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+    return impl.nvqUniformLoss(vector, minValue, maxValue, nBits);
   }
 }

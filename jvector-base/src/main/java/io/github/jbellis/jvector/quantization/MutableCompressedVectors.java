@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 public interface  MutableCompressedVectors<T> extends CompressedVectors {
     /**

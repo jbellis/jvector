@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.pq;
+package io.github.jbellis.jvector.quantization;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static io.github.jbellis.jvector.pq.KMeansPlusPlusClusterer.UNWEIGHTED;
+import static io.github.jbellis.jvector.quantization.KMeansPlusPlusClusterer.UNWEIGHTED;
 import static io.github.jbellis.jvector.util.MathUtil.square;
 import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
 import static io.github.jbellis.jvector.vector.VectorUtil.sub;

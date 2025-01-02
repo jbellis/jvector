@@ -73,8 +73,18 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public void addInPlace(VectorFloat<?> v1, float value) {
+        SimdOps.addInPlace((ArrayVectorFloat)v1, value);
+    }
+
+    @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         SimdOps.subInPlace((ArrayVectorFloat) v1, (ArrayVectorFloat) v2);
+    }
+
+    @Override
+    public void subInPlace(VectorFloat<?> vector, float value) {
+        SimdOps.subInPlace((ArrayVectorFloat) vector, value);
     }
 
     @Override
@@ -83,6 +93,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             throw new IllegalArgumentException("Vectors must be the same length");
         }
         return SimdOps.sub((ArrayVectorFloat)a, 0, (ArrayVectorFloat)b, 0, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, float value) {
+        return SimdOps.sub((ArrayVectorFloat)a, 0, value, a.length());
     }
 
     @Override
@@ -160,6 +175,49 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     public float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude)
     {
         return SimdOps.pqDecodedCosineSimilarity((ByteSequence<byte[]>) encoded, clusterCount, (ArrayVectorFloat) partialSums, (ArrayVectorFloat) aMagnitude, bMagnitude);
+    }
+
+    @Override
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue) {
+        return SimdOps.nvqDotProduct8bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue) {
+        return SimdOps.nvqSquareDistance8bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float alpha, float x0, float minValue, float maxValue, VectorFloat<?> centroid) {
+        return SimdOps.nvqCosine8bit(
+                (ArrayVectorFloat) vector, (ArrayByteSequence) bytes,
+                alpha, x0, minValue, maxValue,
+                (ArrayVectorFloat) centroid
+        );
+    }
+
+    @Override
+    public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+        SimdOps.nvqShuffleQueryInPlace8bit((ArrayVectorFloat) vector);
+    }
+
+    @Override
+    public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
+        SimdOps.nvqQuantize8bit((ArrayVectorFloat) vector, alpha, x0, minValue, maxValue,(ArrayByteSequence) destination);
+    }
+
+    @Override
+    public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
+        return SimdOps.nvqLoss((ArrayVectorFloat) vector, alpha, x0, minValue, maxValue, nBits);
+    }
+
+    @Override
+    public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        return SimdOps.nvqUniformLoss((ArrayVectorFloat) vector, minValue, maxValue, nBits);
     }
 }
 

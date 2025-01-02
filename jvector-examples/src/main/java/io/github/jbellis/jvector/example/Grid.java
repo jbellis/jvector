@@ -30,16 +30,14 @@ import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
 import io.github.jbellis.jvector.graph.disk.InlineVectors;
+import io.github.jbellis.jvector.graph.disk.NVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
-import io.github.jbellis.jvector.pq.CompressedVectors;
-import io.github.jbellis.jvector.pq.PQVectors;
-import io.github.jbellis.jvector.pq.ProductQuantization;
-import io.github.jbellis.jvector.pq.VectorCompressor;
+import io.github.jbellis.jvector.quantization.*;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
@@ -173,9 +171,12 @@ public class Grid {
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
-            if (features.equals(EnumSet.of(FeatureId.INLINE_VECTORS))) {
+            if (features.equals(EnumSet.of(FeatureId.INLINE_VECTORS)) || features.equals(EnumSet.of(FeatureId.NVQ_VECTORS))) {
                 scoringWriter = writer;
             }
+        }
+        if (scoringWriter == null) {
+            throw new IllegalStateException("Bench looks for either NVQ_VECTORS or INLINE_VECTORS feature set for scoring compressed builds.");
         }
 
         // build the graph incrementally
@@ -256,6 +257,12 @@ public class Grid {
                     // no supplier as these will be used for writeInline, when we don't have enough information to fuse neighbors
                     builder.with(new FusedADC(onHeapGraph.maxDegree(), pq));
                     break;
+                case NVQ_VECTORS:
+                    var nvq = NVQuantization.compute(floatVectors, 2);
+                    builder.with(new NVQ(nvq));
+                    suppliers.put(FeatureId.NVQ_VECTORS, ordinal -> new NVQ.State(nvq.encode(floatVectors.getVector(ordinal))));
+                    break;
+
             }
         }
         return new BuilderWithSuppliers(builder, suppliers);

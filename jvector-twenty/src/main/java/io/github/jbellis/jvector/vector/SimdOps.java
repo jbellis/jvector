@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.ByteVector;
@@ -23,6 +24,7 @@ import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.ShortVector;
+import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorOperators;
 
 import java.util.List;
@@ -32,10 +34,8 @@ final class SimdOps {
     static final IntVector BYTE_TO_INT_MASK_512 = IntVector.broadcast(IntVector.SPECIES_512, 0xff);
     static final IntVector BYTE_TO_INT_MASK_256 = IntVector.broadcast(IntVector.SPECIES_256, 0xff);
 
-
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
-
 
     static float sum(ArrayVectorFloat vector) {
         var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
@@ -488,6 +488,11 @@ final class SimdOps {
         a.add(b).intoArray(v1.get(), 0);
     }
 
+    static void addInPlace64(ArrayVectorFloat v1, float value) {
+        var a = FloatVector.fromArray(FloatVector.SPECIES_64, v1.get(), 0);
+        a.add(value).intoArray(v1.get(), 0);
+    }
+
     static void addInPlace(ArrayVectorFloat v1, ArrayVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -513,6 +518,26 @@ final class SimdOps {
         }
     }
 
+    static void addInPlace(ArrayVectorFloat v1, float value) {
+        if (v1.length() == 2) {
+            addInPlace64(v1, value);
+            return;
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), i);
+            a.add(value).intoArray(v1.get(), i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length(); i++) {
+            v1.set(i,  v1.get(i) + value);
+        }
+    }
+
     static void subInPlace(ArrayVectorFloat v1, ArrayVectorFloat v2) {
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
@@ -533,6 +558,21 @@ final class SimdOps {
         }
     }
 
+    static void subInPlace(ArrayVectorFloat vector, float value) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            a.sub(value).intoArray(vector.get(), i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            vector.set(i,  vector.get(i) - value);
+        }
+    }
+
     static VectorFloat<?> sub(ArrayVectorFloat a, int aOffset, ArrayVectorFloat b, int bOffset, int length) {
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         float[] res = new float[length];
@@ -548,6 +588,25 @@ final class SimdOps {
         // Process the tail
         for (int i = vectorizedLength; i < length; i++) {
             res[i] = a.get(aOffset + i) - b.get(bOffset + i);
+        }
+
+        return new ArrayVectorFloat(res);
+    }
+
+    static VectorFloat<?> sub(ArrayVectorFloat a, int aOffset, float value, int length) {
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        float[] res = new float[length];
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var lhs = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, a.get(), aOffset + i);
+            var subResult = lhs.sub(value);
+            subResult.intoArray(res, i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < length; i++) {
+            res[i] = a.get(aOffset + i) - value;
         }
 
         return new ArrayVectorFloat(res);
@@ -750,7 +809,7 @@ final class SimdOps {
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
         float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
 
-            for (; i < baseOffsets.length(); i++) {
+        for (; i < baseOffsets.length(); i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i));
             sumResult += partialSumsArray[offset];
             aMagnitudeResult += aMagnitudeArray[offset];
@@ -811,4 +870,373 @@ final class SimdOps {
 
         return (float) (sum / Math.sqrt(aMag * bMagnitude));
     }
+
+    //---------------------------------------------
+    // NVQ quantization instructions start here
+    //---------------------------------------------
+
+    static final FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
+    static final FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
+
+    static FloatVector logisticNQT(FloatVector vector, float alpha, float x0) {
+        FloatVector temp = vector.fma(alpha, -alpha * x0);
+        VectorMask<Float> isPositive = temp.test(VectorOperators.IS_NEGATIVE).not();
+        IntVector p = temp.add(1, isPositive)
+                .convert(VectorOperators.F2I, 0)
+                .reinterpretAsInts();
+        FloatVector e = p.convert(VectorOperators.I2F, 0).reinterpretAsFloats();
+        IntVector m = temp.sub(e).fma(0.5f, 1).reinterpretAsInts();
+
+        temp = m.add(p.lanewise(VectorOperators.LSHL, 23)).reinterpretAsFloats();  // temp = m * 2^p
+        return temp.div(temp.add(1));
+    }
+
+    static float logisticNQT(float value, float alpha, float x0) {
+        float temp = Math.fma(value, alpha, -alpha * x0);
+        int p = (int) Math.floor(temp + 1);
+        int m = Float.floatToIntBits(Math.fma(temp - p, 0.5f, 1));
+
+        temp = Float.intBitsToFloat(m + (p << 23));  // temp = m * 2^p
+        return temp / (temp + 1);
+    }
+
+    static FloatVector logitNQT(FloatVector vector, float inverseAlpha, float x0) {
+        FloatVector z = vector.div(const1f.sub(vector));
+
+        IntVector temp = z.reinterpretAsInts();
+        FloatVector p = temp.and(0x7f800000)
+                .lanewise(VectorOperators.LSHR, 23).sub(128)
+                .convert(VectorOperators.I2F, 0)
+                .reinterpretAsFloats();
+        FloatVector m = temp.lanewise(VectorOperators.AND, 0x007fffff).add(0x3f800000).reinterpretAsFloats();
+
+        return m.add(p).fma(inverseAlpha, x0);
+    }
+
+    static float logitNQT(float value, float inverseAlpha, float x0) {
+        float z = value / (1 - value);
+
+        int temp = Float.floatToIntBits(z);
+        int e = temp & 0x7f800000;
+        float p = (float) ((e >> 23) - 128);
+        float m = Float.intBitsToFloat((temp & 0x007fffff) + 0x3f800000);
+
+        return Math.fma(m + p, inverseAlpha, x0);
+    }
+
+    static FloatVector nvqDequantize8bit(ByteVector bytes, float inverseAlpha, float x0, float logisticScale, float logisticBias, int part) {
+        /*
+         * We unpack the vector using the FastLanes strategy:
+         * https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf?ref=blog.lancedb.com
+         *
+         * We treat the ByteVector bytes as a vector of integers.
+         * | Int0                    | Int1                    | ...
+         * | Byte3 Byte2 Byte1 Byte0 | Byte3 Byte2 Byte1 Byte0 | ...
+         *
+         * The argument part indicates which byte we want to extract from each integer.
+         * With part=0, we extract
+         *      Int0\Byte0, Int1\Byte0, etc.
+         * With part=1, we shift by 8 bits and then extract
+         *      Int0\Byte1, Int1\Byte1, etc.
+         * With part=2, we shift by 16 bits and then extract
+         *      Int0\Byte2, Int1\Byte2, etc.
+         * With part=3, we shift by 24 bits and then extract
+         *      Int0\Byte3, Int1\Byte3, etc.
+         */
+        var arr = bytes.reinterpretAsInts()
+                .lanewise(VectorOperators.LSHR, 8 * part)
+                .lanewise(VectorOperators.AND, 0xff)
+                .convert(VectorOperators.I2F, 0)
+                .reinterpretAsFloats();
+
+        arr = arr.fma(logisticScale, logisticBias);
+        return logitNQT(arr, inverseAlpha, x0);
+    }
+
+    static void nvqQuantize8bit(ArrayVectorFloat vector, float alpha, float x0, float minValue, float maxValue, ArrayByteSequence destination) {
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        final var mask = ByteVector.SPECIES_PREFERRED.indexInRange(0, FloatVector.SPECIES_PREFERRED.length());
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var invLogisticScale = 255 / (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias);
+
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            arr = logisticNQT(arr, scaledAlpha, scaledX0);
+            arr = arr.sub(logisticBias).mul(invLogisticScale);
+            var bytes = arr.add(const05f)
+                    .convertShape(VectorOperators.F2B, ByteVector.SPECIES_PREFERRED, 0)
+                    .reinterpretAsBytes();
+            bytes.intoArray(destination.get(), i, mask);
+        }
+
+        // Process the tail
+        for (int d = vectorizedLength; d < vector.length(); d++) {
+            // Ensure the quantized value is within the 0 to constant range
+            float value = vector.get(d);
+            value = logisticNQT(value, scaledAlpha, scaledX0);
+            value = (value - logisticBias) * invLogisticScale;
+            int quantizedValue = Math.round(value);
+            destination.set(d, (byte) quantizedValue);
+        }
+    }
+
+    static float nvqLoss(ArrayVectorFloat vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
+        int constant = (1 << nBits) - 1;
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / constant;
+        var invLogisticScale = 1 / logisticScale;
+
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            var recArr = logisticNQT(arr, scaledAlpha, scaledX0);
+            recArr = recArr.sub(logisticBias).mul(invLogisticScale);
+            recArr = recArr.add(const05f)
+                    .convert(VectorOperators.F2I, 0)
+                    .reinterpretAsInts()
+                    .convert(VectorOperators.I2F, 0)
+                    .reinterpretAsFloats();
+            recArr = recArr.fma(logisticScale, logisticBias);
+            recArr = logitNQT(recArr, invScaledAlpha, scaledX0);
+
+            var diff = arr.sub(recArr);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value, recValue;
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            value = vector.get(i);
+
+            recValue = logisticNQT(value, scaledAlpha, scaledX0);
+            recValue = (recValue - logisticBias) * invLogisticScale;
+            recValue = Math.round(recValue);
+            recValue = Math.fma(logisticScale, recValue, logisticBias);
+            recValue = logitNQT(recValue, invScaledAlpha, scaledX0);
+
+            squaredSum += MathUtil.square(value - recValue);
+        }
+
+        return squaredSum;
+    }
+
+    static float nvqUniformLoss(ArrayVectorFloat vector, float minValue, float maxValue, int nBits) {
+        float constant = (1 << nBits) - 1;
+        float delta = maxValue - minValue;
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var arr = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i);
+            var recArr = arr.sub(minValue).mul(constant / delta);
+            recArr = recArr.add(const05f)
+                    .convert(VectorOperators.F2I, 0)
+                    .reinterpretAsInts()
+                    .convert(VectorOperators.I2F, 0)
+                    .reinterpretAsFloats();
+            recArr = recArr.fma(delta / constant, minValue);
+
+            var diff = arr.sub(recArr);
+            squaredSumVec = diff.fma(diff, squaredSumVec);
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value, recValue;
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            value = vector.get(i);
+
+            recValue = (value - minValue) / delta;
+            recValue = Math.round(constant * recValue) / constant;
+            recValue = recValue * delta + minValue;
+
+            squaredSum += MathUtil.square(value - recValue);
+        }
+
+        return squaredSum;
+    }
+
+    static float nvqSquareDistance8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
+                                       float alpha, float x0, float minValue, float maxValue) {
+        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
+
+            for (int j = 0; j < 4; j++) {
+                var v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
+                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+
+                var diff = v1.sub(v2);
+                squaredSumVec = diff.fma(diff, squaredSumVec);
+            }
+        }
+
+        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2, diff;
+        for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
+            value2 = logisticScale * value2 + logisticBias;
+            value2 = logitNQT(value2, invScaledAlpha, scaledX0);
+            diff = vector.get(i) - value2;
+            squaredSum += MathUtil.square(diff);
+        }
+
+        return squaredSum;
+    }
+
+    static float nvqDotProduct8bit(ArrayVectorFloat vector, ArrayByteSequence quantizedVector,
+                                   float alpha, float x0, float minValue, float maxValue) {
+        FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
+
+            for (int j = 0; j < 4; j++) {
+                var v1 = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
+                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+                dotProdVec = v1.fma(v2, dotProdVec);
+            }
+        }
+
+        float dotProd = dotProdVec.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2;
+        for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
+            value2 = Math.fma(logisticScale, value2, logisticBias);
+            value2 = logitNQT(value2, invScaledAlpha, scaledX0);
+            dotProd = Math.fma(vector.get(i), value2, dotProd);
+        }
+
+        return dotProd;
+    }
+
+    static float[] nvqCosine8bit(ArrayVectorFloat vector,
+                                 ArrayByteSequence quantizedVector, float alpha, float x0, float minValue, float maxValue,
+                                 ArrayVectorFloat centroid) {
+        if (vector.length() != centroid.length()) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        var delta = maxValue - minValue;
+        var scaledAlpha = alpha / delta;
+        var invScaledAlpha = 1 / scaledAlpha;
+        var scaledX0 = x0 * delta;
+        var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
+        var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
+
+        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(vector.length());
+        int floatStep = FloatVector.SPECIES_PREFERRED.length();
+
+        for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
+            var byteArr = ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, quantizedVector.get(), i);
+
+            for (int j = 0; j < 4; j++) {
+                var va = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vector.get(), i + floatStep * j);
+                var vb = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+
+                var vCentroid = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, centroid.get(), i + floatStep * j);
+                vb = vb.add(vCentroid);
+
+                vsum = va.fma(vb, vsum);
+                vbMagnitude = vb.fma(vb, vbMagnitude);
+            }
+        }
+
+        float sum = vsum.reduceLanes(VectorOperators.ADD);
+        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+
+        // Process the tail
+        float value2;
+        for (int i = vectorizedLength; i < vector.length(); i++) {
+            value2 = Byte.toUnsignedInt(quantizedVector.get(i));
+            value2 = Math.fma(logisticScale, value2, logisticBias);
+            value2 = logitNQT(value2, invScaledAlpha, scaledX0) + centroid.get(i);
+            sum = Math.fma(vector.get(i), value2, sum);
+            bMagnitude = Math.fma(value2, value2, bMagnitude);
+        }
+
+        // TODO can we avoid returning a new array?
+        return new float[]{sum, bMagnitude};
+    }
+
+    static void transpose(float[] arr, int first, int last, int nRows) {
+        final int mn1 = (last - first - 1);
+        final int n   = (last - first) / nRows;
+        boolean[] visited = new boolean[last - first];
+        float temp;
+        int cycle = first;
+        while (++cycle != last) {
+            if (visited[cycle - first])
+                continue;
+            int a = cycle - first;
+            do  {
+                a = a == mn1 ? mn1 : (n * a) % mn1;
+                temp = arr[first + a];
+                arr[first + a] = arr[cycle];
+                arr[cycle] = temp;
+                visited[a] = true;
+            } while ((first + a) != cycle);
+        }
+    }
+
+    static void nvqShuffleQueryInPlace8bit(ArrayVectorFloat vector) {
+        // To understand this shuffle, see nvqDequantize8bit
+        var arr = vector.get();
+
+        final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
+        final int step = FloatVector.SPECIES_PREFERRED.length() * 4;
+
+        for (int i = 0; i + step <= vectorizedLength; i += step) {
+            transpose(arr, i, i + step, 4);
+        }
+    }
+
+    //---------------------------------------------
+    // NVQ instructions end here
+    //---------------------------------------------
 }
