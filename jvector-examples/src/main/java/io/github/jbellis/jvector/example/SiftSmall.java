@@ -295,7 +295,7 @@ public class SiftSmall {
             // build the index vector-at-a-time (on disk)
             for (int ordinal = 0; ordinal < baseVectors.size(); ordinal++) {
                 VectorFloat<?> v = baseVectors.get(ordinal);
-                // compress the new vector and add it to the PQVectors (via incrementallyCompressedVectors)
+                // compress the new vector and add it to the PQVectors
                 pqv.encodeAndSet(ordinal, v);
                 // write the full vector to disk
                 writer.writeInline(ordinal, Feature.singleState(FeatureId.NVQ_VECTORS, new NVQ.State(nvq.encode(v))));

@@ -55,6 +55,54 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
         TestUtil.deleteQuietly(testDirectory);
     }
 
+    @Test 
+    public void testRescore() {
+        // Create test vectors where each vector is [node_id, 0]
+        var vectors = new ArrayList<VectorFloat<?>>();
+        vectors.add(vts.createFloatVector(new float[] {0, 0}));
+        vectors.add(vts.createFloatVector(new float[] {0, 1}));
+        vectors.add(vts.createFloatVector(new float[] {2, 0}));
+        var ravv = new ListRandomAccessVectorValues(vectors, 2);
+        
+        // Initial score provider uses dot product, so scores will equal node IDs
+        var bsp = BuildScoreProvider.randomAccessScoreProvider(ravv, VectorSimilarityFunction.EUCLIDEAN);
+        var builder = new GraphIndexBuilder(bsp, 2, 2, 10, 1.0f, 1.0f);
+
+        // Add 3 nodes
+        builder.addGraphNode(0, ravv.getVector(0));
+        builder.addGraphNode(1, ravv.getVector(1));
+        builder.addGraphNode(2, ravv.getVector(2));
+        var neighbors = builder.graph.getNeighbors(0);
+        assertEquals(1, neighbors.getNode(0));
+        assertEquals(2, neighbors.getNode(1));
+        assertEquals(0.5f, neighbors.getScore(0), 1E-6);
+        assertEquals(0.2f, neighbors.getScore(1), 1E-6);
+
+        // Create new vectors where each is [-node_id, 0] so dot products will be negative node IDs
+        vectors.clear();
+        vectors.add(vts.createFloatVector(new float[] {0, 0}));
+        vectors.add(vts.createFloatVector(new float[] {0, 4}));
+        vectors.add(vts.createFloatVector(new float[] {2, 0}));
+
+        // Rescore the graph
+        // (The score provider didn't change, but the vectors did, which provides the same effect)
+        var rescored = GraphIndexBuilder.rescore(builder, bsp);
+
+        // Verify edges still exist
+        var newGraph = rescored.getGraph();
+        assertTrue(newGraph.containsNode(0));
+        assertTrue(newGraph.containsNode(1));
+        assertTrue(newGraph.containsNode(2));
+
+        // Check node 0's neighbors, score and order should be different
+        var newNeighbors = newGraph.getNeighbors(0);
+        assertEquals(2, newNeighbors.getNode(0));
+        assertEquals(1, newNeighbors.getNode(1));
+        assertEquals(0.2f, newNeighbors.getScore(0), 1E-6);
+        assertEquals(0.05882353f, newNeighbors.getScore(1), 1E-6);
+
+    }
+
     @Test
     public void testRescore() {
         // Create test vectors where each vector is [node_id, 0]
