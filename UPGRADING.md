@@ -12,6 +12,12 @@
 - The `VectorCompressor.createCompressedVectors(Object[])` method is now deprecated in favor of the new API that returns
   `CompressedVectors` directly from `encodeAll()`.
 
+## New features
+- Support for Non-uniform Vector Quantization (NVQ, pronounced as "new vec"). This new technique quantizes the values
+  in each vector with high accuracy by first applying a nonlinear transformation that is individually fit to each
+  vector. These nonlinearities are designed to be lightweight and have a negligible impact on distance computation
+  performance.
+
 # Upgrading from 2.0.x to 3.0.x
 
 ## Critical API changes
