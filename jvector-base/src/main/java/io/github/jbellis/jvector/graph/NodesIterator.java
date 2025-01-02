@@ -65,14 +65,19 @@ public abstract class NodesIterator implements PrimitiveIterator.OfInt {
 
     public static class ArrayNodesIterator extends NodesIterator {
         private final int[] nodes;
-        private int cur = 0;
+        private int cur;
 
         /** Constructor for iterator based on integer array representing nodes */
-        public ArrayNodesIterator(int[] nodes, int size) {
-            super(size);
+        public ArrayNodesIterator(int[] nodes, int offset, int count) {
+            super(count);
             assert nodes != null;
-            assert size <= nodes.length;
+            assert offset + size <= nodes.length;
             this.nodes = nodes;
+            this.cur = offset;
+        }
+
+        public ArrayNodesIterator(int[] nodes, int count) {
+            this(nodes, 0, count);
         }
 
         public ArrayNodesIterator(int[] nodes) {
@@ -84,16 +89,12 @@ public abstract class NodesIterator implements PrimitiveIterator.OfInt {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            if (nodes == null) {
-                return cur++;
-            } else {
-                return nodes[cur++];
-            }
+            return nodes[cur++];
         }
 
         @Override
         public boolean hasNext() {
-            return cur < size;
+            return cur < nodes.length;
         }
     }
 }

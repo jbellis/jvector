@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.IntArrayList;
 
 import java.io.IOException;
 
@@ -56,7 +57,7 @@ public class CachingGraphIndex implements GraphIndex, Accountable
 
     @Override
     public ScoringView getView() {
-        return new View(cache_, graph.getView());
+        return new View(cache_, graph.getPrefetchingView());
     }
 
     @Override
@@ -81,9 +82,9 @@ public class CachingGraphIndex implements GraphIndex, Accountable
 
     public static class View implements ScoringView {
         private final GraphCache cache;
-        protected final OnDiskGraphIndex.View view;
+        protected final OnDiskGraphIndex.PrefetchingView view;
 
-        public View(GraphCache cache, OnDiskGraphIndex.View view) {
+        public View(GraphCache cache, OnDiskGraphIndex.PrefetchingView view) {
             this.cache = cache;
             this.view = view;
         }
@@ -95,6 +96,16 @@ public class CachingGraphIndex implements GraphIndex, Accountable
                 return new NodesIterator.ArrayNodesIterator(node.neighbors, node.neighbors.length);
             }
             return view.getNeighborsIterator(ordinal);
+        }
+
+        @Override
+        public boolean isIterable(int node) {
+            return cache.getNode(node) != null || view.isIterable(node);
+        }
+
+        @Override
+        public void readEdges(IntArrayList nodes) {
+            view.readEdges(nodes);
         }
 
         @Override

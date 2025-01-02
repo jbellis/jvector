@@ -25,6 +25,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.Experimental;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
@@ -34,6 +35,7 @@ import io.github.jbellis.jvector.util.SparseBits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
@@ -219,6 +221,7 @@ public class GraphSearcher implements Closeable {
         evictedResults.clear();
         candidates.clear();
         visited.clear();
+        view.reset();
 
         // no entry point -> empty results
         if (ep < 0) {
@@ -314,7 +317,15 @@ public class GraphSearcher implements Closeable {
                     similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
                 }
 
+                if (!view.isIterable(topCandidateNode))
+                {
+                    var toPrefetch = new IntArrayList(4, Integer.MIN_VALUE);
+                    toPrefetch.add(topCandidateNode);
+                    candidates.forEachTop3((i, j) -> toPrefetch.add(j));
+                    view.readEdges(toPrefetch);
+                }
                 var it = view.getNeighborsIterator(topCandidateNode);
+
                 for (int i = 0; i < it.size(); i++) {
                     var friendOrd = it.nextInt();
                     if (!visited.add(friendOrd)) {

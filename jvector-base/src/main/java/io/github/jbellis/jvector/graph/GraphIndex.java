@@ -29,6 +29,7 @@ import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.IntArrayList;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -103,6 +104,20 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         NodesIterator getNeighborsIterator(int node);
 
         /**
+         * Returns true if getNeighborsIterator can be called on the given node without having to first call readEdges.
+         */
+        default boolean isIterable(int node) {
+            return true;
+        }
+
+        /**
+         * Read the edges of the given nodes and cache them for calls to getNeighborsIterator
+         */
+        default void readEdges(IntArrayList nodes) {
+            // no-op, just call getNeighborsIterator
+        }
+
+        /**
          * @return the number of nodes in the graph
          */
         int size();
@@ -123,6 +138,12 @@ public interface GraphIndex extends AutoCloseable, Accountable {
          */
         default int getIdUpperBound() {
             return size();
+        }
+
+        /**
+         * Reset state between searches
+         */
+        default void reset() {
         }
     }
 

@@ -30,6 +30,8 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.collections.IntArrayList;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -141,11 +143,21 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 features.keySet().stream().map(Enum::name).collect(Collectors.joining(",")));
     }
 
-    // re-declared to specify type
     @Override
     public View getView() {
         try {
             return new View(readerSupplier.get());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * @return a view that allows prefetching edge lists for getNeighborsIterator
+     */
+    public PrefetchingView getPrefetchingView() {
+        try {
+            return new PrefetchingView(readerSupplier.get());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -307,5 +319,50 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                g1.maxDegree == g2.maxDegree &&
                g1.dimension == g2.dimension &&
                g1.entryNode == g2.entryNode;
+    }
+
+    public class PrefetchingView extends View {
+        private final Int2ObjectHashMap<int[]> edges = new Int2ObjectHashMap<>();
+
+        public PrefetchingView(RandomAccessReader reader) {
+            super(reader);
+        }
+
+        @Override
+        public NodesIterator getNeighborsIterator(int node) {
+            int[] prefetched = edges.get(node);
+            assert prefetched != null : String.format("all edge lists must be prefetched before iteration; node %d not found", node);
+            return new NodesIterator.ArrayNodesIterator(prefetched, 1, prefetched[0]);
+        }
+
+        @Override
+        public boolean isIterable(int node) {
+            return edges.containsKey(node);
+        }
+
+        @Override
+        public void readEdges(IntArrayList nodes) {
+            int[][] targets = new int[nodes.size()][];
+            long[] offsets = new long[nodes.size()];
+            for (int i = 0; i < nodes.size(); i++) {
+                offsets[i] = neighborsOffsetFor(nodes.getInt(i));
+                targets[i] = new int[1 + maxDegree]; // +1 for the count
+            }
+
+            try {
+                reader.read(targets, offsets);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+            for (int i = 0; i < nodes.size(); i++) {
+                edges.put(nodes.getInt(i), targets[i]);
+            }
+        }
+
+        @Override
+        public void reset() {
+            edges.clear();
+        }
     }
 }
