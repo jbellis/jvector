@@ -269,7 +269,6 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     @Override
     public int compressorSize() {
         int size = 0;
-        size += Integer.BYTES; // MAGIC
         size += Integer.BYTES; // STORAGE_VERSION
         size += Integer.BYTES; // globalCentroidLength
         size += Float.BYTES * globalMean.length();
