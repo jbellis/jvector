@@ -137,12 +137,14 @@ public abstract class PQVectors implements CompressedVectors {
         // Encode the vectors in parallel into the compressed data chunks
         // The changes are concurrent, but because they are coordinated and do not overlap, we can use parallel streams
         // and then we are guaranteed safe publication because we join the thread after completion.
+        var ravvCopy = ravv.threadLocalSupplier();
         simdExecutor.submit(() -> IntStream.range(0, ravv.size())
                         .parallel()
                         .forEach(ordinal -> {
                             // Retrieve the slice and mutate it.
+                            var localRavv = ravvCopy.get();
                             var slice = PQVectors.get(chunks, ordinal, vectorsPerChunk, pq.getSubspaceCount());
-                            var vector = ravv.getVector(ordinal);
+                            var vector = localRavv.getVector(ordinal);
                             if (vector != null)
                                 pq.encodeTo(vector, slice);
                             else
