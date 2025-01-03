@@ -57,7 +57,7 @@ public class CachingGraphIndex implements GraphIndex, Accountable
 
     @Override
     public ScoringView getView() {
-        return new View(cache_, graph.getPrefetchingView());
+        return new View(cache_, graph.getView());
     }
 
     @Override
@@ -82,9 +82,9 @@ public class CachingGraphIndex implements GraphIndex, Accountable
 
     public static class View implements ScoringView {
         private final GraphCache cache;
-        protected final OnDiskGraphIndex.PrefetchingView view;
+        protected final OnDiskGraphIndex.View view;
 
-        public View(GraphCache cache, OnDiskGraphIndex.PrefetchingView view) {
+        public View(GraphCache cache, OnDiskGraphIndex.View view) {
             this.cache = cache;
             this.view = view;
         }
@@ -99,13 +99,33 @@ public class CachingGraphIndex implements GraphIndex, Accountable
         }
 
         @Override
-        public boolean isIterable(int node) {
-            return cache.getNode(node) != null || view.isIterable(node);
-        }
+        public NodesIterator[] getNeighborsIterators(IntArrayList nodes, int[][] scratch) {
+            NodesIterator[] results = new NodesIterator[nodes.size()];
+            IntArrayList uncachedNodes = new IntArrayList();
+            int[] uncachedIndices = new int[nodes.size()];
+            int uncachedCount = 0;
 
-        @Override
-        public void readEdges(IntArrayList nodes) {
-            view.readEdges(nodes);
+            // First check cache for each node
+            for (int i = 0; i < nodes.size(); i++) {
+                int nodeOrd = nodes.getInt(i);
+                var node = cache.getNode(nodeOrd);
+                if (node != null) {
+                    results[i] = new NodesIterator.ArrayNodesIterator(node.neighbors, node.neighbors.length);
+                } else {
+                    uncachedNodes.add(nodeOrd);
+                    uncachedIndices[uncachedCount++] = i;
+                }
+            }
+
+            // Get uncached nodes from underlying view
+            if (uncachedCount > 0) {
+                NodesIterator[] uncachedResults = view.getNeighborsIterators(uncachedNodes, scratch);
+                for (int i = 0; i < uncachedCount; i++) {
+                    results[uncachedIndices[i]] = uncachedResults[i];
+                }
+            }
+
+            return results;
         }
 
         @Override

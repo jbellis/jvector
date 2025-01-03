@@ -103,18 +103,9 @@ public interface GraphIndex extends AutoCloseable, Accountable {
          */
         NodesIterator getNeighborsIterator(int node);
 
-        /**
-         * Returns true if getNeighborsIterator can be called on the given node without having to first call readEdges.
-         */
-        default boolean isIterable(int node) {
-            return true;
-        }
-
-        /**
-         * Read the edges of the given nodes and cache them for calls to getNeighborsIterator
-         */
-        default void readEdges(IntArrayList nodes) {
-            // no-op, just call getNeighborsIterator
+        default NodesIterator[] getNeighborsIterators(IntArrayList nodes, int[][] scratch) {
+            // FIXME I think we want to make GraphSearcher call getNeighborsIterator when we don't have "real" multi-read support
+            return nodes.intStream().mapToObj(this::getNeighborsIterator).toArray(NodesIterator[]::new);
         }
 
         /**
@@ -138,12 +129,6 @@ public interface GraphIndex extends AutoCloseable, Accountable {
          */
         default int getIdUpperBound() {
             return size();
-        }
-
-        /**
-         * Reset state between searches
-         */
-        default void reset() {
         }
     }
 

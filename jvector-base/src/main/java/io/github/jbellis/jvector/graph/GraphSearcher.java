@@ -25,7 +25,6 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.Experimental;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.Bits;
@@ -47,6 +46,8 @@ import java.io.IOException;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements Closeable {
+    private static final int EDGE_BATCH_SIZE = 4;
+
     private final GraphIndex.View view;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
@@ -56,6 +57,7 @@ public class GraphSearcher implements Closeable {
     private final NodeQueue rerankedResults;
     private final IntHashSet visited;
     private final NodesUnsorted evictedResults;
+    private final int[][] edgeStorage;
 
     // Search parameters that we save here for use by resume()
     private Bits acceptOrds;
@@ -66,16 +68,20 @@ public class GraphSearcher implements Closeable {
      * Creates a new graph searcher from the given GraphIndex
      */
     public GraphSearcher(GraphIndex graph) {
-        this(graph.getView());
+        this(graph.getView(), graph.maxDegree());
     }
 
-    private GraphSearcher(GraphIndex.View view) {
+    private GraphSearcher(GraphIndex.View view, int maxDegree) {
         this.view = view;
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodesUnsorted(100);
         this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.rerankedResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
+        this.edgeStorage = new int[EDGE_BATCH_SIZE][];
+        for (int i = 0; i < edgeStorage.length; i++) {
+            edgeStorage[i] = new int[1 + maxDegree]; // +1 for the count
+        }
     }
 
     private void initializeScoreProvider(SearchScoreProvider scoreProvider) {
@@ -102,26 +108,6 @@ public class GraphSearcher implements Closeable {
             return searcher.search(ssp, topK, acceptOrds);
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Call GraphSearcher constructor instead
-     */
-    @Deprecated
-    public static class Builder {
-        private final GraphIndex.View view;
-
-        public Builder(GraphIndex.View view) {
-            this.view = view;
-        }
-
-        public Builder withConcurrentUpdates() {
-            return this;
-        }
-
-        public GraphSearcher build() {
-            return new GraphSearcher(view);
         }
     }
 
@@ -221,7 +207,6 @@ public class GraphSearcher implements Closeable {
         evictedResults.clear();
         candidates.clear();
         visited.clear();
-        view.reset();
 
         // no entry point -> empty results
         if (ep < 0) {
@@ -266,6 +251,10 @@ public class GraphSearcher implements Closeable {
             approximateResults.setMaxSize(rerankK);
             rerankedResults.setMaxSize(topK);
 
+            var scoreFunction = scoreProvider.scoreFunction();
+            var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
+            var nodeBatch = new IntArrayList();
+
             int numVisited = initialVisited;
             // A bound that holds the minimum similarity to the query vector that a candidate vector must
             // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
@@ -285,59 +274,59 @@ public class GraphSearcher implements Closeable {
             // the main search loop
             while (candidates.size() > 0) {
                 // we're done when we have K results and the best candidate is worse than the worst result so far
-                float topCandidateScore = candidates.topScore();
-                if (topCandidateScore < minAcceptedSimilarity) {
+                if (candidates.topScore() < minAcceptedSimilarity) {
                     break;
                 }
-                // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
+                // when querying by threshold, stop when we are probabilistically unlikely to find more qualifying results
                 if (scoreTracker.shouldStop()) {
                     break;
                 }
 
-                // process the top candidate
-                int topCandidateNode = candidates.pop();
-                if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
-                    addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
+                // pop top 4 candidates
+                nodeBatch.clear();
+                while (nodeBatch.size() < EDGE_BATCH_SIZE && candidates.size() > 0) {
+                    // TODO is this redundant w/ the outer loop check?
+                    float candidateScore = candidates.topScore();
+                    if (candidateScore < minAcceptedSimilarity) {
+                        break;
+                    }
 
-                    // update minAcceptedSimilarity if we've found K results
-                    if (approximateResults.size() >= rerankK) {
-                        minAcceptedSimilarity = approximateResults.topScore();
+                    int candidate = candidates.pop();
+                    if (acceptOrds.get(candidate) && candidateScore >= threshold) {
+                        addTopCandidate(candidate, candidateScore, rerankK);
+
+                        // update minAcceptedSimilarity if we've found K results
+                        if (approximateResults.size() >= rerankK) {
+                            minAcceptedSimilarity = approximateResults.topScore();
+                        }
+                    }
+
+                    // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
+                    if (!previouslyEvicted.get(candidate)) {
+                        nodeBatch.addInt(candidate);
                     }
                 }
-
-                // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
-                if (previouslyEvicted.get(topCandidateNode)) {
-                    continue;
+                if (nodeBatch.isEmpty()) {
+                    break;
                 }
 
-                // score the neighbors of the top candidate and add them to the queue
-                var scoreFunction = scoreProvider.scoreFunction();
-                var useEdgeLoading = scoreFunction.supportsEdgeLoadingSimilarity();
-                if (useEdgeLoading) {
-                    similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
-                }
+                // load edges for each of the top 4
+                var iterators = view.getNeighborsIterators(nodeBatch, edgeStorage);
 
-                if (!view.isIterable(topCandidateNode))
-                {
-                    var toPrefetch = new IntArrayList(4, Integer.MIN_VALUE);
-                    toPrefetch.add(topCandidateNode);
-                    candidates.forEachTop3((i, j) -> toPrefetch.add(j));
-                    view.readEdges(toPrefetch);
-                }
-                var it = view.getNeighborsIterator(topCandidateNode);
-
-                for (int i = 0; i < it.size(); i++) {
-                    var friendOrd = it.nextInt();
-                    if (!visited.add(friendOrd)) {
-                        continue;
+                // process neighbors for the batch
+                for (int j = 0; j < nodeBatch.size(); j++) {
+                    similarities = useEdgeLoading ? scoreFunction.edgeLoadingSimilarityTo(nodeBatch.getInt(j)) : null;
+                    var it = iterators[j];
+                    for (int i = 0; i < it.size(); i++) {
+                        var friendOrd = it.nextInt();
+                        if (!visited.add(friendOrd)) {
+                            continue;
+                        }
+                        numVisited++;
+                        float friendSimilarity = useEdgeLoading ? similarities.get(i) : scoreFunction.similarityTo(friendOrd);
+                        scoreTracker.track(friendSimilarity);
+                        candidates.push(friendOrd, friendSimilarity);
                     }
-                    numVisited++;
-
-                    float friendSimilarity = useEdgeLoading
-                            ? similarities.get(i)
-                            : scoreFunction.similarityTo(friendOrd);
-                    scoreTracker.track(friendSimilarity);
-                    candidates.push(friendOrd, friendSimilarity);
                 }
             }
 
