@@ -22,6 +22,14 @@ import java.nio.ByteBuffer;
 /**
  * This is a subset of DataInput, plus seek and readFully methods, which allows implementations
  * to use more efficient options like FloatBuffer for bulk reads.
+ * <p>
+ * JVector includes production-ready implementations; the recommended way to use these are via
+ * `ReaderSupplierFactory.open`.  For custom implementations, e.g. reading from network storage,
+ * you should also implement a corresponding `ReaderSupplier`.
+ * <p>
+ * The general usage pattern is expected to be "seek to a position, then read sequentially from there."
+ * Thus, RandomAccessReader implementations are expected to be stateful and NOT threadsafe; JVector
+ * uses the ReaderSupplier API to create a RandomAccessReader per thread, as needed.
  */
 public interface RandomAccessReader extends AutoCloseable {
     void seek(long offset) throws IOException;

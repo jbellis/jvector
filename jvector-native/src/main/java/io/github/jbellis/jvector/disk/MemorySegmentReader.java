@@ -18,6 +18,8 @@ package io.github.jbellis.jvector.disk;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.foreign.ValueLayout.OfFloat;
@@ -31,11 +33,15 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 /**
- * {@link MemorySegment} based implementation of RandomAccessReader.
- * MemorySegmentReader doesn't have 2GB file size limitation of {@link SimpleMappedReader}.
+ * {@link MemorySegment} based implementation of RandomAccessReader.  This is the recommended
+ * RandomAccessReader implementation included with JVector.
+ * <p>
+ * MemorySegmentReader applies MADV_RANDOM to the backing storage, and doesn't have the 2GB file size limitation
+ * of {@link SimpleMappedReader}.
  */
 public class MemorySegmentReader implements RandomAccessReader {
 
+    private static final int MADV_RANDOM = 1; // Value for Linux
     private static final OfInt intLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
     private static final OfFloat floatLayout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
     private static final OfLong longLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
@@ -48,6 +54,19 @@ public class MemorySegmentReader implements RandomAccessReader {
         arena = Arena.ofShared();
         try (var ch = FileChannel.open(path, StandardOpenOption.READ)) {
             memory = ch.map(MapMode.READ_ONLY, 0L, ch.size(), arena);
+            
+            // Apply MADV_RANDOM advice
+            var linker = Linker.nativeLinker();
+            var madvise = linker.downcallHandle(linker.defaultLookup().find("posix_madvise").get(),
+                                                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+            try {
+                int result = (int) madvise.invokeExact(memory, memory.byteSize(), MADV_RANDOM);
+                if (result != 0) {
+                    throw new IOException("posix_madvise failed with error code: " + result);
+                }
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
         } catch (Exception e) {
             arena.close();
             throw e;
