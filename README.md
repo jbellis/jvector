@@ -138,7 +138,7 @@ The code:
 
         // on-disk indexes require a ReaderSupplier (not just a Reader) because we will want it to
         // open additional readers for searching
-        ReaderSupplier rs = new SimpleMappedReaderSupplier(indexPath);
+        ReaderSupplier rs = ReaderSupplierFactor.open(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         // measure our recall against the (exactly computed) ground truth
         Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, ravv);
@@ -174,7 +174,7 @@ Compressing the vectors with product quantization is done as follows:
 
 Then we can wire up the compressed vectors to a two-phase search by getting the fast ApproximateScoreFunction from PQVectors, and the Reranker from the index View:
 ```java
-        ReaderSupplier rs = new MMapReaderSupplier(indexPath);
+        ReaderSupplier rs = ReaderSupplierFactor.open(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         // load the PQVectors that we just wrote to disk
         try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {

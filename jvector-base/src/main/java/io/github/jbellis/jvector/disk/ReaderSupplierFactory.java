@@ -13,10 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.github.jbellis.jvector.example.util;
-
-import io.github.jbellis.jvector.disk.ReaderSupplier;
-import io.github.jbellis.jvector.disk.SimpleMappedReader;
+package io.github.jbellis.jvector.disk;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -28,6 +25,7 @@ import java.util.logging.Logger;
 public class ReaderSupplierFactory {
     private static final Logger LOG = Logger.getLogger(ReaderSupplierFactory.class.getName());
     private static final String MEMORY_SEGMENT_READER_CLASSNAME = "io.github.jbellis.jvector.disk.MemorySegmentReader$Supplier";
+    private static final String MMAP_READER_CLASSNAME = "io.github.jbellis.jvector.example.util.MMapReader$Supplier";
 
     public static ReaderSupplier open(Path path) throws IOException {
         try {
@@ -40,8 +38,10 @@ public class ReaderSupplierFactory {
         }
 
         try {
-            return new MMapReader.Supplier(path);
-        } catch (UnsatisfiedLinkError|NoClassDefFoundError e) {
+            var supplierClass = Class.forName(MMAP_READER_CLASSNAME);
+            Constructor<?> ctor = supplierClass.getConstructor(Path.class);
+            return (ReaderSupplier) ctor.newInstance(path);
+        } catch (Exception e) {
             LOG.log(Level.WARNING, "MMapReaderSupplier not available, falling back to SimpleMappedReaderSupplier. More details available at level FINE.");
             LOG.log(Level.FINE, "MMapReaderSupplier instantiation exception:", e);
             if (Files.size(path) > Integer.MAX_VALUE) {
