@@ -29,6 +29,7 @@ public class ReaderSupplierFactory {
 
     public static ReaderSupplier open(Path path) throws IOException {
         try {
+            // prefer MemorySegmentReader (available under JDK 20+)
             var supplierClass = Class.forName(MEMORY_SEGMENT_READER_CLASSNAME);
             Constructor<?> ctor = supplierClass.getConstructor(Path.class);
             return (ReaderSupplier) ctor.newInstance(path);
@@ -38,6 +39,8 @@ public class ReaderSupplierFactory {
         }
 
         try {
+            // fall back to MMapReader (requires a 3rd party linux-only native mmap library that is only included
+            // in the build with jvector-example; this allows Bench to not embarrass us on older JDKs)
             var supplierClass = Class.forName(MMAP_READER_CLASSNAME);
             Constructor<?> ctor = supplierClass.getConstructor(Path.class);
             return (ReaderSupplier) ctor.newInstance(path);
@@ -45,9 +48,10 @@ public class ReaderSupplierFactory {
             LOG.log(Level.WARNING, "MMapReaderSupplier not available, falling back to SimpleMappedReaderSupplier. More details available at level FINE.");
             LOG.log(Level.FINE, "MMapReaderSupplier instantiation exception:", e);
             if (Files.size(path) > Integer.MAX_VALUE) {
-                throw new RuntimeException("File sizes greater than 2GB are not supported on Windows--contributions welcome");
+                throw new RuntimeException("File sizes greater than 2GB are not supported on older Windows JDKs");
             }
 
+            // finally, fall back to SimpleMappedReader (available everywhere, but doesn't support files > 2GB)
             return new SimpleMappedReader.Supplier(path);
         }
     }
