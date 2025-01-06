@@ -18,6 +18,9 @@ package io.github.jbellis.jvector.disk;
 
 import java.io.IOException;
 
+/**
+ * A supplier of RandomAccessReaders.
+ */
 public interface ReaderSupplier extends AutoCloseable {
     /**
      * @return a new reader.  It is up to the caller to re-use these readers or close them,
