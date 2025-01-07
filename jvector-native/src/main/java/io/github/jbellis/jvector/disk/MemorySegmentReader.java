@@ -32,6 +32,9 @@ import java.nio.channels.FileChannel.MapMode;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * {@link MemorySegment} based implementation of RandomAccessReader.  This is the recommended
  * RandomAccessReader implementation included with JVector.
@@ -40,6 +43,7 @@ import java.nio.file.StandardOpenOption;
  * of {@link SimpleMappedReader}.
  */
 public class MemorySegmentReader implements RandomAccessReader {
+    private static final Logger logger = LoggerFactory.getLogger(MemorySegmentReader.class);
 
     private static final int MADV_RANDOM = 1; // Value for Linux
     private static final OfInt intLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
@@ -57,15 +61,24 @@ public class MemorySegmentReader implements RandomAccessReader {
             
             // Apply MADV_RANDOM advice
             var linker = Linker.nativeLinker();
-            var madvise = linker.downcallHandle(linker.defaultLookup().find("posix_madvise").get(),
-                                                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
-            try {
-                int result = (int) madvise.invokeExact(memory, memory.byteSize(), MADV_RANDOM);
-                if (result != 0) {
-                    throw new IOException("posix_madvise failed with error code: " + result);
+            var maybeMadvise = linker.defaultLookup().find("posix_madvise");
+            if (maybeMadvise.isPresent()) {
+                var madvise = linker.downcallHandle(maybeMadvise.get(),
+                        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+                try
+                {
+                    int result = (int) madvise.invokeExact(memory, memory.byteSize(), MADV_RANDOM);
+                    if (result != 0)
+                    {
+                        throw new IOException("posix_madvise failed with error code: " + result);
+                    }
                 }
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
+                catch (Throwable t)
+                {
+                    throw new RuntimeException(t);
+                }
+            } else {
+                logger.warn("posix_madvise not found, MADV_RANDOM advice not applied");
             }
         } catch (Exception e) {
             arena.close();
