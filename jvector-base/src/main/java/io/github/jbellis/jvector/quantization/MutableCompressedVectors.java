@@ -16,7 +16,7 @@
 
 package io.github.jbellis.jvector.quantization;
 
-public interface  MutableCompressedVectors<T> extends CompressedVectors {
+public interface MutableCompressedVectors<T> extends CompressedVectors {
     /**
      * Encode the given vector and set it at the given ordinal. Done without unnecessary copying.
      *
