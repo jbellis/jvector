@@ -20,6 +20,13 @@ import org.agrona.collections.Int2IntHashMap;
 
 import java.util.Map;
 
+/**
+ * Allows mapping the ordinals that an index was built with to different ordinals while writing to disk.
+ * This is necessary for two use cases:
+ *  - Filling in "holes" left by deleted nodes in the ordinal range
+ *  - Cassandra wants to map ordinals to rowids where possible, which saves a lookup at read time,
+ *    but it doesn't know what rowid vectors in the memtable will get until later, when flushed.
+ */
 public interface OrdinalMapper {
     /**
      * Used by newToOld to indicate that the new ordinal is a "hole" that has no corresponding old ordinal.

@@ -97,6 +97,10 @@ public class OnDiskGraphIndexWriter implements Closeable {
     /**
      * Write the inline features of the given ordinal to the output at the correct offset.
      * Nothing else is written (no headers, no edges).  The output IS NOT flushed.
+     * <p>
+     * Note: the ordinal given is implicitly a "new" ordinal in the sense of the OrdinalMapper,
+     * but since no nodes or edges are involved (we just write the given State to the index file),
+     * the mapper is not invoked.
      */
     public synchronized void writeInline(int ordinal, Map<FeatureId, Feature.State> stateMap) throws IOException
     {
@@ -155,6 +159,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
             if (!featureMap.containsKey(featureId)) {
                 throw new IllegalArgumentException(String.format("Feature %s not configured for index", featureId));
             }
+        }
+        if (ordinalMapper.maxOrdinal() < graph.size() - 1) {
+            var msg = String.format("Ordinal mapper from [0..%d] does not cover all nodes in the graph of size %d",
+                                    ordinalMapper.maxOrdinal(), graph.size());
+            throw new IllegalStateException(msg);
         }
 
         writeHeader();
