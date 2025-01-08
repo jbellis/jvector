@@ -293,9 +293,13 @@ multirelease jar for release. [jvector-examples](./jvector-examples) is an addit
 jvector-base/jvector-twenty to run example code. [jvector-tests](./jvector-tests) contains tests for the project, capable of running against
 both Java 11 and Java 20+ JVMs.
 
-To run tests, use `mvn test`. To run tests against Java 20+, use `mvn test`. To run tests against Java 11, use `mvn -Pjdk11 test`. To run a single test class,
-use the Maven Surefire test filtering capability, e.g., `mvn -Dtest=TestNeighborArray test`. You may also use method-level filtering and patterns, e.g.,
-`mvn -Dtest=TestNeighborArray#testRetain* test`.
+To run tests, use `mvn test`. To run tests against Java 20+, use `mvn test`. To run tests against Java 11, use `mvn -Pjdk11 test`.
+To run a single test class, use the Maven Surefire test filtering capability, e.g.,
+`mvn -Dsurefire.failIfNoSpecifiedTests=false -Dtest=TestNeighborArray test`.
+You may also use method-level filtering and patterns, e.g.,
+`mvn -Dsurefire.failIfNoSpecifiedTests=false -Dtest=TestNeighborArray#testRetain* test`.
+(The `failIfNoSpecifiedTests` option works around a quirk of surefire: it is happy to run `test` with submodules with empty test sets,
+but as soon as you supply a filter, it wants at least one match in every submodule.)
 
 You can run `SiftSmall` and `Bench` directly to get an idea of what all is going on here. `Bench` will automatically download required datasets to the `fvec` and `hdf5` directories.
 The files used by `SiftSmall` can be found in the [siftsmall directory](./siftsmall) in the project root.
