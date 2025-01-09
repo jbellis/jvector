@@ -48,15 +48,17 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
     @Override
     public void encodeAndSet(int ordinal, VectorFloat<?> vector) {
         ensureChunkCapacity(ordinal);
-        pq.encodeTo(vector, get(ordinal));
+        // increase count first so get() works
         vectorCount.updateAndGet(current -> max(current, ordinal + 1));
+        pq.encodeTo(vector, get(ordinal));
     }
 
     @Override
     public void setZero(int ordinal) {
         ensureChunkCapacity(ordinal);
-        get(ordinal).zero();
+        // increase count first so get() works
         vectorCount.updateAndGet(current -> max(current, ordinal + 1));
+        get(ordinal).zero();
     }
 
     private void ensureChunkCapacity(int ordinal) {
