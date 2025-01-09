@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.quantization;
 
 import io.github.jbellis.jvector.vector.VectorizationProvider;
+import java.util.concurrent.atomic.AtomicInteger;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
@@ -30,6 +31,8 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
     private static final int INITIAL_CHUNKS = 10;
     private static final float GROWTH_FACTOR = 1.5f;
 
+    protected AtomicInteger vectorCount;
+
     /**
      * Construct a mutable PQVectors instance with the given ProductQuantization.
      * The vectors storage will grow dynamically as needed.
@@ -37,7 +40,7 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
      */
     public MutablePQVectors(ProductQuantization pq) {
         super(pq);
-        this.vectorCount = 0;
+        this.vectorCount = new AtomicInteger(0);
         this.vectorsPerChunk = VECTORS_PER_CHUNK;
         this.compressedDataChunks = new ByteSequence<?>[INITIAL_CHUNKS];
     }
@@ -45,14 +48,14 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
     @Override
     public void encodeAndSet(int ordinal, VectorFloat<?> vector) {
         ensureChunkCapacity(ordinal);
-        vectorCount = max(vectorCount, ordinal + 1);
+        vectorCount.updateAndGet(current -> max(current, ordinal + 1));
         pq.encodeTo(vector, get(ordinal));
     }
 
     @Override
     public void setZero(int ordinal) {
         ensureChunkCapacity(ordinal);
-        vectorCount = max(vectorCount, ordinal + 1);
+        vectorCount.updateAndGet(current -> max(current, ordinal + 1));
         get(ordinal).zero();
     }
 
@@ -78,9 +81,14 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
 
     @Override
     protected int validChunkCount() {
-        if (vectorCount == 0)
+        if (vectorCount.get() == 0)
             return 0;
-        int chunkOrdinal = (vectorCount - 1) / vectorsPerChunk;
+        int chunkOrdinal = (vectorCount.get() - 1) / vectorsPerChunk;
         return chunkOrdinal + 1;
+    }
+
+    @Override
+    public int count() {
+        return vectorCount.get();
     }
 }

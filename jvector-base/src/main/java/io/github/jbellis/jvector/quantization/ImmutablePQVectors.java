@@ -19,6 +19,8 @@ package io.github.jbellis.jvector.quantization;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 
 public class ImmutablePQVectors extends PQVectors {
+    private final int vectorCount;
+
     /**
      * Construct an immutable PQVectors instance with the given ProductQuantization and compressed data chunks.
      * @param pq the ProductQuantization to use
@@ -36,5 +38,10 @@ public class ImmutablePQVectors extends PQVectors {
     @Override
     protected int validChunkCount() {
         return compressedDataChunks.length;
+    }
+
+    @Override
+    public int count() {
+        return vectorCount;
     }
 }
