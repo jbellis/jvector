@@ -264,11 +264,8 @@ public class GraphSearcher implements Closeable {
             rerankedResults.setMaxSize(topK);
 
             int numVisited = initialVisited;
-            // A bound that holds the minimum similarity to the query vector that a candidate vector must
-            // have to be considered -- will be set to the lowest score in the results queue once the queue is full.
-            var minAcceptedSimilarity = Float.NEGATIVE_INFINITY;
             // track scores to predict when we are done with threshold queries
-            var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : ScoreTracker.NO_OP;
+            var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : new ScoreTracker.TwoPhaseTracker(1.0);
             VectorFloat<?> similarities = null;
 
             // add evicted results from the last call back to the candidates
@@ -283,11 +280,11 @@ public class GraphSearcher implements Closeable {
             while (candidates.size() > 0) {
                 // we're done when we have K results and the best candidate is worse than the worst result so far
                 float topCandidateScore = candidates.topScore();
-                if (topCandidateScore < minAcceptedSimilarity) {
+                if (approximateResults.size() >= rerankK && topCandidateScore < approximateResults.topScore()) {
                     break;
                 }
                 // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
-                if (scoreTracker.shouldStop()) {
+                if (threshold > 0 && scoreTracker.shouldStop()) {
                     break;
                 }
 
@@ -295,15 +292,15 @@ public class GraphSearcher implements Closeable {
                 int topCandidateNode = candidates.pop();
                 if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
                     addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
-
-                    // update minAcceptedSimilarity if we've found K results
-                    if (approximateResults.size() >= rerankK) {
-                        minAcceptedSimilarity = approximateResults.topScore();
-                    }
                 }
 
                 // if this candidate came from evictedResults, we don't need to evaluate its neighbors again
                 if (previouslyEvicted.get(topCandidateNode)) {
+                    continue;
+                }
+
+                // skip edge loading if we've found a local maximum and we have enough results
+                if (scoreTracker.shouldStop() && candidates.size() >= rerankK - approximateResults.size()) {
                     continue;
                 }
 
@@ -313,7 +310,6 @@ public class GraphSearcher implements Closeable {
                 if (useEdgeLoading) {
                     similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
                 }
-
                 var it = view.getNeighborsIterator(topCandidateNode);
                 for (int i = 0; i < it.size(); i++) {
                     var friendOrd = it.nextInt();
