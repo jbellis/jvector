@@ -37,7 +37,11 @@ import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
-import io.github.jbellis.jvector.quantization.*;
+import io.github.jbellis.jvector.quantization.CompressedVectors;
+import io.github.jbellis.jvector.quantization.NVQuantization;
+import io.github.jbellis.jvector.quantization.PQVectors;
+import io.github.jbellis.jvector.quantization.ProductQuantization;
+import io.github.jbellis.jvector.quantization.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
@@ -48,12 +52,12 @@ import java.io.DataOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -93,7 +97,14 @@ public class Grid {
                 }
             }
         } finally {
-            Files.delete(testDirectory);
+            try
+            {
+                Files.delete(testDirectory);
+            } catch (DirectoryNotEmptyException e) {
+                // something broke, we're almost certainly in the middle of another exception being thrown,
+                // so if we don't swallow this one it will mask the original exception
+            }
+
             cachedCompressors.clear();
         }
     }
@@ -171,7 +182,7 @@ public class Grid {
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
-            if (features.equals(EnumSet.of(FeatureId.INLINE_VECTORS)) || features.equals(EnumSet.of(FeatureId.NVQ_VECTORS))) {
+            if (features.contains(FeatureId.INLINE_VECTORS) || features.contains(FeatureId.NVQ_VECTORS)) {
                 scoringWriter = writer;
             }
         }
