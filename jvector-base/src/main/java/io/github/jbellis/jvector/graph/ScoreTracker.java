@@ -55,7 +55,7 @@ interface ScoreTracker {
         private int recentEntryIndex;
 
         // Heap of the best scores seen so far
-        AbstractLongHeap bestScores;
+        BoundedLongHeap bestScores;
 
         // observation count
         private int observationCount;
@@ -87,8 +87,10 @@ interface ScoreTracker {
                 return false;
             }
 
-            // we're in phase 2 if the 99th percentile of the recent scores is worse than the best score
-            // (paper suggests median, but experimentally that is too prone to false positives.
+            // We're in phase 2 if the 99th percentile of the recent scores evaluated is lower
+            // than the worst of the best scores seen.
+            //
+            // (paper suggests using the median of recent scores, but experimentally that is too prone to false positives.
             // 90th does seem to be enough, but 99th doesn't result in much extra work, so we'll be conservative)
             double windowMedian = StatUtils.percentile(recentScores, 99);
             double worstBest = sortableIntToFloat((int) bestScores.top());
