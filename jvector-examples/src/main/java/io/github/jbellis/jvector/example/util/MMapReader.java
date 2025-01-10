@@ -25,6 +25,7 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 
+@SuppressWarnings("unused")
 public class MMapReader implements RandomAccessReader {
     private final MMapBuffer buffer;
     private long position;

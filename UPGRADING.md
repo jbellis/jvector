@@ -6,6 +6,10 @@
   vector. These nonlinearities are designed to be lightweight and have a negligible impact on distance computation
   performance.
 
+## API changes
+- MemorySegmentReader.Supplier must now be explicitly closed, instead of being
+  closed by the first Reader created from it.
+
 # Upgrading from 3.0.x to 3.0.6
 
 ## API changes
