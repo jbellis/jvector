@@ -28,19 +28,30 @@ import static java.lang.Math.abs;
 public class Matrix {
     private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
 
-    VectorFloat<?>[] data;
+    private VectorFloat<?>[] data;
+    private int m, n;
 
     public Matrix(int m, int n) {
         this(m, n, true);
     }
 
     public Matrix(int m, int n, boolean allocateZeroed) {
+        this.m = m;
+        this.n = n;
         data = new VectorFloat[m];
         if (allocateZeroed) {
             for (int i = 0; i < m; i++) {
                 data[i] = vts.createFloatVector(n);
             }
         }
+    }
+
+    public int getRowDimension() {
+        return m;
+    }
+
+    public int getColumnDimension() {
+        return n;
     }
 
     public float get(int i, int j) {
