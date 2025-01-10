@@ -45,6 +45,8 @@ import java.io.IOException;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements Closeable {
+    private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "true"));
+
     private final GraphIndex.View view;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
@@ -265,7 +267,9 @@ public class GraphSearcher implements Closeable {
 
             int numVisited = initialVisited;
             // track scores to predict when we are done with threshold queries
-            var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : new ScoreTracker.TwoPhaseTracker(1.0);
+            var scoreTracker = threshold > 0
+                    ? new ScoreTracker.TwoPhaseTracker(threshold)
+                    : PRUNE ? new ScoreTracker.TwoPhaseTracker(1.0) : new ScoreTracker.NoOpTracker();
             VectorFloat<?> similarities = null;
 
             // add evicted results from the last call back to the candidates
