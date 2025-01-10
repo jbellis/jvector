@@ -7,13 +7,13 @@
   performance.
 
 ## API changes
-- MemorySegmentReader.Supplier must now be explicitly closed, instead of being
-  closed by the first Reader created from it.
+- MemorySegmentReader.Supplier and SimpleMappedReader.Supplier must now be explicitly closed, instead of being
+  closed by the first Reader created from them.
 - OnDiskGraphIndex no longer closes its ReaderSupplier
 
-# Upgrading from 3.0.x to 3.0.6
+### API changes in 3.0.6
 
-## API changes
+These were released in 3.0.6 but are spiritually part of 4.0.
 
 - `VectorCompressor.encodeAll()` now returns a `CompressedVectors` object instead of a `ByteSequence<?>[]`.
   This provides better encapsulation of the compression functionality while also allowing for more efficient

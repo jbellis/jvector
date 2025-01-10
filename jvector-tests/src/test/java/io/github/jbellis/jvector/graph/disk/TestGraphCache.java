@@ -56,8 +56,8 @@ public class TestGraphCache extends RandomizedTest {
 
     @Test
     public void testGraphCacheLoading() throws Exception {
-        try (var marr = new SimpleMappedReader(onDiskGraphIndexPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate))
+        try (var readerSupplier = new SimpleMappedReader.Supplier(onDiskGraphIndexPath);
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier))
         {
             var none = GraphCache.load(onDiskGraph, -1);
             assertEquals(0, none.ramBytesUsed());

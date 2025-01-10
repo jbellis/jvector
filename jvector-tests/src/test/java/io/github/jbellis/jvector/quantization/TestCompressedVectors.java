@@ -58,8 +58,8 @@ public class TestCompressedVectors extends RandomizedTest {
             cv.write(out);
         }
         // Read compressed vectors
-        try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-            var cv2 = PQVectors.load(in, 0);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(cvFile.toPath())) {
+            var cv2 = PQVectors.load(readerSupplier.get(), 0);
             assertEquals(cv.hashCode(), cv2.hashCode());
             assertEquals(cv, cv2);
         }
@@ -83,8 +83,8 @@ public class TestCompressedVectors extends RandomizedTest {
             cv.write(out);
         }
         // Read compressed vectors
-        try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-            var cv2 = BQVectors.load(in, 0);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(cvFile.toPath())) {
+            var cv2 = BQVectors.load(readerSupplier.get(), 0);
             assertEquals(cv, cv2);
         }
     }
@@ -121,8 +121,8 @@ public class TestCompressedVectors extends RandomizedTest {
                 cv.write(out);
             }
             // Read compressed vectors
-            try (var in = new SimpleMappedReader(cvFile.getAbsolutePath())) {
-                var cv2 = NVQVectors.load(in, 0);
+            try (var readerSupplier = new SimpleMappedReader.Supplier(cvFile.toPath())) {
+                var cv2 = NVQVectors.load(readerSupplier.get(), 0);
                 assertEquals(cv, cv2);
             }
         }

@@ -71,8 +71,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             var outputPath = testDirectory.resolve("test_graph_" + graph.getClass().getSimpleName());
             var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
             TestUtil.writeGraph(graph, ravv, outputPath);
-            try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-                 var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate))
+            try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+                 var onDiskGraph = OnDiskGraphIndex.load(readerSupplier))
             {
                 TestUtil.assertGraphEquals(graph, onDiskGraph);
                 try (var onDiskView = onDiskGraph.getView()) {
@@ -114,8 +114,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         OnDiskGraphIndex.write(original, ravv, oldToNewMap, outputPath);
         // check that written graph ordinals match the new ones
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var onDiskView = onDiskGraph.getView())
         {
             // entry point renumbering
@@ -146,8 +146,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         OnDiskGraphIndex.write(original, ravv, oldToNewMap, outputPath);
         // check that written graph ordinals match the new ones
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath);
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
@@ -175,8 +175,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var outputPath = testDirectory.resolve("renumbered_graph");
         OnDiskGraphIndex.write(original, ravv, oldToNewMap, outputPath);
         // check that written graph ordinals match the new ones
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
@@ -201,8 +201,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
         TestUtil.writeGraph(graph, ravv, outputPath);
 
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString());
-             var onDiskGraph = OnDiskGraphIndex.load(marr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
@@ -220,8 +220,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
     public void testV0Read() throws IOException {
         // using a random graph from testLargeGraph generated on old version
         var file = new File("resources/version0.odgi");
-        try (var smr = new SimpleMappedReader(file.getAbsolutePath());
-             var onDiskGraph = OnDiskGraphIndex.load(smr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(file.toPath());
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(32, onDiskGraph.maxDegree);
@@ -241,8 +241,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var fileIn = new File("resources/version0.odgi");
         var fileOut = File.createTempFile("version0", ".odgi");
 
-        try (var smr = new SimpleMappedReader(fileIn.getAbsolutePath());
-             var graph = OnDiskGraphIndex.load(smr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(fileIn.toPath());
+             var graph = OnDiskGraphIndex.load(readerSupplier);
              var view = graph.getView())
         {
              try (var writer = new OnDiskGraphIndexWriter.Builder(graph, fileOut.toPath())
@@ -265,8 +265,8 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var fileIn = new File("resources/version0.odgi");
         var fileOut = File.createTempFile("version0", ".odgi");
 
-        try (var smr = new SimpleMappedReader(fileIn.getAbsolutePath());
-             var graph = OnDiskGraphIndex.load(smr::duplicate);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(fileIn.toPath());
+             var graph = OnDiskGraphIndex.load(readerSupplier);
              var view = graph.getView())
         {
             try (var writer = new OnDiskGraphIndexWriter.Builder(graph, fileOut.toPath())
@@ -340,10 +340,10 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         }
 
         // graph and vectors should be identical
-        try (var bulkMarr = new SimpleMappedReader(bulkPath.toAbsolutePath().toString());
-             var bulkGraph = OnDiskGraphIndex.load(bulkMarr::duplicate);
-             var incrementalMarr = new SimpleMappedReader(incrementalFadcPath.toAbsolutePath().toString());
-             var incrementalGraph = OnDiskGraphIndex.load(incrementalMarr::duplicate);
+        try (var bulkReaderSupplier = new SimpleMappedReader.Supplier(bulkPath.toAbsolutePath());
+             var bulkGraph = OnDiskGraphIndex.load(bulkReaderSupplier);
+             var incrementalReaderSupplier = new SimpleMappedReader.Supplier(incrementalFadcPath.toAbsolutePath());
+             var incrementalGraph = OnDiskGraphIndex.load(incrementalReaderSupplier);
              var incrementalView = incrementalGraph.getView())
         {
             assertTrue(OnDiskGraphIndex.areHeadersEqual(incrementalGraph, bulkGraph));

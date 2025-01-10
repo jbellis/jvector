@@ -115,8 +115,8 @@ public class TestDeletions extends LuceneTestCase {
             graph.save(out);
         }
         var b2 = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
-        try (var marr = new SimpleMappedReader(outputPath.toAbsolutePath().toString())) {
-            b2.load(marr);
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath)) {
+            b2.load(readerSupplier.get());
         }
         var reloadedGraph = b2.getGraph();
         assertGraphEquals(graph, reloadedGraph);

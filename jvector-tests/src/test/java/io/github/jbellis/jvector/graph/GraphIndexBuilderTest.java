@@ -120,8 +120,8 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
         }
 
         builder = newBuilder.get();
-        try(var reader = new SimpleMappedReader(indexDataPath)) {
-            builder.load(reader);
+        try(var readerSupplier = new SimpleMappedReader.Supplier(indexDataPath)) {
+            builder.load(readerSupplier.get());
         }
 
         assertEquals(ravv.size(), builder.graph.size());
