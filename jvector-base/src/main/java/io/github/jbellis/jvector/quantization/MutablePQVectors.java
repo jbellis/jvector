@@ -61,7 +61,7 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
         get(ordinal).zero();
     }
 
-    private void ensureChunkCapacity(int ordinal) {
+    private synchronized void ensureChunkCapacity(int ordinal) {
         int chunkOrdinal = ordinal / vectorsPerChunk;
         
         // Grow backing array if needed
