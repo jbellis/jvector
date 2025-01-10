@@ -9,6 +9,7 @@
 ## API changes
 - MemorySegmentReader.Supplier must now be explicitly closed, instead of being
   closed by the first Reader created from it.
+- OnDiskGraphIndex no longer closes its ReaderSupplier
 
 # Upgrading from 3.0.x to 3.0.6
 
