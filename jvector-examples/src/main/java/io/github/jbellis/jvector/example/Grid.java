@@ -339,7 +339,7 @@ public class Grid {
         for (var overquery : efSearchOptions) {
             var start = System.nanoTime();
             int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 2);
+            var pqr = performQueries(cs, topK, rerankK, 10);
             var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
             System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
                               topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
@@ -405,19 +405,21 @@ public class Grid {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
-            IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
-                var queryVector = cs.ds.queryVectors.get(i);
-                SearchResult sr;
-                var searcher = cs.getSearcher();
-                var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+            PhysicalCoreExecutor.pool().submit(() -> {
+                IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
+                    var queryVector = cs.ds.queryVectors.get(i);
+                    SearchResult sr;
+                    var searcher = cs.getSearcher();
+                    var sf = cs.scoreProviderFor(queryVector, searcher.getView());
+                    sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
 
-                // process search result
-                var gt = cs.ds.groundTruth.get(i);
-                var n = topKCorrect(topK, sr.getNodes(), gt);
-                topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
-            });
+                    // process search result
+                    var gt = cs.ds.groundTruth.get(i);
+                    var n = topKCorrect(topK, sr.getNodes(), gt);
+                    topKfound.add(n);
+                    nodesVisited.add(sr.getVisitedCount());
+                });
+            }).join();
         }
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
