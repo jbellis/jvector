@@ -37,7 +37,7 @@ public class IVFIndex {
     private final VectorSimilarityFunction vsf;
 
     // Maximum number of assignments for each vector
-    private static final int MAX_ASSIGNMENTS = 1;
+    private static final int MAX_ASSIGNMENTS = 2;
 
     public IVFIndex(GraphIndex index, RandomAccessVectorValues ravv, Int2ObjectHashMap<int[]> postings, VectorSimilarityFunction vsf) {
         this.index = index;
@@ -49,8 +49,10 @@ public class IVFIndex {
 
     public static IVFIndex build(RandomAccessVectorValues ravv, VectorSimilarityFunction vsf, float centroidFraction) {
         long start = System.nanoTime();
-        // Select centroids using HCB
-        var centroids = selectRandomCentroids(ravv, centroidFraction);
+        // Select centroids
+//        var centroids = selectRandomCentroids(ravv, centroidFraction);
+//        var centroids = selectKmeansCentroids(ravv, centroidFraction);
+        var centroids = selectHCBCentroids(ravv, centroidFraction);
         System.out.printf("%d initial centroids computed in %fs%n", centroids.size(), (System.nanoTime() - start) / 1_000_000_000.0);
 
         var postingsMap = new ConcurrentHashMap<Integer, Set<Integer>>(); // centroid indexes -> point indexes
@@ -86,9 +88,9 @@ public class IVFIndex {
             });
             var totalAssignments = IntStream.range(0, centroids.size()).mapToLong(i -> postingsMap.getOrDefault(i, Set.of()).size()).sum();
             System.out.printf("Pass %d with %d total vector assignments in %fs%n", pass, totalAssignments, (System.nanoTime() - start) / 1_000_000_000.0);
-            if (true) break;
             printHistogram(postingsMap);
 
+            // attempt to optimize the centroids, mostly doesn't work
             float ratio = (float) totalAssignments / ravv.size();
             int idealExpandedAssignments = (int) Math.ceil(ratio / centroidFraction);
             float largeThresholdFactor = 1.5f + 0.1f * pass;
