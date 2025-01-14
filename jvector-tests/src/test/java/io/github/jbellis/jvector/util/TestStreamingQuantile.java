@@ -63,21 +63,21 @@ public class TestStreamingQuantile extends LuceneTestCase {
     @Test
     public void testQuantileEstimator() {
         int nTrials = 10_000;
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 100, 50, 0.26);
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 500, 50, 0.18);
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 1_000, 50, 0.15);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 100, 50, 0.26);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 500, 50, 0.18);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 1_000, 50, 0.15);
 
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 100, 95, 0.08);
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 500, 95, 0.05);
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 1_000, 95, 0.04);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 100, 95, 0.08);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 500, 95, 0.05);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 1_000, 95, 0.04);
 
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 100, 99, 0.05);
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 500, 99, 0.03);
-//        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 1_000, 99, 0.02);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 100, 99, 0.05);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 500, 99, 0.03);
+        testQuantileEstimator(RandomStreamCreator.UNIFORM, nTrials, 1_000, 99, 0.02);
 
-//        testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 100, 50, 0.20);
-//        testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 500, 50, 0.14);
-//        testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 1_000, 50, 0.12);
+        testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 100, 50, 0.20);
+        testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 500, 50, 0.14);
+        testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 1_000, 50, 0.12);
 
         testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 100, 95, 0.07);
         testQuantileEstimator(RandomStreamCreator.GAUSSIAN, nTrials, 500, 95, 0.04);
