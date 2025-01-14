@@ -36,7 +36,7 @@ public class TestStreamingQuantile extends LuceneTestCase {
                                        double errorThreshold) {
         var sq = new StreamingQuantile((double) percentile / 100);
 
-        double averageAbsoluteError = 0;
+        double averageRelativeError = 0;
         for (var trial = 0; trial < nTrials; trial++) {
             var stream = streamCreator.createStream(getRandom(), nSamples);
 
@@ -45,19 +45,14 @@ public class TestStreamingQuantile extends LuceneTestCase {
                 sq.insert(v);
             }
             double quantileEstimate = sq.quantile();
-//            System.out.println("\t" + quantileEstimate);
 
             double quantileTrue = StatUtils.percentile(stream, percentile);
-//            System.out.println("\t" + quantileTrue);
-//            System.out.println("---");
 
-            var absoluteError = Math.abs(quantileTrue - quantileEstimate) / Math.abs(quantileTrue);
-            averageAbsoluteError += absoluteError;
-
+            var relativeError = Math.abs(quantileTrue - quantileEstimate) / Math.abs(quantileTrue);
+            averageRelativeError += relativeError;
         }
-        averageAbsoluteError /= nTrials;
-        System.out.println(averageAbsoluteError);
-        assert averageAbsoluteError <= errorThreshold : String.format("%s > %s", averageAbsoluteError, errorThreshold);
+        averageRelativeError /= nTrials;
+        assert averageRelativeError <= errorThreshold : String.format("%s > %s", averageRelativeError, errorThreshold);
     }
 
     @Test
