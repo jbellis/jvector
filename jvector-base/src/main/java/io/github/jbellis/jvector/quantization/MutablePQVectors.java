@@ -21,14 +21,21 @@ import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static java.lang.Math.max;
 
+/**
+ * A threadsafe mutable PQVectors implementation that grows dynamically as needed.
+ */
 public class MutablePQVectors extends PQVectors implements MutableCompressedVectors<VectorFloat<?>> {
     private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
 
     private static final int VECTORS_PER_CHUNK = 1024;
     private static final int INITIAL_CHUNKS = 10;
     private static final float GROWTH_FACTOR = 1.5f;
+
+    protected AtomicInteger vectorCount;
 
     /**
      * Construct a mutable PQVectors instance with the given ProductQuantization.
@@ -37,7 +44,7 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
      */
     public MutablePQVectors(ProductQuantization pq) {
         super(pq);
-        this.vectorCount = 0;
+        this.vectorCount = new AtomicInteger(0);
         this.vectorsPerChunk = VECTORS_PER_CHUNK;
         this.compressedDataChunks = new ByteSequence<?>[INITIAL_CHUNKS];
     }
@@ -45,18 +52,20 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
     @Override
     public void encodeAndSet(int ordinal, VectorFloat<?> vector) {
         ensureChunkCapacity(ordinal);
-        vectorCount = max(vectorCount, ordinal + 1);
+        // increase count first so get() works
+        vectorCount.updateAndGet(current -> max(current, ordinal + 1));
         pq.encodeTo(vector, get(ordinal));
     }
 
     @Override
     public void setZero(int ordinal) {
         ensureChunkCapacity(ordinal);
-        vectorCount = max(vectorCount, ordinal + 1);
+        // increase count first so get() works
+        vectorCount.updateAndGet(current -> max(current, ordinal + 1));
         get(ordinal).zero();
     }
 
-    private void ensureChunkCapacity(int ordinal) {
+    private synchronized void ensureChunkCapacity(int ordinal) {
         int chunkOrdinal = ordinal / vectorsPerChunk;
         
         // Grow backing array if needed
@@ -78,9 +87,14 @@ public class MutablePQVectors extends PQVectors implements MutableCompressedVect
 
     @Override
     protected int validChunkCount() {
-        if (vectorCount == 0)
+        if (vectorCount.get() == 0)
             return 0;
-        int chunkOrdinal = (vectorCount - 1) / vectorsPerChunk;
+        int chunkOrdinal = (vectorCount.get() - 1) / vectorsPerChunk;
         return chunkOrdinal + 1;
+    }
+
+    @Override
+    public int count() {
+        return vectorCount.get();
     }
 }

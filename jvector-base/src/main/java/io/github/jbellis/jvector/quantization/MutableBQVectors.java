@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.quantization;
 
+@SuppressWarnings("unused")
 public class MutableBQVectors extends BQVectors implements MutableCompressedVectors<long[]> {
     private static final int INITIAL_CAPACITY = 1024;
     private static final float GROWTH_FACTOR = 1.5f;

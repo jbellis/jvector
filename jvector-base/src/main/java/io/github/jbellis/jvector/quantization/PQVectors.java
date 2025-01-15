@@ -41,7 +41,6 @@ public abstract class PQVectors implements CompressedVectors {
 
     final ProductQuantization pq;
     protected ByteSequence<?>[] compressedDataChunks;
-    protected int vectorCount;
     protected int vectorsPerChunk;
 
     protected PQVectors(ProductQuantization pq) {
@@ -156,18 +155,13 @@ public abstract class PQVectors implements CompressedVectors {
     }
 
     @Override
-    public int count() {
-        return vectorCount;
-    }
-
-    @Override
     public void write(DataOutput out, int version) throws IOException
     {
         // pq codebooks
         pq.write(out, version);
 
         // compressed vectors
-        out.writeInt(vectorCount);
+        out.writeInt(count());
         out.writeInt(pq.getSubspaceCount());
         for (int i = 0; i < validChunkCount(); i++) {
             vectorTypeSupport.writeByteSequence(out, compressedDataChunks[i]);
@@ -286,8 +280,8 @@ public abstract class PQVectors implements CompressedVectors {
     }
 
     public ByteSequence<?> get(int ordinal) {
-        if (ordinal < 0 || ordinal >= vectorCount)
-            throw new IndexOutOfBoundsException("Ordinal " + ordinal + " out of bounds for vector count " + vectorCount);
+        if (ordinal < 0 || ordinal >= count())
+            throw new IndexOutOfBoundsException("Ordinal " + ordinal + " out of bounds for vector count " + count());
         return get(compressedDataChunks, ordinal, vectorsPerChunk, pq.getSubspaceCount());
     }
 
@@ -341,7 +335,7 @@ public abstract class PQVectors implements CompressedVectors {
     public String toString() {
         return "PQVectors{" +
                 "pq=" + pq +
-                ", count=" + vectorCount +
+                ", count=" + count() +
                 '}';
     }
 }

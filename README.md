@@ -174,10 +174,12 @@ Compressing the vectors with product quantization is done as follows:
 
 Then we can wire up the compressed vectors to a two-phase search by getting the fast ApproximateScoreFunction from PQVectors, and the Reranker from the index View:
 ```java
-        ReaderSupplier rs = ReaderSupplierFactor.open(indexPath);
+        ReaderSupplier rs = ReaderSupplierFactory.open(indexPath);
         OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
         // load the PQVectors that we just wrote to disk
-        try (RandomAccessReader in = new SimpleMappedReader(pqPath)) {
+        try (ReaderSupplier pqSupplier = ReaderSupplierFactory.open(pqPath);
+             RandomAccessReader in = pqSupplier.get())
+        {
             PQVectors pqv = PQVectors.load(in);
             // SearchScoreProvider that does a first pass with the loaded-in-memory PQVectors,
             // then reranks with the exact vectors that are stored on disk in the index

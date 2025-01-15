@@ -132,7 +132,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     public void close() throws IOException {
-        readerSupplier.close();
+        // caller is responsible for closing ReaderSupplier
     }
 
     @Override

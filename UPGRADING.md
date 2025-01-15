@@ -1,6 +1,19 @@
-# Upgrading from 3.0.x to 3.0.6
+# Upgrading from 3.0.x to 4.0.x
+
+## New features
+- Support for Non-uniform Vector Quantization (NVQ, pronounced as "new vec"). This new technique quantizes the values
+  in each vector with high accuracy by first applying a nonlinear transformation that is individually fit to each
+  vector. These nonlinearities are designed to be lightweight and have a negligible impact on distance computation
+  performance.
 
 ## API changes
+- MemorySegmentReader.Supplier and SimpleMappedReader.Supplier must now be explicitly closed, instead of being
+  closed by the first Reader created from them.
+- OnDiskGraphIndex no longer closes its ReaderSupplier
+
+### API changes in 3.0.6
+
+These were released in 3.0.6 but are spiritually part of 4.0.
 
 - `VectorCompressor.encodeAll()` now returns a `CompressedVectors` object instead of a `ByteSequence<?>[]`.
   This provides better encapsulation of the compression functionality while also allowing for more efficient
@@ -15,12 +28,6 @@
 - The `VectorCompressor.createCompressedVectors(Object[])` method is now deprecated in favor of the new API that returns
   `CompressedVectors` directly from `encodeAll()`.
 - `PQVectors::getProductQuantization` is removed; it duplicated `CompressedVectors::getCompressor` unnecessarily
-
-## New features
-- Support for Non-uniform Vector Quantization (NVQ, pronounced as "new vec"). This new technique quantizes the values
-  in each vector with high accuracy by first applying a nonlinear transformation that is individually fit to each
-  vector. These nonlinearities are designed to be lightweight and have a negligible impact on distance computation
-  performance.
 
 # Upgrading from 2.0.x to 3.0.x
 
