@@ -105,7 +105,7 @@ interface ScoreTracker {
      * To compute quantiles quickly, we treat the distribution of the data as Normal,
      * track its mean and variance, and compute quantiles from them as:
      *     mean + SIGMA_FACTOR * sqrt(variance)
-     * Empirically, SIGMA_FACTOR=3.5 seems to work reasonably well.
+     * Empirically, SIGMA_FACTOR=4 seems to work reasonably well.
      */
     class RelaxedMonotonicityTracker implements ScoreTracker {
         static final double SIGMA_FACTOR = 4;
