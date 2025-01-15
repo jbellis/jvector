@@ -28,14 +28,14 @@ interface ScoreTracker {
 
     void track(float score);
 
-    boolean shouldStop(double worstBest);
+    boolean shouldStop();
 
     class NoOpTracker implements ScoreTracker {
         @Override
         public void track(float score) { }
 
         @Override
-        public boolean shouldStop(double worstBestScore) {
+        public boolean shouldStop() {
             return false;
         }
     }
@@ -77,7 +77,7 @@ interface ScoreTracker {
         }
 
         @Override
-        public boolean shouldStop(double worstBestScore) {
+        public boolean shouldStop() {
             // don't stop if we don't have enough data points
             if (observationCount < RECENT_SCORES_TRACKED) {
                 return false;
@@ -93,7 +93,7 @@ interface ScoreTracker {
             // (paper suggests using the median of recent scores, but experimentally that is too prone to false positives.
             // 90th does seem to be enough, but 99th doesn't result in much extra work, so we'll be conservative)
             double windowMedian = StatUtils.percentile(recentScores, 99);
-            worstBestScore = sortableIntToFloat((int) bestScores.top());
+            double worstBestScore = sortableIntToFloat((int) bestScores.top());
             return windowMedian < worstBestScore && windowMedian < threshold;
         }
     }
@@ -105,14 +105,18 @@ interface ScoreTracker {
      * To compute quantiles quickly, we treat the distribution of the data as Normal,
      * track its mean and variance, and compute quantiles from them as:
      *     mean + SIGMA_FACTOR * sqrt(variance)
-     * Empirically, SIGMA_FACTOR=4 seems to work reasonably well.
+     * Empirically, SIGMA_FACTOR=1.75 seems to work reasonably well
+     * (approximately the 96th percentile of the Normal distribution).
      */
     class RelaxedMonotonicityTracker implements ScoreTracker {
-        static final double SIGMA_FACTOR = 4;
+        static final double SIGMA_FACTOR = 1.75;
 
         // a sliding window of recent scores
         private final double[] recentScores;
         private int recentEntryIndex;
+
+        // Heap of the best scores seen so far
+        BoundedLongHeap bestScores;
 
         // observation count
         private int observationCount;
@@ -125,24 +129,31 @@ interface ScoreTracker {
 
         /**
          * Constructor
-         * @param recentScoredTracked the number of tracked scores used to estimate if we are unlikely to improve
-         *                            the results anymore. An empirical rule of thumb is 3 * rerankK.
+         * @param bestScoredTracked the number of tracked scores used to estimate if we are unlikely to improve
+         *                          the results anymore. An empirical rule of thumb is bestScoredTracked=rerankK.
          */
-        RelaxedMonotonicityTracker(int recentScoredTracked) {
-            this.recentScores = new double[recentScoredTracked];
+        RelaxedMonotonicityTracker(int bestScoredTracked) {
+            // A quick empirical study yields that the number of recent scores
+            // that we need to consider grows by a factor of ~sqrt(bestScoredTracked / 2)
+            int factor = (int) Math.round(Math.sqrt(bestScoredTracked / 2.0));
+            this.recentScores = new double[200 * factor];
+            this.bestScores = new BoundedLongHeap(bestScoredTracked);
             this.mean = 0;
             this.dSquared = 0;
         }
 
         @Override
         public void track(float score) {
+            bestScores.push(floatToSortableInt(score));
             observationCount++;
 
-            // The updates follow the math in
+            // The updates of the sufficient statistics follow
+            // https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online
+            // and
             // https://nestedsoftware.com/2019/09/26/incremental-average-and-standard-deviation-with-sliding-window-470k.176143.html
             if (observationCount <= this.recentScores.length) {
                 // if the buffer is not full yet, use standard Welford method
-                var meanDelta = (score - this.mean) / (observationCount);
+                var meanDelta = (score - this.mean) / observationCount;
                 var newMean = this.mean + meanDelta;
 
                 var dSquaredDelta = ((score - newMean) * (score - this.mean));
@@ -151,7 +162,7 @@ interface ScoreTracker {
                 this.mean = newMean;
                 this.dSquared = newDSquared;
             } else {
-                // once the buffer is full, adjust Welford Method for window size
+                // once the buffer is full, adjust Welford method for window size
                 var oldScore = recentScores[recentEntryIndex];
                 var meanDelta = (score - oldScore) / this.recentScores.length;
                 var newMean = this.mean + meanDelta;
@@ -163,25 +174,25 @@ interface ScoreTracker {
                 this.dSquared = newDSquared;
             }
             recentScores[recentEntryIndex] = score;
-            recentEntryIndex = (recentEntryIndex + 1) % recentScores.length;
-
+            recentEntryIndex = (recentEntryIndex + 1) % this.recentScores.length;
         }
 
         @Override
-        public boolean shouldStop(double worstBestScore) {
+        public boolean shouldStop() {
             // don't stop if we don't have enough data points
             if (observationCount < this.recentScores.length) {
                 return false;
             }
 
             // We're in phase 2 if the q-th percentile of the recent scores evaluated,
-            //     mean + SIGMA_FACTOR * sqrt(variance)
+            //     mean + SIGMA_FACTOR * sqrt(variance),
             // is lower than the worst of the best scores seen.
             // (paper suggests using the median of recent scores, but experimentally that is too prone to false positives)
             double std = Math.sqrt(this.dSquared / (this.recentScores.length - 1));
             double windowPercentile = this.mean + SIGMA_FACTOR * std;
-
+            double worstBestScore = sortableIntToFloat((int) bestScores.top());
             return windowPercentile < worstBestScore;
+//            return false;
         }
     }
 }
