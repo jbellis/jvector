@@ -265,7 +265,7 @@ public class GraphSearcher implements Closeable {
 
             int numVisited = initialVisited;
             // track scores to predict when we are done with threshold queries
-            var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : new ScoreTracker.TwoPhaseTracker(1.0);
+            var scoreTracker = threshold > 0 ? new ScoreTracker.TwoPhaseTracker(threshold) : new ScoreTracker.RelaxedMonotonicityTracker(3 * rerankK);
             VectorFloat<?> similarities = null;
 
             // add evicted results from the last call back to the candidates
@@ -284,7 +284,7 @@ public class GraphSearcher implements Closeable {
                     break;
                 }
                 // when querying by threshold, also stop when we are probabilistically unlikely to find more qualifying results
-                if (threshold > 0 && scoreTracker.shouldStop()) {
+                if (threshold > 0 && scoreTracker.shouldStop(approximateResults.topScore())) {
                     break;
                 }
 
@@ -300,7 +300,7 @@ public class GraphSearcher implements Closeable {
                 }
 
                 // skip edge loading if we've found a local maximum and we have enough results
-                if (scoreTracker.shouldStop() && candidates.size() >= rerankK - approximateResults.size()) {
+                if (scoreTracker.shouldStop(approximateResults.topScore()) && candidates.size() >= rerankK - approximateResults.size()) {
                     continue;
                 }
 
