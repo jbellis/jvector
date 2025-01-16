@@ -44,7 +44,6 @@ interface ScoreTracker {
      * Follows the methodology of section 3.1 in "VBase: Unifying Online Vector Similarity Search
      * and Relational Queries via Relaxed Monotonicity" to determine when we've left phase 1
      * (finding the local maximum) and entered phase 2 (mostly just finding worse options)
-     * This implementation does not consider the worstBestScore provided to shouldStop.
      */
     class TwoPhaseTracker implements ScoreTracker {
         static final int RECENT_SCORES_TRACKED = 500;
@@ -129,15 +128,15 @@ interface ScoreTracker {
 
         /**
          * Constructor
-         * @param bestScoredTracked the number of tracked scores used to estimate if we are unlikely to improve
-         *                          the results anymore. An empirical rule of thumb is bestScoredTracked=rerankK.
+         * @param bestScoresTracked the number of tracked scores used to estimate if we are unlikely to improve
+         *                          the results anymore. An empirical rule of thumb is bestScoresTracked=rerankK.
          */
-        RelaxedMonotonicityTracker(int bestScoredTracked) {
+        RelaxedMonotonicityTracker(int bestScoresTracked) {
             // A quick empirical study yields that the number of recent scores
-            // that we need to consider grows by a factor of ~sqrt(bestScoredTracked / 2)
-            int factor = (int) Math.round(Math.sqrt(bestScoredTracked / 2.0));
+            // that we need to consider grows by a factor of ~sqrt(bestScoresTracked / 2)
+            int factor = (int) Math.round(Math.sqrt(bestScoresTracked / 2.0));
             this.recentScores = new double[200 * factor];
-            this.bestScores = new BoundedLongHeap(bestScoredTracked);
+            this.bestScores = new BoundedLongHeap(bestScoresTracked);
             this.mean = 0;
             this.dSquared = 0;
         }
@@ -192,7 +191,6 @@ interface ScoreTracker {
             double windowPercentile = this.mean + SIGMA_FACTOR * std;
             double worstBestScore = sortableIntToFloat((int) bestScores.top());
             return windowPercentile < worstBestScore;
-//            return false;
         }
     }
 }
