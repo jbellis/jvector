@@ -269,7 +269,7 @@ public class GraphSearcher implements Closeable {
             // track scores to predict when we are done with threshold queries
             var scoreTracker = threshold > 0
                     ? new ScoreTracker.TwoPhaseTracker(threshold)
-                    : PRUNE ? new ScoreTracker.TwoPhaseTracker(1.0) : new ScoreTracker.NoOpTracker();
+                    : PRUNE ? new ScoreTracker.RelaxedMonotonicityTracker(rerankK) : new ScoreTracker.NoOpTracker();
             VectorFloat<?> similarities = null;
 
             // add evicted results from the last call back to the candidates
