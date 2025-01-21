@@ -43,7 +43,7 @@ public class Bench {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
-        var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var overqueryConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
         var overqueryGrid = List.of(1.0, 2.0); // rerankK = oq * topK
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
                 ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
@@ -74,7 +74,7 @@ public class Bench {
                 "nv-qa-v4-100k",
                 "colbert-1M",
                 "gecko-100k");
-        executeNw(coreFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, efConstructionGrid, overqueryGrid);
+        executeNw(coreFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, overqueryConstructionGrid, overqueryGrid);
 
         var extraFiles = List.of(
                 "openai-v3-large-3072-100k",
@@ -82,7 +82,7 @@ public class Bench {
                 "e5-small-v2-100k",
                 "e5-base-v2-100k",
                 "e5-large-v2-100k");
-        executeNw(extraFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, efConstructionGrid, overqueryGrid);
+        executeNw(extraFiles, pattern, buildCompression, featureSets, searchCompression, mGrid, overqueryConstructionGrid, overqueryGrid);
 
         // smaller vectors from ann-benchmarks
         var hdf5Files = List.of(
@@ -99,7 +99,7 @@ public class Bench {
         for (var f : hdf5Files) {
             if (pattern.matcher(f).find()) {
                 DownloadHelper.maybeDownloadHdf5(f);
-                Grid.runAll(Hdf5Loader.load(f), mGrid, efConstructionGrid, featureSets, buildCompression, searchCompression, overqueryGrid);
+                Grid.runAll(Hdf5Loader.load(f), mGrid, overqueryConstructionGrid, featureSets, buildCompression, searchCompression, overqueryGrid);
             }
         }
 
@@ -109,7 +109,7 @@ public class Bench {
                                               ds -> new PQParameters(ds.getDimension(), 256, true, UNWEIGHTED));
             buildCompression = Arrays.asList(__ -> CompressorParameters.NONE);
             var grid2d = DataSetCreator.create2DGrid(4_000_000, 10_000, 100);
-            Grid.runAll(grid2d, mGrid, efConstructionGrid, featureSets, buildCompression, searchCompression, overqueryGrid);
+            Grid.runAll(grid2d, mGrid, overqueryConstructionGrid, featureSets, buildCompression, searchCompression, overqueryGrid);
         }
     }
 
