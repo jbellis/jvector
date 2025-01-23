@@ -80,19 +80,19 @@ public class Grid {
 
     static void runAll(DataSet ds,
                        List<Integer> mGrid,
-                       List<Integer> efConstructionGrid,
+                       List<Integer> searchDepthConstructionGrid,
                        List<? extends Set<FeatureId>> featureSets,
                        List<Function<DataSet, CompressorParameters>> buildCompressors,
                        List<Function<DataSet, CompressorParameters>> compressionGrid,
-                       List<Double> efSearchFactor) throws IOException
+                       List<Double> overquerySearchFactor) throws IOException
     {
         var testDirectory = Files.createTempDirectory(dirPrefix);
         try {
             for (int M : mGrid) {
-                for (int efC : efConstructionGrid) {
+                for (int overqueryC : searchDepthConstructionGrid) {
                     for (var bc : buildCompressors) {
                         var compressor = getCompressor(bc, ds);
-                        runOneGraph(featureSets, M, efC, compressor, compressionGrid, efSearchFactor, ds, testDirectory);
+                        runOneGraph(featureSets, M, overqueryC, compressor, compressionGrid, overquerySearchFactor, ds, testDirectory);
                     }
                 }
             }
@@ -111,18 +111,18 @@ public class Grid {
 
     static void runOneGraph(List<? extends Set<FeatureId>> featureSets,
                             int M,
-                            int efConstruction,
+                            int searchDepthConstruction,
                             VectorCompressor<?> buildCompressor,
                             List<Function<DataSet, CompressorParameters>> compressionGrid,
-                            List<Double> efSearchOptions,
+                            List<Double> overquerySearchOptions,
                             DataSet ds,
                             Path testDirectory) throws IOException
     {
         Map<Set<FeatureId>, GraphIndex> indexes;
         if (buildCompressor == null) {
-            indexes = buildInMemory(featureSets, M, efConstruction, ds, testDirectory);
+            indexes = buildInMemory(featureSets, M, searchDepthConstruction, ds, testDirectory);
         } else {
-            indexes = buildOnDisk(featureSets, M, efConstruction, ds, testDirectory, buildCompressor);
+            indexes = buildOnDisk(featureSets, M, searchDepthConstruction, ds, testDirectory, buildCompressor);
         }
 
         try {
@@ -141,7 +141,7 @@ public class Grid {
                 indexes.forEach((features, index) -> {
                     try (var cs = new ConfiguredSystem(ds, index instanceof OnDiskGraphIndex ? new CachingGraphIndex((OnDiskGraphIndex) index) : index, cv,
                                                        index instanceof OnDiskGraphIndex ? ((OnDiskGraphIndex) index).getFeatureSet() : Set.of())) {
-                        testConfiguration(cs, efSearchOptions);
+                        testConfiguration(cs, overquerySearchOptions);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -159,7 +159,7 @@ public class Grid {
 
     private static Map<Set<FeatureId>, GraphIndex> buildOnDisk(List<? extends Set<FeatureId>> featureSets,
                                                                int M,
-                                                               int efConstruction,
+                                                               int searchDepthConstruction,
                                                                DataSet ds,
                                                                Path testDirectory,
                                                                VectorCompressor<?> buildCompressor)
@@ -169,7 +169,7 @@ public class Grid {
 
         var pq = (PQVectors) buildCompressor.encodeAll(floatVectors);
         var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, searchDepthConstruction, 1.5f, 1.2f);
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
@@ -291,7 +291,7 @@ public class Grid {
 
     private static Map<Set<FeatureId>, GraphIndex> buildInMemory(List<? extends Set<FeatureId>> featureSets,
                                                                  int M,
-                                                                 int efConstruction,
+                                                                 int searchDepthConstruction,
                                                                  DataSet ds,
                                                                  Path testDirectory)
             throws IOException
@@ -300,13 +300,13 @@ public class Grid {
         Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
         long start;
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, searchDepthConstruction, 1.2f, 1.2f);
         start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
-        System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+        System.out.format("Build (%s) M=%d overquery=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
                           "full res",
                           M,
-                          efConstruction,
+                          searchDepthConstruction,
                           (System.nanoTime() - start) / 1_000_000_000.0,
                           onHeapGraph.getAverageDegree(),
                           builder.getAverageShortEdges());
@@ -333,10 +333,10 @@ public class Grid {
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
     static final Map<String, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
 
-    private static void testConfiguration(ConfiguredSystem cs, List<Double> efSearchOptions) {
+    private static void testConfiguration(ConfiguredSystem cs, List<Double> overquerySearchOptions) {
         var topK = cs.ds.groundTruth.get(0).size();
         System.out.format("Using %s:%n", cs.index);
-        for (var overquery : efSearchOptions) {
+        for (var overquery : overquerySearchOptions) {
             var start = System.nanoTime();
             int rerankK = (int) (topK * overquery);
             var pqr = performQueries(cs, topK, rerankK, 2);

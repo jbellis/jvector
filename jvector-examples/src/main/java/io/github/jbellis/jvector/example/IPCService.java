@@ -67,7 +67,7 @@ public class IPCService
 
         int dimension;
         int M;
-        int efConstruction;
+        int searchDepthConstruction;
         VectorSimilarityFunction similarityFunction;
         RandomAccessVectorValues ravv;
         CompressedVectors cv;
@@ -78,11 +78,11 @@ public class IPCService
     }
 
     enum Command {
-        CREATE,  //DIMENSIONS SIMILARITY_TYPE M EF\n
+        CREATE,  //DIMENSIONS SIMILARITY_TYPE M SEARCH_DEPTH\n
         WRITE,  //[N,N,N] [N,N,N]...\n
         BULKLOAD, // /path/to/local/file
         OPTIMIZE, //Run once finished writing
-        SEARCH, //EF-search limit [N,N,N] [N,N,N]...\n
+        SEARCH, //search-overquery limit [N,N,N] [N,N,N]...\n
         MEMORY, // Memory usage in kb
     }
 
@@ -104,18 +104,18 @@ public class IPCService
         String[] args = input.split("\\s+");
 
         if (args.length != 4)
-            throw new IllegalArgumentException("Illegal CREATE statement. Expecting 'CREATE [DIMENSIONS] [SIMILARITY_TYPE] [M] [EF]'");
+            throw new IllegalArgumentException("Illegal CREATE statement. Expecting 'CREATE [DIMENSIONS] [SIMILARITY_TYPE] [M] [SEARCH_DEPTH]'");
 
         int dimensions = Integer.parseInt(args[0]);
         VectorSimilarityFunction sim = VectorSimilarityFunction.valueOf(args[1]);
         int M = Integer.parseInt(args[2]);
-        int efConstruction = Integer.parseInt(args[3]);
+        int searchDepthConstruction = Integer.parseInt(args[3]);
 
         ctx.ravv = new UpdatableRandomAccessVectorValues(dimensions);
-        ctx.indexBuilder =  new GraphIndexBuilder(ctx.ravv, sim, M, efConstruction, 1.2f, 1.4f);
+        ctx.indexBuilder =  new GraphIndexBuilder(ctx.ravv, sim, M, searchDepthConstruction, 1.2f, 1.4f);
         ctx.M = M;
         ctx.dimension = dimensions;
-        ctx.efConstruction = efConstruction;
+        ctx.searchDepthConstruction = searchDepthConstruction;
         ctx.similarityFunction = sim;
         ctx.isBulkLoad = false;
     }
@@ -163,7 +163,7 @@ public class IPCService
         ctx.isBulkLoad = true;
 
         var ravv = new MMapRandomAccessVectorValues(f, ctx.dimension);
-        var indexBuilder = new GraphIndexBuilder(ravv, ctx.similarityFunction, ctx.M, ctx.efConstruction, 1.2f, 1.4f);
+        var indexBuilder = new GraphIndexBuilder(ravv, ctx.similarityFunction, ctx.M, ctx.searchDepthConstruction, 1.2f, 1.4f);
         System.out.println("BulkIndexing " + ravv.size());
         ctx.index = flushGraphIndex(indexBuilder.build(ravv), ravv);
         ctx.cv = pqIndex(ravv, ctx);
@@ -224,9 +224,9 @@ public class IPCService
         String[] args = input.split("\\s+");
 
         if (args.length < 3)
-            throw new IllegalArgumentException("Invalid arguments search-ef top-k [vector1] [vector2]...");
+            throw new IllegalArgumentException("Invalid arguments search-overquery top-k [vector1] [vector2]...");
 
-        int searchEf = Integer.parseInt(args[0]);
+        int searchOverquery = Integer.parseInt(args[0]);
         int topK = Integer.parseInt(args[1]);
 
         VectorFloat<?> queryVector = vectorTypeSupport.createFloatVector(ctx.dimension);
@@ -260,7 +260,7 @@ public class IPCService
                             ? ((GraphIndex.ScoringView) view).rerankerFor(queryVector, ctx.similarityFunction)
                             : ctx.ravv.rerankerFor(queryVector, ctx.similarityFunction);
                     var ssp = new SearchScoreProvider(sf, rr);
-                    r = new GraphSearcher(ctx.index).search(ssp, searchEf, Bits.ALL);
+                    r = new GraphSearcher(ctx.index).search(ssp, searchOverquery, Bits.ALL);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
