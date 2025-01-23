@@ -1104,7 +1104,7 @@ final class SimdOps {
         float value2, diff;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
             value2 = logitNQT(value2, invScaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
             squaredSum += MathUtil.square(diff);
