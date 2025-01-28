@@ -160,7 +160,7 @@ public class SiftSmall {
         try (ReaderSupplier rs = ReaderSupplierFactory.open(indexPath)) {
             OnDiskGraphIndex index = OnDiskGraphIndex.load(rs);
             // measure our recall against the (exactly computed) ground truth
-            Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, ravv);
+            Function<VectorFloat<?>, SearchScoreProvider> sspFactory = q -> SearchScoreProvider.exact(q, VectorSimilarityFunction.EUCLIDEAN, index.getView());
             testRecall(index, queryVectors, groundTruth, sspFactory);
         }
     }
