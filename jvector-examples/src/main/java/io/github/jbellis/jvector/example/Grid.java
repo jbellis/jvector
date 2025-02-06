@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
@@ -45,7 +46,9 @@ import io.github.jbellis.jvector.quantization.VectorCompressor;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.agrona.collections.Int2IntHashMap;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
@@ -56,6 +59,7 @@ import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -63,6 +67,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -402,15 +407,30 @@ public class Grid {
     }
 
     private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
+        // build a second layer
+        var nodeMap = new Int2IntHashMap(Integer.MIN_VALUE);
+        var subset = new ArrayList<VectorFloat<?>>();
+        for (int i = 0; i < cs.ds.baseVectors.size(); i++) {
+            if (ThreadLocalRandom.current().nextDouble() < 0.01) {
+                nodeMap.put(subset.size(), i);
+                subset.add(cs.ds.baseVectors.get(i));
+            }
+        }
+        var sRavv = new ListRandomAccessVectorValues(subset, cs.ds.getDimension());
+        var builder = new GraphIndexBuilder(sRavv, VectorSimilarityFunction.COSINE, 32, 100, 1.2f, 1.2f);
+        var sGraph = builder.build(sRavv);
+
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
             IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = cs.ds.queryVectors.get(i);
-                SearchResult sr;
+
+                var top1 = GraphSearcher.search(queryVector, 1, sRavv, VectorSimilarityFunction.COSINE, sGraph, Bits.ALL).getNodes()[0].node;
+
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
+                var sr = searcher.searchInternal(sf, topK, rerankK, 0.0f, 0.0f, nodeMap.get(top1), Bits.ALL);
 
                 // process search result
                 var gt = cs.ds.groundTruth.get(i);

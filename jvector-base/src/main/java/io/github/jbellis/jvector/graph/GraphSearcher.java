@@ -198,7 +198,7 @@ public class GraphSearcher implements Closeable {
     /**
      * Set up the state for a new search and kick it off
      */
-    SearchResult searchInternal(SearchScoreProvider scoreProvider,
+    public SearchResult searchInternal(SearchScoreProvider scoreProvider,
                                 int topK,
                                 int rerankK,
                                 float threshold,
