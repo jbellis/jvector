@@ -406,39 +406,93 @@ public class Grid {
         return topKCorrect(topK, a, gt);
     }
 
-    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
-        // build a second layer
-        var nodeMap = new Int2IntHashMap(Integer.MIN_VALUE);
-        var subset = new ArrayList<VectorFloat<?>>();
-        for (int i = 0; i < cs.ds.baseVectors.size(); i++) {
-            if (ThreadLocalRandom.current().nextDouble() < 0.01) {
-                nodeMap.put(subset.size(), i);
-                subset.add(cs.ds.baseVectors.get(i));
-            }
+    static class Layer {
+        public final GraphIndex graph;
+        public final RandomAccessVectorValues ravv;
+        public final Int2IntHashMap nodeMap;
+
+        Layer(GraphIndex graph, RandomAccessVectorValues ravv, Int2IntHashMap nodeMap) {
+            this.graph = graph;
+            this.ravv = ravv;
+            this.nodeMap = nodeMap;
         }
-        var sRavv = new ListRandomAccessVectorValues(subset, cs.ds.getDimension());
-        var builder = new GraphIndexBuilder(sRavv, VectorSimilarityFunction.COSINE, 32, 100, 1.2f, 1.2f);
-        var sGraph = builder.build(sRavv);
+    }
+
+    private static List<Layer> buildLayers(DataSet ds) {
+        List<Layer> layers = new ArrayList<>();
+        List<VectorFloat<?>> currentVectors = ds.baseVectors;
+        int currentSize = currentVectors.size();
+        
+        while (currentSize >= 100) {
+            var nodeMap = new Int2IntHashMap(Integer.MIN_VALUE);
+            var subset = new ArrayList<VectorFloat<?>>();
+            
+            // Sample 10% of vectors for next layer
+            for (int i = 0; i < currentVectors.size(); i++) {
+                if (ThreadLocalRandom.current().nextDouble() < 0.1) {
+                    nodeMap.put(subset.size(), i);
+                    subset.add(currentVectors.get(i));
+                }
+            }
+            
+            var ravv = new ListRandomAccessVectorValues(subset, ds.getDimension());
+            var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 32, 100, 1.2f, 1.2f);
+            var graph = builder.build(ravv);
+            
+            layers.add(0, new Layer(graph, ravv, nodeMap)); // Add at front so smallest is first
+            
+            currentVectors = subset;
+            currentSize = currentVectors.size();
+        }
+        
+        return layers;
+    }
+
+    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
+        var layers = buildLayers(cs.ds);
 
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
+        
         for (int k = 0; k < queryRuns; k++) {
             IntStream.range(0, cs.ds.queryVectors.size()).parallel().forEach(i -> {
                 var queryVector = cs.ds.queryVectors.get(i);
+                int entryPoint = -1;
+                long visitedCount = 0;
 
-                var top1 = GraphSearcher.search(queryVector, 1, sRavv, VectorSimilarityFunction.COSINE, sGraph, Bits.ALL).getNodes()[0].node;
+                // Search through each layer
+                for (int layerIdx = 0; layerIdx < layers.size(); layerIdx++) {
+                    var layer = layers.get(layerIdx);
+                    
+                    if (layerIdx == 0) {
+                        // First layer uses basic search
+                        var results = GraphSearcher.search(queryVector, 1, layer.ravv, VectorSimilarityFunction.COSINE, layer.graph, Bits.ALL);
+                        entryPoint = layer.nodeMap.get(results.getNodes()[0].node);
+                        visitedCount += results.getVisitedCount();
+                    } else {
+                        // Subsequent layers use searchInternal with entry point
+                        var searcher = new GraphSearcher(layer.graph);
+                        var sf = SearchScoreProvider.exact(queryVector, VectorSimilarityFunction.COSINE, layer.ravv);
+                        var results = searcher.searchInternal(sf, 1, 1, 0.0f, 0.0f, entryPoint, Bits.ALL);
+                        entryPoint = layer.nodeMap.get(results.getNodes()[0].node);
+                        visitedCount += results.getVisitedCount();
+                    }
+                }
 
+                // Final search on main graph
                 var searcher = cs.getSearcher();
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
-                var sr = searcher.searchInternal(sf, topK, rerankK, 0.0f, 0.0f, nodeMap.get(top1), Bits.ALL);
+                var sr = searcher.searchInternal(sf, topK, rerankK, 0.0f, 0.0f, entryPoint, Bits.ALL);
+                visitedCount += sr.getVisitedCount();
 
-                // process search result
+                // Process search result
                 var gt = cs.ds.groundTruth.get(i);
                 var n = topKCorrect(topK, sr.getNodes(), gt);
                 topKfound.add(n);
-                nodesVisited.add(sr.getVisitedCount());
+                nodesVisited.add(visitedCount);
             });
         }
+        
         return new ResultSummary((int) topKfound.sum(), nodesVisited.sum());
     }
 
