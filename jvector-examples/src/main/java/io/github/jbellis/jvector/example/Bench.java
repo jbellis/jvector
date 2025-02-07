@@ -43,8 +43,8 @@ public class Bench {
         System.out.println("Heap space available is " + Runtime.getRuntime().maxMemory());
 
         var mGrid = List.of(32); // List.of(16, 24, 32, 48, 64, 96, 128);
-        var efConstructionGrid = List.of(100); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
-        var overqueryGrid = List.of(1.0, 2.0); // rerankK = oq * topK
+        var efConstructionGrid = List.of(200); // List.of(60, 80, 100, 120, 160, 200, 400, 600, 800);
+        var overqueryGrid = List.of(2.0, 5.0, 10.0); // rerankK = oq * topK
         List<Function<DataSet, CompressorParameters>> buildCompression = Arrays.asList(
 //                ds -> new PQParameters(ds.getDimension() / 8, 256, ds.similarityFunction == VectorSimilarityFunction.EUCLIDEAN, UNWEIGHTED),
                 __ -> CompressorParameters.NONE
