@@ -342,13 +342,30 @@ public class Grid {
         var topK = cs.ds.groundTruth.get(0).size();
         System.out.format("Using %s:%n", cs.index);
         for (var overquery : efSearchOptions) {
-            var start = System.nanoTime();
-            int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 2);
-            var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
-            System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                              topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+            var recallList = new ArrayList<Double>();
+            for (int i = 0; i < 20; i++) {
+                var start = System.nanoTime();
+                int rerankK = (int) (topK * overquery);
+                var pqr = performQueries(cs, topK, rerankK, 1);
+                var recall = ((double) pqr.topKFound) / (cs.ds.queryVectors.size() * topK);
+                recallList.add(recall);
+                System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
+                        topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
+            }
+            var recallAVG = 0.;
+            for (double r : recallList) {
+                recallAVG += r;
+            }
+            recallAVG /= recallList.size();
 
+            double recallVariance = 0;
+            for (double r : recallList) {
+                recallVariance += Math.pow(r - recallAVG, 2);
+            }
+            recallVariance /= recallList.size() - 1;
+            double recallStandardDeviation = Math.sqrt(recallVariance);
+
+            System.out.format(" RECALL AVG %.4f STD %.4f%n", recallAVG, recallStandardDeviation);
         }
     }
 
@@ -423,20 +440,28 @@ public class Grid {
         List<VectorFloat<?>> currentVectors = ds.baseVectors;
         int currentSize = currentVectors.size();
         
-        while (currentSize >= 100) {
+        while (currentSize > 1) {
             var nodeMap = new Int2IntHashMap(Integer.MIN_VALUE);
             var subset = new ArrayList<VectorFloat<?>>();
-            
-            // Sample 10% of vectors for next layer
-            for (int i = 0; i < currentVectors.size(); i++) {
-                if (ThreadLocalRandom.current().nextDouble() < 0.1) {
-                    nodeMap.put(subset.size(), i);
-                    subset.add(currentVectors.get(i));
-                }
+
+            // Sample a fraction p of all vectors for the next layer
+            var p = Math.exp(-(layers.size() + 1) * Math.log(32)); // as recommended in the HNSW paper
+            var targetSize = Math.max((int) Math.floor(ds.baseVectors.size() * p), 1);
+
+            for (int i = 0; i < currentVectors.size() && subset.size() < targetSize; i++) {
+                // sample without replacement
+                int randI;
+                do {
+                    randI = ThreadLocalRandom.current().nextInt(currentVectors.size());
+                } while (nodeMap.containsValue(randI));
+
+                nodeMap.put(subset.size(), randI);
+                subset.add(currentVectors.get(randI));
             }
-            
+
             var ravv = new ListRandomAccessVectorValues(subset, ds.getDimension());
-            var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 32, 100, 1.2f, 1.2f);
+            // We double the number of neighbors in the hierarchy, as in the HNSW paper
+            var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 64, 200, 1.2f, 1f);
             var graph = builder.build(ravv);
             
             layers.add(0, new Layer(graph, ravv, nodeMap)); // Add at front so smallest is first
