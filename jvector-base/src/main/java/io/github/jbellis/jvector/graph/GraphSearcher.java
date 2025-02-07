@@ -45,7 +45,7 @@ import java.io.IOException;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements Closeable {
-    private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "true"));
+    private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "false"));
 
     private final GraphIndex.View view;
 
