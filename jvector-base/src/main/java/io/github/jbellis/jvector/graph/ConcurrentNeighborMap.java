@@ -24,6 +24,7 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
+import io.github.jbellis.jvector.util.IntMap;
 
 import static java.lang.Math.min;
 
@@ -31,7 +32,7 @@ import static java.lang.Math.min;
  * Encapsulates operations on a graph's neighbors.
  */
 public class ConcurrentNeighborMap {
-    private final DenseIntMap<Neighbors> neighbors;
+    private final IntMap<Neighbors> neighbors;
 
     /** the diversity threshold; 1.0 is equivalent to HNSW; Vamana uses 1.2 or more */
     private final float alpha;

@@ -41,7 +41,7 @@ public class TestDenseIntMap extends RandomizedTest {
             Assert.assertNull(map.get(i));
             Assert.assertFalse(map.containsKey(i));
 
-            map.put(i, "value" + i);
+            map.compareAndPut(i, null, "value" + i);
             Assert.assertEquals("value" + i, map.get(i));
             Assert.assertTrue(map.containsKey(i));
             Assert.assertEquals(i + 1, map.size());
@@ -52,12 +52,12 @@ public class TestDenseIntMap extends RandomizedTest {
     public void testUpdate() {
         var map = new DenseIntMap<String>(100);
         for (int i = 0; i < 3; i++) {
-            map.put(i, "value" + i);
+            map.compareAndPut(i, null, "value" + i);
         }
         Assert.assertEquals(3, map.size());
 
         for (int i = 0; i < 3; i++) {
-            map.put(i, "new-value" + i);
+            map.compareAndPut(i, map.get(i), "new-value" + i);
             Assert.assertEquals("new-value" + i, map.get(i));
             Assert.assertEquals(3, map.size());
         }
@@ -67,7 +67,7 @@ public class TestDenseIntMap extends RandomizedTest {
     public void testRemove() {
         var map = new DenseIntMap<String>(100);
         for (int i = 0; i < 3; i++) {
-            map.put(i, "value" + i);
+            map.compareAndPut(i, null, "value" + i);
         }
         Assert.assertEquals(3, map.size());
 
@@ -103,7 +103,7 @@ public class TestDenseIntMap extends RandomizedTest {
                         } else {
                             String value = randomAsciiAlphanumOfLength(20);
                             source.put(key, value);
-                            map.put(key, value);
+                            map.compareAndPut(key, map.get(key), value);
                         }
                     }
                 } finally {
