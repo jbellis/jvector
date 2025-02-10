@@ -122,7 +122,7 @@ public class OnHeapGraphIndex implements GraphIndex {
         // create extra layers if necessary
         for (int i = layers.size(); i <= maxLayer; i++) {
             synchronized (layers) {
-                if (i < layers.size()) { // doublecheck after locking
+                if (i == layers.size()) { // doublecheck after locking
                     var denseMap = layers.get(0);
                     var map = new ConcurrentNeighborMap(new SparseIntMap<>(),
                                                         denseMap.scoreProvider,
@@ -136,7 +136,7 @@ public class OnHeapGraphIndex implements GraphIndex {
 
         // add the node to each layer
         for (int i = 0; i <= maxLayer; i++) {
-            layers.get(maxLayer).addNode(nodeId);
+            layers.get(i).addNode(nodeId);
         }
         maxNodeId.accumulateAndGet(nodeId, Math::max);
     }
@@ -162,10 +162,10 @@ public class OnHeapGraphIndex implements GraphIndex {
         entryPoint.accumulateAndGet(
                 new NodeAtLevel(level, node),
                 (oldEntry, newEntry) -> {
-                    if (oldEntry.node >= 0 && oldEntry.level >= level) {
-                        return oldEntry;
-                    } else {
+                    if (oldEntry == null) {
                         return newEntry;
+                    } else {
+                        return oldEntry;
                     }
                 });
         completions.markComplete(node);

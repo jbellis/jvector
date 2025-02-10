@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.SearchResult.NodeScore;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
@@ -338,24 +339,30 @@ public class GraphIndexBuilder implements Closeable {
             var bits = new ExcludingBits(node);
             var ssp = scoreProvider.searchProviderFor(vector);
             var entry = graph.entry();
-            gs.initializeInternal(ssp, entry, bits);
+            SearchResult result;
+            if (entry != null) {
+                gs.initializeInternal(ssp, entry, bits);
 
-            // Move downward from entry.level to 1
-            for (int lvl = entry.level; lvl > 0; lvl--) {
-                gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
-                SearchResult.NodeScore[] neighbors = new SearchResult.NodeScore[gs.approximateResults.size()];
-                AtomicInteger index = new AtomicInteger();
-                // TODO extract an interface that lets us avoid the copy here and in toScratchCandidates
-                gs.approximateResults.foreach((neighbor, score) -> {
-                    neighbors[index.getAndIncrement()] = new SearchResult.NodeScore(neighbor, score);
-                });
-                Arrays.sort(neighbors);
-                updateNeighborsOneLayer(lvl, node, neighbors, naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
-                gs.setEntryPointsFromPreviousLayer();
+                // Move downward from entry.level to 1
+                for (int lvl = entry.level; lvl > 0; lvl--) {
+                    gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
+                    NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
+                    AtomicInteger index = new AtomicInteger();
+                    // TODO extract an interface that lets us avoid the copy here and in toScratchCandidates
+                    gs.approximateResults.foreach((neighbor, score) -> {
+                        neighbors[index.getAndIncrement()] = new NodeScore(neighbor, score);
+                    });
+                    Arrays.sort(neighbors);
+                    updateNeighborsOneLayer(lvl, node, neighbors, naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
+                    gs.setEntryPointsFromPreviousLayer();
+                }
+
+                // Now do the main search at layer 0
+                result = gs.resume(0, beamWidth, beamWidth, 0.0f, 0.0f);
+            } else {
+                result = new SearchResult(new NodeScore[] {}, 0, 0, 0);
             }
 
-            // Now do the main search at layer 0
-            var result = gs.resume(0, beamWidth, beamWidth, 0.0f, 0.0f);
             updateNeighborsOneLayer(0, node, result.getNodes(), naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
 
             graph.markComplete(nodeLevel, node);
@@ -368,7 +375,7 @@ public class GraphIndexBuilder implements Closeable {
         return graph.ramBytesUsedOneNode();
     }
 
-    private void updateNeighborsOneLayer(int layer, int node, SearchResult.NodeScore[] neighbors, NodeArray naturalScratchPooled, ConcurrentSkipListSet<Integer> inProgressBefore, NodeArray concurrentScratchPooled, SearchScoreProvider ssp) {
+    private void updateNeighborsOneLayer(int layer, int node, NodeScore[] neighbors, NodeArray naturalScratchPooled, ConcurrentSkipListSet<Integer> inProgressBefore, NodeArray concurrentScratchPooled, SearchScoreProvider ssp) {
         // Update neighbors with these candidates.
         // The DiskANN paper calls for using the entire set of visited nodes along the search path as
         // potential candidates, but in practice we observe neighbor lists being completely filled using
@@ -516,7 +523,7 @@ public class GraphIndexBuilder implements Closeable {
         graph.layers.get(layer).backlink(neighbors, nodeId, neighborOverflow);
     }
 
-    private static NodeArray toScratchCandidates(SearchResult.NodeScore[] candidates, NodeArray scratch) {
+    private static NodeArray toScratchCandidates(NodeScore[] candidates, NodeArray scratch) {
         scratch.clear();
         for (var candidate : candidates) {
             scratch.addInOrder(candidate.node, candidate.score);
