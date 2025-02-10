@@ -118,9 +118,9 @@ public class OnHeapGraphIndex implements GraphIndex {
      * @param maxLayer the maximum layer; entries will be initialized for the given node at all
      *                 layers L where 0 <= L <= maxLayer
      */
-    public void addNode(int maxLayer, int nodeId) {
+    public void addNode(NodeAtLevel nodeLevel) {
         // create extra layers if necessary
-        for (int i = layers.size(); i <= maxLayer; i++) {
+        for (int i = layers.size(); i <= nodeLevel.level; i++) {
             synchronized (layers) {
                 if (i == layers.size()) { // doublecheck after locking
                     var denseMap = layers.get(0);
@@ -135,10 +135,10 @@ public class OnHeapGraphIndex implements GraphIndex {
         }
 
         // add the node to each layer
-        for (int i = 0; i <= maxLayer; i++) {
-            layers.get(i).addNode(nodeId);
+        for (int i = 0; i <= nodeLevel.level; i++) {
+            layers.get(i).addNode(nodeLevel.node);
         }
-        maxNodeId.accumulateAndGet(nodeId, Math::max);
+        maxNodeId.accumulateAndGet(nodeLevel.node, Math::max);
     }
 
     /**
@@ -158,17 +158,17 @@ public class OnHeapGraphIndex implements GraphIndex {
     }
 
     /** must be called after addNode once neighbors are linked in all levels. */
-    void markComplete(int level, int node) {
+    void markComplete(NodeAtLevel nodeLevel) {
         entryPoint.accumulateAndGet(
-                new NodeAtLevel(level, node),
+                nodeLevel,
                 (oldEntry, newEntry) -> {
-                    if (oldEntry == null) {
+                    if (oldEntry == null || newEntry.level > oldEntry.level) {
                         return newEntry;
                     } else {
                         return oldEntry;
                     }
                 });
-        completions.markComplete(node);
+        completions.markComplete(nodeLevel.node);
     }
 
     void updateEntryNode(NodeAtLevel newEntry) {

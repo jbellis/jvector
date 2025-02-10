@@ -108,6 +108,7 @@ public class ConcurrentNeighborMap {
     public Neighbors insertDiverse(int nodeId, NodeArray candidates) {
         while (true) {
             var old = neighbors.get(nodeId);
+            assert old != null : nodeId; // graph.addNode should always be called before this method
             var next = old.insertDiverse(candidates, this);
             if (next == old || neighbors.compareAndPut(nodeId, old, next)) {
                 return next;

@@ -344,6 +344,7 @@ public class GraphSearcher implements Closeable {
                             : scoreFunction.similarityTo(friendOrd);
                     scoreTracker.track(friendSimilarity);
                     candidates.push(friendOrd, friendSimilarity);
+                    i++;
                 }
             }
 

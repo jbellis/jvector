@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.GraphIndex.NodeAtLevel;
 import io.github.jbellis.jvector.graph.SearchResult.NodeScore;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
@@ -48,6 +49,7 @@ import static io.github.jbellis.jvector.graph.OnHeapGraphIndex.NO_ENTRY_POINT;
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
 import static java.lang.Math.log;
+import static java.lang.Math.min;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -73,7 +75,7 @@ public class GraphIndexBuilder implements Closeable {
     final OnHeapGraphIndex graph;
     private double averageShortEdges = Double.NaN;
 
-    private final ConcurrentSkipListSet<Integer> insertionsInProgress = new ConcurrentSkipListSet<>(); // TODO make this a List<CSLS> for multilayer
+    private final ConcurrentSkipListSet<NodeAtLevel> insertionsInProgress = new ConcurrentSkipListSet<NodeAtLevel>(); // TODO make this a List<CSLS> for multilayer
 
     private final BuildScoreProvider scoreProvider;
 
@@ -327,11 +329,11 @@ public class GraphIndexBuilder implements Closeable {
     public long addGraphNode(int node, VectorFloat<?> vector) {
         // do this before adding to in-progress, so a concurrent writer checking
         // the in-progress set doesn't have to worry about uninitialized neighbor sets
-        int nodeLevel = getRandomGraphLevel();
-        graph.addNode(nodeLevel, node);
+        var nodeLevel = new NodeAtLevel(getRandomGraphLevel(), node);
+        graph.addNode(nodeLevel);
 
-        insertionsInProgress.add(node);
-        ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
+        insertionsInProgress.add(nodeLevel);
+        var inProgressBefore = insertionsInProgress.clone();
         try (var gs = searchers.get()) {
             var naturalScratchPooled = naturalScratch.get();
             var concurrentScratchPooled = concurrentScratch.get();
@@ -344,7 +346,7 @@ public class GraphIndexBuilder implements Closeable {
                 gs.initializeInternal(ssp, entry, bits);
 
                 // Move downward from entry.level to 1
-                for (int lvl = entry.level; lvl > 0; lvl--) {
+                for (int lvl = min(nodeLevel.level, entry.level); lvl > 0; lvl--) {
                     gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
                     NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
                     AtomicInteger index = new AtomicInteger();
@@ -365,17 +367,17 @@ public class GraphIndexBuilder implements Closeable {
 
             updateNeighborsOneLayer(0, node, result.getNodes(), naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
 
-            graph.markComplete(nodeLevel, node);
+            graph.markComplete(nodeLevel);
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            insertionsInProgress.remove(node);
+            insertionsInProgress.remove(nodeLevel);
         }
 
         return graph.ramBytesUsedOneNode();
     }
 
-    private void updateNeighborsOneLayer(int layer, int node, NodeScore[] neighbors, NodeArray naturalScratchPooled, ConcurrentSkipListSet<Integer> inProgressBefore, NodeArray concurrentScratchPooled, SearchScoreProvider ssp) {
+    private void updateNeighborsOneLayer(int layer, int node, NodeScore[] neighbors, NodeArray naturalScratchPooled, ConcurrentSkipListSet<NodeAtLevel> inProgressBefore, NodeArray concurrentScratchPooled, SearchScoreProvider ssp) {
         // Update neighbors with these candidates.
         // The DiskANN paper calls for using the entire set of visited nodes along the search path as
         // potential candidates, but in practice we observe neighbor lists being completely filled using
@@ -383,13 +385,13 @@ public class GraphIndexBuilder implements Closeable {
         // this means that considering additional nodes from the search path, that are by definition
         // farther away than the ones in the topK, would not change the result.)
         var natural = toScratchCandidates(neighbors, naturalScratchPooled);
-        var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, ssp.scoreFunction());
+        var concurrent = getConcurrentCandidates(layer, node, inProgressBefore, concurrentScratchPooled, ssp.scoreFunction());
         updateNeighbors(layer, node, natural, concurrent);
     }
 
     @VisibleForTesting
     public void setEntryPoint(int level, int node) {
-        graph.updateEntryNode(new GraphIndex.NodeAtLevel(level, node));
+        graph.updateEntryNode(new NodeAtLevel(level, node));
     }
 
     public void markNodeDeleted(int node) {
@@ -496,7 +498,7 @@ public class GraphIndexBuilder implements Closeable {
                 topNodes.addInt(it.nextInt());
             }
             var newEntryNode = topNodes.get(ThreadLocalRandom.current().nextInt(topNodes.size()));
-            graph.updateEntryNode(new GraphIndex.NodeAtLevel(graph.layers.size() - 1, newEntryNode));
+            graph.updateEntryNode(new NodeAtLevel(graph.layers.size() - 1, newEntryNode));
         }
 
         // Remove the deleted nodes from the graph
@@ -531,17 +533,18 @@ public class GraphIndexBuilder implements Closeable {
         return scratch;
     }
 
-    private NodeArray getConcurrentCandidates(int newNode,
-                                              Set<Integer> inProgress,
+    private NodeArray getConcurrentCandidates(int layer,
+                                              int newNode,
+                                              Set<NodeAtLevel> inProgress,
                                               NodeArray scratch,
                                               ScoreFunction scoreFunction)
     {
         scratch.clear();
-        for (var n : inProgress) {
-            if (n == newNode) {
+        for (NodeAtLevel n : inProgress) {
+            if (n.node == newNode || n.level < layer) {
                 continue;
             }
-            scratch.insertSorted(n, scoreFunction.similarityTo(n));
+            scratch.insertSorted(n.node, scoreFunction.similarityTo(n.node));
         }
         return scratch;
     }
