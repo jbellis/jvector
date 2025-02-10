@@ -45,10 +45,6 @@ public class DenseIntMap<T> implements IntMap<T> {
         size = new AtomicInteger();
     }
 
-    /**
-     * @param key ordinal
-     * @return true if successful, false if the current value != `existing`
-     */
     @Override
     public boolean compareAndPut(int key, T existing, T value) {
         if (value == null) {
@@ -69,18 +65,11 @@ public class DenseIntMap<T> implements IntMap<T> {
         }
     }
 
-    /**
-     * @return number of items that have been added
-     */
     @Override
     public int size() {
         return size.get();
     }
 
-    /**
-     * @param key ordinal
-     * @return the value of the key, or null if not set
-     */
     @Override
     public T get(int key) {
         if (key >= objects.length()) {
@@ -111,9 +100,6 @@ public class DenseIntMap<T> implements IntMap<T> {
         }
     }
 
-    /**
-     * @return the former value of the key, or null if it was not set
-     */
     @Override
     public T remove(int key) {
         if (key >= objects.length()) {
@@ -151,9 +137,6 @@ public class DenseIntMap<T> implements IntMap<T> {
         return NodesIterator.fromPrimitiveIterator(keysInts, minSize);
     }
 
-    /**
-     * Iterates keys in ascending order and calls the consumer for each non-null key-value pair.
-     */
     @Override
     public void forEach(IntBiConsumer<T> consumer) {
         var ref = objects;
