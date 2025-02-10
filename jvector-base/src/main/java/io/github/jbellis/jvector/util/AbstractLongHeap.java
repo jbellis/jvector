@@ -159,6 +159,9 @@ public abstract class AbstractLongHeap {
      */
     public void copyFrom(AbstractLongHeap other)
     {
+        if (this.heap.length < other.size) {
+            this.heap = new long[other.heap.length];
+        }
         System.arraycopy(other.heap, 0, this.heap, 0, other.size);
         this.size = other.size;
     }

@@ -258,9 +258,15 @@ public class NodeQueue {
     }
 
     public void copyFrom(NodeQueue other) {
-        if (other.size() > 1) {
-            assert this.order == other.order;
+        if (this.order == other.order) {
+            this.heap.copyFrom(other.heap);
+            return;
         }
-        this.heap.copyFrom(other.heap);
+
+        clear();
+        // use raw longs to avoid round-tripping through decode/encode
+        for (int i = 0; i < other.size(); i++) {
+            heap.push(other.heap.get(i));
+        }
     }
 }
