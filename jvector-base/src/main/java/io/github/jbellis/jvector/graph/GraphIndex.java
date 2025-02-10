@@ -29,6 +29,7 @@ import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import java.util.Objects;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -53,7 +54,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
      *
      * @return an iterator over nodes where {@code nextInt} returns the next node.
      */
-    NodesIterator getNodes();
+    NodesIterator getNodes(int layer);
 
     /**
      * Return a View with which to navigate the graph.  Views are not threadsafe -- that is,
@@ -100,7 +101,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
          * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
          * is guaranteed to be valid.
          */
-        NodesIterator getNeighborsIterator(int node);
+        NodesIterator getNeighborsIterator(int level, int node);
 
         /**
          * @return the number of nodes in the graph
@@ -110,7 +111,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         /**
          * @return the node of the graph to start searches at
          */
-        int entryNode();
+        NodeAtLevel entryNode();
 
         /**
          * Return a Bits instance indicating which nodes are live.  The result is undefined for
@@ -145,7 +146,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
             while (it.hasNext()) {
                 int node = it.nextInt();
                 sb.append("  ").append(node).append(" -> ");
-                for (var neighbors = view.getNeighborsIterator(node); neighbors.hasNext(); ) {
+                for (var neighbors = view.getNeighborsIterator(0, node); neighbors.hasNext(); ) { // TODO
                     sb.append(" ").append(neighbors.nextInt());
                 }
                 sb.append("\n");
@@ -155,5 +156,47 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         }
 
         return sb.toString();
+    }
+
+    // TODO pretty sure this doesn't need Comparable
+    final class NodeAtLevel implements Comparable<NodeAtLevel> {
+        // HNSW level assignment
+        public static int levelFor(float similarity) {
+            return Math.max(0, (int)(-Math.log(1 - similarity) / Math.log(2)));
+        }
+        public final int level;
+        public final int node;
+
+        public NodeAtLevel(int level, int node) {
+            this.level = level;
+            this.node = node;
+        }
+
+        @Override
+        public int compareTo(NodeAtLevel o) {
+            int cmp = Integer.compare(level, o.level);
+            if (cmp == 0) {
+                cmp = Integer.compare(node, o.node);
+            }
+            return cmp;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof NodeAtLevel)) return false;
+            NodeAtLevel that = (NodeAtLevel) o;
+            return level == that.level && node == that.node;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(level, node);
+        }
+
+        @Override
+        public String toString() {
+            return "NodeAtLevel(level=" + level + ", node=" + node + ")";
+        }
     }
 }

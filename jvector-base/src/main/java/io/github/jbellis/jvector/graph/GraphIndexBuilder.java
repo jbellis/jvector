@@ -208,7 +208,7 @@ public class GraphIndexBuilder implements Closeable {
                 continue;
             }
 
-            var neighbors = other.graph.getNeighbors(i);
+            var neighbors = other.graph.getNeighbors(0, i); // TODO
             var sf = newProvider.searchProviderFor(i).scoreFunction();
             var newNeighbors = new NodeArray(neighbors.size());
 
@@ -267,12 +267,15 @@ public class GraphIndexBuilder implements Closeable {
         }
 
         // clean up overflowed neighbor lists and compute short edges
-        averageShortEdges = parallelExecutor.submit(
-            () -> IntStream.range(0, graph.getIdUpperBound()).parallel()
-                    .mapToDouble(graph.nodes::enforceDegree)
-                    .filter(Double::isFinite)
-                    .average()
-        ).join().orElse(Double.NaN);
+        for (int i = 0; i < graph.layers.size(); i++) {
+            // TODO
+//            averageShortEdges = parallelExecutor.submit(
+//                    () -> IntStream.range(0, graph.getIdUpperBound()).parallel()
+//                            .mapToDouble(graph.layers.get(i)::enforceDegree)
+//                            .filter(Double::isFinite)
+//                            .average()
+//            ).join().orElse(Double.NaN);
+        }
 
         // optimize entry node -- we do this before reconnecting, as otherwise, improving the entry node's
         // connections will tend to disconnect any orphaned nodes reconnected to the entry node
@@ -293,7 +296,7 @@ public class GraphIndexBuilder implements Closeable {
         for (int i = 0; i < 5; i++) {
             // determine the nodes reachable from the entry point at the start of this pass
             var connectedNodes = new AtomicFixedBitSet(graph.getIdUpperBound());
-            var entryNeighbors = graph.getNeighbors(graph.entry());
+            var entryNeighbors = graph.getNeighbors(0, graph.entry()); // TODO
             parallelExecutor.submit(() -> IntStream.range(0, entryNeighbors.size()).parallel().forEach(node -> findConnected(connectedNodes, entryNeighbors.getNode(node)))).join();
 
             // Gather basic debug information about efficacy/efficiency of reconnection attempts
@@ -310,7 +313,7 @@ public class GraphIndexBuilder implements Closeable {
 
                 // first, attempt to connect one of our own connected neighbors to us. Filtering
                 // to connected nodes tends to help for partitioned graphs with large partitions.
-                ConcurrentNeighborMap.Neighbors self = graph.getNeighbors(node);
+                ConcurrentNeighborMap.Neighbors self = graph.getNeighbors(0, node); // TODO
                 var neighbors = (NodeArray) self;
                 if (connectToClosestNeighbor(node, neighbors, connectedNodes, globalConnectionTargets) != null) {
                     nReconnectedViaNeighbors.incrementAndGet();
@@ -348,7 +351,7 @@ public class GraphIndexBuilder implements Closeable {
                         // check to see if it should be added as an edge to the original node as well
                         var na = new NodeArray(1);
                         na.addInOrder(reconnectedTo.node, reconnectedTo.score);
-                        graph.nodes.backlink(na, node, 1.0f);
+                        graph.layers.get(0).backlink(na, node, 1.0f); // TODO
                     }
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
@@ -434,9 +437,19 @@ public class GraphIndexBuilder implements Closeable {
      * @return an estimate of the number of extra bytes used by the graph after adding the given node
      */
     public long addGraphNode(int node, VectorFloat<?> vector) {
-        // do this before adding to in-progress, so a concurrent writer checking
-        // the in-progress set doesn't have to worry about uninitialized neighbor sets
-        graph.addNode(node);
+        // Assign HNSW level
+        double rnd = -Math.log(ThreadLocalRandom.current().nextDouble()) / Math.log(graph.maxDegree());
+        int nodeLevel = (int) rnd;
+        
+        // Create new layers if needed
+        while (nodeLevel >= graph.layers.size()) {
+            graph.layers.add(new SparseIntMap<>());
+        }
+
+        // Add node to each layer from its level down to 0
+        for (int l = 0; l <= nodeLevel; l++) {
+            graph.addNode(node, l);
+        }
 
         insertionsInProgress.add(node);
         ConcurrentSkipListSet<Integer> inProgressBefore = insertionsInProgress.clone();
@@ -462,7 +475,7 @@ public class GraphIndexBuilder implements Closeable {
             var concurrent = getConcurrentCandidates(node, inProgressBefore, concurrentScratchPooled, ssp.scoreFunction());
             updateNeighbors(node, natural, concurrent);
 
-            maybeUpdateEntryPoint(node);
+            graph.markComplete(node); // TODO it seems silly to call this long after we've set it the first time
             maybeImproveOlderNode();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -498,28 +511,9 @@ public class GraphIndexBuilder implements Closeable {
         }
     }
 
-    private void maybeUpdateEntryPoint(int node) {
-        graph.maybeSetInitialEntryNode(node); // TODO it seems silly to call this long after we've set it the first time
-
-        if (updateEntryNodeIn.decrementAndGet() == 0) {
-            updateEntryPoint();
-        }
-    }
-
     @VisibleForTesting
     public void setEntryPoint(int ep) {
         graph.updateEntryNode(ep);
-    }
-
-    private void updateEntryPoint() {
-        int newEntryNode = approximateMedioid();
-        graph.updateEntryNode(newEntryNode);
-        if (newEntryNode >= 0) {
-            improveConnections(newEntryNode);
-            updateEntryNodeIn.addAndGet(graph.size());
-        } else {
-            updateEntryNodeIn.addAndGet(10_000);
-        }
     }
 
     private void improveConnections(int node) {

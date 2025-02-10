@@ -314,7 +314,8 @@ public class GraphSearcher implements Closeable {
                 if (useEdgeLoading) {
                     similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
                 }
-                var it = view.getNeighborsIterator(topCandidateNode);
+                int level = GraphIndex.NodeAtLevel.levelFor(topCandidateScore);
+                var it = view.getNeighborsIterator(level, topCandidateNode);
                 for (int i = 0; i < it.size(); i++) {
                     var friendOrd = it.nextInt();
                     if (!visited.add(friendOrd)) {

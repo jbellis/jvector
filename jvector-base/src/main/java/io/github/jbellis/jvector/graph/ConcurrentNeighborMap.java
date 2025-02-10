@@ -35,10 +35,10 @@ public class ConcurrentNeighborMap {
     private final IntMap<Neighbors> neighbors;
 
     /** the diversity threshold; 1.0 is equivalent to HNSW; Vamana uses 1.2 or more */
-    private final float alpha;
+    final float alpha;
 
     /** used to compute diversity */
-    private final BuildScoreProvider scoreProvider;
+    final BuildScoreProvider scoreProvider;
 
     /** the maximum number of neighbors desired per node */
     public final int maxDegree;
@@ -46,11 +46,15 @@ public class ConcurrentNeighborMap {
     public final int maxOverflowDegree;
 
     public ConcurrentNeighborMap(BuildScoreProvider scoreProvider, int maxDegree, int maxOverflowDegree, float alpha) {
+        this(new DenseIntMap<>(1024), scoreProvider, maxDegree, maxOverflowDegree, alpha);
+    }
+
+    public <T> ConcurrentNeighborMap(IntMap<Neighbors> neighbors, BuildScoreProvider scoreProvider, int maxDegree, int maxOverflowDegree, float alpha) {
+        this.neighbors = neighbors;
         this.alpha = alpha;
         this.scoreProvider = scoreProvider;
         this.maxDegree = maxDegree;
         this.maxOverflowDegree = maxOverflowDegree;
-        neighbors = new DenseIntMap<>(1024);
     }
 
     public void insertEdge(int fromId, int toId, float score, float overflow) {
@@ -403,14 +407,18 @@ public class ConcurrentNeighborMap {
         }
     }
 
-    private static class NeighborIterator extends NodesIterator {
+    private static class NeighborIterator implements NodesIterator {
         private final NodeArray neighbors;
         private int i;
 
         private NeighborIterator(NodeArray neighbors) {
-            super(neighbors.size());
             this.neighbors = neighbors;
             i = 0;
+        }
+
+        @Override
+        public int size() {
+            return neighbors.size();
         }
 
         @Override
