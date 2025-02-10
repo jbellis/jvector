@@ -258,7 +258,9 @@ public class NodeQueue {
     }
 
     public void copyFrom(NodeQueue other) {
-        assert this.order == other.order;
+        if (other.size() > 1) {
+            assert this.order == other.order;
+        }
         this.heap.copyFrom(other.heap);
     }
 }
