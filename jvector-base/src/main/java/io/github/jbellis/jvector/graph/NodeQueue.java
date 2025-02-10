@@ -256,4 +256,9 @@ public class NodeQueue {
     public interface NodeConsumer {
         void accept(int node, float score);
     }
+
+    public void copyFrom(NodeQueue other) {
+        assert this.order == other.order;
+        this.heap.copyFrom(other.heap);
+    }
 }

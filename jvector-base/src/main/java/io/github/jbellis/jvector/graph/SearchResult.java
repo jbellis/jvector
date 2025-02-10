@@ -62,7 +62,7 @@ public final class SearchResult {
         return worstApproximateScoreInTopK;
     }
 
-    public static final class NodeScore {
+    public static final class NodeScore implements Comparable<NodeScore> {
         public final int node;
         public final float score;
 
@@ -74,6 +74,14 @@ public final class SearchResult {
         @Override
         public String toString() {
             return String.format("NodeScore(%d, %s)", node, score);
+        }
+
+        @Override
+        public int compareTo(NodeScore o) {
+            // Sort by score in descending order (highest score first)
+            int scoreCompare = Float.compare(o.score, this.score);
+            // If scores are equal, break ties using node id (ascending order)
+            return scoreCompare != 0 ? scoreCompare : Integer.compare(node, o.node);
         }
     }
 }

@@ -115,9 +115,12 @@ public class OnHeapGraphIndex implements GraphIndex {
      * <p>It is also the responsibility of the caller to ensure that each node is only added once.
      *
      * @param nodeId the node to add, represented as an ordinal
+     * @param maxLayer the maximum layer; entries will be initialized for the given node at all
+     *                 layers L where 0 <= L <= maxLayer
      */
-    public void addNode(int layer, int nodeId) {
-        for (int i = layers.size(); i <= layer; i++) {
+    public void addNode(int maxLayer, int nodeId) {
+        // create extra layers if necessary
+        for (int i = layers.size(); i <= maxLayer; i++) {
             synchronized (layers) {
                 if (i < layers.size()) { // doublecheck after locking
                     var denseMap = layers.get(0);
@@ -130,10 +133,12 @@ public class OnHeapGraphIndex implements GraphIndex {
                 }
             }
         }
-        layers.get(layer).addNode(nodeId);
-        if (layer == 0) {
-            maxNodeId.accumulateAndGet(nodeId, Math::max);
+
+        // add the node to each layer
+        for (int i = 0; i <= maxLayer; i++) {
+            layers.get(maxLayer).addNode(nodeId);
         }
+        maxNodeId.accumulateAndGet(nodeId, Math::max);
     }
 
     /**
@@ -166,8 +171,8 @@ public class OnHeapGraphIndex implements GraphIndex {
         completions.markComplete(node);
     }
 
-    void updateEntryNode(int level, int node) {
-        entryPoint.set(new NodeAtLevel(level, node));
+    void updateEntryNode(NodeAtLevel newEntry) {
+        entryPoint.set(newEntry);
     }
 
     @Override

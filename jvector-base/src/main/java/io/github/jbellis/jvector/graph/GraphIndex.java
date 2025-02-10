@@ -142,7 +142,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         sb.append("\n");
 
         try (var view = graph.getView()) {
-            NodesIterator it = graph.getNodes();
+            NodesIterator it = graph.getNodes(0); // TODO
             while (it.hasNext()) {
                 int node = it.nextInt();
                 sb.append("  ").append(node).append(" -> ");
@@ -160,14 +160,12 @@ public interface GraphIndex extends AutoCloseable, Accountable {
 
     // TODO pretty sure this doesn't need Comparable
     final class NodeAtLevel implements Comparable<NodeAtLevel> {
-        // HNSW level assignment
-        public static int levelFor(float similarity) {
-            return Math.max(0, (int)(-Math.log(1 - similarity) / Math.log(2)));
-        }
         public final int level;
         public final int node;
 
         public NodeAtLevel(int level, int node) {
+            assert level >= 0 : level;
+            assert node >= 0 : node;
             this.level = level;
             this.node = node;
         }

@@ -120,8 +120,9 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     @Override
-    public NodesIterator getNodes()
+    public NodesIterator getNodes(int layer)
     {
+        // TODO
         return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
     }
 
@@ -228,7 +229,8 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             }
         }
 
-        public NodesIterator getNeighborsIterator(int node) {
+        // TODO
+        public NodesIterator getNeighborsIterator(int layer, int node) {
             try {
                 reader.seek(neighborsOffsetFor(node));
                 int neighborCount = reader.readInt();
@@ -246,8 +248,8 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         }
 
         @Override
-        public int entryNode() {
-            return entryNode;
+        public NodeAtLevel entryNode() {
+            return new NodeAtLevel(0, entryNode); // TODO
         }
 
         @Override
