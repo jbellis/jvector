@@ -25,7 +25,6 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.graph.disk.Feature;
 import io.github.jbellis.jvector.graph.disk.FeatureId;
 import io.github.jbellis.jvector.graph.disk.FusedADC;
@@ -139,7 +138,7 @@ public class Grid {
                 }
 
                 indexes.forEach((features, index) -> {
-                    try (var cs = new ConfiguredSystem(ds, index instanceof OnDiskGraphIndex ? new CachingGraphIndex((OnDiskGraphIndex) index) : index, cv,
+                    try (var cs = new ConfiguredSystem(ds, index, cv,
                                                        index instanceof OnDiskGraphIndex ? ((OnDiskGraphIndex) index).getFeatureSet() : Set.of())) {
                         testConfiguration(cs, efSearchOptions);
                     } catch (Exception e) {

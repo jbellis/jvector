@@ -202,16 +202,12 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         TestUtil.writeGraph(graph, ravv, outputPath);
 
         try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
-             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
-             var cachedOnDiskGraph = new CachingGraphIndex(onDiskGraph))
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier))
         {
             TestUtil.assertGraphEquals(graph, onDiskGraph);
-            TestUtil.assertGraphEquals(graph, cachedOnDiskGraph);
-            try (var onDiskView = onDiskGraph.getView();
-                 var cachedOnDiskView = onDiskGraph.getView())
+            try (var onDiskView = onDiskGraph.getView())
             {
                 validateVectors(onDiskView, ravv);
-                validateVectors(cachedOnDiskView, ravv);
             }
         }
     }

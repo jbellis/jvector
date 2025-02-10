@@ -69,7 +69,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         this.startOffset = startOffset;
 
         // create a mock Header to determine the correct size
-        var ch = new CommonHeader(version, 0, dimension, view.entryNode(), graph.maxDegree());
+        var ch = new CommonHeader(version, 0, dimension, view.entryNode().node, graph.maxDegree()); // TODO
         var placeholderHeader = new Header(ch, featureMap);
         this.headerSize = placeholderHeader.size();
     }
@@ -200,7 +200,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 }
             }
 
-            var neighbors = view.getNeighborsIterator(originalOrdinal);
+            var neighbors = view.getNeighborsIterator(0, originalOrdinal); // TODO
             if (neighbors.size() > graph.maxDegree()) {
                 var msg = String.format("Node %d has more neighbors %d than the graph's max degree %d -- run Builder.cleanup()!",
                                         originalOrdinal, neighbors.size(), graph.maxDegree());
@@ -240,7 +240,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         var commonHeader = new CommonHeader(version,
                                             graph.size(),
                                             dimension,
-                                            ordinalMapper.oldToNew(view.entryNode()),
+                                            ordinalMapper.oldToNew(view.entryNode().node), // TODO
                                             graph.maxDegree());
         var header = new Header(commonHeader, featureMap);
         header.write(out);
