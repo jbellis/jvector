@@ -52,8 +52,6 @@ import java.util.stream.IntStream;
  * For searching, use a view obtained from {@link #getView()} which supports level–aware operations.
  */
 public class OnHeapGraphIndex implements GraphIndex {
-    static final int NO_ENTRY_POINT = -1;
-
     // The current entry node for searches
     private final AtomicReference<NodeAtLevel> entryPoint;
 
@@ -62,7 +60,7 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     private final CompletionTracker completions;
     private final ThreadSafeGrowableBitSet deletedNodes = new ThreadSafeGrowableBitSet(0);
-    private final AtomicInteger maxNodeId = new AtomicInteger(NO_ENTRY_POINT);
+    private final AtomicInteger maxNodeId = new AtomicInteger(-1);
 
     // Maximum number of neighbors (edges) per node in the base layer
     final int maxDegree;

@@ -247,7 +247,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
 
         for (int i = 0; i < nDoc; i++) {
-            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(i);
+            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(0, i); // TODO
             Iterator<Integer> it = neighbors.iterator();
             while (it.hasNext()) {
                 // all neighbors should be valid node ids.
@@ -286,7 +286,7 @@ public class TestVectorGraph extends LuceneTestCase {
         assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
 
         for (int i = 0; i < nDoc; i++) {
-            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(i);
+            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(0, i); // TODO
             Iterator<Integer> it = neighbors.iterator();
             while (it.hasNext()) {
                 // all neighbors should be valid node ids.
@@ -507,7 +507,7 @@ public class TestVectorGraph extends LuceneTestCase {
 
     private void assertNeighbors(OnHeapGraphIndex graph, int node, int... expected) {
         Arrays.sort(expected);
-        ConcurrentNeighborMap.Neighbors nn = graph.getNeighbors(node);
+        ConcurrentNeighborMap.Neighbors nn = graph.getNeighbors(0, node); // TODO
         Iterator<Integer> it = nn.iterator();
         int[] actual = new int[nn.size()];
         for (int i = 0; i < actual.length; i++) {
@@ -583,7 +583,7 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 2, 30, 1.0f, 1.4f);
         var graph = builder.build(vectors);
         for (int i = 0; i < vectors.size(); i++) {
-            assertTrue(graph.getNeighbors(i).size() <= 2);
+            assertTrue(graph.getNeighbors(0, i).size() <= 2); // TODO
         }
     }
 

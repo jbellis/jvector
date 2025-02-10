@@ -164,7 +164,7 @@ public class TestUtil {
 
     public static Set<Integer> getNeighborNodes(GraphIndex.View g, int node) {
       Set<Integer> neighbors = new HashSet<>();
-      for (var it = g.getNeighborsIterator(node); it.hasNext(); ) {
+      for (var it = g.getNeighborsIterator(0, node); it.hasNext(); ) { // TODO
         int n = it.nextInt();
         neighbors.add(n);
       }
@@ -172,7 +172,7 @@ public class TestUtil {
     }
 
     static List<Integer> sortedNodes(GraphIndex h) {
-          var graphNodes = h.getNodes();
+          var graphNodes = h.getNodes(0); // TODO
           List<Integer> nodes = new ArrayList<>();
           while (graphNodes.hasNext()) {
               nodes.add(graphNodes.next());
@@ -201,7 +201,7 @@ public class TestUtil {
                        hNodes);
 
           // assert equal nodes' neighbours in each graph
-          NodesIterator gNodesIterator = g.getNodes();
+          NodesIterator gNodesIterator = g.getNodes(0); // TODO
           var gv = g.getView();
           var hv = h.getView();
           while (gNodesIterator.hasNext()) {
@@ -248,7 +248,7 @@ public class TestUtil {
         }
 
         @Override
-        public NodesIterator getNodes() {
+        public NodesIterator getNodes(int layer) { // TODO
             return new NodesIterator.ArrayNodesIterator(IntStream.range(0, size).toArray(),  size);
         }
 
@@ -267,7 +267,7 @@ public class TestUtil {
 
         private class FullyConnectedGraphIndexView implements View {
             @Override
-            public NodesIterator getNeighborsIterator(int node) {
+            public NodesIterator getNeighborsIterator(int level, int node) { // TODO
                 return new NodesIterator.ArrayNodesIterator(IntStream.range(0, size).filter(i -> i != node).toArray() , size - 1);
             }
 
@@ -277,8 +277,8 @@ public class TestUtil {
             }
 
             @Override
-            public int entryNode() {
-                return entryNode;
+            public NodeAtLevel entryNode() {
+                return new NodeAtLevel(0, entryNode); // TODO
             }
 
             @Override
@@ -330,7 +330,7 @@ public class TestUtil {
         }
 
         @Override
-        public NodesIterator getNodes() {
+        public NodesIterator getNodes(int level) { // TODO
             return new NodesIterator.ArrayNodesIterator(IntStream.range(0, size).toArray(),  size);
         }
 
@@ -349,7 +349,7 @@ public class TestUtil {
 
         private class RandomlyConnectedGraphIndexView implements View {
             @Override
-            public NodesIterator getNeighborsIterator(int node) {
+            public NodesIterator getNeighborsIterator(int level, int node) { // TODO
                 return new NodesIterator.ArrayNodesIterator(nodes.get(node));
             }
 
@@ -358,8 +358,8 @@ public class TestUtil {
             }
 
             @Override
-            public int entryNode() {
-                return entryNode;
+            public NodeAtLevel entryNode() {
+                return new NodeAtLevel(0, entryNode); // TODO
             }
 
             @Override

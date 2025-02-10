@@ -92,7 +92,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         // delete the first node
         builder.markNodeDeleted(0);
         builder.cleanup();
-        builder.setEntryPoint(builder.getGraph().getIdUpperBound() - 1);
+        builder.setEntryPoint(0, builder.getGraph().getIdUpperBound() - 1); // TODO
 
         // check
         assertEquals(2, original.size());

@@ -44,6 +44,7 @@ import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatV
 import static io.github.jbellis.jvector.graph.TestVectorGraph.createRandomFloatVectorsParallel;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestDeletions extends LuceneTestCase {
@@ -88,7 +89,7 @@ public class TestDeletions extends LuceneTestCase {
         int nDeleted = 0;
         try (var view = graph.getView()) {
             for (var i = 0; i < view.size(); i++) {
-                for (var it = view.getNeighborsIterator(i); it.hasNext(); ) {
+                for (var it = view.getNeighborsIterator(0, i); it.hasNext(); ) { // TODO hardcoded level
                     if (nodeToIsolate == it.nextInt()) {
                         builder.markNodeDeleted(i);
                         nDeleted++;
@@ -138,7 +139,7 @@ public class TestDeletions extends LuceneTestCase {
         // removeDeletedNodes should leave the graph empty
         builder.removeDeletedNodes();
         assertEquals(0, graph.size());
-        assertEquals(OnHeapGraphIndex.NO_ENTRY_POINT, graph.entry());
+        assertNull(graph.entry());
     }
 
     @Test
@@ -167,7 +168,7 @@ public class TestDeletions extends LuceneTestCase {
             }
 
             builder.cleanup();
-            assert builder.graph.getView().entryNode() != OnHeapGraphIndex.NO_ENTRY_POINT;
+            assert builder.graph.getView().entryNode() != null;
         }
     }
 }

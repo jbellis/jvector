@@ -45,9 +45,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static io.github.jbellis.jvector.graph.OnHeapGraphIndex.NO_ENTRY_POINT;
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
-import static io.github.jbellis.jvector.vector.VectorUtil.dotProduct;
 import static java.lang.Math.log;
 import static java.lang.Math.min;
 
@@ -558,38 +556,6 @@ public class GraphIndexBuilder implements Closeable {
         } catch (Exception e) {
             ExceptionUtils.throwIoException(e);
         }
-    }
-
-    /**
-     * @return a random live node, or `NO_ENTRY_POINT` if no live nodes exist.
-     */
-    @VisibleForTesting
-    int randomLiveNode() {
-        var R = ThreadLocalRandom.current();
-
-        // first, try doing it quickly by just picking a random node
-        for (int i = 0; i < 3; i++) {
-            var idUpperBound = graph.getIdUpperBound();
-            if (idUpperBound == 0) {
-                return NO_ENTRY_POINT;
-            }
-            int n = R.nextInt(idUpperBound);
-            if (graph.containsNode(n) && !graph.getDeletedNodes().get(n)) {
-                return n;
-            }
-        }
-
-        // lots of deletions and/or sparse node ids, so we do it the slow way
-        var L = new ArrayList<Integer>();
-        for (int i = 0; i < graph.getIdUpperBound(); i++) {
-            if (graph.containsNode(i) && !graph.getDeletedNodes().get(i)) {
-                L.add(i);
-            }
-        }
-        if (L.isEmpty()) {
-            return NO_ENTRY_POINT;
-        }
-        return L.get(R.nextInt(L.size()));
     }
 
     /**
