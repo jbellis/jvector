@@ -305,7 +305,7 @@ public class GraphIndexBuilder implements Closeable {
         return addGraphNode(node, ravv.getVector(node));
     }
 
-    // This is Lucene's approach, is FAISS's better?
+    // This is Lucene's approach, is FAISS's better? MT: It is almost the same, up to a small additive factor
     int getRandomGraphLevel() {
         double ml = graph.maxDegree == 1 ? 1 : 1 / log(1.0 * graph.maxDegree);
         double randDouble;
@@ -346,16 +346,18 @@ public class GraphIndexBuilder implements Closeable {
                 gs.initializeInternal(ssp, entry, bits);
 
                 // Move downward from entry.level to 1
-                for (int lvl = min(nodeLevel.level, entry.level); lvl > 0; lvl--) {
+                for (int lvl = entry.level; lvl > 0; lvl--) {
                     gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
-                    NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
-                    AtomicInteger index = new AtomicInteger();
-                    // TODO extract an interface that lets us avoid the copy here and in toScratchCandidates
-                    gs.approximateResults.foreach((neighbor, score) -> {
-                        neighbors[index.getAndIncrement()] = new NodeScore(neighbor, score);
-                    });
-                    Arrays.sort(neighbors);
-                    updateNeighborsOneLayer(lvl, node, neighbors, naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
+                    if (lvl <= nodeLevel.level) {
+                        NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
+                        AtomicInteger index = new AtomicInteger();
+                        // TODO extract an interface that lets us avoid the copy here and in toScratchCandidates
+                        gs.approximateResults.foreach((neighbor, score) -> {
+                            neighbors[index.getAndIncrement()] = new NodeScore(neighbor, score);
+                        });
+                        Arrays.sort(neighbors);
+                        updateNeighborsOneLayer(lvl, node, neighbors, naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
+                    }
                     gs.setEntryPointsFromPreviousLayer();
                 }
 
