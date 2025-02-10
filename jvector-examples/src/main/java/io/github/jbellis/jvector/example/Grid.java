@@ -315,16 +315,7 @@ public class Grid {
                 System.out.println("Skipping Fused ADC feature when building in memory");
                 continue;
             }
-            var graphPath = testDirectory.resolve("graph" + n++);
-            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors, null);
-            try (var writer = bws.builder.build()) {
-                start = System.nanoTime();
-                writer.write(bws.suppliers);
-                System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
-            }
-
-            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
-            indexes.put(features, index);
+            indexes.put(features, onHeapGraph);
         }
         return indexes;
     }
