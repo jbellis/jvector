@@ -313,7 +313,7 @@ public class GraphSearcher implements Closeable {
 
                 // process the top candidate
                 int topCandidateNode = candidates.pop();
-                if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
+                if (level > 0 || acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
                     addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
                 }
 
