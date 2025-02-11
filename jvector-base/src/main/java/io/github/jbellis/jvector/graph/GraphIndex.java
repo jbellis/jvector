@@ -92,6 +92,8 @@ public interface GraphIndex extends AutoCloseable, Accountable {
     @Override
     void close() throws IOException;
 
+    int getMaxLevel();
+
     /**
      * Encapsulates the state of a graph for searching.  Re-usable across search calls,
      * but each thread needs its own.
@@ -142,12 +144,16 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         sb.append("\n");
 
         try (var view = graph.getView()) {
-            NodesIterator it = graph.getNodes(0); // TODO
-            while (it.hasNext()) {
-                int node = it.nextInt();
-                sb.append("  ").append(node).append(" -> ");
-                for (var neighbors = view.getNeighborsIterator(0, node); neighbors.hasNext(); ) { // TODO
-                    sb.append(" ").append(neighbors.nextInt());
+            for (int level = 0; level < graph.getMaxLevel(); level++) {
+                sb.append(String.format("# Level %d\n", level));
+                NodesIterator it = graph.getNodes(level);
+                while (it.hasNext()) {
+                    int node = it.nextInt();
+                    sb.append("  ").append(node).append(" -> ");
+                    for (var neighbors = view.getNeighborsIterator(level, node); neighbors.hasNext(); ) {
+                        sb.append(" ").append(neighbors.nextInt());
+                    }
+                    sb.append("\n");
                 }
                 sb.append("\n");
             }
@@ -158,7 +164,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         return sb.toString();
     }
 
-    // TODO pretty sure this doesn't need Comparable
+    // Comparable b/c it gets used in CSLM
     final class NodeAtLevel implements Comparable<NodeAtLevel> {
         public final int level;
         public final int node;

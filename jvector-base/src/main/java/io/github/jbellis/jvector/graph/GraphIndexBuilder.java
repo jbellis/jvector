@@ -72,7 +72,7 @@ public class GraphIndexBuilder implements Closeable {
     @VisibleForTesting
     final OnHeapGraphIndex graph;
 
-    private final ConcurrentSkipListSet<NodeAtLevel> insertionsInProgress = new ConcurrentSkipListSet<NodeAtLevel>(); // TODO make this a List<CSLS> for multilayer
+    private final ConcurrentSkipListSet<NodeAtLevel> insertionsInProgress = new ConcurrentSkipListSet<>();
 
     private final BuildScoreProvider scoreProvider;
 

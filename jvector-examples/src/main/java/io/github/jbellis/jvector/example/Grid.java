@@ -302,13 +302,17 @@ public class Grid {
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
         start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
-        System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+        System.out.format("Build (%s) M=%d ef=%d in %.2fs%n",
                           "full res",
                           M,
                           efConstruction,
-                          (System.nanoTime() - start) / 1_000_000_000.0,
-                          onHeapGraph.getAverageDegree(),
-                          Double.NaN);
+                          (System.nanoTime() - start) / 1_000_000_000.0);
+        for (int i = 0; i <= onHeapGraph.getMaxLevel(); i++) {
+            System.out.format("  L%d: %d nodes, %.2f avg degree%n",
+                              i,
+                              onHeapGraph.getLayerSize(i),
+                              onHeapGraph.getAverageDegree(i));
+        }
         int n = 0;
         for (var features : featureSets) {
             if (features.contains(FeatureId.FUSED_ADC)) {

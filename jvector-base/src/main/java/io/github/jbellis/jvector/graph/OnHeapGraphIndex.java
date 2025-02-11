@@ -280,12 +280,21 @@ public class OnHeapGraphIndex implements GraphIndex {
      *
      * @return the average degree or NaN if no nodes are present.
      */
-    public double getAverageDegree() {
+    public double getAverageDegree(int level) {
         return IntStream.range(0, getIdUpperBound())
                 .filter(this::containsNode)
-                .mapToDouble(i -> getNeighbors(0, i).size())
+                .mapToDouble(i -> getNeighbors(level, i).size())
                 .average()
                 .orElse(Double.NaN);
+    }
+
+    @Override
+    public int getMaxLevel() {
+        return layers.size() - 1;
+    }
+
+    public int getLayerSize(int level) {
+        return layers.get(level).size();
     }
 
     /**

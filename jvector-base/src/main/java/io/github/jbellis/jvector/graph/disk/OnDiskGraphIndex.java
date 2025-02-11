@@ -142,6 +142,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 features.keySet().stream().map(Enum::name).collect(Collectors.joining(",")));
     }
 
+    @Override
+    public int getMaxLevel() {
+        throw new UnsupportedOperationException(); // TODO
+    }
+
     // re-declared to specify type
     @Override
     public View getView() {
