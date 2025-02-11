@@ -16,7 +16,7 @@
 
 package io.github.jbellis.jvector.quantization;
 
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.v3.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;

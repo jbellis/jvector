@@ -19,7 +19,7 @@ package io.github.jbellis.jvector.quantization;
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.v3.OnDiskGraphIndex;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;

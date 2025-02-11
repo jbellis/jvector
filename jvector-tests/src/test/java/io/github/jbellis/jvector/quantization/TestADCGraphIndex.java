@@ -21,7 +21,7 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.v3.OnDiskGraphIndex;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.junit.After;
 import org.junit.Before;

@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.disk.v3.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.quantization.FusedADCPQDecoder;
 import io.github.jbellis.jvector.quantization.PQVectors;
@@ -37,7 +38,7 @@ import java.io.UncheckedIOException;
  * Implements Quick ADC-style scoring by fusing PQ-encoded neighbors into an OnDiskGraphIndex.
  */
 public class FusedADC implements Feature {
-    private static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
+    private static final VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
     private final ProductQuantization pq;
     private final int maxDegree;
     private final ThreadLocal<VectorFloat<?>> reusableResults;
@@ -53,8 +54,8 @@ public class FusedADC implements Feature {
         }
         this.maxDegree = maxDegree;
         this.pq = pq;
-        this.reusableResults = ThreadLocal.withInitial(() -> OnDiskGraphIndex.vectorTypeSupport.createFloatVector(maxDegree));
-        this.reusableNeighbors = ExplicitThreadLocal.withInitial(() -> vectorTypeSupport.createByteSequence(pq.compressedVectorSize() * maxDegree));
+        this.reusableResults = ThreadLocal.withInitial(() -> vts.createFloatVector(maxDegree));
+        this.reusableNeighbors = ExplicitThreadLocal.withInitial(() -> vts.createByteSequence(pq.compressedVectorSize() * maxDegree));
     }
 
     @Override
@@ -80,7 +81,7 @@ public class FusedADC implements Feature {
         }
     }
 
-    ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, OnDiskGraphIndex.View view, ScoreFunction.ExactScoreFunction esf) {
+    public ScoreFunction.ApproximateScoreFunction approximateScoreFunctionFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf, OnDiskGraphIndex.View view, ScoreFunction.ExactScoreFunction esf) {
         var neighbors = new PackedNeighbors(view);
         return FusedADCPQDecoder.newDecoder(neighbors, pq, queryVector, reusableResults.get(), vsf, esf);
     }
@@ -95,7 +96,7 @@ public class FusedADC implements Feature {
     @Override
     public void writeInline(DataOutput out, Feature.State state_) throws IOException {
         if (compressedNeighbors == null) {
-            compressedNeighbors = vectorTypeSupport.createByteSequence(pq.compressedVectorSize() * maxDegree);
+            compressedNeighbors = vts.createByteSequence(pq.compressedVectorSize() * maxDegree);
         }
         var state = (FusedADC.State) state_;
         var pqv = state.pqVectors;
@@ -111,7 +112,7 @@ public class FusedADC implements Feature {
             }
         }
 
-        vectorTypeSupport.writeByteSequence(out, compressedNeighbors);
+        vts.writeByteSequence(out, compressedNeighbors);
     }
 
     public static class State implements Feature.State {
@@ -137,7 +138,7 @@ public class FusedADC implements Feature {
             try {
                 var reader = view.inlineReaderForNode(node, FeatureId.FUSED_ADC);
                 var tlNeighbors = reusableNeighbors.get();
-                OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, tlNeighbors);
+                vts.readByteSequence(reader, tlNeighbors);
                 return tlNeighbors;
             } catch (IOException e) {
                 throw new RuntimeException(e);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk;
+package io.github.jbellis.jvector.graph.disk.v3;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -24,6 +24,10 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
+import io.github.jbellis.jvector.graph.disk.Feature;
+import io.github.jbellis.jvector.graph.disk.FeatureId;
+import io.github.jbellis.jvector.graph.disk.FusedADC;
+import io.github.jbellis.jvector.graph.disk.InlineVectors;
 import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;

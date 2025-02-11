@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk;
+package io.github.jbellis.jvector.graph.disk.v3;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
@@ -22,6 +22,13 @@ import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.disk.Feature;
+import io.github.jbellis.jvector.graph.disk.FeatureId;
+import io.github.jbellis.jvector.graph.disk.FeatureSource;
+import io.github.jbellis.jvector.graph.disk.FusedADC;
+import io.github.jbellis.jvector.graph.disk.Header;
+import io.github.jbellis.jvector.graph.disk.InlineVectors;
+import io.github.jbellis.jvector.graph.disk.NVQ;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
 import io.github.jbellis.jvector.util.Bits;
@@ -50,7 +57,6 @@ import java.util.stream.IntStream;
 public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
     public static final int CURRENT_VERSION = 3;
-    static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
     static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ReaderSupplier readerSupplier;
     final int version;

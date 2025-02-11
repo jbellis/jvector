@@ -16,15 +16,13 @@
 
 package io.github.jbellis.jvector.quantization;
 
-import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
+import io.github.jbellis.jvector.graph.disk.v3.OnDiskGraphIndex;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 
 /**
