@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
@@ -114,8 +113,17 @@ public class OnHeapGraphIndex implements GraphIndex {
      * <p>It is also the responsibility of the caller to ensure that each node is only added once.
      */
     public void addNode(NodeAtLevel nodeLevel) {
-        // create extra layers if necessary
-        for (int i = layers.size(); i <= nodeLevel.level; i++) {
+        ensureLayersExist(nodeLevel.level);
+
+        // add the node to each layer
+        for (int i = 0; i <= nodeLevel.level; i++) {
+            layers.get(i).addNode(nodeLevel.node);
+        }
+        maxNodeId.accumulateAndGet(nodeLevel.node, Math::max);
+    }
+
+    private void ensureLayersExist(int level) {
+        for (int i = layers.size(); i <= level; i++) {
             synchronized (layers) {
                 if (i == layers.size()) { // doublecheck after locking
                     var denseMap = layers.get(0);
@@ -128,12 +136,6 @@ public class OnHeapGraphIndex implements GraphIndex {
                 }
             }
         }
-
-        // add the node to each layer
-        for (int i = 0; i <= nodeLevel.level; i++) {
-            layers.get(i).addNode(nodeLevel.node);
-        }
-        maxNodeId.accumulateAndGet(nodeLevel.node, Math::max);
     }
 
     /**
@@ -141,6 +143,7 @@ public class OnHeapGraphIndex implements GraphIndex {
      */
     void addNode(int level, int nodeId, NodeArray nodes) {
         assert nodes != null;
+        ensureLayersExist(level);
         this.layers.get(level).addNode(nodeId, nodes);
         maxNodeId.accumulateAndGet(nodeId, Math::max);
     }
