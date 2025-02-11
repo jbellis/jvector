@@ -157,8 +157,34 @@ public class GraphSearcher implements Closeable {
                                int rerankK,
                                float threshold,
                                float rerankFloor,
-                               Bits acceptOrds) {
-        return searchInternal(scoreProvider, topK, 1, rerankK, threshold, rerankFloor, view.entryNode(), acceptOrds);
+                               Bits acceptOrds)
+    {
+        NodeAtLevel entry = view.entryNode();
+        if (acceptOrds == null) {
+            throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
+        }
+        if (rerankK < topK) {
+            throw new IllegalArgumentException(String.format("rerankK %d must be >= topK %d", rerankK, topK));
+        }
+
+        if (entry == null) {
+            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, Float.POSITIVE_INFINITY);
+        }
+
+        initializeInternal(scoreProvider, entry, acceptOrds);
+
+        // Move downward from entry.level to 1
+        int numVisited = 0;
+        for (int lvl = entry.level; lvl > 0; lvl--) {
+            // Search this layer with minimal parameters since we just want the best candidate
+            numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl);
+            assert approximateResults.size() == 1 : approximateResults.size();
+            System.out.format("Best result from level %d is %d\n", lvl, approximateResults.topNode());
+            setEntryPointsFromPreviousLayer();
+        }
+
+        // Now do the main search at layer 0
+        return resume(numVisited, topK, rerankK, threshold, rerankFloor);
     }
 
     /**
@@ -200,48 +226,11 @@ public class GraphSearcher implements Closeable {
         return search(scoreProvider, topK, 0.0f, acceptOrds);
     }
 
-    /**
-     * Set up the state for a new search and kick it off
-     */
-    SearchResult searchInternal(SearchScoreProvider scoreProvider,
-                                int topK,
-                                int sparseLayersTopK,
-                                int rerankK,
-                                float threshold,
-                                float rerankFloor,
-                                NodeAtLevel entry,
-                                Bits rawAcceptOrds)
-    {
-        if (rawAcceptOrds == null) {
-            throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
-        }
-        if (rerankK < topK) {
-            throw new IllegalArgumentException(String.format("rerankK %d must be >= topK %d", rerankK, topK));
-        }
-
-        if (entry == null) {
-            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, Float.POSITIVE_INFINITY);
-        }
-
-        initializeInternal(scoreProvider, entry, rawAcceptOrds);
-
-        // Move downward from entry.level to 1
-        int numVisited = 0;
-        for (int lvl = entry.level; lvl > 0; lvl--) {
-            // Search this layer with minimal parameters since we just want the best candidate
-            numVisited += searchOneLayer(scoreProvider, sparseLayersTopK, 0.0f, lvl);
-            assert approximateResults.size() == 1;
-            setEntryPointsFromPreviousLayer();
-        }
-
-        // Now do the main search at layer 0
-        return resume(numVisited, topK, rerankK, threshold, rerankFloor);
-    }
-
     void setEntryPointsFromPreviousLayer() {
         // Take the best result as next layer's entry point
         candidates.copyFrom(approximateResults);
         approximateResults.clear();
+        visited.clear();
     }
 
     void initializeInternal(SearchScoreProvider scoreProvider, NodeAtLevel entry, Bits rawAcceptOrds) {
@@ -296,7 +285,7 @@ public class GraphSearcher implements Closeable {
                        int layer)
     {
         try {
-            assert approximateResults.size() == 0;
+            assert approximateResults.size() == 0; // should be cleared by setEntryPointsFromPreviousLayer
             approximateResults.setMaxSize(rerankK);
 
             int numVisited = 0;
