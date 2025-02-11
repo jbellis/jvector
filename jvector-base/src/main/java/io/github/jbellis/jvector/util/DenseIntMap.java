@@ -40,8 +40,8 @@ public class DenseIntMap<T> implements IntMap<T> {
     private volatile AtomicReferenceArray<T> objects;
     private final AtomicInteger size;
 
-    public DenseIntMap(int initialSize) {
-        objects = new AtomicReferenceArray<>(initialSize);
+    public DenseIntMap(int initialCapacity) {
+        objects = new AtomicReferenceArray<>(initialCapacity);
         size = new AtomicInteger();
     }
 
@@ -129,15 +129,6 @@ public class DenseIntMap<T> implements IntMap<T> {
     }
 
     @Override
-    public NodesIterator keysIterator() {
-        // implemented here because we can't make it threadsafe AND performant elsewhere
-        var minSize = size(); // if keys are added concurrently we will miss them
-        var ref = objects;
-        var keysInts = IntStream.range(0, ref.length()).filter(i -> ref.get(i) != null).iterator();
-        return NodesIterator.fromPrimitiveIterator(keysInts, minSize);
-    }
-
-    @Override
     public void forEach(IntBiConsumer<T> consumer) {
         var ref = objects;
         for (int i = 0; i < ref.length(); i++) {
@@ -147,5 +138,4 @@ public class DenseIntMap<T> implements IntMap<T> {
             }
         }
     }
-
 }

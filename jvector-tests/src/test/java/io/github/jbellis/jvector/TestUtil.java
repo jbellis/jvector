@@ -248,7 +248,7 @@ public class TestUtil {
         }
 
         @Override
-        public NodesIterator getNodes(int layer) { // TODO
+        public NodesIterator getNodes(int level) { // TODO
             return new NodesIterator.ArrayNodesIterator(IntStream.range(0, size).toArray(),  size);
         }
 

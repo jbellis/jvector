@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
@@ -111,10 +112,6 @@ public class OnHeapGraphIndex implements GraphIndex {
      * responsibility of the caller.
      *
      * <p>It is also the responsibility of the caller to ensure that each node is only added once.
-     *
-     * @param nodeId the node to add, represented as an ordinal
-     * @param maxLayer the maximum layer; entries will be initialized for the given node at all
-     *                 layers L where 0 <= L <= maxLayer
      */
     public void addNode(NodeAtLevel nodeLevel) {
         // create extra layers if necessary
@@ -183,8 +180,20 @@ public class OnHeapGraphIndex implements GraphIndex {
     }
 
     @Override
-    public NodesIterator getNodes(int layer) {
-        return layers.get(layer).nodesIterator();
+    public NodesIterator getNodes(int level) {
+        return NodesIterator.fromPrimitiveIterator(nodeStream(level).iterator(),
+                                                   layers.get(level).size());
+    }
+
+    /**
+     * this does call get() internally to filter level 0, so if you're going to use it in a pipeline
+     * that also calls get(), consider using your own raw IntStream.range instead
+     */
+    private IntStream nodeStream(int level) {
+        var layer = layers.get(level);
+        return level == 0
+                ? IntStream.range(0, getIdUpperBound()).filter(i -> layer.get(i) != null)
+                : ((SparseIntMap<Neighbors>) layer.neighbors).keysStream();
     }
 
     @Override
@@ -281,8 +290,7 @@ public class OnHeapGraphIndex implements GraphIndex {
      * @return the average degree or NaN if no nodes are present.
      */
     public double getAverageDegree(int level) {
-        return IntStream.range(0, getIdUpperBound())
-                .filter(this::containsNode)
+        return nodeStream(level)
                 .mapToDouble(i -> getNeighbors(level, i).size())
                 .average()
                 .orElse(Double.NaN);

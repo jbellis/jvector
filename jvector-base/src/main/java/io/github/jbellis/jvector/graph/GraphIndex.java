@@ -54,7 +54,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
      *
      * @return an iterator over nodes where {@code nextInt} returns the next node.
      */
-    NodesIterator getNodes(int layer);
+    NodesIterator getNodes(int level);
 
     /**
      * Return a View with which to navigate the graph.  Views are not threadsafe -- that is,

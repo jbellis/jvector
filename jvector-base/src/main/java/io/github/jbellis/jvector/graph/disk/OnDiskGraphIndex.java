@@ -120,7 +120,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     @Override
-    public NodesIterator getNodes(int layer)
+    public NodesIterator getNodes(int level)
     {
         // TODO
         return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);

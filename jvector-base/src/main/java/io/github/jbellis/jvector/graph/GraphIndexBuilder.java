@@ -23,7 +23,6 @@ import io.github.jbellis.jvector.graph.SearchResult.NodeScore;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
-import io.github.jbellis.jvector.util.AtomicFixedBitSet;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.ExceptionUtils;
 import io.github.jbellis.jvector.util.ExplicitThreadLocal;
@@ -36,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -491,14 +489,21 @@ public class GraphIndexBuilder implements Closeable {
         // but if the entry point was deleted then we have no choice
         if (toDelete.get(graph.entry().node)) {
             // pick a random node at the top layer
-            var topLayer = graph.layers.get(graph.layers.size() - 1);
-            var it = topLayer.nodesIterator();
-            var topNodes = new IntArrayList();
-            while (it.hasNext()) {
-                topNodes.addInt(it.nextInt());
+            int newLevel = graph.getMaxLevel();
+            int newEntry = -1;
+            outer:
+            while (newLevel > 0) {
+                for (var it = graph.getNodes(newLevel); it.hasNext(); ){
+                    int i = it.nextInt();
+                    if (!toDelete.get(i)) {
+                        newEntry = i;
+                        break outer;
+                    }
+                }
+                newLevel--;
             }
-            var newEntryNode = topNodes.get(ThreadLocalRandom.current().nextInt(topNodes.size()));
-            graph.updateEntryNode(new NodeAtLevel(graph.layers.size() - 1, newEntryNode));
+
+            graph.updateEntryNode(newEntry >= 0 ? new NodeAtLevel(newLevel, newEntry) : null);
         }
 
         // Remove the deleted nodes from the graph
