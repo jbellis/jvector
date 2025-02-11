@@ -128,7 +128,9 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     @Override
     public NodesIterator getNodes(int level)
     {
-        // TODO
+        if (level != 0) {
+            throw new IllegalArgumentException("v3 OnDiskGraphIndex is single-level only, got " + level);
+        }
         return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
     }
 
@@ -150,7 +152,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     @Override
     public int getMaxLevel() {
-        throw new UnsupportedOperationException(); // TODO
+        return 0;
     }
 
     // re-declared to specify type
@@ -240,8 +242,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             }
         }
 
-        // TODO
-        public NodesIterator getNeighborsIterator(int layer, int node) {
+        public NodesIterator getNeighborsIterator(int level, int node) {
+            if (level != 0) {
+                throw new IllegalArgumentException("v3 OnDiskGraphIndex is single-level only, got " + level);
+            }
+
             try {
                 reader.seek(neighborsOffsetFor(node));
                 int neighborCount = reader.readInt();
@@ -260,7 +265,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
         @Override
         public NodeAtLevel entryNode() {
-            return new NodeAtLevel(0, entryNode); // TODO
+            return new NodeAtLevel(0, entryNode);
         }
 
         @Override

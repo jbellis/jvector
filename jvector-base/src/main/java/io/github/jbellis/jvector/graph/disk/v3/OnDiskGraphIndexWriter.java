@@ -66,9 +66,12 @@ public class OnDiskGraphIndexWriter implements Closeable {
                                    int dimension,
                                    EnumMap<FeatureId, Feature> features)
     {
+        if (version < 0 || version > 3) {
+            throw new IllegalArgumentException("v3 OnDiskGraphIndexWriter can only handle versions up to 3, got " + version);
+        }
         this.version = version;
         this.graph = graph;
-        this.view = graph.getView();
+        this.view = graph instanceof OnHeapGraphIndex ? ((OnHeapGraphIndex) graph).getFrozenView() : graph.getView();
         this.ordinalMapper = oldToNewOrdinals;
         this.dimension = dimension;
         this.featureMap = features;
@@ -76,7 +79,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         this.startOffset = startOffset;
 
         // create a mock Header to determine the correct size
-        var ch = new CommonHeader(version, 0, dimension, view.entryNode().node, graph.maxDegree()); // TODO
+        var ch = new CommonHeader(version, 0, dimension, view.entryNode().node, graph.maxDegree());
         var placeholderHeader = new Header(ch, featureMap);
         this.headerSize = placeholderHeader.size();
     }
@@ -207,7 +210,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
                 }
             }
 
-            var neighbors = view.getNeighborsIterator(0, originalOrdinal); // TODO
+            var neighbors = view.getNeighborsIterator(0, originalOrdinal);
             if (neighbors.size() > graph.maxDegree()) {
                 var msg = String.format("Node %d has more neighbors %d than the graph's max degree %d -- run Builder.cleanup()!",
                                         originalOrdinal, neighbors.size(), graph.maxDegree());
@@ -247,7 +250,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         var commonHeader = new CommonHeader(version,
                                             graph.size(),
                                             dimension,
-                                            ordinalMapper.oldToNew(view.entryNode().node), // TODO
+                                            ordinalMapper.oldToNew(view.entryNode().node),
                                             graph.maxDegree());
         var header = new Header(commonHeader, featureMap);
         header.write(out);

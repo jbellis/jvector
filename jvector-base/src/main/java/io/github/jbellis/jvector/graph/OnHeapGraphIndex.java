@@ -244,6 +244,13 @@ public class OnHeapGraphIndex implements GraphIndex {
     }
 
     /**
+     * A View that assumes no concurrent modifications are made
+     */
+    public GraphIndex.View getFrozenView() {
+        return new FrozenView();
+    }
+
+    /**
      * Validates that the current entry node has been completely added.
      */
     void validateEntryNode() {
@@ -315,7 +322,7 @@ public class OnHeapGraphIndex implements GraphIndex {
      * are allowed to change, so you could potentially get different top K results from the same query
      * if concurrent updates are in progress.)
      */
-    public class ConcurrentGraphIndexView implements View {
+    public class ConcurrentGraphIndexView extends FrozenView {
         // It is tempting, but incorrect, to try to provide "adequate" isolation by
         // (1) keeping a bitset of complete nodes and giving that to the searcher as nodes to
         // accept -- but we need to keep incomplete nodes out of the search path entirely,
@@ -366,6 +373,13 @@ public class OnHeapGraphIndex implements GraphIndex {
                 }
             };
         }
+    }
+
+    private class FrozenView implements View {
+        @Override
+        public NodesIterator getNeighborsIterator(int level, int node) {
+            return getNeighbors(level, node).iterator();
+        }
 
         @Override
         public int size() {
@@ -375,12 +389,6 @@ public class OnHeapGraphIndex implements GraphIndex {
         @Override
         public NodeAtLevel entryNode() {
             return entryPoint.get();
-        }
-
-        @Override
-        public String toString() {
-            NodeAtLevel entry = entryNode();
-            return String.format("OnHeapGraphIndexView(size=%d, entryNode=%s)", size(), entry);
         }
 
         @Override
@@ -397,7 +405,13 @@ public class OnHeapGraphIndex implements GraphIndex {
 
         @Override
         public void close() {
-            // No resources to close.
+            // No resources to close
+        }
+
+        @Override
+        public String toString() {
+            NodeAtLevel entry = entryNode();
+            return String.format("%s(size=%d, entryNode=%s)", getClass().getSimpleName(), size(), entry);
         }
     }
 
