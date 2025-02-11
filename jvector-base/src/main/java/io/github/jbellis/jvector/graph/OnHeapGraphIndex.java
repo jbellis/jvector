@@ -142,9 +142,9 @@ public class OnHeapGraphIndex implements GraphIndex {
     /**
      * Only for use by Builder loading a saved graph
      */
-    void addNode(int nodeId, NodeArray nodes) {
+    void addNode(int level, int nodeId, NodeArray nodes) {
         assert nodes != null;
-        // TODO
+        this.layers.get(level).addNode(nodeId, nodes);
         maxNodeId.accumulateAndGet(nodeId, Math::max);
     }
 
