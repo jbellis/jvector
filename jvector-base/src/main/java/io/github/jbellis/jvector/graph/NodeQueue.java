@@ -111,6 +111,7 @@ public class NodeQueue {
      * @return the encoded score, node ID
      */
     private long encode(int node, float score) {
+        assert node >= 0 : node;
         return order.apply(
                 (((long) NumericUtils.floatToSortableInt(score)) << 32) | (0xFFFFFFFFL & ~node));
     }
@@ -263,10 +264,8 @@ public class NodeQueue {
             return;
         }
 
+        // can't avoid re-encoding since order influences it
         clear();
-        // use raw longs to avoid round-tripping through decode/encode
-        for (int i = 0; i < other.size(); i++) {
-            heap.push(other.heap.get(i));
-        }
+        other.foreach(this::push);
     }
 }
