@@ -140,7 +140,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
 
     static String prettyPrint(GraphIndex graph) {
         StringBuilder sb = new StringBuilder();
-        sb.append(graph);
+        sb.append(graph); // toString looks like OnHeapGraphIndex(size=9, entryPoint=NodeAtLevel(level=4, node=6))
         sb.append("\n");
 
         try (var view = graph.getView()) {

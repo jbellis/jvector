@@ -337,7 +337,9 @@ public class GraphIndexBuilder implements Closeable {
             var ssp = scoreProvider.searchProviderFor(vector);
             var entry = graph.entry();
             SearchResult result;
-            if (entry != null) {
+            if (entry == null) {
+                result = new SearchResult(new NodeScore[] {}, 0, 0, 0);
+            } else {
                 gs.initializeInternal(ssp, entry, bits);
 
                 // Move downward from entry.level to 1
@@ -358,8 +360,6 @@ public class GraphIndexBuilder implements Closeable {
 
                 // Now do the main search at layer 0
                 result = gs.resume(0, beamWidth, beamWidth, 0.0f, 0.0f);
-            } else {
-                result = new SearchResult(new NodeScore[] {}, 0, 0, 0);
             }
 
             updateNeighborsOneLayer(0, node, result.getNodes(), naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
