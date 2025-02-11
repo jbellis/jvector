@@ -233,7 +233,7 @@ public class GraphIndexBuilder implements Closeable {
         int size = ravv.size();
 
         simdExecutor.submit(() -> {
-            IntStream.range(0, size).forEach(node -> addGraphNode(node, vv.get().getVector(node)));
+            IntStream.range(0, size).parallel().forEach(node -> addGraphNode(node, vv.get().getVector(node)));
         }).join();
 
         cleanup();
