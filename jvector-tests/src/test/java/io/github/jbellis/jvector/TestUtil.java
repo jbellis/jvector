@@ -263,6 +263,11 @@ public class TestUtil {
         }
 
         @Override
+        public int getMaxLevel() {
+            return 0; // TODO
+        }
+
+        @Override
         public void close() { }
 
         private class FullyConnectedGraphIndexView implements View {
@@ -321,6 +326,11 @@ public class TestUtil {
             }
 
             this.entryNode = random.nextInt(size);
+        }
+
+        @Override
+        public int getMaxLevel() {
+            return 0; // TODO
         }
 
         @Override
