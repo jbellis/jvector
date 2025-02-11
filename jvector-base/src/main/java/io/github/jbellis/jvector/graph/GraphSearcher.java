@@ -180,7 +180,6 @@ public class GraphSearcher implements Closeable {
             // Search this layer with minimal parameters since we just want the best candidate
             numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl);
             assert approximateResults.size() == 1 : approximateResults.size();
-            System.out.format("Best result from level %d is %d\n", lvl, approximateResults.topNode());
             setEntryPointsFromPreviousLayer();
         }
 
@@ -292,8 +291,6 @@ public class GraphSearcher implements Closeable {
         try {
             assert approximateResults.size() == 0; // should be cleared by setEntryPointsFromPreviousLayer
             approximateResults.setMaxSize(rerankK);
-            System.out.format("Layer %d initial candidates %s\n", level, Arrays.toString(candidates.nodesCopy()));
-            System.out.format("Visited: %s\n", visited.toString());
 
             int numVisited = 0;
             // track scores to predict when we are done with threshold queries
@@ -343,7 +340,6 @@ public class GraphSearcher implements Closeable {
                             ? similarities.get(i)
                             : scoreFunction.similarityTo(friendOrd);
                     scoreTracker.track(friendSimilarity);
-//                    System.out.println("Adding new edge " + friendOrd + " to candidates pool " + Arrays.toString(candidates.nodesCopy()));
                     candidates.push(friendOrd, friendSimilarity);
                     i++;
                 }
