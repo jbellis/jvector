@@ -48,7 +48,7 @@ import java.io.IOException;
 public class GraphSearcher implements Closeable {
     private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "true"));
 
-    private final GraphIndex.View view;
+    private GraphIndex.View view;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
     // to allocate, so they're cleared and reused across calls.
@@ -104,6 +104,10 @@ public class GraphSearcher implements Closeable {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void setView(GraphIndex.View view) {
+        this.view = view;
     }
 
     /**

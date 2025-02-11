@@ -233,7 +233,7 @@ public class GraphIndexBuilder implements Closeable {
         int size = ravv.size();
 
         simdExecutor.submit(() -> {
-            IntStream.range(0, size).parallel().forEach(node -> addGraphNode(node, vv.get().getVector(node)));
+            IntStream.range(0, size).forEach(node -> addGraphNode(node, vv.get().getVector(node)));
         }).join();
 
         cleanup();
@@ -333,6 +333,7 @@ public class GraphIndexBuilder implements Closeable {
         insertionsInProgress.add(nodeLevel);
         var inProgressBefore = insertionsInProgress.clone();
         try (var gs = searchers.get()) {
+            gs.setView(graph.getView()); // new snapshot
             var naturalScratchPooled = naturalScratch.get();
             var concurrentScratchPooled = concurrentScratch.get();
 
