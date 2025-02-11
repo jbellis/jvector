@@ -147,6 +147,7 @@ public class NodeArray {
      * nodes.
      */
     public void addInOrder(int newNode, float newScore) {
+        assert Arrays.stream(nodes, 0, size).noneMatch(s -> s == newNode); // TODO remove
         if (size == nodes.length) {
             growArrays();
         }
@@ -170,6 +171,7 @@ public class NodeArray {
      * @return the insertion point of the new node, or -1 if it already existed
      */
     public int insertSorted(int newNode, float newScore) {
+        assert Arrays.stream(nodes, 0, size).noneMatch(s -> s == newNode); // TODO remove
         if (size == nodes.length) {
             growArrays();
         }

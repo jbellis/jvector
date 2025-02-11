@@ -39,6 +39,7 @@ import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 
 
 /**
@@ -227,10 +228,14 @@ public class GraphSearcher implements Closeable {
     }
 
     void setEntryPointsFromPreviousLayer() {
+        evictedResults.clear();
+        visited.clear();
         // Take the best result as next layer's entry point
         candidates.copyFrom(approximateResults);
+        candidates.foreach((node, score) -> {
+            visited.add(node); // TODO can we unify this with the foreach in copyFrom?
+        });
         approximateResults.clear();
-        visited.clear();
     }
 
     void initializeInternal(SearchScoreProvider scoreProvider, NodeAtLevel entry, Bits rawAcceptOrds) {
@@ -255,7 +260,7 @@ public class GraphSearcher implements Closeable {
      * @param scoreProvider the current query's scoring/approximation logic
      * @param rerankK       how many results to over-query for approximate ranking
      * @param threshold     similarity threshold, or 0f if none
-     * @param layer         which layer to search
+     * @param level         which layer to search
      *                      <p>
      *                      Modifies the internal search state.
      *                      When it's done, `approximateResults` contains the best `rerankK` results found at the given layer.
@@ -282,11 +287,13 @@ public class GraphSearcher implements Closeable {
     int searchOneLayer(SearchScoreProvider scoreProvider,
                        int rerankK,
                        float threshold,
-                       int layer)
+                       int level)
     {
         try {
             assert approximateResults.size() == 0; // should be cleared by setEntryPointsFromPreviousLayer
             approximateResults.setMaxSize(rerankK);
+            System.out.format("Layer %d initial candidates %s\n", level, Arrays.toString(candidates.nodesCopy()));
+            System.out.format("Visited: %s\n", visited.toString());
 
             int numVisited = 0;
             // track scores to predict when we are done with threshold queries
@@ -325,7 +332,7 @@ public class GraphSearcher implements Closeable {
                     similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
                 }
                 int i = 0;
-                for (var it = view.getNeighborsIterator(layer, topCandidateNode); it.hasNext(); ) {
+                for (var it = view.getNeighborsIterator(level, topCandidateNode); it.hasNext(); ) {
                     var friendOrd = it.nextInt();
                     if (!visited.add(friendOrd)) {
                         continue;
@@ -336,6 +343,7 @@ public class GraphSearcher implements Closeable {
                             ? similarities.get(i)
                             : scoreFunction.similarityTo(friendOrd);
                     scoreTracker.track(friendSimilarity);
+//                    System.out.println("Adding new edge " + friendOrd + " to candidates pool " + Arrays.toString(candidates.nodesCopy()));
                     candidates.push(friendOrd, friendSimilarity);
                     i++;
                 }

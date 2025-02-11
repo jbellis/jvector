@@ -30,6 +30,8 @@ import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 import org.agrona.collections.Int2ObjectHashMap;
 
+import java.util.Arrays;
+
 import static java.lang.Math.min;
 
 /**
@@ -85,6 +87,8 @@ public class NodeQueue {
      * @return true if the new value was added.
      */
     public boolean push(int newNode, float newScore) {
+        assert Arrays.stream(nodesCopy()).noneMatch(i -> i == newNode) // TODO remove
+                : String.format("%s contains %s", Arrays.toString(nodesCopy()), newNode);
         return heap.push(encode(newNode, newScore));
     }
 
