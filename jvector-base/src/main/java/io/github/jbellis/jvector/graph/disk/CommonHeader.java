@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
-import io.github.jbellis.jvector.graph.disk.v3.OnDiskGraphIndex;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -25,15 +24,14 @@ import java.io.IOException;
 /**
  * Base header for OnDiskGraphIndex functionality.
  */
-public class CommonHeader {
-    static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
+class CommonHeader {
     public final int version;
     public final int size;
     public final int dimension;
     public final int entryNode;
     public final int maxDegree;
 
-    public CommonHeader(int version, int size, int dimension, int entryNode, int maxDegree) {
+    CommonHeader(int version, int size, int dimension, int entryNode, int maxDegree) {
         this.version = version;
         this.size = size;
         this.dimension = dimension;
@@ -43,7 +41,7 @@ public class CommonHeader {
 
     void write(DataOutput out) throws IOException {
         if (version >= 3) {
-            out.writeInt(MAGIC);
+            out.writeInt(OnDiskGraphIndex.MAGIC);
             out.writeInt(version);
         }
         out.writeInt(size);
@@ -56,7 +54,7 @@ public class CommonHeader {
         int maybeMagic = reader.readInt();
         int version;
         int size;
-        if (maybeMagic == MAGIC) {
+        if (maybeMagic == OnDiskGraphIndex.MAGIC) {
             version = reader.readInt();
             size = reader.readInt();
         } else {

@@ -26,16 +26,16 @@ import java.util.EnumSet;
 /**
  * Header information for an on-disk graph index, reflecting the common header and feature-specific headers.
  */
-public class Header {
-    public final CommonHeader common;
-    public final EnumMap<FeatureId, ? extends Feature> features;
+class Header {
+    final CommonHeader common;
+    final EnumMap<FeatureId, ? extends Feature> features;
 
-    public Header(CommonHeader common, EnumMap<FeatureId, ? extends Feature> features) {
+    Header(CommonHeader common, EnumMap<FeatureId, ? extends Feature> features) {
         this.common = common;
         this.features = features;
     }
 
-    public void write(DataOutput out) throws IOException {
+    void write(DataOutput out) throws IOException {
         common.write(out);
 
         if (common.version >= 3) {
@@ -60,7 +60,7 @@ public class Header {
         return size;
     }
 
-    public static Header load(RandomAccessReader reader, long offset) throws IOException {
+    static Header load(RandomAccessReader reader, long offset) throws IOException {
         reader.seek(offset);
 
         EnumSet<FeatureId> featureIds;

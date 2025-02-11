@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk.v3;
+package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.BufferedRandomAccessWriter;
 import io.github.jbellis.jvector.disk.RandomAccessWriter;
 import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
-import io.github.jbellis.jvector.graph.disk.CommonHeader;
-import io.github.jbellis.jvector.graph.disk.Feature;
-import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.Header;
-import io.github.jbellis.jvector.graph.disk.InlineVectors;
-import io.github.jbellis.jvector.graph.disk.NVQ;
-import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
 import org.agrona.collections.Int2IntHashMap;
 
 import java.io.Closeable;
