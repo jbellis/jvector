@@ -26,8 +26,6 @@ import io.github.jbellis.jvector.util.DocIdSetIterator;
 import io.github.jbellis.jvector.util.FixedBitSet;
 import io.github.jbellis.jvector.util.IntMap;
 
-import java.util.stream.IntStream;
-
 import static java.lang.Math.min;
 
 /**

@@ -32,6 +32,7 @@ import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.SparseIntMap;
 import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
+import org.agrona.collections.IntArrayList;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -62,23 +63,20 @@ public class OnHeapGraphIndex implements GraphIndex {
     private final ThreadSafeGrowableBitSet deletedNodes = new ThreadSafeGrowableBitSet(0);
     private final AtomicInteger maxNodeId = new AtomicInteger(-1);
 
-    // Maximum number of neighbors (edges) per node in the base layer
-    final int maxDegree;
+    // Maximum number of neighbors (edges) per node per layer
+    final IntArrayList maxDegrees;
 
-    /**
-     * Constructs a new OnHeapGraphIndex.
-     *
-     * @param M               maximum degree
-     * @param maxOverflowDegree ratio by which construction is allowed to temporarily overflow the max degree
-     * @param scoreProvider   a provider of build–time scores (may be used by node arrays)
-     * @param alpha           diversity strictness parameter as described in DiskANN
-     */
-    OnHeapGraphIndex(int M, int maxOverflowDegree, BuildScoreProvider scoreProvider, float alpha) {
-        this.maxDegree = M;
+    OnHeapGraphIndex(List<Integer> maxDegrees, double maxOverflowDegree, BuildScoreProvider scoreProvider, float alpha) {
+        this.maxDegrees = new IntArrayList();
+        setDegrees(maxDegrees);
         entryPoint = new AtomicReference<>();
         this.completions = new CompletionTracker(1024);
         // Initialize the base layer (layer 0) with a dense map.
-        this.layers.add(new ConcurrentNeighborMap(new DenseIntMap<>(1024), scoreProvider, maxDegree, maxOverflowDegree, alpha));
+        this.layers.add(new ConcurrentNeighborMap(new DenseIntMap<>(1024),
+                                                  scoreProvider,
+                                                  getDegree(0),
+                                                  (int) (getDegree(0) * maxOverflowDegree),
+                                                  alpha));
     }
 
     /**
@@ -128,7 +126,7 @@ public class OnHeapGraphIndex implements GraphIndex {
                     var denseMap = layers.get(0);
                     var map = new ConcurrentNeighborMap(new SparseIntMap<>(),
                                                         denseMap.scoreProvider,
-                                                        maxDegree,
+                                                        getDegree(level),
                                                         denseMap.maxOverflowDegree,
                                                         denseMap.alpha);
                     layers.add(map);
@@ -218,7 +216,7 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     @Override
     public String toString() {
-        return String.format("OnHeapGraphIndex(size=%d, entryPoint=%s)", size(), entryPoint.get());
+        return String.format("OnHeapGraphIndex(size=%d, entryPoint=%s)", size(0), entryPoint.get());
     }
 
     @Override
@@ -248,7 +246,7 @@ public class OnHeapGraphIndex implements GraphIndex {
      * Validates that the current entry node has been completely added.
      */
     void validateEntryNode() {
-        if (size() == 0) {
+        if (size(0) == 0) {
             return;
         }
         NodeAtLevel entry = getView().entryNode();
@@ -307,11 +305,24 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     @Override
     public int getDegree(int level) {
-        return maxDegree;
+        if (level >= maxDegrees.size()) {
+            return maxDegrees.get(maxDegrees.size() - 1);
+        }
+        return maxDegrees.get(level);
+    }
+
+    @Override
+    public int maxDegree() {
+        return maxDegrees.stream().mapToInt(i -> i).max().orElseThrow();
     }
 
     public int getLayerSize(int level) {
         return layers.get(level).size();
+    }
+
+    public void setDegrees(List<Integer> layerDegrees) {
+        maxDegrees.clear();
+        maxDegrees.addAll(layerDegrees);
     }
 
     /**
@@ -382,7 +393,7 @@ public class OnHeapGraphIndex implements GraphIndex {
 
         @Override
         public int size() {
-            return OnHeapGraphIndex.this.size();
+            return OnHeapGraphIndex.this.size(0);
         }
 
         @Override
@@ -424,26 +435,30 @@ public class OnHeapGraphIndex implements GraphIndex {
 
         try (var view = getView()) {
             // Write graph-level properties.
-            out.writeInt(size());
-            NodeAtLevel entry = view.entryNode();
-            out.writeInt(entry.node);
-            out.writeInt(maxDegree());
+            out.writeInt(layers.size());
+            assert view.entryNode().level == getMaxLevel();
+            out.writeInt(view.entryNode().node);
 
-            // Save neighbors from the base layer.
-            var baseLayer = layers.get(0);
-            baseLayer.forEach((nodeId, neighbors) -> {
-                try {
-                    NodesIterator iterator = neighbors.iterator();
-                    out.writeInt(nodeId);
-                    out.writeInt(iterator.size());
-                    for (int n = 0; n < iterator.size(); n++) {
-                        out.writeInt(iterator.nextInt());
+            for (int level = 0; level < layers.size(); level++) {
+                out.writeInt(size(level));
+                out.writeInt(getDegree(level));
+
+                // Save neighbors from the layer.
+                var baseLayer = layers.get(level);
+                baseLayer.forEach((nodeId, neighbors) -> {
+                    try {
+                        NodesIterator iterator = neighbors.iterator();
+                        out.writeInt(nodeId);
+                        out.writeInt(iterator.size());
+                        for (int n = 0; n < iterator.size(); n++) {
+                            out.writeInt(iterator.nextInt());
+                        }
+                        assert !iterator.hasNext();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
                     }
-                    assert !iterator.hasNext();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            });
+                });
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

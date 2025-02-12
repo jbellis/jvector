@@ -35,7 +35,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -157,8 +159,36 @@ public class GraphIndexBuilder implements Closeable {
                              ForkJoinPool simdExecutor,
                              ForkJoinPool parallelExecutor)
     {
-        if (M <= 0) {
-            throw new IllegalArgumentException("maxConn must be positive");
+        this(scoreProvider, dimension, List.of(M), beamWidth, neighborOverflow, alpha, simdExecutor, parallelExecutor);
+    }
+    /**
+     * Reads all the vectors from vector values, builds a graph connecting them by their dense
+     * ordinals, using the given hyperparameter settings, and returns the resulting graph.
+     *
+     * @param scoreProvider    describes how to determine the similarities between vectors
+     * @param maxDegrees       the maximum number of connections a node can have in each layer; if fewer entries
+     *                         are specified than the number of layers, the last entry is used for all remaining layers.
+     * @param beamWidth        the size of the beam search to use when finding nearest neighbors.
+     * @param neighborOverflow the ratio of extra neighbors to allow temporarily when inserting a
+     *                         node. larger values will build more efficiently, but use more memory.
+     * @param alpha            how aggressive pruning diverse neighbors should be.  Set alpha &gt; 1.0 to
+     *                         allow longer edges.  If alpha = 1.0 then the equivalent of the lowest level of
+     *                         an HNSW graph will be created, which is usually not what you want.
+     * @param simdExecutor     ForkJoinPool instance for SIMD operations, best is to use a pool with the size of
+     *                         the number of physical cores.
+     * @param parallelExecutor ForkJoinPool instance for parallel stream operations
+     */
+    public GraphIndexBuilder(BuildScoreProvider scoreProvider,
+                             int dimension,
+                             List<Integer> maxDegrees,
+                             int beamWidth,
+                             float neighborOverflow,
+                             float alpha,
+                             ForkJoinPool simdExecutor,
+                             ForkJoinPool parallelExecutor)
+    {
+        if (maxDegrees.stream().mapToInt(i -> i).anyMatch(i -> i <= 0)) {
+            throw new IllegalArgumentException("layer degree must be positive");
         }
         if (beamWidth <= 0) {
             throw new IllegalArgumentException("beamWidth must be positive");
@@ -178,20 +208,19 @@ public class GraphIndexBuilder implements Closeable {
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
 
-        int maxOverflowDegree = (int) (M * neighborOverflow);
-        this.graph = new OnHeapGraphIndex(M, maxOverflowDegree, scoreProvider, alpha);
+        this.graph = new OnHeapGraphIndex(maxDegrees, neighborOverflow, scoreProvider, alpha);
         this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph));
 
         // in scratch we store candidates in reverse order: worse candidates are first
-        this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
-        this.concurrentScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, M + 1)));
+        this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, graph.maxDegree() + 1)));
+        this.concurrentScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, graph.maxDegree() + 1)));
     }
 
     // used by Cassandra when it fine-tunes the PQ codebook
     public static GraphIndexBuilder rescore(GraphIndexBuilder other, BuildScoreProvider newProvider) {
         var newBuilder = new GraphIndexBuilder(newProvider,
                                                other.dimension,
-                                               other.graph.maxDegree(),
+                                               other.graph.maxDegrees,
                                                other.beamWidth,
                                                other.neighborOverflow,
                                                other.alpha,
@@ -299,9 +328,8 @@ public class GraphIndexBuilder implements Closeable {
         return addGraphNode(node, ravv.getVector(node));
     }
 
-    // This is Lucene's approach, is FAISS's better? MT: It is almost the same, up to a small additive factor
     int getRandomGraphLevel() {
-        double ml = graph.maxDegree == 1 ? 1 : 1 / log(1.0 * graph.maxDegree);
+        double ml = graph.getDegree(0) == 1 ? 1 : 1 / log(1.0 * graph.getDegree(0));
         double randDouble;
         do {
             randDouble =
@@ -417,8 +445,8 @@ public class GraphIndexBuilder implements Closeable {
             }
         }
 
-        for (int currentLayer = 0; currentLayer < graph.layers.size(); currentLayer++) {
-            final int layer = currentLayer;  // Create effectively final copy for lambda
+        for (int currentLevel = 0; currentLevel < graph.layers.size(); currentLevel++) {
+            final int level = currentLevel;  // Create effectively final copy for lambda
             // Compute new edges to insert.  If node j is deleted, we add edges (i, k)
             // whenever (i, j) and (j, k) are directed edges in the current graph.  This
             // strategy is proposed in "FreshDiskANN: A Fast and Accurate Graph-Based
@@ -426,7 +454,7 @@ public class GraphIndexBuilder implements Closeable {
             var newEdges = new ConcurrentHashMap<Integer, Set<Integer>>(); // new edges for key k are values v
             parallelExecutor.submit(() -> {
                 IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(i -> {
-                    var neighbors = graph.getNeighbors(layer, i);
+                    var neighbors = graph.getNeighbors(level, i);
                     if (neighbors == null || toDelete.get(i)) {
                         return;
                     }
@@ -434,7 +462,7 @@ public class GraphIndexBuilder implements Closeable {
                         var j = it.nextInt();
                         if (toDelete.get(j)) {
                             var newEdgesForI = newEdges.computeIfAbsent(i, __ -> ConcurrentHashMap.newKeySet());
-                            for (var jt = graph.getNeighbors(layer, j).iterator(); jt.hasNext(); ) {
+                            for (var jt = graph.getNeighbors(level, j).iterator(); jt.hasNext(); ) {
                                 int k = jt.nextInt();
                                 if (i != k && !toDelete.get(k)) {
                                     newEdgesForI.add(k);
@@ -454,7 +482,7 @@ public class GraphIndexBuilder implements Closeable {
                     // each deleted node has ALL of its neighbors added as candidates, so using approximate
                     // scoring and then re-scoring only the best options later makes sense here
                     var sf = scoreProvider.searchProviderFor(node).scoreFunction();
-                    var candidates = new NodeArray(graph.maxDegree);
+                    var candidates = new NodeArray(graph.getDegree(level));
                     for (var k : e.getValue()) {
                         candidates.insertSorted(k, sf.similarityTo(k));
                     }
@@ -467,20 +495,20 @@ public class GraphIndexBuilder implements Closeable {
                     if (candidates.size() == 0) {
                         var R = ThreadLocalRandom.current();
                         // doing actual sampling-without-replacement is expensive so we'll loop a fixed number of times instead
-                        for (int i = 0; i < 2 * graph.maxDegree(); i++) {
+                        for (int i = 0; i < 2 * graph.getDegree(level); i++) {
                             int randomNode = liveNodes.get(R.nextInt(liveNodes.size()));
                             if (randomNode != node && !candidates.contains(randomNode)) {
                                 float score = sf.similarityTo(randomNode);
                                 candidates.insertSorted(randomNode, score);
                             }
-                            if (candidates.size() == graph.maxDegree) {
+                            if (candidates.size() == graph.getDegree(level)) {
                                 break;
                             }
                         }
                     }
 
                     // remove edges to deleted nodes and add the new connections, maintaining diversity
-                    graph.layers.get(layer).replaceDeletedNeighbors(node, toDelete, candidates);
+                    graph.layers.get(level).replaceDeletedNeighbors(node, toDelete, candidates);
                 });
             }).join();
         }
@@ -577,6 +605,32 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     public void load(RandomAccessReader in) throws IOException {
-        // TODO
+        if (graph.size(0) != 0) {
+            throw new IllegalStateException("Cannot load into a non-empty graph");
+        }
+
+        int layerCount = in.readInt();
+        int entryNode = in.readInt();
+        var layerDegrees = new ArrayList<Integer>(layerCount);
+
+        // Read layer info
+        for (int i = 0; i < layerCount; i++) {
+            int layerSize = in.readInt();
+            layerDegrees.add(in.readInt());
+            for (int level = 0; level < layerSize; level++) {
+                int nodeId = in.readInt();
+                int nNeighbors = in.readInt();
+                var sf = scoreProvider.searchProviderFor(nodeId).exactScoreFunction();
+                var ca = new NodeArray(nNeighbors);
+                for (int j = 0; j < nNeighbors; j++) {
+                    int neighbor = in.readInt();
+                    ca.addInOrder(neighbor, sf.similarityTo(neighbor));
+                }
+                graph.addNode(level, nodeId, ca);
+            }
+        }
+
+        graph.setDegrees(layerDegrees);
+        graph.updateEntryNode(new NodeAtLevel(graph.getMaxLevel(), entryNode));
     }
 }

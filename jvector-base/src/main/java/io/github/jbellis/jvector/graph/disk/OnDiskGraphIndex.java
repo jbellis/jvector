@@ -197,6 +197,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         return entryNode.level;
     }
 
+    @Override
+    public int maxDegree() {
+        return layerInfo.stream().mapToInt(li -> li.degree).max().orElseThrow();
+    }
+
     // re-declared to specify type
     @Override
     public View getView() {

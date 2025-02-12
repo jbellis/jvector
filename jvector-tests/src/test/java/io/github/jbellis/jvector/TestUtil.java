@@ -255,6 +255,11 @@ public class TestUtil {
         }
 
         @Override
+        public int maxDegree() {
+            return layerSizes.stream().mapToInt(i -> i).max().orElseThrow();
+        }
+
+        @Override
         public NodesIterator getNodes(int level) {
             int n = layerSizes.get(level);
             return new NodesIterator.ArrayNodesIterator(IntStream.range(0, n).toArray(), n);
@@ -376,6 +381,11 @@ public class TestUtil {
         @Override
         public int getDegree(int level) {
             return layerInfo.get(level).degree;
+        }
+
+        @Override
+        public int maxDegree() {
+            return layerInfo.stream().mapToInt(li -> li.degree).max().orElseThrow();
         }
 
         @Override

@@ -72,12 +72,9 @@ public interface GraphIndex extends AutoCloseable, Accountable {
     View getView();
 
     /**
-     * @return the maximum number of edges per node
+     * @return the maximum number of edges per node across any layer
      */
-    @Deprecated // TODO
-    default int maxDegree() {
-        return getDegree(0);
-    }
+    int maxDegree();
 
     /**
      * @return the first ordinal greater than all node ids in the graph.  Equal to size() in simple cases;
