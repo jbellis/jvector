@@ -65,12 +65,14 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     // Maximum number of neighbors (edges) per node per layer
     final IntArrayList maxDegrees;
+    // The ratio by which we can overflow the neighborhood of a node during construction. Should be higher than 1
     private final double overflowRatio;
 
     OnHeapGraphIndex(List<Integer> maxDegrees, double overflowRatio, BuildScoreProvider scoreProvider, float alpha) {
         this.overflowRatio = overflowRatio;
         this.maxDegrees = new IntArrayList();
         setDegrees(maxDegrees);
+        this.maxOverflowFactor = maxOverflowDegree;
         entryPoint = new AtomicReference<>();
         this.completions = new CompletionTracker(1024);
         // Initialize the base layer (layer 0) with a dense map.
