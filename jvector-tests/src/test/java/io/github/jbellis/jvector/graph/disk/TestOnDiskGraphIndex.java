@@ -179,6 +179,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var onDiskView = onDiskGraph.getView())
         {
+            assertEquals(11, onDiskGraph.getIdUpperBound());
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
             assertEquals(onDiskView.getVector(10), ravv.getVector(1));
             assertEquals(onDiskView.getVector(2), ravv.getVector(0));
