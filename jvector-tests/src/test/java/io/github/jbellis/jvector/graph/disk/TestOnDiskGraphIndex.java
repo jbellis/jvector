@@ -24,6 +24,7 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
+import io.github.jbellis.jvector.quantization.NVQuantization;
 import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -189,7 +190,95 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     private static void validateVectors(OnDiskGraphIndex.View view, RandomAccessVectorValues ravv) {
         for (int i = 0; i < view.size(); i++) {
-            assertEquals("Incorrect vector at " + i, view.getVector(i), ravv.getVector(i));
+            assertEquals("Incorrect vector at " + i, ravv.getVector(i), view.getVector(i));
+        }
+    }
+
+    private static void validateSeparatedNVQ(OnDiskGraphIndex.View view,
+                                             RandomAccessVectorValues ravv,
+                                             NVQuantization nvq) throws IOException
+    {
+        assertEquals("Sizes differ", ravv.size(), view.size());
+        // Reusable buffer for decoding
+        var quantized = NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets,
+                                                                   nvq.bitsPerDimension);
+        for (int i = 0; i < view.size(); i++) {
+            try (var reader = view.featureReaderForNode(i, FeatureId.SEPARATED_NVQ)) {
+                NVQuantization.QuantizedVector.loadInto(reader, quantized);
+            }
+            // sanity check?
+        }
+    }
+
+    @Test
+    public void testSimpleGraphSeparated() throws Exception {
+        for (var graph : List.of(fullyConnectedGraph, randomlyConnectedGraph)) {
+            var outputPath = testDirectory.resolve("test_graph_separated_" + graph.getClass().getSimpleName());
+            var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size());
+
+            // Write graph with SEPARATED_VECTORS
+            try (var writer = new OnDiskGraphIndexWriter.Builder(graph, outputPath)
+                    .with(new SeparatedVectors(ravv.dimension(), 0L))
+                    .build())
+            {
+                writer.write(Feature.singleStateFactory(
+                    FeatureId.SEPARATED_VECTORS,
+                    nodeId -> new InlineVectors.State(ravv.getVector(nodeId))
+                ));
+            }
+
+            // Read and validate
+            try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+                 var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
+                 var onDiskView = onDiskGraph.getView())
+            {
+                TestUtil.assertGraphEquals(graph, onDiskGraph);
+                validateVectors(onDiskView, ravv);
+            }
+        }
+    }
+
+    @Test
+    public void testLargeGraphSeparatedNVQ() throws Exception {
+        // Build a large-ish graph
+        var nodeCount = 100_000;
+        var maxDegree = 32;
+        var graph = new TestUtil.RandomlyConnectedGraphIndex(nodeCount, maxDegree, getRandom());
+        var outputPath = testDirectory.resolve("large_graph_nvq");
+
+        // Create random vectors
+        var dimension = 64;
+        var vectors = TestUtil.createRandomVectors(nodeCount, dimension);
+        var ravv = new ListRandomAccessVectorValues(vectors, dimension);
+
+        // Compute NVQ and build a SeparatedNVQ feature
+        var nvq = NVQuantization.compute(ravv, /* e.g. subquantizers=2 */ 2);
+        var separatedNVQ = new SeparatedNVQ(nvq, 0L);
+
+        // Write the graph with SEPARATED_NVQ
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, outputPath)
+                .with(separatedNVQ)
+                .build())
+        {
+            // Provide the states for each node
+            writer.write(Feature.singleStateFactory(
+                FeatureId.SEPARATED_NVQ,
+                nodeId -> new NVQ.State(nvq.encode(ravv.getVector(nodeId)))
+            ));
+        }
+
+        // Read back the graph & check structure, then decode vectors
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
+             var cachedOnDisk = new CachingGraphIndex(onDiskGraph);
+             var onDiskView = onDiskGraph.getView())
+        {
+            // structure check
+            TestUtil.assertGraphEquals(graph, onDiskGraph);
+            TestUtil.assertGraphEquals(graph, cachedOnDisk);
+
+            // decode and compare vectors
+            validateSeparatedNVQ(onDiskView, ravv, nvq);
         }
     }
 

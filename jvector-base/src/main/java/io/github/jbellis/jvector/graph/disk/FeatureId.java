@@ -32,7 +32,9 @@ import java.util.function.BiFunction;
 public enum FeatureId {
     INLINE_VECTORS(InlineVectors::load),
     FUSED_ADC(FusedADC::load),
-    NVQ_VECTORS(NVQ::load);
+    NVQ_VECTORS(NVQ::load),
+    SEPARATED_VECTORS(SeparatedVectors::load),
+    SEPARATED_NVQ(SeparatedNVQ::load);
 
     public static final Set<FeatureId> ALL = Collections.unmodifiableSet(EnumSet.allOf(FeatureId.class));
 

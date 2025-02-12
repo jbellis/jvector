@@ -76,8 +76,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         var inlineBlockSize = 0;
         inlineOffsets = new EnumMap<>(FeatureId.class);
         for (var entry : features.entrySet()) {
-            inlineOffsets.put(entry.getKey(), inlineBlockSize);
-            inlineBlockSize += entry.getValue().inlineSize();
+            var feature = entry.getValue();
+            if (!(feature instanceof SeparatedFeature)) {
+                inlineOffsets.put(entry.getKey(), inlineBlockSize);
+                inlineBlockSize += feature.featureSize();
+            }
         }
         this.inlineBlockSize = inlineBlockSize;
     }
@@ -184,7 +187,16 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             throw new UnsupportedOperationException(); // need to copy reader
         }
 
-        protected long inlineOffsetFor(int node, FeatureId featureId) {
+        protected long offsetFor(int node, FeatureId featureId) {
+            Feature feature = features.get(featureId);
+
+            // Separated features are just global offset + node offset
+            if (feature instanceof SeparatedFeature) {
+                SeparatedFeature sf = (SeparatedFeature) feature;
+                return sf.getOffset() + (node * (long) feature.featureSize());
+            }
+            
+            // Inline features are more complicated
             return neighborsOffset +
                     (node * ((long) Integer.BYTES // ids
                             + inlineBlockSize // inline elements
@@ -200,20 +212,24 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         }
 
         @Override
-        public RandomAccessReader inlineReaderForNode(int node, FeatureId featureId) throws IOException {
-            long offset = inlineOffsetFor(node, featureId);
+        public RandomAccessReader featureReaderForNode(int node, FeatureId featureId) throws IOException {
+            long offset = offsetFor(node, featureId);
             reader.seek(offset);
             return reader;
         }
 
         @Override
         public VectorFloat<?> getVector(int node) {
-            if (!features.containsKey(FeatureId.INLINE_VECTORS)) {
-                throw new UnsupportedOperationException("No inline vectors in this graph");
+            var feature = features.get(FeatureId.INLINE_VECTORS);
+            if (feature == null) {
+                feature = features.get(FeatureId.SEPARATED_VECTORS);
+            }
+            if (feature == null) {
+                throw new UnsupportedOperationException("No full-resolution vectors in this graph");
             }
 
             try {
-                long offset = inlineOffsetFor(node, FeatureId.INLINE_VECTORS);
+                long offset = offsetFor(node, feature.id());
                 reader.seek(offset);
                 return vectorTypeSupport.readFloatVector(reader, dimension);
             } catch (IOException e) {
@@ -223,12 +239,16 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
         @Override
         public void getVectorInto(int node, VectorFloat<?> vector, int offset) {
-            if (!features.containsKey(FeatureId.INLINE_VECTORS)) {
-                throw new UnsupportedOperationException("No inline vectors in this graph");
+            var feature = features.get(FeatureId.INLINE_VECTORS);
+            if (feature == null) {
+                feature = features.get(FeatureId.SEPARATED_VECTORS);
+            }
+            if (feature == null) {
+                throw new UnsupportedOperationException("No full-resolution vectors in this graph");
             }
 
             try {
-                long diskOffset = inlineOffsetFor(node, FeatureId.INLINE_VECTORS);
+                long diskOffset = offsetFor(node, feature.id());
                 reader.seek(diskOffset);
                 vectorTypeSupport.readFloatVector(reader, dimension, vector, offset);
             } catch (IOException e) {

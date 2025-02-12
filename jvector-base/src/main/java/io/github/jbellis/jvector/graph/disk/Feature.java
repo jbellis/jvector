@@ -29,13 +29,19 @@ public interface Feature {
 
     int headerSize();
 
-    int inlineSize();
+    int featureSize();
 
     void writeHeader(DataOutput out) throws IOException;
 
-    void writeInline(DataOutput out, State state) throws IOException;
+    default void writeInline(DataOutput out, State state) throws IOException {
+        // default no-op
+    }
 
-    // Feature implementations should implement a State as well for use with writeInline
+    default void writeSeparately(DataOutput out, State state) throws IOException {
+        // default no-op
+    }
+
+    // Feature implementations should implement a State as well for use with writeInline/writeSeparately
     interface State {
     }
 

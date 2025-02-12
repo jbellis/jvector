@@ -16,11 +16,7 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
-import io.github.jbellis.jvector.disk.RandomAccessReader;
-
-import java.io.Closeable;
-import java.io.IOException;
-
-public interface FeatureSource extends Closeable {
-    RandomAccessReader featureReaderForNode(int node, FeatureId featureId) throws IOException;
+public interface SeparatedFeature extends Feature {
+    void setOffset(long offset);
+    long getOffset();
 }

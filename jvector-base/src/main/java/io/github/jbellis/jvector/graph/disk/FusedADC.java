@@ -68,7 +68,7 @@ public class FusedADC implements Feature {
     }
 
     @Override
-    public int inlineSize() {
+    public int featureSize() {
         return pq.compressedVectorSize() * maxDegree;
     }
 
@@ -135,7 +135,7 @@ public class FusedADC implements Feature {
 
         public ByteSequence<?> getPackedNeighbors(int node) {
             try {
-                var reader = view.inlineReaderForNode(node, FeatureId.FUSED_ADC);
+                var reader = view.featureReaderForNode(node, FeatureId.FUSED_ADC);
                 var tlNeighbors = reusableNeighbors.get();
                 OnDiskGraphIndex.vectorTypeSupport.readByteSequence(reader, tlNeighbors);
                 return tlNeighbors;

@@ -20,7 +20,6 @@ import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.quantization.NVQScorer;
 import io.github.jbellis.jvector.quantization.NVQuantization;
-import io.github.jbellis.jvector.quantization.NVQuantization.QuantizedVector;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 
@@ -28,73 +27,86 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-/**
- * Implements the storage of NuVeQ vectors in an on-disk graph index.  These can be used for reranking.
- */
-public class NVQ implements Feature {
+public class SeparatedNVQ implements SeparatedFeature {
     private final NVQuantization nvq;
     private final NVQScorer scorer;
-    private final ThreadLocal<QuantizedVector> reusableQuantizedVector;
+    private final ThreadLocal<NVQuantization.QuantizedVector> reusableQuantizedVector;
+    private long offset;
 
-    public NVQ(NVQuantization nvq) {
+    public SeparatedNVQ(NVQuantization nvq, long offset) {
         this.nvq = nvq;
+        this.offset = offset;
         scorer = new NVQScorer(this.nvq);
         reusableQuantizedVector = ThreadLocal.withInitial(() -> NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension));
     }
 
     @Override
+    public void setOffset(long offset) {
+        this.offset = offset;
+    }
+
+    @Override
+    public long getOffset() {
+        return offset;
+    }
+
+    @Override
     public FeatureId id() {
-        return FeatureId.NVQ_VECTORS;
+        return FeatureId.SEPARATED_NVQ;
     }
 
     @Override
     public int headerSize() {
-        return nvq.compressorSize();
+        return nvq.compressorSize() + Long.BYTES;
     }
 
     @Override
-    public int featureSize() { return nvq.compressedVectorSize();}
-
-    public int dimension() {
-        return nvq.globalMean.length();
-    }
-
-    static NVQ load(CommonHeader header, RandomAccessReader reader) {
-        try {
-            return new NVQ(NVQuantization.load(reader));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+    public int featureSize() {
+        return nvq.compressedVectorSize();
     }
 
     @Override
     public void writeHeader(DataOutput out) throws IOException {
         nvq.write(out, OnDiskGraphIndex.CURRENT_VERSION);
+        out.writeLong(offset);
     }
 
     @Override
-    public void writeInline(DataOutput out, Feature.State state_) throws IOException {
+    public void writeSeparately(DataOutput out, State state_) throws IOException {
         var state = (NVQ.State) state_;
-        state.vector.write(out);
-    }
-
-    public static class State implements Feature.State {
-        public final QuantizedVector vector;
-
-        public State(QuantizedVector vector) {
-            this.vector = vector;
+        if (state.vector != null) {
+            state.vector.write(out);
+        } else {
+            // Write zeros for missing vector
+            NVQuantization.QuantizedVector.createEmpty(nvq.subvectorSizesAndOffsets, nvq.bitsPerDimension).write(out);
         }
     }
 
+    // Using NVQ.State
+
+    static SeparatedNVQ load(CommonHeader header, RandomAccessReader reader) {
+        try {
+            var nvq = NVQuantization.load(reader);
+            long offset = reader.readLong();
+            return new SeparatedNVQ(nvq, offset);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public int dimension() {
+        return nvq.globalMean.length();
+    }
+
     ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector,
-                                                 VectorSimilarityFunction vsf,
-                                                 FeatureSource source) {
+                                                VectorSimilarityFunction vsf,
+                                                FeatureSource source) {
         var function = scorer.scoreFunctionFor(queryVector, vsf);
 
         return node2 -> {
             try {
-                var reader = source.featureReaderForNode(node2, FeatureId.NVQ_VECTORS);
-                QuantizedVector.loadInto(reader, reusableQuantizedVector.get());
+                var reader = source.featureReaderForNode(node2, FeatureId.SEPARATED_NVQ);
+                NVQuantization.QuantizedVector.loadInto(reader, reusableQuantizedVector.get());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

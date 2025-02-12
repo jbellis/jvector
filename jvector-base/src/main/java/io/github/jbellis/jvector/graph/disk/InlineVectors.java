@@ -45,7 +45,7 @@ public class InlineVectors implements Feature {
         return 0;
     }
 
-    public int inlineSize() {
+    public int featureSize() {
         return dimension * Float.BYTES;
     }
 
