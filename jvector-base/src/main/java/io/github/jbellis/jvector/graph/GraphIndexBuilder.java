@@ -615,10 +615,10 @@ public class GraphIndexBuilder implements Closeable {
         var layerDegrees = new ArrayList<Integer>(layerCount);
 
         // Read layer info
-        for (int i = 0; i < layerCount; i++) {
+        for (int level = 0; level < layerCount; level++) {
             int layerSize = in.readInt();
             layerDegrees.add(in.readInt());
-            for (int level = 0; level < layerSize; level++) {
+            for (int i = 0; i < layerSize; i++) {
                 int nodeId = in.readInt();
                 int nNeighbors = in.readInt();
                 var sf = scoreProvider.searchProviderFor(nodeId).exactScoreFunction();
@@ -627,7 +627,7 @@ public class GraphIndexBuilder implements Closeable {
                     int neighbor = in.readInt();
                     ca.addInOrder(neighbor, sf.similarityTo(neighbor));
                 }
-                graph.addNode(level, nodeId, ca);
+                graph.addNode(i, nodeId, ca);
             }
         }
 
