@@ -62,6 +62,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -300,7 +301,14 @@ public class Grid {
         Map<Set<FeatureId>, GraphIndex> indexes = new HashMap<>();
         long start;
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp,
+                                                          floatVectors.dimension(),
+                                                          List.of(M, 2*M),
+                                                          efConstruction,
+                                                          1.2f,
+                                                          1.2f,
+                                                          PhysicalCoreExecutor.pool(),
+                                                          ForkJoinPool.commonPool());
         start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
         System.out.format("Build (%s) M=%d ef=%d in %.2fs%n",

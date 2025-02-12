@@ -65,8 +65,10 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     // Maximum number of neighbors (edges) per node per layer
     final IntArrayList maxDegrees;
+    private final double overflowRatio;
 
-    OnHeapGraphIndex(List<Integer> maxDegrees, double maxOverflowDegree, BuildScoreProvider scoreProvider, float alpha) {
+    OnHeapGraphIndex(List<Integer> maxDegrees, double overflowRatio, BuildScoreProvider scoreProvider, float alpha) {
+        this.overflowRatio = overflowRatio;
         this.maxDegrees = new IntArrayList();
         setDegrees(maxDegrees);
         entryPoint = new AtomicReference<>();
@@ -75,7 +77,7 @@ public class OnHeapGraphIndex implements GraphIndex {
         this.layers.add(new ConcurrentNeighborMap(new DenseIntMap<>(1024),
                                                   scoreProvider,
                                                   getDegree(0),
-                                                  (int) (getDegree(0) * maxOverflowDegree),
+                                                  (int) (getDegree(0) * overflowRatio),
                                                   alpha));
     }
 
@@ -127,7 +129,7 @@ public class OnHeapGraphIndex implements GraphIndex {
                     var map = new ConcurrentNeighborMap(new SparseIntMap<>(),
                                                         denseMap.scoreProvider,
                                                         getDegree(level),
-                                                        denseMap.maxOverflowDegree,
+                                                        (int) (getDegree(level) * overflowRatio),
                                                         denseMap.alpha);
                     layers.add(map);
                 }
@@ -184,7 +186,7 @@ public class OnHeapGraphIndex implements GraphIndex {
      * this does call get() internally to filter level 0, so if you're going to use it in a pipeline
      * that also calls get(), consider using your own raw IntStream.range instead
      */
-    private IntStream nodeStream(int level) {
+    IntStream nodeStream(int level) {
         var layer = layers.get(level);
         return level == 0
                 ? IntStream.range(0, getIdUpperBound()).filter(i -> layer.get(i) != null)
