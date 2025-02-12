@@ -227,13 +227,11 @@ public class GraphSearcher implements Closeable {
     }
 
     void setEntryPointsFromPreviousLayer() {
+        // push the candidates seen so far back onto the queue for the next layer
+        // at worst we save recomputing the similarity; at best we might connect to a more distant cluster
+        approximateResults.foreach(candidates::push);
+        evictedResults.foreach(candidates::push);
         evictedResults.clear();
-        visited.clear();
-        // Take the best result as next layer's entry point
-        candidates.copyFrom(approximateResults);
-        candidates.foreach((node, score) -> {
-            visited.add(node); // TODO can we unify this with the foreach in copyFrom?
-        });
         approximateResults.clear();
     }
 
