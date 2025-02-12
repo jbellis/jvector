@@ -72,7 +72,6 @@ public class OnHeapGraphIndex implements GraphIndex {
         this.overflowRatio = overflowRatio;
         this.maxDegrees = new IntArrayList();
         setDegrees(maxDegrees);
-        this.maxOverflowFactor = maxOverflowDegree;
         entryPoint = new AtomicReference<>();
         this.completions = new CompletionTracker(1024);
         // Initialize the base layer (layer 0) with a dense map.
