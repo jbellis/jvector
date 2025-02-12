@@ -198,20 +198,18 @@ public class OnHeapGraphIndex implements GraphIndex {
     }
 
     public long ramBytesUsedOneLayer(int layer) {
-        // TODO Sparse and Dense layers are different
         int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
         var REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
         var AH_BYTES = RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
 
-        long neighborSize = ramBytesUsedOneNode() * layers.get(layer).size();
+        long neighborSize = ramBytesUsedOneNode(layer) * layers.get(layer).size();
         return OH_BYTES + REF_BYTES * 2L + AH_BYTES + neighborSize;
     }
 
-    public long ramBytesUsedOneNode() {
+    public long ramBytesUsedOneNode(int layer) {
         // we include the REF_BYTES for the CNS reference here to make it self-contained for addGraphNode()
         int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        // TODO different layers have different degrees
-        return REF_BYTES + Neighbors.ramBytesUsed(layers.get(0).nodeArrayLength());
+        return REF_BYTES + Neighbors.ramBytesUsed(layers.get(layer).nodeArrayLength());
     }
 
     @Override
@@ -263,13 +261,13 @@ public class OnHeapGraphIndex implements GraphIndex {
      * Removes the given node from all layers.
      *
      * @param node the node id to remove
-     * @return true if the node was present in any layer.
+     * @return the number of layers from which it was removed
      */
-    boolean removeNode(int node) {
-        boolean found = false;
+    int removeNode(int node) {
+        int found = 0;
         for (var layer : layers) {
             if (layer.remove(node) != null) {
-                found = true;
+                found++;
             }
         }
         deletedNodes.clear(node);

@@ -399,7 +399,7 @@ public class GraphIndexBuilder implements Closeable {
             insertionsInProgress.remove(nodeLevel);
         }
 
-        return graph.ramBytesUsedOneNode();
+        return IntStream.range(0, nodeLevel.level).mapToLong(graph::ramBytesUsedOneNode).sum();
     }
 
     private void updateNeighborsOneLayer(int layer, int node, NodeScore[] neighbors, NodeArray naturalScratchPooled, ConcurrentSkipListSet<NodeAtLevel> inProgressBefore, NodeArray concurrentScratchPooled, SearchScoreProvider ssp) {
@@ -536,11 +536,12 @@ public class GraphIndexBuilder implements Closeable {
 
         // Remove the deleted nodes from the graph
         assert toDelete.cardinality() == nRemoved : "cardinality changed";
+        int nodeLayers = 0;
         for (int i = toDelete.nextSetBit(0); i != NO_MORE_DOCS; i = toDelete.nextSetBit(i + 1)) {
-            graph.removeNode(i);
+            nodeLayers += graph.removeNode(i);
         }
-
-        return nRemoved * graph.ramBytesUsedOneNode();
+        // TODO this is not correct since different layers can use more or less ram due to different degrees
+        return nodeLayers * graph.ramBytesUsedOneNode(0);
     }
 
     private void updateNeighbors(int layer, int nodeId, NodeArray natural, NodeArray concurrent) {
