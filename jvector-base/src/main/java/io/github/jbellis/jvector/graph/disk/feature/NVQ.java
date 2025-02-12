@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk;
+package io.github.jbellis.jvector.graph.disk.feature;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.disk.CommonHeader;
+import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.quantization.NVQScorer;
 import io.github.jbellis.jvector.quantization.NVQuantization;
@@ -86,9 +88,9 @@ public class NVQ implements Feature {
         }
     }
 
-    ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector,
-                                                 VectorSimilarityFunction vsf,
-                                                 FeatureSource source) {
+    public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector,
+                                                        VectorSimilarityFunction vsf,
+                                                        FeatureSource source) {
         var function = scorer.scoreFunctionFor(queryVector, vsf);
 
         return node2 -> {

@@ -24,7 +24,7 @@ import java.io.IOException;
 /**
  * Base header for OnDiskGraphIndex functionality.
  */
-class CommonHeader {
+public class CommonHeader {
     public final int version;
     public final int size;
     public final int dimension;

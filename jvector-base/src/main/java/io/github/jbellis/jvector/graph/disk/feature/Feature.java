@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk;
+package io.github.jbellis.jvector.graph.disk.feature;
 
 import java.io.DataOutput;
 import java.io.IOException;

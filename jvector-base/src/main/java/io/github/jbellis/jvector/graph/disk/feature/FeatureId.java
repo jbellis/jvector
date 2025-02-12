@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk;
+package io.github.jbellis.jvector.graph.disk.feature;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.disk.CommonHeader;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -44,7 +45,7 @@ public enum FeatureId {
         this.loader = loader;
     }
 
-    Feature load(CommonHeader header, RandomAccessReader reader) {
+    public Feature load(CommonHeader header, RandomAccessReader reader) {
         return loader.apply(header, reader);
     }
 

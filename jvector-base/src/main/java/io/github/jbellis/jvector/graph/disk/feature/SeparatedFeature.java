@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.jbellis.jvector.graph.disk;
+package io.github.jbellis.jvector.graph.disk.feature;
 
 public interface SeparatedFeature extends Feature {
     void setOffset(long offset);
