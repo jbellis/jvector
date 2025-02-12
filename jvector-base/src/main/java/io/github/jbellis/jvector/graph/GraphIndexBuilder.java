@@ -161,6 +161,32 @@ public class GraphIndexBuilder implements Closeable {
     {
         this(scoreProvider, dimension, List.of(M), beamWidth, neighborOverflow, alpha, simdExecutor, parallelExecutor);
     }
+
+    /**
+     * Reads all the vectors from vector values, builds a graph connecting them by their dense
+     * ordinals, using the given hyperparameter settings, and returns the resulting graph.
+     * Default executor pools are used.
+     *
+     * @param scoreProvider    describes how to determine the similarities between vectors
+     * @param maxDegrees       the maximum number of connections a node can have in each layer; if fewer entries
+     *      *                  are specified than the number of layers, the last entry is used for all remaining layers.
+     * @param beamWidth        the size of the beam search to use when finding nearest neighbors.
+     * @param neighborOverflow the ratio of extra neighbors to allow temporarily when inserting a
+     *                         node. larger values will build more efficiently, but use more memory.
+     * @param alpha            how aggressive pruning diverse neighbors should be.  Set alpha &gt; 1.0 to
+     *                         allow longer edges.  If alpha = 1.0 then the equivalent of the lowest level of
+     *                         an HNSW graph will be created, which is usually not what you want.
+     */
+    public GraphIndexBuilder(BuildScoreProvider scoreProvider,
+                             int dimension,
+                             List<Integer> maxDegrees,
+                             int beamWidth,
+                             float neighborOverflow,
+                             float alpha)
+    {
+        this(scoreProvider, dimension, maxDegrees, beamWidth, neighborOverflow, alpha, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+    }
+
     /**
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
      * ordinals, using the given hyperparameter settings, and returns the resulting graph.
