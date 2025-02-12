@@ -50,6 +50,7 @@ public class ConcurrentNeighborMap {
     }
 
     public <T> ConcurrentNeighborMap(IntMap<Neighbors> neighbors, BuildScoreProvider scoreProvider, int maxDegree, int maxOverflowDegree, float alpha) {
+        assert maxDegree <= maxOverflowDegree : String.format("maxDegree %d exceeds maxOverflowDegree %d", maxDegree, maxOverflowDegree);
         this.neighbors = neighbors;
         this.alpha = alpha;
         this.scoreProvider = scoreProvider;
@@ -264,7 +265,9 @@ public class ConcurrentNeighborMap {
                 retainDiverse(merged, 0, map);
             }
             // insertDiverse usually gets called with a LOT of candidates, so trim down the resulting NodeArray
-            var nextNodes = merged.getArrayLength() <= map.nodeArrayLength() ? merged : merged.copy(map.nodeArrayLength());
+            var nextNodes = merged.getArrayLength() <= map.nodeArrayLength()
+                    ? merged
+                    : merged.copy(map.nodeArrayLength());
             return new Neighbors(nodeId, nextNodes);
         }
 
