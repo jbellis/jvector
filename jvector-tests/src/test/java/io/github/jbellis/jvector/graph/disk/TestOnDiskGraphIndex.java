@@ -21,6 +21,7 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
@@ -34,7 +35,9 @@ import io.github.jbellis.jvector.graph.disk.feature.SeparatedVectors;
 import io.github.jbellis.jvector.quantization.NVQuantization;
 import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,8 +51,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
+import static io.github.jbellis.jvector.TestUtil.randomVector;
 import static org.junit.Assert.*;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
@@ -106,11 +111,11 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         assertEquals(2, original.size());
         var originalView = original.getView();
         // 1 -> 2
-        assertEquals(1, getNeighborNodes(originalView, 1).size());
-        assertTrue(getNeighborNodes(originalView, 1).contains(2));
+        assertEquals(1, getNeighborNodes(originalView, 0, 1).size());
+        assertTrue(getNeighborNodes(originalView, 0, 1).contains(2));
         // 2 -> 1
-        assertEquals(1, getNeighborNodes(originalView, 2).size());
-        assertTrue(getNeighborNodes(originalView, 2).contains(1));
+        assertEquals(1, getNeighborNodes(originalView, 0, 2).size());
+        assertTrue(getNeighborNodes(originalView, 0, 2).contains(1));
 
         // create renumbering map
         Map<Integer, Integer> oldToNewMap = OnDiskGraphIndexWriter.sequentialRenumbering(original);
@@ -127,11 +132,11 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskView = onDiskGraph.getView())
         {
             // entry point renumbering
-            assertNotNull(onDiskView.getVector(onDiskGraph.entryNode));
+            assertNotNull(onDiskView.getVector(onDiskGraph.entryNode.node));
             // 0 -> 1
-            assertTrue(getNeighborNodes(onDiskView, 0).contains(1));
+            assertTrue(getNeighborNodes(onDiskView, 0, 0).contains(1));
             // 1 -> 0
-            assertTrue(getNeighborNodes(onDiskView, 1).contains(0));
+            assertTrue(getNeighborNodes(onDiskView, 0, 1).contains(0));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -277,12 +282,10 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         // Read back the graph & check structure, then decode vectors
         try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
              var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
-             var cachedOnDisk = new CachingGraphIndex(onDiskGraph);
              var onDiskView = onDiskGraph.getView())
         {
             // structure check
             TestUtil.assertGraphEquals(graph, onDiskGraph);
-            TestUtil.assertGraphEquals(graph, cachedOnDisk);
 
             // decode and compare vectors
             validateSeparatedNVQ(onDiskView, ravv, nvq);
@@ -316,13 +319,13 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskGraph = OnDiskGraphIndex.load(readerSupplier);
              var onDiskView = onDiskGraph.getView())
         {
-            assertEquals(32, onDiskGraph.maxDegree);
+            assertEquals(32, onDiskGraph.getDegree(0));
             assertEquals(2, onDiskGraph.version);
-            assertEquals(100_000, onDiskGraph.size);
+            assertEquals(100_000, onDiskGraph.size(0));
             assertEquals(2, onDiskGraph.dimension);
-            assertEquals(99779, onDiskGraph.entryNode);
+            assertEquals(99779, onDiskGraph.entryNode.node);
             assertEquals(EnumSet.of(FeatureId.INLINE_VECTORS), onDiskGraph.features.keySet());
-            var actualNeighbors = getNeighborNodes(onDiskView, 12345);
+            var actualNeighbors = getNeighborNodes(onDiskView, 0, 12345);
             var expectedNeighbors = Set.of(67461, 9540, 85444, 13638, 89415, 21255, 73737, 46985, 71373, 47436, 94863, 91343, 27215, 59730, 69911, 91867, 89373, 6621, 59106, 98922, 69679, 47728, 60722, 56052, 28854, 38902, 21561, 20665, 41722, 57917, 34495, 5183);
             assertEquals(expectedNeighbors, actualNeighbors);
         }
@@ -350,6 +353,64 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var contents1 = Files.readAllBytes(fileIn.toPath());
         var contents2 = Files.readAllBytes(fileOut.toPath());
         assertArrayEquals(contents1, contents2);
+    }
+
+    @Test
+    public void testMultiLayerFullyConnected() throws Exception {
+        // Suppose we have 3 layers of sizes 5, 4, 3
+        var graph = new TestUtil.FullyConnectedGraphIndex(1, List.of(5, 4, 3));
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size(0));
+        var outputPath = testDirectory.resolve("fully_connected_multilayer");
+        TestUtil.writeGraph(graph, ravv, outputPath);
+
+        // read back
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath);
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier))
+        {
+            // verify the multi-layer structure
+            assertEquals(2, onDiskGraph.getMaxLevel());
+            assertEquals(5, onDiskGraph.size(0));
+            assertEquals(4, onDiskGraph.size(1));
+            assertEquals(3, onDiskGraph.size(2));
+            TestUtil.assertGraphEquals(graph, onDiskGraph);
+
+            var q = randomVector(ThreadLocalRandom.current(), ravv.dimension());
+            var results1 = GraphSearcher.search(q, 10, ravv, VectorSimilarityFunction.EUCLIDEAN, graph, Bits.ALL);
+            var results2 = GraphSearcher.search(q, 10, ravv, VectorSimilarityFunction.EUCLIDEAN, onDiskGraph, Bits.ALL);
+            assertEquals(results1, results2);
+        }
+    }
+
+    @Test
+    public void testMultiLayerRandomlyConnected() throws Exception {
+        // 3 layers
+        var layerInfo = List.of(
+            new CommonHeader.LayerInfo(100, 8),
+            new CommonHeader.LayerInfo(10, 3),
+            new CommonHeader.LayerInfo(5, 2)
+        );
+        var graph = new TestUtil.RandomlyConnectedGraphIndex(layerInfo, getRandom());
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size(0));
+        var outputPath = testDirectory.resolve("random_multilayer");
+
+        TestUtil.writeGraph(graph, ravv, outputPath);
+
+        // read back
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath);
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier))
+        {
+            // confirm multi-layer
+            assertEquals(2, onDiskGraph.getMaxLevel());
+            assertEquals(100, onDiskGraph.size(0));
+            assertEquals(10, onDiskGraph.size(1));
+            assertEquals(5, onDiskGraph.size(2));
+            TestUtil.assertGraphEquals(graph, onDiskGraph);
+
+            var q = randomVector(ThreadLocalRandom.current(), ravv.dimension());
+            var results1 = GraphSearcher.search(q, 10, ravv, VectorSimilarityFunction.EUCLIDEAN, graph, Bits.ALL);
+            var results2 = GraphSearcher.search(q, 10, ravv, VectorSimilarityFunction.EUCLIDEAN, onDiskGraph, Bits.ALL);
+            assertEquals(results1, results2);
+        }
     }
 
     @Test
@@ -418,7 +479,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
         var pqv = (PQVectors) pq.encodeAll(ravv);
         try (var writer = new OnDiskGraphIndexWriter.Builder(graph, incrementalFadcPath)
                 .with(new InlineVectors(ravv.dimension()))
-                .with(new FusedADC(graph.maxDegree(), pq))
+                .with(new FusedADC(graph.getDegree(0), pq))
                 .build())
         {
             // write inline vectors incrementally

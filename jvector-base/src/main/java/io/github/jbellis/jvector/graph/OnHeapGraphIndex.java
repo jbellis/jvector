@@ -96,9 +96,8 @@ public class OnHeapGraphIndex implements GraphIndex {
     }
 
     @Override
-    public int size() {
-        // Base layer (layer 0) contains all nodes.
-        return layers.get(0).size();
+    public int size(int level) {
+        return layers.get(level).size();
     }
 
     /**
@@ -171,11 +170,6 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     void updateEntryNode(NodeAtLevel newEntry) {
         entryPoint.set(newEntry);
-    }
-
-    @Override
-    public int maxDegree() {
-        return maxDegree;
     }
 
     NodeAtLevel entry() {
@@ -309,6 +303,11 @@ public class OnHeapGraphIndex implements GraphIndex {
     @Override
     public int getMaxLevel() {
         return layers.size() - 1;
+    }
+
+    @Override
+    public int getDegree(int level) {
+        return maxDegree;
     }
 
     public int getLayerSize(int level) {

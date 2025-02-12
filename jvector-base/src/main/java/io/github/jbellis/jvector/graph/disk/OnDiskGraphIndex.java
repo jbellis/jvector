@@ -31,6 +31,8 @@ import io.github.jbellis.jvector.graph.disk.feature.NVQ;
 import io.github.jbellis.jvector.graph.disk.feature.SeparatedFeature;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.util.Accountable;
+import org.agrona.collections.Int2ObjectHashMap;
+import java.util.ArrayList;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -42,6 +44,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -56,28 +59,29 @@ import java.util.stream.IntStream;
  */
 public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
     static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
     static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ReaderSupplier readerSupplier;
     final int version;
-    final int size;
-    final int maxDegree;
     final int dimension;
-    final int entryNode;
+    final NodeAtLevel entryNode;
     final int inlineBlockSize; // total size of all inline elements contributed by features
     final EnumMap<FeatureId, ? extends Feature> features;
     final EnumMap<FeatureId, Integer> inlineOffsets;
+    private final List<CommonHeader.LayerInfo> layerInfo;
+    // offset of L0 adjacency data
     private final long neighborsOffset;
+    /** For layers > 0, store adjacency fully in memory. */
+    private final List<Int2ObjectHashMap<int[]>> inMemoryNeighbors;
 
     OnDiskGraphIndex(ReaderSupplier readerSupplier, Header header, long neighborsOffset)
     {
         this.readerSupplier = readerSupplier;
         this.version = header.common.version;
-        this.size = header.common.size;
+        this.layerInfo = header.common.layerInfo;
         this.dimension = header.common.dimension;
-        this.entryNode = header.common.entryNode;
-        this.maxDegree = header.common.maxDegree;
+        this.entryNode = new NodeAtLevel(header.common.layerInfo.size() - 1, header.common.entryNode);
         this.features = header.features;
         this.neighborsOffset = neighborsOffset;
         var inlineBlockSize = 0;
@@ -90,6 +94,40 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             }
         }
         this.inlineBlockSize = inlineBlockSize;
+        this.inMemoryNeighbors = new ArrayList<>(layerInfo.size());
+
+        // For levels > 0, we load adjacency into memory
+        inMemoryNeighbors.add(null); // L0 placeholder so we don't have to mangle indexing
+        try (RandomAccessReader in = readerSupplier.get()) {
+            long L0size = layerInfo.get(0).size
+                    * (inlineBlockSize + Integer.BYTES * (1L + 1L + layerInfo.get(0).degree));
+            in.seek(neighborsOffset + L0size);
+
+            for (int lvl = 1; lvl < layerInfo.size(); lvl++) {
+                CommonHeader.LayerInfo info = layerInfo.get(lvl);
+                Int2ObjectHashMap<int[]> edges = new Int2ObjectHashMap<>();
+
+                for (int i = 0; i < info.size; i++) {
+                    int nodeId = in.readInt();
+                    assert nodeId >= 0 && nodeId < layerInfo.get(0).size :
+                            String.format("Node ID %d out of bounds for layer %d", nodeId, lvl);
+                    int neighborCount = in.readInt();
+                    assert neighborCount >= 0 && neighborCount <= info.degree
+                            : String.format("Node %d neighborCount %d > M %d", nodeId, neighborCount, info.degree);
+                    int[] neighbors = new int[neighborCount];
+                    in.read(neighbors, 0, neighborCount);
+
+                    // skip any padding up to 'degree' neighbors  
+                    int skip = info.degree - neighborCount;
+                    if (skip > 0) in.seek(in.getPosition() + ((long) skip * Integer.BYTES));
+
+                    edges.put(nodeId, neighbors);
+                }
+                this.inMemoryNeighbors.add(edges);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /**
@@ -120,22 +158,22 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     @Override
-    public int size() {
-        return size;
+    public int size(int level) {
+        return layerInfo.get(level).size;
     }
 
     @Override
-    public int maxDegree() {
-        return maxDegree;
+    public int getDegree(int level) {
+        return layerInfo.get(level).degree;
     }
 
     @Override
     public NodesIterator getNodes(int level)
     {
-        if (level != 0) {
-            throw new IllegalArgumentException("v3 OnDiskGraphIndex is single-level only, got " + level);
-        }
-        return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
+        return NodesIterator.fromPrimitiveIterator(
+            IntStream.range(0, size(level)).iterator(),
+            size(level)
+        );
     }
 
     @Override
@@ -150,13 +188,13 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     @Override
     public String toString() {
-        return String.format("OnDiskGraphIndex(size=%d, entryPoint=%d, features=%s)", size, entryNode,
+        return String.format("OnDiskGraphIndex(layers=%s, entryPoint=%s, features=%s)", layerInfo, entryNode,
                 features.keySet().stream().map(Enum::name).collect(Collectors.joining(",")));
     }
 
     @Override
     public int getMaxLevel() {
-        return 0;
+        return entryNode.level;
     }
 
     // re-declared to specify type
@@ -175,7 +213,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
         public View(RandomAccessReader reader) {
             this.reader = reader;
-            this.neighbors = new int[maxDegree];
+            this.neighbors = new int[layerInfo.stream().mapToInt(li -> li.degree).max().orElse(0)];
         }
 
         @Override
@@ -203,19 +241,25 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 return sf.getOffset() + (node * (long) feature.featureSize());
             }
             
-            // Inline features are more complicated
+            // Inline features are in layer 0 only
             return neighborsOffset +
                     (node * ((long) Integer.BYTES // ids
                             + inlineBlockSize // inline elements
-                            + (Integer.BYTES * (long) (maxDegree + 1)) // neighbor count + neighbors)
+                            + (Integer.BYTES * (long) (layerInfo.get(0).degree + 1)) // neighbor count + neighbors)
                     )) + Integer.BYTES + // id
                     inlineOffsets.get(featureId);
         }
 
-        long neighborsOffsetFor(int node) {
-            return neighborsOffset +
-                    (node + 1) * (Integer.BYTES + (long) inlineBlockSize) +
-                    (node * (long) Integer.BYTES * (maxDegree + 1));
+        private long neighborsOffsetFor(int level, int node) {
+            assert level == 0; // higher layers are in memory
+            int degree = layerInfo.get(level).degree;
+
+            // skip node ID + inline features
+            long skipInline = Integer.BYTES + inlineBlockSize;
+            long blockBytes = skipInline + (long) Integer.BYTES * (degree + 1);
+
+            long offsetWithinLayer = blockBytes * node;
+            return neighborsOffset + offsetWithinLayer + skipInline;
         }
 
         @Override
@@ -264,16 +308,21 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         }
 
         public NodesIterator getNeighborsIterator(int level, int node) {
-            if (level != 0) {
-                throw new IllegalArgumentException("v3 OnDiskGraphIndex is single-level only, got " + level);
-            }
-
             try {
-                reader.seek(neighborsOffsetFor(node));
-                int neighborCount = reader.readInt();
-                assert neighborCount <= maxDegree : String.format("Node %d neighborCount %d > M %d", node, neighborCount, maxDegree);
-                reader.read(neighbors, 0, neighborCount);
-                return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
+                if (level == 0) {
+                    // For layer 0, read from disk
+                    reader.seek(neighborsOffsetFor(level, node));
+                    int neighborCount = reader.readInt();
+                    assert neighborCount <= neighbors.length
+                            : String.format("Node %d neighborCount %d > M %d", node, neighborCount, neighbors.length);
+                    reader.read(neighbors, 0, neighborCount);
+                    return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
+                } else {
+                    // For levels > 0, read from memory
+                    int[] stored = inMemoryNeighbors.get(level).get(node);
+                    assert stored != null : String.format("No neighbors found for node %d at level %d", node, level);
+                    return new NodesIterator.ArrayNodesIterator(stored, stored.length);
+                }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -281,12 +330,13 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
         @Override
         public int size() {
-            return size;
+            // For vector operations we only care about layer 0
+            return OnDiskGraphIndex.this.size(0);
         }
 
         @Override
         public NodeAtLevel entryNode() {
-            return new NodeAtLevel(0, entryNode);
+            return entryNode;
         }
 
         @Override
@@ -345,9 +395,8 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     @VisibleForTesting
     static boolean areHeadersEqual(OnDiskGraphIndex g1, OnDiskGraphIndex g2) {
         return g1.version == g2.version &&
-               g1.size == g2.size &&
-               g1.maxDegree == g2.maxDegree &&
                g1.dimension == g2.dimension &&
-               g1.entryNode == g2.entryNode;
+               g1.entryNode.equals(g2.entryNode) &&
+               g1.layerInfo.equals(g2.layerInfo);
     }
 }

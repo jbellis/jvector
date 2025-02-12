@@ -46,7 +46,10 @@ import java.io.IOException;
  */
 public interface GraphIndex extends AutoCloseable, Accountable {
     /** Returns the number of nodes in the graph */
-    int size();
+    @Deprecated
+    default int size() {
+        return size(0);
+    }
 
     /**
      * Get all node ordinals included in the graph. The nodes are NOT guaranteed to be
@@ -71,7 +74,10 @@ public interface GraphIndex extends AutoCloseable, Accountable {
     /**
      * @return the maximum number of edges per node
      */
-    int maxDegree();
+    @Deprecated // TODO
+    default int maxDegree() {
+        return getDegree(0);
+    }
 
     /**
      * @return the first ordinal greater than all node ids in the graph.  Equal to size() in simple cases;
@@ -94,6 +100,10 @@ public interface GraphIndex extends AutoCloseable, Accountable {
 
     int getMaxLevel();
 
+    int getDegree(int level);
+
+    int size(int i);
+
     /**
      * Encapsulates the state of a graph for searching.  Re-usable across search calls,
      * but each thread needs its own.
@@ -108,6 +118,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         /**
          * @return the number of nodes in the graph
          */
+        // TODO can we just remove this in favor of graph's?
         int size();
 
         /**

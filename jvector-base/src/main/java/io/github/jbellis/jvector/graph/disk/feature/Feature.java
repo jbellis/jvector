@@ -37,10 +37,6 @@ public interface Feature {
         // default no-op
     }
 
-    default void writeSeparately(DataOutput out, State state) throws IOException {
-        // default no-op
-    }
-
     // Feature implementations should implement a State as well for use with writeInline/writeSeparately
     interface State {
     }

@@ -75,8 +75,9 @@ public class FusedADC implements Feature {
     }
 
     static FusedADC load(CommonHeader header, RandomAccessReader reader) {
+        // TODO doesn't work with different degrees
         try {
-            return new FusedADC(header.maxDegree, ProductQuantization.load(reader));
+            return new FusedADC(header.layerInfo.get(0).degree, ProductQuantization.load(reader));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

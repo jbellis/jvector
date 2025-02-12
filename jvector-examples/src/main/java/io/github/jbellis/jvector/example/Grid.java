@@ -251,7 +251,8 @@ public class Grid {
             throws FileNotFoundException
     {
         var identityMapper = new OrdinalMapper.IdentityMapper(floatVectors.size() - 1);
-        var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(identityMapper);
+        var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath)
+                .withMapper(identityMapper);
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         for (var featureId : features) {
             switch (featureId) {
@@ -319,7 +320,16 @@ public class Grid {
                 System.out.println("Skipping Fused ADC feature when building in memory");
                 continue;
             }
-            indexes.put(features, onHeapGraph);
+            var graphPath = testDirectory.resolve("graph" + n++);
+            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors, null);
+            try (var writer = bws.builder.build()) {
+                start = System.nanoTime();
+                writer.write(bws.suppliers);
+                System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
+            }
+
+            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
+            indexes.put(features, index);
         }
         return indexes;
     }

@@ -45,6 +45,13 @@ import java.util.stream.Collectors;
  * <p>
  * Implements `getFeatureSource` to allow incremental construction of a larger-than-memory graph
  * (using the writer as the source of INLINE_VECTORS).
+ *
+ * Layout:
+ * [CommonHeader]
+ * [Header with Features]
+ * [Edges + inline features for level 0]
+ * [Edges for levels 1..N]
+ * [Separated features]
  */
 public class OnDiskGraphIndexWriter implements Closeable {
     private final int version;
@@ -59,7 +66,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     private final long startOffset;
     private final int headerSize;
     private volatile int maxOrdinalWritten = -1;
-    private List<Feature> inlineFeatures;
+    private final List<Feature> inlineFeatures;
 
     private OnDiskGraphIndexWriter(RandomAccessWriter out,
                                    int version,
@@ -69,8 +76,8 @@ public class OnDiskGraphIndexWriter implements Closeable {
                                    int dimension,
                                    EnumMap<FeatureId, Feature> features)
     {
-        if (version < 0 || version > 3) {
-            throw new IllegalArgumentException("v3 OnDiskGraphIndexWriter can only handle versions up to 3, got " + version);
+        if (graph.getMaxLevel() > 0 && version < 4) {
+            throw new IllegalArgumentException("Multilayer graphs must be written with version 4 or higher");
         }
         this.version = version;
         this.graph = graph;
@@ -83,7 +90,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         this.startOffset = startOffset;
 
         // create a mock Header to determine the correct size
-        var ch = new CommonHeader(version, 0, dimension, view.entryNode().node, graph.maxDegree());
+        var ch = new CommonHeader(version, graph, 0, dimension);
         var placeholderHeader = new Header(ch, featureMap);
         this.headerSize = placeholderHeader.size();
     }
@@ -146,7 +153,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
     }
 
     private long featureOffsetForOrdinal(int ordinal) {
-        int edgeSize = Integer.BYTES * (1 + graph.maxDegree());
+        int edgeSize = Integer.BYTES * (1 + graph.getDegree(0));
         long inlineBytes = ordinal * (long) (Integer.BYTES + inlineFeatures.stream().mapToInt(Feature::featureSize).sum() + edgeSize);
         return startOffset
                 + headerSize
@@ -162,8 +169,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
      * Each supplier takes a node ordinal and returns a FeatureState suitable for Feature.writeInline.
      */
     private boolean isSeparated(Feature feature) {
-        return feature.id() == FeatureId.SEPARATED_VECTORS 
-            || feature.id() == FeatureId.SEPARATED_NVQ;
+        return feature instanceof SeparatedFeature;
     }
 
     public synchronized void write(Map<FeatureId, IntFunction<Feature.State>> featureStateSuppliers) throws IOException
@@ -187,7 +193,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
 
         writeHeader(); // sets position to start writing features
 
-        // for each graph node, write the associated features, followed by its neighbors
+        // for each graph node, write the associated features, followed by its neighbors at L0
         for (int newOrdinal = 0; newOrdinal <= ordinalMapper.maxOrdinal(); newOrdinal++) {
             var originalOrdinal = ordinalMapper.newToOld(newOrdinal);
 
@@ -239,10 +245,39 @@ public class OnDiskGraphIndexWriter implements Closeable {
             assert !neighbors.hasNext();
 
             // pad out to maxEdgesPerNode
-            for (; n < graph.maxDegree(); n++) {
+            for (; n < graph.getDegree(0); n++) {
                 out.writeInt(-1);
             }
         }
+
+        // write sparse levels
+        for (int level = 1; level <= graph.getMaxLevel(); level++) {
+            int layerSize = graph.size(level);
+            int layerDegree = graph.getDegree(level);
+            int nodesWritten = 0;
+            for (var it = graph.getNodes(level); it.hasNext(); ) {
+                int originalOrdinal = it.nextInt();
+                // node id
+                out.writeInt(ordinalMapper.oldToNew(originalOrdinal));
+                // neighbors
+                var neighbors = view.getNeighborsIterator(level, originalOrdinal);
+                out.writeInt(neighbors.size());
+                int n = 0;
+                for ( ; n < neighbors.size(); n++) {
+                    out.writeInt(ordinalMapper.oldToNew(neighbors.nextInt()));
+                }
+                assert !neighbors.hasNext() : "Mismatch between neighbor's reported size and actual size";
+                // pad out to degree
+                for (; n < layerDegree; n++) {
+                    out.writeInt(-1);
+                }
+                nodesWritten++;
+            }
+            if (nodesWritten != layerSize) {
+                throw new IllegalStateException("Mismatch between layer size and nodes written");
+            }
+        }
+
 
         // Write separated features
         for (var featureEntry : featureMap.entrySet()) {
@@ -285,10 +320,9 @@ public class OnDiskGraphIndexWriter implements Closeable {
         // graph-level properties
         out.seek(startOffset);
         var commonHeader = new CommonHeader(version,
-                                            graph.size(),
-                                            dimension,
+                                            graph,
                                             ordinalMapper.oldToNew(view.entryNode().node),
-                                            graph.maxDegree());
+                                            dimension);
         var header = new Header(commonHeader, featureMap);
         header.write(out);
         out.flush();
@@ -365,7 +399,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
 
         /**
          * Set the starting offset for the graph index in the output file.  This is useful if you want to
-         * write the index to an existing file.
+         * append the index to an existing file.
          */
         public Builder withStartOffset(long startOffset) {
             this.startOffset = startOffset;

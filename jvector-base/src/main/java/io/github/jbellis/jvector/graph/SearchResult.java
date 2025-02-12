@@ -16,6 +16,9 @@
 
 package io.github.jbellis.jvector.graph;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * Container class for results of an ANN search, along with associated metrics about the behavior of the search.
  */
@@ -83,5 +86,29 @@ public final class SearchResult {
             // If scores are equal, break ties using node id (ascending order)
             return scoreCompare != 0 ? scoreCompare : Integer.compare(node, o.node);
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            NodeScore nodeScore = (NodeScore) o;
+            return node == nodeScore.node && Float.compare(score, nodeScore.score) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(node, score);
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        SearchResult that = (SearchResult) o;
+        return visitedCount == that.visitedCount && rerankedCount == that.rerankedCount && Float.compare(worstApproximateScoreInTopK, that.worstApproximateScoreInTopK) == 0 && Objects.deepEquals(nodes, that.nodes);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(Arrays.hashCode(nodes), visitedCount, rerankedCount, worstApproximateScoreInTopK);
     }
 }
