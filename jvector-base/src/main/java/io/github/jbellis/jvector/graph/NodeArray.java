@@ -147,7 +147,6 @@ public class NodeArray {
      * nodes.
      */
     public void addInOrder(int newNode, float newScore) {
-        assert Arrays.stream(nodes, 0, size).noneMatch(s -> s == newNode); // TODO remove
         if (size == nodes.length) {
             growArrays();
         }

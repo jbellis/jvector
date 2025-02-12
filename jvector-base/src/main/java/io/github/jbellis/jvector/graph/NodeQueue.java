@@ -87,8 +87,6 @@ public class NodeQueue {
      * @return true if the new value was added.
      */
     public boolean push(int newNode, float newScore) {
-        assert Arrays.stream(nodesCopy()).noneMatch(i -> i == newNode) // TODO remove
-                : String.format("%s contains %s", Arrays.toString(nodesCopy()), newNode);
         return heap.push(encode(newNode, newScore));
     }
 
