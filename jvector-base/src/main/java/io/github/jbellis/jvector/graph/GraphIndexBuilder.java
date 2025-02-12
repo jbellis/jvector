@@ -346,8 +346,11 @@ public class GraphIndexBuilder implements Closeable {
 
                 // Move downward from entry.level to 1
                 for (int lvl = entry.level; lvl > 0; lvl--) {
-                    gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
-                    if (lvl <= nodeLevel.level) {
+                    if (lvl > nodeLevel.level) {
+                        gs.searchOneLayer(ssp, 1, 0.0f, lvl);
+                    } else {
+                        gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
+
                         NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
                         AtomicInteger index = new AtomicInteger();
                         // TODO extract an interface that lets us avoid the copy here and in toScratchCandidates
