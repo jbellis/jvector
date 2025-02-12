@@ -39,7 +39,6 @@ import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Arrays;
 
 
 /**
@@ -178,7 +177,7 @@ public class GraphSearcher implements Closeable {
         int numVisited = 0;
         for (int lvl = entry.level; lvl > 0; lvl--) {
             // Search this layer with minimal parameters since we just want the best candidate
-            numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl);
+            numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl, view.liveNodes());
             assert approximateResults.size() == 1 : approximateResults.size();
             setEntryPointsFromPreviousLayer();
         }
@@ -261,6 +260,7 @@ public class GraphSearcher implements Closeable {
      *                      <p>
      *                      Modifies the internal search state.
      *                      When it's done, `approximateResults` contains the best `rerankK` results found at the given layer.
+     * @param acceptOrds
      */
     // Since Astra / Cassandra's usage drives the design decisions here, it's worth being explicit
     // about how that works and why.
@@ -284,7 +284,8 @@ public class GraphSearcher implements Closeable {
     int searchOneLayer(SearchScoreProvider scoreProvider,
                        int rerankK,
                        float threshold,
-                       int level)
+                       int level,
+                       Bits acceptOrdsThisLayer)
     {
         try {
             assert approximateResults.size() == 0; // should be cleared by setEntryPointsFromPreviousLayer
@@ -311,7 +312,7 @@ public class GraphSearcher implements Closeable {
 
                 // process the top candidate
                 int topCandidateNode = candidates.pop();
-                if (level > 0 || acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
+                if (acceptOrdsThisLayer.get(topCandidateNode) && topCandidateScore >= threshold) {
                     addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
                 }
 
@@ -364,7 +365,7 @@ public class GraphSearcher implements Closeable {
         });
         evictedResults.clear();
         
-        numVisited += searchOneLayer(scoreProvider, rerankK, threshold, 0);
+        numVisited += searchOneLayer(scoreProvider, rerankK, threshold, 0, acceptOrds);
 
         // rerank results
         assert approximateResults.size() <= rerankK;
