@@ -95,6 +95,7 @@ public class TestVectorGraph extends LuceneTestCase {
         getRandom().nextInt();
         GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 32, 100, 1.0f, 1.0f);
         var graph = TestUtil.buildSequentially(builder, vectors);
+        validateIndex(graph);
 
         // Skip over half of the documents that are closest to the query vector
         FixedBitSet acceptOrds = new FixedBitSet(nDoc);
@@ -131,6 +132,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var vectors = vectorValues(size, dim);
         var builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
         var graph = builder.build(vectors);
+        validateIndex(graph);
         Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
         int initialTopK = 10;
@@ -165,6 +167,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var vectors = vectorValues(size, dim);
         var builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
         var graph = builder.build(vectors);
+        validateIndex(graph);
 
         var pq = ProductQuantization.compute(vectors, 2, 256, false);
         var pqv = pq.encodeAll(vectors);
@@ -193,6 +196,7 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 20, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
+        validateIndex(graph);
 
         // wrap vectors so that the second access to a vector throws an exception
         var wrappedVectors = new RandomAccessVectorValues() {
@@ -245,14 +249,29 @@ public class TestVectorGraph extends LuceneTestCase {
         // We expect to get approximately 100% recall;
         // the lowest docIds are closest to zero; sum(0,9) = 45
         assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
+    }
 
-        for (int i = 0; i < nDoc; i++) {
-            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(0, i); // TODO
-            Iterator<Integer> it = neighbors.iterator();
-            while (it.hasNext()) {
-                // all neighbors should be valid node ids.
-                assertTrue(it.next() < nDoc);
+    private static void validateIndex(OnHeapGraphIndex graph) {
+        for (int level = graph.getMaxLevel(); level > 0; level--) {
+            for (var nodeIt = graph.getNodes(level); nodeIt.hasNext(); ) {
+                var nodeInLevel = nodeIt.nextInt();
+
+                // node's neighbors should also exist in the same level
+                var neighbors = graph.getNeighbors(level, nodeInLevel);
+                for (int neighbor : neighbors.copyDenseNodes()) {
+                    assertNotNull(graph.getNeighbors(level, neighbor));
+                }
+
+                // node should exist at every layer below it
+                for (int lowerLevel = level - 1; lowerLevel >= 0; lowerLevel--) {
+                    assertNotNull(graph.getNeighbors(lowerLevel, nodeInLevel));
+                }
             }
+        }
+
+        // no holes in lowest level (not true for all graphs but true for the ones constructed here)
+        for (int i = 0; i < graph.getIdUpperBound(); i++) {
+            assertNotNull(graph.getNeighbors(0, i));
         }
     }
 
@@ -267,6 +286,7 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 20, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
+        validateIndex(graph);
         // run some searches
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
                 10,
@@ -284,15 +304,6 @@ public class TestVectorGraph extends LuceneTestCase {
         // We expect to get approximately 100% recall;
         // the lowest docIds are closest to zero; sum(0,9) = 45
         assertTrue("sum(result docs)=" + sum + " for " + GraphIndex.prettyPrint(builder.graph), sum < 75);
-
-        for (int i = 0; i < nDoc; i++) {
-            ConcurrentNeighborMap.Neighbors neighbors = graph.getNeighbors(0, i); // TODO
-            Iterator<Integer> it = neighbors.iterator();
-            while (it.hasNext()) {
-                // all neighbors should be valid node ids.
-                assertTrue(it.next() < nDoc);
-            }
-        }
     }
 
     @Test
@@ -303,6 +314,7 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 32, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
+        validateIndex(graph);
         // the first 10 docs must not be deleted to ensure the expected recall
         Bits acceptOrds = createRandomAcceptOrds(10, nDoc);
         SearchResult.NodeScore[] nn = GraphSearcher.search(getTargetVector(),
@@ -332,6 +344,7 @@ public class TestVectorGraph extends LuceneTestCase {
         GraphIndexBuilder builder =
                 new GraphIndexBuilder(vectors, similarityFunction, 32, 100, 1.0f, 1.4f);
         var graph = TestUtil.buildSequentially(builder, vectors);
+        validateIndex(graph);
         // Only mark a few vectors as accepted
         var acceptOrds = new FixedBitSet(nDoc);
         for (int i = 0; i < nDoc; i += nextInt(15, 20)) {
@@ -526,6 +539,7 @@ public class TestVectorGraph extends LuceneTestCase {
         int topK = 5;
         GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 20, 30, 1.0f, 1.4f);
         var graph = builder.build(vectors);
+        validateIndex(graph);
         Bits acceptOrds = getRandom().nextBoolean() ? Bits.ALL : createRandomAcceptOrds(0, size);
 
         int efSearch = 100;
@@ -582,6 +596,7 @@ public class TestVectorGraph extends LuceneTestCase {
         RandomAccessVectorValues vectors = circularVectorValues(100);
         GraphIndexBuilder builder = new GraphIndexBuilder(vectors, similarityFunction, 2, 30, 1.0f, 1.4f);
         var graph = builder.build(vectors);
+        validateIndex(graph);
         for (int i = 0; i < vectors.size(); i++) {
             assertTrue(graph.getNeighbors(0, i).size() <= 2); // TODO
         }
@@ -595,6 +610,7 @@ public class TestVectorGraph extends LuceneTestCase {
         var vectors = new ListRandomAccessVectorValues(rawVectors, 2);
         var builder = new GraphIndexBuilder(vectors, VectorSimilarityFunction.COSINE, 2, 2, 1.0f, 1.0f);
         try (var graph = builder.build(vectors)) {
+            validateIndex(graph);
             var qv = vectorTypeSupport.createFloatVector(new float[] {0.5f, 0.5f});
             var results = GraphSearcher.search(qv, 1, vectors, VectorSimilarityFunction.COSINE, graph, Bits.ALL);
             assertEquals(1, results.getNodes().length);

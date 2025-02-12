@@ -25,11 +25,11 @@ import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.OnHeapGraphIndex;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.SearchResult;
-import io.github.jbellis.jvector.graph.disk.Feature;
-import io.github.jbellis.jvector.graph.disk.FeatureId;
-import io.github.jbellis.jvector.graph.disk.FusedADC;
-import io.github.jbellis.jvector.graph.disk.InlineVectors;
-import io.github.jbellis.jvector.graph.disk.NVQ;
+import io.github.jbellis.jvector.graph.disk.feature.Feature;
+import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
+import io.github.jbellis.jvector.graph.disk.feature.FusedADC;
+import io.github.jbellis.jvector.graph.disk.feature.InlineVectors;
+import io.github.jbellis.jvector.graph.disk.feature.NVQ;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
@@ -251,7 +251,8 @@ public class Grid {
             throws FileNotFoundException
     {
         var identityMapper = new OrdinalMapper.IdentityMapper(floatVectors.size() - 1);
-        var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath).withMapper(identityMapper);
+        var builder = new OnDiskGraphIndexWriter.Builder(onHeapGraph, outPath)
+                .withMapper(identityMapper);
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         for (var featureId : features) {
             switch (featureId) {
@@ -302,20 +303,33 @@ public class Grid {
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.2f, 1.2f);
         start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
-        System.out.format("Build (%s) M=%d ef=%d in %.2fs with avg degree %.2f and %.2f short edges%n",
+        System.out.format("Build (%s) M=%d ef=%d in %.2fs%n",
                           "full res",
                           M,
                           efConstruction,
-                          (System.nanoTime() - start) / 1_000_000_000.0,
-                          onHeapGraph.getAverageDegree(),
-                          builder.getAverageShortEdges());
+                          (System.nanoTime() - start) / 1_000_000_000.0);
+        for (int i = 0; i <= onHeapGraph.getMaxLevel(); i++) {
+            System.out.format("  L%d: %d nodes, %.2f avg degree%n",
+                              i,
+                              onHeapGraph.getLayerSize(i),
+                              onHeapGraph.getAverageDegree(i));
+        }
         int n = 0;
         for (var features : featureSets) {
             if (features.contains(FeatureId.FUSED_ADC)) {
                 System.out.println("Skipping Fused ADC feature when building in memory");
                 continue;
             }
-            indexes.put(features, onHeapGraph);
+            var graphPath = testDirectory.resolve("graph" + n++);
+            var bws = builderWithSuppliers(features, onHeapGraph, graphPath, floatVectors, null);
+            try (var writer = bws.builder.build()) {
+                start = System.nanoTime();
+                writer.write(bws.suppliers);
+                System.out.format("Wrote %s in %.2fs%n", features, (System.nanoTime() - start) / 1_000_000_000.0);
+            }
+
+            var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(graphPath));
+            indexes.put(features, index);
         }
         return indexes;
     }

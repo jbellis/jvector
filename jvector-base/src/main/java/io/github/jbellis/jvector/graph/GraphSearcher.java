@@ -39,6 +39,7 @@ import org.agrona.collections.IntHashSet;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 
 
 /**
@@ -46,7 +47,7 @@ import java.io.IOException;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements Closeable {
-    private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "true"));
+    private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "false"));
 
     private GraphIndex.View view;
 
@@ -157,8 +158,33 @@ public class GraphSearcher implements Closeable {
                                int rerankK,
                                float threshold,
                                float rerankFloor,
-                               Bits acceptOrds) {
-        return searchInternal(scoreProvider, topK, 1, rerankK, threshold, rerankFloor, view.entryNode(), acceptOrds);
+                               Bits acceptOrds)
+    {
+        NodeAtLevel entry = view.entryNode();
+        if (acceptOrds == null) {
+            throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
+        }
+        if (rerankK < topK) {
+            throw new IllegalArgumentException(String.format("rerankK %d must be >= topK %d", rerankK, topK));
+        }
+
+        if (entry == null) {
+            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, Float.POSITIVE_INFINITY);
+        }
+
+        initializeInternal(scoreProvider, entry, acceptOrds);
+
+        // Move downward from entry.level to 1
+        int numVisited = 0;
+        for (int lvl = entry.level; lvl > 0; lvl--) {
+            // Search this layer with minimal parameters since we just want the best candidate
+            numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl);
+            assert approximateResults.size() == 1 : approximateResults.size();
+            setEntryPointsFromPreviousLayer();
+        }
+
+        // Now do the main search at layer 0
+        return resume(numVisited, topK, rerankK, threshold, rerankFloor);
     }
 
     /**
@@ -200,47 +226,12 @@ public class GraphSearcher implements Closeable {
         return search(scoreProvider, topK, 0.0f, acceptOrds);
     }
 
-    /**
-     * Set up the state for a new search and kick it off
-     */
-    SearchResult searchInternal(SearchScoreProvider scoreProvider,
-                                int topK,
-                                int sparseLayersTopK,
-                                int rerankK,
-                                float threshold,
-                                float rerankFloor,
-                                NodeAtLevel entry,
-                                Bits rawAcceptOrds)
-    {
-        if (rawAcceptOrds == null) {
-            throw new IllegalArgumentException("Use MatchAllBits to indicate that all ordinals are accepted, instead of null");
-        }
-        if (rerankK < topK) {
-            throw new IllegalArgumentException(String.format("rerankK %d must be >= topK %d", rerankK, topK));
-        }
-
-        if (entry == null) {
-            return new SearchResult(new SearchResult.NodeScore[0], 0, 0, Float.POSITIVE_INFINITY);
-        }
-
-        initializeInternal(scoreProvider, entry, rawAcceptOrds);
-
-        // Move downward from entry.level to 1
-        int numVisited = 0;
-        for (int lvl = entry.level; lvl > 0; lvl--) {
-            // Search this layer with minimal parameters since we just want the best candidate
-            numVisited += searchOneLayer(scoreProvider, sparseLayersTopK, 0.0f, lvl);
-            assert approximateResults.size() == 1;
-            setEntryPointsFromPreviousLayer();
-        }
-
-        // Now do the main search at layer 0
-        return resume(numVisited, topK, rerankK, threshold, rerankFloor);
-    }
-
     void setEntryPointsFromPreviousLayer() {
-        // Take the best result as next layer's entry point
-        candidates.copyFrom(approximateResults);
+        // push the candidates seen so far back onto the queue for the next layer
+        // at worst we save recomputing the similarity; at best we might connect to a more distant cluster
+        approximateResults.foreach(candidates::push);
+        evictedResults.foreach(candidates::push);
+        evictedResults.clear();
         approximateResults.clear();
     }
 
@@ -266,7 +257,7 @@ public class GraphSearcher implements Closeable {
      * @param scoreProvider the current query's scoring/approximation logic
      * @param rerankK       how many results to over-query for approximate ranking
      * @param threshold     similarity threshold, or 0f if none
-     * @param layer         which layer to search
+     * @param level         which layer to search
      *                      <p>
      *                      Modifies the internal search state.
      *                      When it's done, `approximateResults` contains the best `rerankK` results found at the given layer.
@@ -293,10 +284,10 @@ public class GraphSearcher implements Closeable {
     int searchOneLayer(SearchScoreProvider scoreProvider,
                        int rerankK,
                        float threshold,
-                       int layer)
+                       int level)
     {
         try {
-            assert approximateResults.size() == 0;
+            assert approximateResults.size() == 0; // should be cleared by setEntryPointsFromPreviousLayer
             approximateResults.setMaxSize(rerankK);
 
             int numVisited = 0;
@@ -320,7 +311,7 @@ public class GraphSearcher implements Closeable {
 
                 // process the top candidate
                 int topCandidateNode = candidates.pop();
-                if (acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
+                if (level > 0 || acceptOrds.get(topCandidateNode) && topCandidateScore >= threshold) {
                     addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
                 }
 
@@ -336,7 +327,7 @@ public class GraphSearcher implements Closeable {
                     similarities = scoreFunction.edgeLoadingSimilarityTo(topCandidateNode);
                 }
                 int i = 0;
-                for (var it = view.getNeighborsIterator(layer, topCandidateNode); it.hasNext(); ) {
+                for (var it = view.getNeighborsIterator(level, topCandidateNode); it.hasNext(); ) {
                     var friendOrd = it.nextInt();
                     if (!visited.add(friendOrd)) {
                         continue;

@@ -2,6 +2,8 @@ package io.github.jbellis.jvector.util;
 
 import io.github.jbellis.jvector.graph.NodesIterator;
 
+import java.util.stream.IntStream;
+
 public interface IntMap<T> {
     /**
      * @param key ordinal
@@ -29,11 +31,6 @@ public interface IntMap<T> {
      * @return true iff the given key is set in the map
      */
     boolean containsKey(int key);
-
-    /**
-     * @return an iterator over all keys set in the map
-     */
-    NodesIterator keysIterator();
 
     /**
      * Iterates keys in ascending order and calls the consumer for each non-null key-value pair.

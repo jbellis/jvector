@@ -30,6 +30,8 @@ import io.github.jbellis.jvector.util.BoundedLongHeap;
 import io.github.jbellis.jvector.util.NumericUtils;
 import org.agrona.collections.Int2ObjectHashMap;
 
+import java.util.Arrays;
+
 import static java.lang.Math.min;
 
 /**

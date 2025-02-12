@@ -3,6 +3,7 @@ package io.github.jbellis.jvector.util;
 import io.github.jbellis.jvector.graph.NodesIterator;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
 public class SparseIntMap<T> implements IntMap<T> {
     private final ConcurrentHashMap<Integer, T> map;
@@ -45,12 +46,8 @@ public class SparseIntMap<T> implements IntMap<T> {
         return map.containsKey(key);
     }
 
-    // TODO we may need to make this in sorted order
-    @Override
-    public NodesIterator keysIterator() {
-        var minSize = size();  // if keys are added concurrently we will miss them
-        var keysIterator = map.keySet().stream().mapToInt(Integer::intValue).iterator();
-        return NodesIterator.fromPrimitiveIterator(keysIterator, minSize);
+    public IntStream keysStream() {
+        return map.keySet().stream().mapToInt(key -> key);
     }
 
     @Override

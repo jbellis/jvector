@@ -16,27 +16,36 @@
 
 package io.github.jbellis.jvector.graph.disk;
 
+import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.graph.GraphIndex;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Base header for OnDiskGraphIndex functionality.
  */
-class CommonHeader {
+public class CommonHeader {
     public final int version;
-    public final int size;
     public final int dimension;
     public final int entryNode;
-    public final int maxDegree;
+    public final List<LayerInfo> layerInfo;
 
-    CommonHeader(int version, int size, int dimension, int entryNode, int maxDegree) {
+    CommonHeader(int version, int dimension, int entryNode, List<LayerInfo> layerInfo) {
         this.version = version;
-        this.size = size;
         this.dimension = dimension;
         this.entryNode = entryNode;
-        this.maxDegree = maxDegree;
+        this.layerInfo = layerInfo;
+    }
+
+    public CommonHeader(int version, GraphIndex graph, int entryNode, int dimension) {
+        this(version, dimension, entryNode, LayerInfo.fromGraph(graph));
     }
 
     void write(DataOutput out) throws IOException {
@@ -44,10 +53,21 @@ class CommonHeader {
             out.writeInt(OnDiskGraphIndex.MAGIC);
             out.writeInt(version);
         }
-        out.writeInt(size);
+        out.writeInt(layerInfo.get(0).size);
         out.writeInt(dimension);
         out.writeInt(entryNode);
-        out.writeInt(maxDegree);
+        out.writeInt(layerInfo.get(0).degree);
+        if (version >= 4) {
+            out.writeInt(layerInfo.size());
+            for (LayerInfo info : layerInfo) {
+                out.writeInt(info.size);
+                out.writeInt(info.degree);
+            }
+        } else {
+            if (layerInfo.size() > 1) {
+                throw new IllegalArgumentException("Layer info is not supported in version " + version);
+            }
+        }
     }
 
     static CommonHeader load(RandomAccessReader reader) throws IOException {
@@ -64,11 +84,63 @@ class CommonHeader {
         int dimension = reader.readInt();
         int entryNode = reader.readInt();
         int maxDegree = reader.readInt();
+        List<LayerInfo> layerInfo;
+        if (version < 4) {
+            layerInfo = List.of(new LayerInfo(size, maxDegree));
+        } else {
+            int numLayers = reader.readInt();
+            layerInfo = new ArrayList<>();
+            for (int i = 0; i < numLayers; i++) {
+                LayerInfo info = new LayerInfo(reader.readInt(), reader.readInt());
+                layerInfo.add(info);
+            }
+        }
 
-        return new CommonHeader(version, size, dimension, entryNode, maxDegree);
+        return new CommonHeader(version, dimension, entryNode, layerInfo);
     }
 
     int size() {
-        return ((version >= 3 ? 2 : 0) + 4) * Integer.BYTES;
+        return ((version >= 3 ? 2 : 0) // version + magic
+                + 4 // v3 fields
+                + (version >= 4 ? 1 + 2 * layerInfo.size() : 0)) // layerinfo count
+                * Integer.BYTES; // layerinfo count + contents
+    }
+
+    @VisibleForTesting
+    public static class LayerInfo {
+        public final int size;
+        public final int degree;
+
+        public LayerInfo(int size, int degree) {
+            this.size = size;
+            this.degree = degree;
+        }
+
+        public static List<LayerInfo> fromGraph(GraphIndex graph) {
+            return IntStream.range(0, graph.getMaxLevel() + 1)
+                    .mapToObj(i -> new LayerInfo(graph.size(i), graph.getDegree(i)))
+                    .collect(Collectors.toList());
+        }
+
+        @Override
+        public String toString() {
+            return "LayerInfo{" +
+                    "size=" + size +
+                    ", degree=" + degree +
+                    '}';
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(size, degree);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            LayerInfo other = (LayerInfo) obj;
+            return size == other.size && degree == other.degree;
+        }
     }
 }

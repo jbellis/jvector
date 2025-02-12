@@ -32,7 +32,7 @@ import static java.lang.Math.min;
  * Encapsulates operations on a graph's neighbors.
  */
 public class ConcurrentNeighborMap {
-    private final IntMap<Neighbors> neighbors;
+    final IntMap<Neighbors> neighbors;
 
     /** the diversity threshold; 1.0 is equivalent to HNSW; Vamana uses 1.2 or more */
     final float alpha;
@@ -136,10 +136,6 @@ public class ConcurrentNeighborMap {
 
     public void addNode(int nodeId) {
         addNode(nodeId, new NodeArray(0));
-    }
-
-    public NodesIterator nodesIterator() {
-        return neighbors.keysIterator();
     }
 
     public Neighbors remove(int node) {
