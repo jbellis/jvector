@@ -627,11 +627,36 @@ public class GraphIndexBuilder implements Closeable {
                     int neighbor = in.readInt();
                     ca.addInOrder(neighbor, sf.similarityTo(neighbor));
                 }
-                graph.addNode(i, nodeId, ca);
+                graph.addNode(level, nodeId, ca);
             }
         }
 
         graph.setDegrees(layerDegrees);
         graph.updateEntryNode(new NodeAtLevel(graph.getMaxLevel(), entryNode));
+    }
+
+    public void loadV3(RandomAccessReader in) throws IOException {
+        if (graph.size() != 0) {
+            throw new IllegalStateException("Cannot load into a non-empty graph");
+        }
+
+        int size = in.readInt();
+        int entryNode = in.readInt();
+        int maxDegree = in.readInt();
+
+        for (int i = 0; i < size; i++) {
+            int nodeId = in.readInt();
+            int nNeighbors = in.readInt();
+            var sf = scoreProvider.searchProviderFor(nodeId).exactScoreFunction();
+            var ca = new NodeArray(nNeighbors);
+            for (int j = 0; j < nNeighbors; j++) {
+                int neighbor = in.readInt();
+                ca.addInOrder(neighbor, sf.similarityTo(neighbor));
+            }
+            graph.addNode(0, nodeId, ca);
+        }
+
+        graph.updateEntryNode(new NodeAtLevel(0, entryNode));
+        graph.setDegrees(List.of(maxDegree));
     }
 }
