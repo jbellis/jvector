@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -300,6 +301,13 @@ public class GraphIndexBuilder implements Closeable {
             return;
         }
 
+        // improve connections on everything in L1
+        if (graph.getMaxLevel() > 0) {
+            parallelExecutor.submit(() -> {
+                graph.nodeStream(1).parallel().forEach(this::improveConnections);
+            }).join();
+        }
+
         // clean up overflowed neighbor lists
         parallelExecutor.submit(() -> {
             IntStream.range(0, graph.getIdUpperBound()).parallel().forEach(id -> {
@@ -308,6 +316,28 @@ public class GraphIndexBuilder implements Closeable {
                 }
             });
         }).join();
+    }
+
+    private void improveConnections(int node) {
+        var ssp = scoreProvider.searchProviderFor(node);
+        var bits = new ExcludingBits(node);
+        try (var gs = searchers.get()) {
+            gs.initializeInternal(ssp, graph.entry(), bits);
+
+            // Move downward from entry.level to 1
+            for (int lvl = graph.entry().level; lvl >= 0; lvl--) {
+                gs.searchOneLayer(ssp, 1, 0.0f, lvl, Bits.intersectionOf(bits, gs.getView().liveNodes()));
+                if (graph.layers.get(lvl).get(node) != null) {
+                    var candidates = new NodeArray(gs.approximateResults.size());
+                    gs.approximateResults.foreach(candidates::insertSorted);
+                    var newNeighbors = graph.layers.get(lvl).insertDiverse(node, candidates);
+                    graph.layers.get(lvl).backlink(newNeighbors, node, neighborOverflow);
+                }
+                gs.setEntryPointsFromPreviousLayer();
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public OnHeapGraphIndex getGraph() {
@@ -372,7 +402,7 @@ public class GraphIndexBuilder implements Closeable {
 
                 // Move downward from entry.level to 1
                 for (int lvl = entry.level; lvl > 0; lvl--) {
-                    gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl);
+                    gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl, gs.getView().liveNodes());
                     if (lvl <= nodeLevel.level) {
                         NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
                         AtomicInteger index = new AtomicInteger();
