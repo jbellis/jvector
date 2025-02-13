@@ -46,10 +46,6 @@ public class CommonHeader {
         this.layerInfo = layerInfo;
     }
 
-    public CommonHeader(int version, GraphIndex graph, int entryNode, int dimension) {
-        this(version, dimension, entryNode, LayerInfo.fromGraph(graph));
-    }
-
     void write(DataOutput out) throws IOException {
         if (version >= 3) {
             out.writeInt(OnDiskGraphIndex.MAGIC);
@@ -133,9 +129,10 @@ public class CommonHeader {
             this.degree = degree;
         }
 
-        public static List<LayerInfo> fromGraph(GraphIndex graph) {
+        public static List<LayerInfo> fromGraph(GraphIndex graph, OrdinalMapper mapper) {
+            int l0Size = mapper.maxOrdinal() + 1;
             return IntStream.range(0, graph.getMaxLevel() + 1)
-                    .mapToObj(i -> new LayerInfo(graph.size(i), graph.getDegree(i)))
+                    .mapToObj(i -> new LayerInfo(i == 0 ? l0Size : graph.size(i), graph.getDegree(i)))
                     .collect(Collectors.toList());
         }
 
