@@ -32,6 +32,8 @@ import java.util.stream.IntStream;
  * Base header for OnDiskGraphIndex functionality.
  */
 public class CommonHeader {
+    private static final int V4_MAX_LAYERS = 32;
+
     public final int version;
     public final int dimension;
     public final int entryNode;
@@ -58,10 +60,20 @@ public class CommonHeader {
         out.writeInt(entryNode);
         out.writeInt(layerInfo.get(0).degree);
         if (version >= 4) {
+            if (layerInfo.size() > V4_MAX_LAYERS) {
+                var msg = String.format("Number of layers %d exceeds maximum of %d", layerInfo.size(), V4_MAX_LAYERS);
+                throw new IllegalArgumentException(msg);
+            }
             out.writeInt(layerInfo.size());
+            // Write actual layer info
             for (LayerInfo info : layerInfo) {
                 out.writeInt(info.size);
                 out.writeInt(info.degree);
+            }
+            // Pad remaining entries with zeros
+            for (int i = layerInfo.size(); i < V4_MAX_LAYERS; i++) {
+                out.writeInt(0); // size
+                out.writeInt(0); // degree
             }
         } else {
             if (layerInfo.size() > 1) {
@@ -94,16 +106,21 @@ public class CommonHeader {
                 LayerInfo info = new LayerInfo(reader.readInt(), reader.readInt());
                 layerInfo.add(info);
             }
+            // Skip over remaining padding entries
+            for (int i = numLayers; i < V4_MAX_LAYERS; i++) {
+                reader.readInt();
+                reader.readInt();
+            }
         }
 
         return new CommonHeader(version, dimension, entryNode, layerInfo);
     }
 
     int size() {
-        return ((version >= 3 ? 2 : 0) // version + magic
-                + 4 // v3 fields
-                + (version >= 4 ? 1 + 2 * layerInfo.size() : 0)) // layerinfo count
-                * Integer.BYTES; // layerinfo count + contents
+        return ((version >= 3 ? 2 : 0) // v3: version + magic
+                + 4 // v2 fields
+                + (version >= 4 ? 1 + 2 * V4_MAX_LAYERS : 0)) // v4: layerinfo count + contents
+                * Integer.BYTES;
     }
 
     @VisibleForTesting
