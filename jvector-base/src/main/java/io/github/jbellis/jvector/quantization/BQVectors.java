@@ -129,6 +129,9 @@ public abstract class BQVectors implements CompressedVectors {
 
     @Override
     public long ramBytesUsed() {
+        long[] chunk = compressedVectors[0];
+        if (chunk == null)
+            return 0;
         return count() * RamUsageEstimator.sizeOf(compressedVectors[0]);
     }
 
