@@ -47,8 +47,11 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A class representing a graph index stored on disk. The base graph contains only graph structure.
@@ -59,6 +62,7 @@ import java.util.stream.IntStream;
  */
 public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
+    private static final Logger logger = LoggerFactory.getLogger(OnDiskGraphIndex.class);
     public static final int CURRENT_VERSION = 4;
     static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
     static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
@@ -73,7 +77,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     // offset of L0 adjacency data
     private final long neighborsOffset;
     /** For layers > 0, store adjacency fully in memory. */
-    private final List<Int2ObjectHashMap<int[]>> inMemoryNeighbors;
+    private volatile AtomicReference<List<Int2ObjectHashMap<int[]>>> inMemoryNeighbors;
 
     OnDiskGraphIndex(ReaderSupplier readerSupplier, Header header, long neighborsOffset)
     {
@@ -94,40 +98,41 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
             }
         }
         this.inlineBlockSize = inlineBlockSize;
-        this.inMemoryNeighbors = new ArrayList<>(layerInfo.size());
+        inMemoryNeighbors = new AtomicReference<>(null);
+    }
 
+    private List<Int2ObjectHashMap<int[]>> loadInMemoryLayers(RandomAccessReader in) throws IOException {
+        var imn = new ArrayList<Int2ObjectHashMap<int[]>>(layerInfo.size());
         // For levels > 0, we load adjacency into memory
-        inMemoryNeighbors.add(null); // L0 placeholder so we don't have to mangle indexing
-        try (RandomAccessReader in = readerSupplier.get()) {
-            long L0size = layerInfo.get(0).size
-                    * (inlineBlockSize + Integer.BYTES * (1L + 1L + layerInfo.get(0).degree));
-            in.seek(neighborsOffset + L0size);
+        imn.add(null); // L0 placeholder so we don't have to mangle indexing
+        long L0size = 0;
+        L0size = layerInfo.get(0).size
+                * (inlineBlockSize + Integer.BYTES * (1L + 1L + layerInfo.get(0).degree));
+        in.seek(neighborsOffset + L0size);
 
-            for (int lvl = 1; lvl < layerInfo.size(); lvl++) {
-                CommonHeader.LayerInfo info = layerInfo.get(lvl);
-                Int2ObjectHashMap<int[]> edges = new Int2ObjectHashMap<>();
+        for (int lvl = 1; lvl < layerInfo.size(); lvl++) {
+            CommonHeader.LayerInfo info = layerInfo.get(lvl);
+            Int2ObjectHashMap<int[]> edges = new Int2ObjectHashMap<>();
 
-                for (int i = 0; i < info.size; i++) {
-                    int nodeId = in.readInt();
-                    assert nodeId >= 0 && nodeId < layerInfo.get(0).size :
-                            String.format("Node ID %d out of bounds for layer %d", nodeId, lvl);
-                    int neighborCount = in.readInt();
-                    assert neighborCount >= 0 && neighborCount <= info.degree
-                            : String.format("Node %d neighborCount %d > M %d", nodeId, neighborCount, info.degree);
-                    int[] neighbors = new int[neighborCount];
-                    in.read(neighbors, 0, neighborCount);
+            for (int i = 0; i < info.size; i++) {
+                int nodeId = in.readInt();
+                assert nodeId >= 0 && nodeId < layerInfo.get(0).size :
+                        String.format("Node ID %d out of bounds for layer %d", nodeId, lvl);
+                int neighborCount = in.readInt();
+                assert neighborCount >= 0 && neighborCount <= info.degree
+                        : String.format("Node %d neighborCount %d > M %d", nodeId, neighborCount, info.degree);
+                int[] neighbors = new int[neighborCount];
+                in.read(neighbors, 0, neighborCount);
 
-                    // skip any padding up to 'degree' neighbors  
-                    int skip = info.degree - neighborCount;
-                    if (skip > 0) in.seek(in.getPosition() + ((long) skip * Integer.BYTES));
+                // skip any padding up to 'degree' neighbors
+                int skip = info.degree - neighborCount;
+                if (skip > 0) in.seek(in.getPosition() + ((long) skip * Integer.BYTES));
 
-                    edges.put(nodeId, neighbors);
-                }
-                this.inMemoryNeighbors.add(edges);
+                edges.put(nodeId, neighbors);
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            imn.add(edges);
         }
+        return imn;
     }
 
     /**
@@ -135,7 +140,12 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
      */
     public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset) {
         try (var reader = readerSupplier.get()) {
+            logger.debug("Loading OnDiskGraphIndex from offset={}", offset);
             var header = Header.load(reader, offset);
+            logger.debug("Header loaded: version={}, dimension={}, entryNode={}, layerInfoCount={}",
+                         header.common.version, header.common.dimension, header.common.entryNode, header.common.layerInfo.size());
+            logger.debug("Position after reading header={}",
+                         reader.getPosition());
             return new OnDiskGraphIndex(readerSupplier, header, reader.getPosition());
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
@@ -324,7 +334,17 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                     return new NodesIterator.ArrayNodesIterator(neighbors, neighborCount);
                 } else {
                     // For levels > 0, read from memory
-                    int[] stored = inMemoryNeighbors.get(level).get(node);
+                    var imn = inMemoryNeighbors.updateAndGet(current -> {
+                        if (current != null) {
+                            return current;
+                        }
+                        try {
+                            return loadInMemoryLayers(reader);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+                    int[] stored = imn.get(level).get(node);
                     assert stored != null : String.format("No neighbors found for node %d at level %d", node, level);
                     return new NodesIterator.ArrayNodesIterator(stored, stored.length);
                 }

@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.disk.RandomAccessWriter;
 import io.github.jbellis.jvector.graph.disk.feature.Feature;
 import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
 
@@ -37,7 +38,7 @@ class Header {
         this.features = features;
     }
 
-    void write(DataOutput out) throws IOException {
+    void write(RandomAccessWriter out) throws IOException {
         common.write(out);
 
         if (common.version >= 3) {
