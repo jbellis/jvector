@@ -36,10 +36,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ForkJoinPool;
@@ -49,6 +46,7 @@ import java.util.stream.IntStream;
 
 import static io.github.jbellis.jvector.util.DocIdSetIterator.NO_MORE_DOCS;
 import static java.lang.Math.log;
+import static java.lang.Math.min;
 
 /**
  * Builder for Concurrent GraphIndex. See {@link GraphIndex} for a high level overview, and the
@@ -82,6 +80,8 @@ public class GraphIndexBuilder implements Closeable {
 
     private final ExplicitThreadLocal<GraphSearcher> searchers;
 
+    private Random rng;
+
     /**
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
      * ordinals, using the given hyperparameter settings, and returns the resulting graph.
@@ -104,11 +104,11 @@ public class GraphIndexBuilder implements Closeable {
                              float alpha)
     {
         this(BuildScoreProvider.randomAccessScoreProvider(vectorValues, similarityFunction),
-             vectorValues.dimension(),
-             M,
-             beamWidth,
-             neighborOverflow,
-             alpha);
+                vectorValues.dimension(),
+                M,
+                beamWidth,
+                neighborOverflow,
+                alpha);
     }
 
     /**
@@ -241,18 +241,20 @@ public class GraphIndexBuilder implements Closeable {
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, graph.maxDegree() + 1)));
         this.concurrentScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, graph.maxDegree() + 1)));
+
+        this.rng = new Random(0);
     }
 
     // used by Cassandra when it fine-tunes the PQ codebook
     public static GraphIndexBuilder rescore(GraphIndexBuilder other, BuildScoreProvider newProvider) {
         var newBuilder = new GraphIndexBuilder(newProvider,
-                                               other.dimension,
-                                               other.graph.maxDegrees,
-                                               other.beamWidth,
-                                               other.neighborOverflow,
-                                               other.alpha,
-                                               other.simdExecutor,
-                                               other.parallelExecutor);
+                other.dimension,
+                other.graph.maxDegrees,
+                other.beamWidth,
+                other.neighborOverflow,
+                other.alpha,
+                other.simdExecutor,
+                other.parallelExecutor);
 
         // Copy each node and its neighbors from the old graph to the new one
         IntStream.range(0, other.graph.getIdUpperBound()).parallel().forEach(i -> {
@@ -290,15 +292,62 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     public OnHeapGraphIndex build(RandomAccessVectorValues ravv) {
-        var vv = ravv.threadLocalSupplier();
-        int size = ravv.size();
+//        var vv = ravv.threadLocalSupplier();
+//        int size = ravv.size();
+//
+//        simdExecutor.submit(() -> {
+//            IntStream.range(0, size).parallel().forEach(node -> addGraphNode(node, vv.get().getVector(node)));
+//        }).join();
 
-        simdExecutor.submit(() -> {
-            IntStream.range(0, size).parallel().forEach(node -> addGraphNode(node, vv.get().getVector(node)));
-        }).join();
+        buildLevelwise(ravv);
+
+//        var batchSize = 5000;
+//        for (int batch = 0; batch < size; batch += batchSize) {
+//            if (batch % 50000 == 0) {
+//                System.out.println(" " + batch);
+//            }
+//            var lower = batch;
+//            var upper = min(size, batch + batchSize);
+//            simdExecutor.submit(() -> {
+//                IntStream.range(lower, upper).parallel().forEach(node -> addGraphNode(node, vv.get().getVector(node)));
+//            }).join();
+//        }
 
         cleanup();
         return graph;
+    }
+
+    public void buildLevelwise(RandomAccessVectorValues ravv) {
+        var vv = ravv.threadLocalSupplier();
+        int size = ravv.size();
+
+        Map<Integer, List<NodeAtLevel>> levels = new HashMap<>();
+        int nLevels = 0;
+        for (int node = 0; node < size; node++) {
+            var nl = new NodeAtLevel(getRandomGraphLevel(), node);
+            graph.addNode(nl);
+            var list = levels.getOrDefault(nl.level, new ArrayList<>());
+            list.add(nl);
+            levels.put(nl.level, list);
+            nLevels = Math.max(nLevels, nl.level);
+        }
+
+        for (var level = nLevels; level >= 0; level--) {
+            var nodes = levels.get(level);
+            System.out.println(level + " " + nodes.size());
+
+//            simdExecutor.submit(() -> {
+//                nodes.stream().parallel().forEach(nodeLevel -> addGraphNode(nodeLevel, vv.get().getVector(nodeLevel.node)));
+//            }).join();
+            var batchSize = 500;
+            for (int batch = 0; batch < nodes.size(); batch += batchSize) {
+                var lower = batch;
+                var upper = min(nodes.size(), batch + batchSize);
+                simdExecutor.submit(() -> {
+                    IntStream.range(lower, upper).parallel().forEach(i -> addGraphNode(nodes.get(i), vv.get().getVector(nodes.get(i).node)));
+                }).join();
+            }
+        }
     }
 
     /**
@@ -388,10 +437,78 @@ public class GraphIndexBuilder implements Closeable {
         double ml = graph.getDegree(0) == 1 ? 1 : 1 / log(1.0 * graph.getDegree(0));
         double randDouble;
         do {
-            randDouble =
-                    ThreadLocalRandom.current().nextDouble(); // avoid 0 value, as log(0) is undefined
+//            randDouble =
+//                    ThreadLocalRandom.current().nextDouble(); // avoid 0 value, as log(0) is undefined
+            randDouble = this.rng.nextDouble();  // avoid 0 value, as log(0) is undefined
         } while (randDouble == 0.0);
         return ((int) (-log(randDouble) * ml));
+    }
+
+    /**
+     * Inserts a node with the given vector value to the graph.
+     *
+     * <p>To allow correctness under concurrency, we track in-progress updates in a
+     * ConcurrentSkipListSet. After adding ourselves, we take a snapshot of this set, and consider all
+     * other in-progress updates as neighbor candidates.
+     *
+     * @param nodeLevel the node ID and level to add
+     * @return an estimate of the number of extra bytes used by the graph after adding the given node
+     */
+    public long addGraphNode(NodeAtLevel nodeLevel, VectorFloat<?> vector) {
+        insertionsInProgress.add(nodeLevel);
+        var inProgressBefore = insertionsInProgress.clone();
+        try (var gs = searchers.get()) {
+            gs.setView(graph.getView()); // new snapshot
+            var naturalScratchPooled = naturalScratch.get();
+            var concurrentScratchPooled = concurrentScratch.get();
+
+            var bits = new ExcludingBits(nodeLevel.node);
+            var ssp = scoreProvider.searchProviderFor(vector);
+            var entry = graph.entry();
+            SearchResult result;
+            if (entry == null) {
+                result = new SearchResult(new NodeScore[] {}, 0, 0, 0);
+            } else {
+                gs.initializeInternal(ssp, entry, bits);
+
+                // Move downward from entry.level to 1
+                for (int lvl = entry.level; lvl >= Math.max(nodeLevel.level, 1); lvl--) {
+                    if (lvl > nodeLevel.level) {
+                        gs.searchOneLayer(ssp, 1, 0.0f, lvl, gs.getView().liveNodes());
+                    } else {
+                        gs.searchOneLayer(ssp, beamWidth, 0.0f, lvl, gs.getView().liveNodes());
+                        NodeScore[] neighbors = new NodeScore[gs.approximateResults.size()];
+                        AtomicInteger index = new AtomicInteger();
+                        // TODO extract an interface that lets us avoid the copy here and in toScratchCandidates
+                        gs.approximateResults.foreach((neighbor, score) -> {
+                            neighbors[index.getAndIncrement()] = new NodeScore(neighbor, score);
+                        });
+                        Arrays.sort(neighbors);
+                        updateNeighborsOneLayer(lvl, nodeLevel.node, neighbors, naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
+                    }
+                    gs.setEntryPointsFromPreviousLayer();
+                }
+
+                if (nodeLevel.level == 0) {
+                    // Now do the main search at layer 0
+                    result = gs.resume(0, beamWidth, beamWidth, 0.0f, 0.0f);
+                } else {
+                    result = null; // if we get here, result will not be used anyway, so it is safe to set it to null
+                }
+            }
+
+            if (nodeLevel.level == 0) {
+                updateNeighborsOneLayer(0, nodeLevel.node, result.getNodes(), naturalScratchPooled, inProgressBefore, concurrentScratchPooled, ssp);
+            }
+
+            graph.markComplete(nodeLevel);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            insertionsInProgress.remove(nodeLevel);
+        }
+
+        return IntStream.range(0, nodeLevel.level).mapToLong(graph::ramBytesUsedOneNode).sum();
     }
 
     /**
