@@ -37,7 +37,6 @@ import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -55,7 +54,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
 import static io.github.jbellis.jvector.TestUtil.randomVector;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TestOnDiskGraphIndex extends RandomizedTest {
@@ -504,6 +506,54 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             validateVectors(incrementalView, ravv); // inline vectors should be the same
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+    @Test
+    public void testMultiLayerCustomStartOffset() throws Exception {
+        // 3 layers
+        var layerInfo = List.of(
+                new CommonHeader.LayerInfo(100, 8),
+                new CommonHeader.LayerInfo(10, 3),
+                new CommonHeader.LayerInfo(5, 2)
+        );
+        var graph = new TestUtil.RandomlyConnectedGraphIndex(layerInfo, getRandom());
+        var ravv = new TestVectorGraph.CircularFloatVectorValues(graph.size(0));
+        var outputPath = testDirectory.resolve("random_multilayer_offset");
+
+        // Write some padding (100 bytes) before the graph index
+        try (var channel = Files.newByteChannel(outputPath, java.nio.file.StandardOpenOption.CREATE,
+                                                java.nio.file.StandardOpenOption.WRITE)) {
+            channel.position(100);
+        }
+
+        // Write the graph index at offset 100
+        try (var writer = new OnDiskGraphIndexWriter.Builder(graph, outputPath)
+                .withStartOffset(100)
+                .with(new InlineVectors(ravv.dimension()))
+                .build())
+        {
+            writer.write(Feature.singleStateFactory(
+                    FeatureId.INLINE_VECTORS,
+                    nodeId -> new InlineVectors.State(ravv.getVector(nodeId))
+            ));
+        }
+
+        // Read the graph back from offset 100
+        try (var readerSupplier = new SimpleMappedReader.Supplier(outputPath.toAbsolutePath());
+             var onDiskGraph = OnDiskGraphIndex.load(readerSupplier, 100))
+        {
+            // confirm multi-layer
+            assertEquals(2, onDiskGraph.getMaxLevel());
+            assertEquals(100, onDiskGraph.size(0));
+            assertEquals(10, onDiskGraph.size(1));
+            assertEquals(5, onDiskGraph.size(2));
+            TestUtil.assertGraphEquals(graph, onDiskGraph);
+
+            // confirm searching matches the original graph
+            var q = randomVector(ThreadLocalRandom.current(), ravv.dimension());
+            var results1 = GraphSearcher.search(q, 10, ravv, VectorSimilarityFunction.EUCLIDEAN, graph, Bits.ALL);
+            var results2 = GraphSearcher.search(q, 10, ravv, VectorSimilarityFunction.EUCLIDEAN, onDiskGraph, Bits.ALL);
+            assertEquals(results1, results2);
         }
     }
 }
