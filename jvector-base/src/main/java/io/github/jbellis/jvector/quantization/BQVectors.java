@@ -155,7 +155,7 @@ public abstract class BQVectors implements CompressedVectors {
     public String toString() {
         return "BQVectors{" +
                "bq=" + bq +
-               ", count=" + compressedVectors.length +
+               ", count=" + count() +
                '}';
     }
 }
