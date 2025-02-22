@@ -71,7 +71,6 @@ public class RandomVectorsBenchmark {
                 1.2f, // allow degree overflow during construction by this factor
                 1.2f); // relax neighbor diversity requirement by this factor
         graphIndex = graphIndexBuilder.build(ravv);
-        queryVector = SiftSmall.randomVector(originalDimension);
     }
 
     @TearDown
