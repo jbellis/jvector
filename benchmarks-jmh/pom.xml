@@ -96,43 +96,4 @@
             </plugin>
         </plugins>
     </build>
-    <profiles>
-        <profile>
-            <id>jmh</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <configuration>
-                            <skip>false</skip>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>benchmark</id>
-                                <goals>
-                                    <goal>exec</goal>
-                                </goals>
-                                <configuration>
-                                    <executable>java</executable>
-                                    <arguments>
-                                        <argument>--enable-native-access=ALL-UNNAMED</argument>
-                                        <argument>--add-modules=jdk.incubator.vector</argument>
-                                        <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
-                                        <argument>-Xmx14G</argument>
-                                        <argument>-Djvector.experimental.enable_native_vectorization=true</argument>
-                                        <argument>-jar</argument>
-                                        <argument>${project.build.directory}/benchmarks-jmh-${project.version}.jar</argument>
-                                    </arguments>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>
