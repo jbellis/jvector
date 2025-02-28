@@ -541,4 +541,11 @@ final class DefaultVectorUtilSupport implements VectorUtilSupport {
 
     return squaredSum;
   }
+
+  @Override
+  public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+   for (int i = 0; i < v1.length(); i++) {
+     v1.set(i, Math.min(v1.get(i), v2.get(i)));
+    }
+  }
 }

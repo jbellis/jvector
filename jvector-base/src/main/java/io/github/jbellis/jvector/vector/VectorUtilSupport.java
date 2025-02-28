@@ -300,4 +300,7 @@ public interface VectorUtilSupport {
    * @param nBits the number of bits per dimension
    */
   float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits);
+
+  /** Calculates the minimum value for every corresponding lane values in v1 and v2, in place (v1 will be modified) */
+  void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
 }
