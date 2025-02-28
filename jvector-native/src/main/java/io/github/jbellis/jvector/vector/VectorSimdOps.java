@@ -598,6 +598,26 @@ final class VectorSimdOps {
         return res;
     }
 
+    static void minInPlace(MemorySegmentVectorFloat v1, MemorySegmentVectorFloat v2) {
+        if (v1.length() != v2.length()) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+            var b = FloatVector.fromMemorySegment(FloatVector.SPECIES_PREFERRED, v2.get(), v2.offset(i), ByteOrder.LITTLE_ENDIAN);
+            a.min(b).intoMemorySegment(v1.get(), v1.offset(i), ByteOrder.LITTLE_ENDIAN);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length(); i++) {
+            v1.set(i,  Math.min(v1.get(i), v2.get(i)));
+        }
+    }
+
     public static float max(MemorySegmentVectorFloat vector) {
         var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -Float.MAX_VALUE);
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());

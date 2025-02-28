@@ -238,4 +238,8 @@ public final class VectorUtil {
   public static float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
     return impl.nvqUniformLoss(vector, minValue, maxValue, nBits);
   }
+
+  public static void minInPlace(VectorFloat<?> distances1, VectorFloat<?> distances2) {
+    impl.minInPlace(distances1, distances2);
+  }
 }

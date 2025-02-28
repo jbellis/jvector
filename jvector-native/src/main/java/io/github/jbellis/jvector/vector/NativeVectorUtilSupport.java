@@ -225,4 +225,9 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
         return VectorSimdOps.nvqUniformLoss((MemorySegmentVectorFloat) vector, minValue, maxValue, nBits);
     }
+
+	@Override
+    public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        VectorSimdOps.minInPlace((MemorySegmentVectorFloat) v1, (MemorySegmentVectorFloat) v2);
+    }
 }
