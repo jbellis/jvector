@@ -437,8 +437,6 @@ public class GraphIndexBuilder implements Closeable {
         double ml = graph.getDegree(0) == 1 ? 1 : 1 / log(1.0 * graph.getDegree(0));
         double randDouble;
         do {
-//            randDouble =
-//                    ThreadLocalRandom.current().nextDouble(); // avoid 0 value, as log(0) is undefined
             randDouble = this.rng.nextDouble();  // avoid 0 value, as log(0) is undefined
         } while (randDouble == 0.0);
         return ((int) (-log(randDouble) * ml));
