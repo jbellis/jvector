@@ -33,3 +33,26 @@ Common JMH command line options you can use in the configuration or command line
 - `-t <num>` - Number of threads
 - `-p <param>=<value>` - Benchmark parameters
 - `-prof <profiler>` - Add profiler
+
+
+2. Focus on specific benchmarks
+
+For example in the below command lines we are going to run only `IndexConstructionWithStaticSetBenchmark`
+```shell
+mvn clean install -DskipTests=true
+BENCHMARK_NAME="IndexConstructionWithStaticSetBenchmark"
+java --enable-native-access=ALL-UNNAMED \
+  --add-modules=jdk.incubator.vector \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -Xmx14G -Djvector.experimental.enable_native_vectorization=true \
+  -jar benchmarks-jmh/target/benchmarks-jmh-4.0.0-beta.2-SNAPSHOT.jar $BENCHMARK_NAME
+```
+
+If you want to rerun a specific benchmark without testing the entire grid of scenarios defined in the benchmark.
+You can just do the following to set M and beamWidth:
+```shell
+java -jar target/benchmarks.jar IndexConstructionWithStaticSetBenchmark -p M=32 -p beamWidth=100 
+```
+
+
+
