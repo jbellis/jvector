@@ -158,6 +158,10 @@ public final class VectorUtil {
     return impl.sub(a, aOffset, b, bOffset, length);
   }
 
+  public static void minInPlace(VectorFloat<?> distances1, VectorFloat<?> distances2) {
+    impl.minInPlace(distances1, distances2);
+  }
+
   public static float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> dataOffsets) {
     return impl.assembleAndSum(data, dataBase, dataOffsets);
   }
@@ -239,7 +243,4 @@ public final class VectorUtil {
     return impl.nvqUniformLoss(vector, minValue, maxValue, nBits);
   }
 
-  public static void minInPlace(VectorFloat<?> distances1, VectorFloat<?> distances2) {
-    impl.minInPlace(distances1, distances2);
-  }
 }

@@ -111,6 +111,11 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
     }
 
     @Override
+    public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        VectorSimdOps.minInPlace((MemorySegmentVectorFloat) v1, (MemorySegmentVectorFloat) v2);
+    }
+
+    @Override
     public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
         assert baseOffsets.offset() == 0 : "Base offsets are expected to have an offset of 0. Found: " + baseOffsets.offset();
         return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat)data).get(), dataBase, ((MemorySegmentByteSequence)baseOffsets).get(), baseOffsets.length());
@@ -226,8 +231,4 @@ final class NativeVectorUtilSupport implements VectorUtilSupport
         return VectorSimdOps.nvqUniformLoss((MemorySegmentVectorFloat) vector, minValue, maxValue, nBits);
     }
 
-	@Override
-    public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
-        VectorSimdOps.minInPlace((MemorySegmentVectorFloat) v1, (MemorySegmentVectorFloat) v2);
-    }
 }

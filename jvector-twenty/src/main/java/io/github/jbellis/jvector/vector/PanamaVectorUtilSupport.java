@@ -77,11 +77,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         SimdOps.addInPlace((ArrayVectorFloat)v1, value);
     }
 
-	@Override
-    public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
-        SimdOps.minInPlace((ArrayVectorFloat)v1, (ArrayVectorFloat)v2);
-    }
-
     @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         SimdOps.subInPlace((ArrayVectorFloat) v1, (ArrayVectorFloat) v2);
@@ -108,6 +103,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
         return SimdOps.sub((ArrayVectorFloat) a, aOffset, (ArrayVectorFloat) b, bOffset, length);
+    }
+
+    @Override
+    public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        SimdOps.minInPlace((ArrayVectorFloat)v1, (ArrayVectorFloat)v2);
     }
 
     @Override

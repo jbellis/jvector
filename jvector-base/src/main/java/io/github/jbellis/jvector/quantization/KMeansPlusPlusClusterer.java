@@ -215,7 +215,7 @@ public class KMeansPlusPlusClusterer {
             centroids.copyFrom(nextCentroid, 0, i * nextCentroid.length(), nextCentroid.length());
 
             // Update distances, but only if the new centroid provides a closer distance
-            newDistancesVector.zero();
+            // All entries of newDistancesVector is overwritten with the updated squareL2Distance value
             for (int j = 0; j < distancesLength; j++) {
                 newDistancesVector.set(j, squareL2Distance(points[j], nextCentroid));
             }
