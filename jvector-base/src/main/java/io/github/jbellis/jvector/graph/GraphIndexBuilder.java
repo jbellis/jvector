@@ -307,9 +307,6 @@ public class GraphIndexBuilder implements Closeable {
 
         var batchSize = 50;
         for (int batch = 0; batch < size; batch += batchSize) {
-            if (batch % 50000 == 0) {
-                System.out.println(" " + batch);
-            }
             var lower = batch;
             var upper = min(size, batch + batchSize);
             simdExecutor.submit(() -> {
