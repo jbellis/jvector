@@ -67,6 +67,7 @@ public class GraphIndexBuilder implements Closeable {
     private final int dimension;
     private final float neighborOverflow;
     private final float alpha;
+    private final boolean addHierarchy;
 
     @VisibleForTesting
     final OnHeapGraphIndex graph;
@@ -101,14 +102,16 @@ public class GraphIndexBuilder implements Closeable {
                              int M,
                              int beamWidth,
                              float neighborOverflow,
-                             float alpha)
+                             float alpha,
+                             boolean addHierarchy)
     {
         this(BuildScoreProvider.randomAccessScoreProvider(vectorValues, similarityFunction),
                 vectorValues.dimension(),
                 M,
                 beamWidth,
                 neighborOverflow,
-                alpha);
+                alpha,
+                addHierarchy);
     }
 
     /**
@@ -130,9 +133,10 @@ public class GraphIndexBuilder implements Closeable {
                              int M,
                              int beamWidth,
                              float neighborOverflow,
-                             float alpha)
+                             float alpha,
+                             boolean addHierarchy)
     {
-        this(scoreProvider, dimension, M, beamWidth, neighborOverflow, alpha, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        this(scoreProvider, dimension, M, beamWidth, neighborOverflow, alpha, addHierarchy, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
     }
 
     /**
@@ -157,10 +161,11 @@ public class GraphIndexBuilder implements Closeable {
                              int beamWidth,
                              float neighborOverflow,
                              float alpha,
+                             boolean addHierarchy,
                              ForkJoinPool simdExecutor,
                              ForkJoinPool parallelExecutor)
     {
-        this(scoreProvider, dimension, List.of(M), beamWidth, neighborOverflow, alpha, simdExecutor, parallelExecutor);
+        this(scoreProvider, dimension, List.of(M), beamWidth, neighborOverflow, alpha, addHierarchy, simdExecutor, parallelExecutor);
     }
 
     /**
@@ -183,9 +188,10 @@ public class GraphIndexBuilder implements Closeable {
                              List<Integer> maxDegrees,
                              int beamWidth,
                              float neighborOverflow,
-                             float alpha)
+                             float alpha,
+                             boolean addHierarchy)
     {
-        this(scoreProvider, dimension, maxDegrees, beamWidth, neighborOverflow, alpha, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
+        this(scoreProvider, dimension, maxDegrees, beamWidth, neighborOverflow, alpha, addHierarchy, PhysicalCoreExecutor.pool(), ForkJoinPool.commonPool());
     }
 
     /**
@@ -201,6 +207,7 @@ public class GraphIndexBuilder implements Closeable {
      * @param alpha            how aggressive pruning diverse neighbors should be.  Set alpha &gt; 1.0 to
      *                         allow longer edges.  If alpha = 1.0 then the equivalent of the lowest level of
      *                         an HNSW graph will be created, which is usually not what you want.
+     * @param addHierarchy     whether we want to add an HNSW hierarchy on top of the Vamana index.
      * @param simdExecutor     ForkJoinPool instance for SIMD operations, best is to use a pool with the size of
      *                         the number of physical cores.
      * @param parallelExecutor ForkJoinPool instance for parallel stream operations
@@ -211,6 +218,7 @@ public class GraphIndexBuilder implements Closeable {
                              int beamWidth,
                              float neighborOverflow,
                              float alpha,
+                             boolean addHierarchy,
                              ForkJoinPool simdExecutor,
                              ForkJoinPool parallelExecutor)
     {
@@ -231,6 +239,7 @@ public class GraphIndexBuilder implements Closeable {
         this.dimension = dimension;
         this.neighborOverflow = neighborOverflow;
         this.alpha = alpha;
+        this.addHierarchy = addHierarchy;
         this.beamWidth = beamWidth;
         this.simdExecutor = simdExecutor;
         this.parallelExecutor = parallelExecutor;
@@ -253,6 +262,7 @@ public class GraphIndexBuilder implements Closeable {
                 other.beamWidth,
                 other.neighborOverflow,
                 other.alpha,
+                other.addHierarchy,
                 other.simdExecutor,
                 other.parallelExecutor);
 
@@ -395,7 +405,12 @@ public class GraphIndexBuilder implements Closeable {
     }
 
     int getRandomGraphLevel() {
-        double ml = graph.getDegree(0) == 1 ? 1 : 1 / log(1.0 * graph.getDegree(0));
+        double ml;
+        if (addHierarchy) {
+            ml = graph.getDegree(0) == 1 ? 1 : 1 / log(1.0 * graph.getDegree(0));
+        } else {
+            ml = 0;
+        }
         double randDouble;
         do {
             randDouble = this.rng.nextDouble();  // avoid 0 value, as log(0) is undefined
