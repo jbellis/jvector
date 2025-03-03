@@ -303,9 +303,9 @@ public class Grid {
         var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.similarityFunction);
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp,
                                                           floatVectors.dimension(),
-                                                          List.of(M, 2*M),
+                                                          M,
                                                           efConstruction,
-                                                          1.2f,
+                                                          2.0f,
                                                           1.2f,
                                                           PhysicalCoreExecutor.pool(),
                                                           ForkJoinPool.commonPool());
