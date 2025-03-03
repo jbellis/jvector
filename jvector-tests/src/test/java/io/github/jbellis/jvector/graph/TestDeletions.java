@@ -40,10 +40,15 @@ import static org.junit.Assert.assertNull;
 public class TestDeletions extends LuceneTestCase {
     @Test
     public void testMarkDeleted() {
+        testMarkDeleted(false);
+        testMarkDeleted(true);
+    }
+
+    public void testMarkDeleted(boolean addHierarchy) {
         // graph of 10 vectors
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy);
         var graph = TestUtil.buildSequentially(builder, ravv);
 
         // delete a random entry
@@ -68,10 +73,15 @@ public class TestDeletions extends LuceneTestCase {
 
     @Test
     public void testCleanup() throws IOException {
+        testCleanup(false);
+        testCleanup(true);
+    }
+
+    public void testCleanup(boolean addHierarchy) throws IOException {
         // graph of 10 vectors
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy);
         var graph = TestUtil.buildSequentially(builder, ravv);
 
         // delete all nodes that connect to a random node
@@ -116,10 +126,15 @@ public class TestDeletions extends LuceneTestCase {
 
     @Test
     public void testMarkingAllNodesAsDeleted() {
+        testMarkingAllNodesAsDeleted(false);
+        testMarkingAllNodesAsDeleted(true);
+    }
+
+    public void testMarkingAllNodesAsDeleted(boolean addHierarchy) {
         // build graph
         int dimension = 2;
         var ravv = MockVectorValues.fromValues(createRandomFloatVectors(10, dimension, getRandom()));
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy);
         var graph = TestUtil.buildSequentially(builder, ravv);
 
         // mark all deleted
@@ -135,6 +150,11 @@ public class TestDeletions extends LuceneTestCase {
 
     @Test
     public void testNoPathToLiveNodesWhenRemovingDeletedNodes2() throws IOException {
+        testNoPathToLiveNodesWhenRemovingDeletedNodes2(false);
+        testNoPathToLiveNodesWhenRemovingDeletedNodes2(true);
+    }
+
+    public void testNoPathToLiveNodesWhenRemovingDeletedNodes2(boolean addHierarchy) throws IOException {
         var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
         var random = getRandom();
         // generate two clusters of vectors
@@ -149,7 +169,7 @@ public class TestDeletions extends LuceneTestCase {
         );
 
         // add the vectors, then delete all the ones from the first (larger) cluster
-        try (var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f)) {
+        try (var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy)) {
             for (int i = 0; i < 1100; i++) {
                 builder.addGraphNode(i, ravv.getVector(i));
             }

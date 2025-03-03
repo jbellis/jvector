@@ -169,7 +169,7 @@ public class Grid {
 
         var pq = (PQVectors) buildCompressor.encodeAll(floatVectors);
         var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 1.5f, 1.2f);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 2.0f, 1.2f, true);
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
@@ -307,6 +307,7 @@ public class Grid {
                                                           efConstruction,
                                                           2.0f,
                                                           1.2f,
+                                                          true,
                                                           PhysicalCoreExecutor.pool(),
                                                           ForkJoinPool.commonPool());
         start = System.nanoTime();

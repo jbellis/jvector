@@ -97,9 +97,14 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     @Test
     public void testRenumberingOnDelete() throws IOException {
+        testRenumberingOnDelete(false);
+        testRenumberingOnDelete(true);
+    }
+
+    public void testRenumberingOnDelete(boolean addHierarchy) throws IOException {
         // graph of 3 vectors
         var ravv = new TestVectorGraph.CircularFloatVectorValues(3);
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy);
         var original = TestUtil.buildSequentially(builder, ravv);
 
         // delete the first node
@@ -141,12 +146,16 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             throw new RuntimeException(e);
         }
     }
-
     @Test
     public void testReorderingRenumbering() throws IOException {
+        testReorderingRenumbering(false);
+        testReorderingRenumbering(true);
+    }
+
+    public void testReorderingRenumbering(boolean addHierarchy) throws IOException {
         // graph of 3 vectors
         var ravv = new TestVectorGraph.CircularFloatVectorValues(3);
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy);
         var original = TestUtil.buildSequentially(builder, ravv);
 
         // create renumbering map
@@ -173,9 +182,14 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
 
     @Test
     public void testReorderingWithHoles() throws IOException {
+        testReorderingWithHoles(false);
+        testReorderingWithHoles(true);
+    }
+
+    public void testReorderingWithHoles(boolean addHierarchy) throws IOException {
         // graph of 3 vectors
         var ravv = new TestVectorGraph.CircularFloatVectorValues(3);
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.COSINE, 2, 10, 1.0f, 1.0f, addHierarchy);
         var original = TestUtil.buildSequentially(builder, ravv);
 
         // create renumbering map

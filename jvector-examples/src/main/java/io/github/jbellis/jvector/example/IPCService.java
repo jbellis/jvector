@@ -66,6 +66,8 @@ public class IPCService
         int dimension;
         int M;
         int efConstruction;
+        float neighborOverflow;
+        boolean addHierarchy;
         VectorSimilarityFunction similarityFunction;
         RandomAccessVectorValues ravv;
         CompressedVectors cv;
@@ -101,16 +103,18 @@ public class IPCService
     void create(String input, SessionContext ctx) {
         String[] args = input.split("\\s+");
 
-        if (args.length != 4)
+        if (args.length != 6)
             throw new IllegalArgumentException("Illegal CREATE statement. Expecting 'CREATE [DIMENSIONS] [SIMILARITY_TYPE] [M] [EF]'");
 
         int dimensions = Integer.parseInt(args[0]);
         VectorSimilarityFunction sim = VectorSimilarityFunction.valueOf(args[1]);
         int M = Integer.parseInt(args[2]);
         int efConstruction = Integer.parseInt(args[3]);
+        float neighborOverflow = Float.parseFloat(args[4]);
+        boolean addHierarchy = Boolean.parseBoolean(args[5]);
 
         ctx.ravv = new UpdatableRandomAccessVectorValues(dimensions);
-        ctx.indexBuilder =  new GraphIndexBuilder(ctx.ravv, sim, M, efConstruction, 1.2f, 1.4f);
+        ctx.indexBuilder =  new GraphIndexBuilder(ctx.ravv, sim, M, efConstruction, neighborOverflow, 1.4f, addHierarchy);
         ctx.M = M;
         ctx.dimension = dimensions;
         ctx.efConstruction = efConstruction;
@@ -161,7 +165,7 @@ public class IPCService
         ctx.isBulkLoad = true;
 
         var ravv = new MMapRandomAccessVectorValues(f, ctx.dimension);
-        var indexBuilder = new GraphIndexBuilder(ravv, ctx.similarityFunction, ctx.M, ctx.efConstruction, 1.2f, 1.4f);
+        var indexBuilder = new GraphIndexBuilder(ravv, ctx.similarityFunction, ctx.M, ctx.efConstruction, ctx.neighborOverflow, 1.4f, ctx.addHierarchy);
         System.out.println("BulkIndexing " + ravv.size());
         ctx.index = flushGraphIndex(indexBuilder.build(ravv), ravv);
         ctx.cv = pqIndex(ravv, ctx);

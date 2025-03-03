@@ -55,8 +55,15 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
         TestUtil.deleteQuietly(testDirectory);
     }
 
-    @Test 
+    @Test
     public void testRescore() {
+        testRescore(false);
+        testRescore(true);
+    }
+
+
+    @Test 
+    public void testRescore(boolean addHierarchy) {
         // Create test vectors where each vector is [node_id, 0]
         var vectors = new ArrayList<VectorFloat<?>>();
         vectors.add(vts.createFloatVector(new float[] {0, 0}));
@@ -66,7 +73,7 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
         
         // Initial score provider uses dot product, so scores will equal node IDs
         var bsp = BuildScoreProvider.randomAccessScoreProvider(ravv, VectorSimilarityFunction.EUCLIDEAN);
-        var builder = new GraphIndexBuilder(bsp, 2, 2, 10, 1.0f, 1.0f);
+        var builder = new GraphIndexBuilder(bsp, 2, 2, 10, 1.0f, 1.0f, addHierarchy);
 
         // Add 3 nodes
         builder.addGraphNode(0, ravv.getVector(0));

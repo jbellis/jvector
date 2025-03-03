@@ -35,24 +35,26 @@ public class Test2DThreshold extends LuceneTestCase {
     @Test
     public void testThreshold10k() throws IOException {
         for (int i = 0; i < 10; i++) {
-            testThreshold(10_000, 16);
+            testThreshold(10_000, 16, false);
+            testThreshold(10_000, 16, true);
         }
     }
 
     @Test
     public void testThreshold20k() throws IOException {
         for (int i = 0; i < 10; i++) {
-            testThreshold(20_000, 24);
+            testThreshold(20_000, 24, false);
+            testThreshold(20_000, 24, true);
         }
     }
 
-    public void testThreshold(int graphSize, int maxDegree) throws IOException {
+    public void testThreshold(int graphSize, int maxDegree, boolean addHierarchy) throws IOException {
         var R = getRandom();
 
         // build index
         VectorFloat<?>[] vectors = TestVectorGraph.createRandomFloatVectors(graphSize, 2, R);
         var ravv = new ListRandomAccessVectorValues(List.of(vectors), 2);
-        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.EUCLIDEAN, maxDegree, 2 * maxDegree, 1.2f, 1.4f);
+        var builder = new GraphIndexBuilder(ravv, VectorSimilarityFunction.EUCLIDEAN, maxDegree, 2 * maxDegree, 1.2f, 1.4f, addHierarchy);
         var onHeapGraph = builder.build(ravv);
 
         // test raw vectors
