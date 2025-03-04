@@ -58,6 +58,8 @@ import static java.lang.Math.min;
  * that spawning a new Thread per call is not advisable.  This includes virtual threads.
  */
 public class GraphIndexBuilder implements Closeable {
+    private static final int BUILD_BATCH_SIZE = 50;
+
     private static final Logger logger = LoggerFactory.getLogger(GraphIndexBuilder.class);
 
     private final int beamWidth;
@@ -305,10 +307,9 @@ public class GraphIndexBuilder implements Closeable {
         var vv = ravv.threadLocalSupplier();
         int size = ravv.size();
 
-        var batchSize = 50;
-        for (int batch = 0; batch < size; batch += batchSize) {
+        for (int batch = 0; batch < size; batch += BUILD_BATCH_SIZE) {
             var lower = batch;
-            var upper = min(size, batch + batchSize);
+            var upper = min(size, batch + BUILD_BATCH_SIZE);
             simdExecutor.submit(() -> {
                 IntStream.range(lower, upper).parallel().forEach(node -> addGraphNode(node, vv.get().getVector(node)));
             }).join();
