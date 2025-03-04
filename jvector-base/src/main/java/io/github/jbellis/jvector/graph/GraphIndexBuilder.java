@@ -227,6 +227,9 @@ public class GraphIndexBuilder implements Closeable {
         if (maxDegrees.stream().mapToInt(i -> i).anyMatch(i -> i <= 0)) {
             throw new IllegalArgumentException("layer degree must be positive");
         }
+        if (maxDegrees.size() > 1 && !addHierarchy) {
+            throw new IllegalArgumentException("Cannot specify multiple max degrees with addHierarchy=False");
+        }
         if (beamWidth <= 0) {
             throw new IllegalArgumentException("beamWidth must be positive");
         }
