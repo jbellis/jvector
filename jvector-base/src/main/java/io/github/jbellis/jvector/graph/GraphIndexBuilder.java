@@ -81,7 +81,7 @@ public class GraphIndexBuilder implements Closeable {
 
     private final ExplicitThreadLocal<GraphSearcher> searchers;
 
-    private Random rng;
+    private final Random rng;
 
     /**
      * Reads all the vectors from vector values, builds a graph connecting them by their dense
