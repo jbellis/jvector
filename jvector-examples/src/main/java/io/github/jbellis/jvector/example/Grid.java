@@ -81,18 +81,25 @@ public class Grid {
     static void runAll(DataSet ds,
                        List<Integer> mGrid,
                        List<Integer> efConstructionGrid,
+                       List<Float> neighborOverflowGrid,
+                       List<Boolean> addHierarchyGrid,
                        List<? extends Set<FeatureId>> featureSets,
                        List<Function<DataSet, CompressorParameters>> buildCompressors,
                        List<Function<DataSet, CompressorParameters>> compressionGrid,
-                       List<Double> efSearchFactor) throws IOException
+                       List<Double> efSearchFactor,
+                       List<Boolean> usePruningGrid) throws IOException
     {
         var testDirectory = Files.createTempDirectory(dirPrefix);
         try {
-            for (int M : mGrid) {
-                for (int efC : efConstructionGrid) {
-                    for (var bc : buildCompressors) {
-                        var compressor = getCompressor(bc, ds);
-                        runOneGraph(featureSets, M, efC, compressor, compressionGrid, efSearchFactor, ds, testDirectory);
+            for (var addHierarchy :  addHierarchyGrid) {
+                for (int M : mGrid) {
+                    for (float neighborOverflow: neighborOverflowGrid) {
+                        for (int efC : efConstructionGrid) {
+                            for (var bc : buildCompressors) {
+                                var compressor = getCompressor(bc, ds);
+                                runOneGraph(featureSets, M, efC, neighborOverflow, addHierarchy, compressor, compressionGrid, efSearchFactor, usePruningGrid, ds, testDirectory);
+                            }
+                        }
                     }
                 }
             }
@@ -112,17 +119,20 @@ public class Grid {
     static void runOneGraph(List<? extends Set<FeatureId>> featureSets,
                             int M,
                             int efConstruction,
+                            float neighborOverflow,
+                            boolean addHierarchy,
                             VectorCompressor<?> buildCompressor,
                             List<Function<DataSet, CompressorParameters>> compressionGrid,
                             List<Double> efSearchOptions,
+                            List<Boolean> usePruningGrid,
                             DataSet ds,
                             Path testDirectory) throws IOException
     {
         Map<Set<FeatureId>, GraphIndex> indexes;
         if (buildCompressor == null) {
-            indexes = buildInMemory(featureSets, M, efConstruction, ds, testDirectory);
+            indexes = buildInMemory(featureSets, M, efConstruction, neighborOverflow, addHierarchy, ds, testDirectory);
         } else {
-            indexes = buildOnDisk(featureSets, M, efConstruction, ds, testDirectory, buildCompressor);
+            indexes = buildOnDisk(featureSets, M, efConstruction, neighborOverflow, addHierarchy, ds, testDirectory, buildCompressor);
         }
 
         try {
@@ -141,7 +151,7 @@ public class Grid {
                 indexes.forEach((features, index) -> {
                     try (var cs = new ConfiguredSystem(ds, index, cv,
                                                        index instanceof OnDiskGraphIndex ? ((OnDiskGraphIndex) index).getFeatureSet() : Set.of())) {
-                        testConfiguration(cs, efSearchOptions);
+                        testConfiguration(cs, efSearchOptions, usePruningGrid);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -160,6 +170,8 @@ public class Grid {
     private static Map<Set<FeatureId>, GraphIndex> buildOnDisk(List<? extends Set<FeatureId>> featureSets,
                                                                int M,
                                                                int efConstruction,
+                                                               float neighborOverflow,
+                                                               boolean addHierarchy,
                                                                DataSet ds,
                                                                Path testDirectory,
                                                                VectorCompressor<?> buildCompressor)
@@ -169,7 +181,7 @@ public class Grid {
 
         var pq = (PQVectors) buildCompressor.encodeAll(floatVectors);
         var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.similarityFunction, pq);
-        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, 2.0f, 1.2f, true);
+        GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, neighborOverflow, 1.2f, addHierarchy);
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, OnDiskGraphIndexWriter> writers = new HashMap<>();
@@ -293,6 +305,8 @@ public class Grid {
     private static Map<Set<FeatureId>, GraphIndex> buildInMemory(List<? extends Set<FeatureId>> featureSets,
                                                                  int M,
                                                                  int efConstruction,
+                                                                 float neighborOverflow,
+                                                                 boolean addHierarchy,
                                                                  DataSet ds,
                                                                  Path testDirectory)
             throws IOException
@@ -305,16 +319,17 @@ public class Grid {
                                                           floatVectors.dimension(),
                                                           M,
                                                           efConstruction,
-                                                          2.0f,
+                                                          neighborOverflow,
                                                           1.2f,
-                                                          true,
+                                                          addHierarchy,
                                                           PhysicalCoreExecutor.pool(),
                                                           ForkJoinPool.commonPool());
         start = System.nanoTime();
         var onHeapGraph = builder.build(floatVectors);
-        System.out.format("Build (%s) M=%d ef=%d in %.2fs%n",
+        System.out.format("Build (%s) M=%d overflow=%.2f ef=%d in %.2fs%n",
                           "full res",
                           M,
+                          neighborOverflow,
                           efConstruction,
                           (System.nanoTime() - start) / 1_000_000_000.0);
         for (int i = 0; i <= onHeapGraph.getMaxLevel(); i++) {
@@ -346,17 +361,18 @@ public class Grid {
     // avoid recomputing the compressor repeatedly (this is a relatively small memory footprint)
     static final Map<String, VectorCompressor<?>> cachedCompressors = new IdentityHashMap<>();
 
-    private static void testConfiguration(ConfiguredSystem cs, List<Double> efSearchOptions) {
+    private static void testConfiguration(ConfiguredSystem cs, List<Double> efSearchOptions, List<Boolean> usePruningGrid) {
         var topK = cs.ds.groundTruth.get(0).size();
         System.out.format("Using %s:%n", cs.index);
         for (var overquery : efSearchOptions) {
             var start = System.nanoTime();
             int rerankK = (int) (topK * overquery);
-            var pqr = performQueries(cs, topK, rerankK, 2);
-            var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
-            System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited%n",
-                              topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited);
-
+            for (var usePruning : usePruningGrid) {
+                var pqr = performQueries(cs, topK, rerankK, usePruning, 2);
+                var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
+                System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited with pruning=%b%n",
+                        topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited, usePruning);
+            }
         }
     }
 
@@ -414,7 +430,7 @@ public class Grid {
         return topKCorrect(topK, a, gt);
     }
 
-    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, int queryRuns) {
+    private static ResultSummary performQueries(ConfiguredSystem cs, int topK, int rerankK, boolean usePruning, int queryRuns) {
         LongAdder topKfound = new LongAdder();
         LongAdder nodesVisited = new LongAdder();
         for (int k = 0; k < queryRuns; k++) {
@@ -422,6 +438,7 @@ public class Grid {
                 var queryVector = cs.ds.queryVectors.get(i);
                 SearchResult sr;
                 var searcher = cs.getSearcher();
+                searcher.usePruning(usePruning);
                 var sf = cs.scoreProviderFor(queryVector, searcher.getView());
                 sr = searcher.search(sf, topK, rerankK, 0.0f, 0.0f, Bits.ALL);
 
