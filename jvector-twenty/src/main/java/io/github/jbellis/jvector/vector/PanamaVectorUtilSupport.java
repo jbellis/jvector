@@ -106,6 +106,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
+    public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        SimdOps.minInPlace((ArrayVectorFloat)v1, (ArrayVectorFloat)v2);
+    }
+
+    @Override
     public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
         return SimdOps.assembleAndSum(((ArrayVectorFloat) data).get(), dataBase, ((ByteSequence<byte[]>) baseOffsets));
     }
