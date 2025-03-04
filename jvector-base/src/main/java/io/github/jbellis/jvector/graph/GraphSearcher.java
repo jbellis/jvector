@@ -253,14 +253,17 @@ public class GraphSearcher implements Closeable {
     /**
      * Performs a single-layer ANN search, expanding from the given candidates queue.
      *
-     * @param scoreProvider the current query's scoring/approximation logic
-     * @param rerankK       how many results to over-query for approximate ranking
-     * @param threshold     similarity threshold, or 0f if none
-     * @param level         which layer to search
-     *                      <p>
-     *                      Modifies the internal search state.
-     *                      When it's done, `approximateResults` contains the best `rerankK` results found at the given layer.
-     * @param acceptOrds
+     * @param scoreProvider       the current query's scoring/approximation logic
+     * @param rerankK             how many results to over-query for approximate ranking
+     * @param threshold           similarity threshold, or 0f if none
+     * @param level               which layer to search
+     *                            <p>
+     *                            Modifies the internal search state.
+     *                            When it's done, `approximateResults` contains the best `rerankK` results found at the given layer.
+     * @param acceptOrdsThisLayer a Bits instance indicating which nodes are acceptable results.
+     *                            If {@link Bits#ALL}, all nodes are acceptable.
+     *                            It is caller's responsibility to ensure that there are enough acceptable nodes
+     *                            that we don't search the entire graph trying to satisfy topK.
      */
     // Since Astra / Cassandra's usage drives the design decisions here, it's worth being explicit
     // about how that works and why.
