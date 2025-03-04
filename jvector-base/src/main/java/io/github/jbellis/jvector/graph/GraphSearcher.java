@@ -46,7 +46,7 @@ import java.io.IOException;
  * search algorithm, see {@link GraphIndex}.
  */
 public class GraphSearcher implements Closeable {
-    private static final boolean PRUNE = Boolean.parseBoolean(System.getenv().getOrDefault("JVECTOR_PRUNE_SEARCH", "false"));
+    private boolean pruneSearch;
 
     private GraphIndex.View view;
 
@@ -77,6 +77,7 @@ public class GraphSearcher implements Closeable {
         this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.rerankedResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
+        this.pruneSearch = true;
     }
 
     private void initializeScoreProvider(SearchScoreProvider scoreProvider) {
@@ -91,6 +92,10 @@ public class GraphSearcher implements Closeable {
 
     public GraphIndex.View getView() {
         return view;
+    }
+
+    public void usePruning(boolean usage) {
+        pruneSearch = usage;
     }
 
     /**
@@ -298,7 +303,7 @@ public class GraphSearcher implements Closeable {
             // track scores to predict when we are done with threshold queries
             var scoreTracker = threshold > 0
                     ? new ScoreTracker.TwoPhaseTracker(threshold)
-                    : PRUNE ? new ScoreTracker.RelaxedMonotonicityTracker(rerankK) : new ScoreTracker.NoOpTracker();
+                    : pruneSearch ? new ScoreTracker.RelaxedMonotonicityTracker(rerankK) : new ScoreTracker.NoOpTracker();
             VectorFloat<?> similarities = null;
 
             // the main search loop
