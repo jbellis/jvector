@@ -337,7 +337,7 @@ public class GraphIndexBuilder implements Closeable {
      * May be called multiple times, but should not be called during concurrent modifications to the graph.
      */
     public void cleanup() {
-        if (graph.size() == 0) {
+        if (graph.size(0) == 0) {
             return;
         }
         graph.validateEntryNode(); // sanity check before we start
@@ -346,7 +346,7 @@ public class GraphIndexBuilder implements Closeable {
         // backlinks can cause neighbors to soft-overflow, so do this before neighbors cleanup
         removeDeletedNodes();
 
-        if (graph.size() == 0) {
+        if (graph.size(0) == 0) {
             // After removing all the deleted nodes, we might end up with an empty graph.
             // The calls below expect a valid entry node, but we do not have one right now.
             return;

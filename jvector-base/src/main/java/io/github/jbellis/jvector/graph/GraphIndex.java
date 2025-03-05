@@ -99,7 +99,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
 
     int getDegree(int level);
 
-    int size(int i);
+    int size(int level);
 
     /**
      * Encapsulates the state of a graph for searching.  Re-usable across search calls,
