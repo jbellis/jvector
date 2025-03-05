@@ -250,7 +250,11 @@ public class GraphIndexBuilder implements Closeable {
         this.parallelExecutor = parallelExecutor;
 
         this.graph = new OnHeapGraphIndex(maxDegrees, neighborOverflow, scoreProvider, alpha);
-        this.searchers = ExplicitThreadLocal.withInitial(() -> new GraphSearcher(graph));
+        this.searchers = ExplicitThreadLocal.withInitial(() -> {
+            var gs = new GraphSearcher(graph);
+            gs.usePruning(false);
+            return gs;
+        });
 
         // in scratch we store candidates in reverse order: worse candidates are first
         this.naturalScratch = ExplicitThreadLocal.withInitial(() -> new NodeArray(Math.max(beamWidth, graph.maxDegree() + 1)));
