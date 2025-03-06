@@ -370,8 +370,8 @@ public class Grid {
             for (var usePruning : usePruningGrid) {
                 var pqr = performQueries(cs, topK, rerankK, usePruning, 2);
                 var recall = ((double) pqr.topKFound) / (2 * cs.ds.queryVectors.size() * topK);
-                System.out.format(" Query top %d/%d recall %.4f in %.2fs after %,d nodes visited with pruning=%b%n",
-                        topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000_000.0, pqr.nodesVisited, usePruning);
+                System.out.format(" Query top %d/%d recall %.4f in %.2fms after %,d nodes visited with pruning=%b%n",
+                        topK, rerankK, recall, (System.nanoTime() - start) / 1_000_000.0, pqr.nodesVisited, usePruning);
             }
         }
     }
