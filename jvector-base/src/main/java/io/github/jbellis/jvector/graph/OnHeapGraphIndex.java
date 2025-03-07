@@ -32,6 +32,7 @@ import io.github.jbellis.jvector.util.DenseIntMap;
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import io.github.jbellis.jvector.util.SparseIntMap;
 import io.github.jbellis.jvector.util.ThreadSafeGrowableBitSet;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.agrona.collections.IntArrayList;
 
 import java.io.DataOutput;
@@ -39,6 +40,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
@@ -68,7 +71,9 @@ public class OnHeapGraphIndex implements GraphIndex {
     // The ratio by which we can overflow the neighborhood of a node during construction. Should be higher than 1
     private final double overflowRatio;
 
-    OnHeapGraphIndex(List<Integer> maxDegrees, double overflowRatio, BuildScoreProvider scoreProvider, float alpha) {
+    public final ConcurrentMap<NodeAtLevel, VectorFloat<?>> constructionBatch;
+
+    OnHeapGraphIndex(List<Integer> maxDegrees, double overflowRatio, BuildScoreProvider scoreProvider, float alpha, int batchSize) {
         this.overflowRatio = overflowRatio;
         this.maxDegrees = new IntArrayList();
         setDegrees(maxDegrees);
@@ -80,6 +85,7 @@ public class OnHeapGraphIndex implements GraphIndex {
                                                   getDegree(0),
                                                   (int) (getDegree(0) * overflowRatio),
                                                   alpha));
+        this.constructionBatch = new ConcurrentHashMap<>(batchSize);
     }
 
     /**
