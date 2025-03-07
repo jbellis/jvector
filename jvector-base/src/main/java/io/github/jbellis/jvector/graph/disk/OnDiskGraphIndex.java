@@ -49,7 +49,7 @@ import java.util.stream.IntStream;
  */
 public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 {
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
     static final int MAGIC = 0xFFFF0D61; // FFFF to distinguish from old graphs, which should never start with a negative size "ODGI"
     static final VectorTypeSupport vectorTypeSupport = VectorizationProvider.getInstance().getVectorTypeSupport();
     final ReaderSupplier readerSupplier;
@@ -58,6 +58,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     final int maxDegree;
     final int dimension;
     final int entryNode;
+    final int idUpperBound;
     final int inlineBlockSize; // total size of all inline elements contributed by features
     final EnumMap<FeatureId, ? extends Feature> features;
     final EnumMap<FeatureId, Integer> inlineOffsets;
@@ -71,6 +72,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         this.dimension = header.common.dimension;
         this.entryNode = header.common.entryNode;
         this.maxDegree = header.common.maxDegree;
+        this.idUpperBound = header.common.idUpperBound;
         this.features = header.features;
         this.neighborsOffset = neighborsOffset;
         var inlineBlockSize = 0;
@@ -120,9 +122,33 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     @Override
-    public NodesIterator getNodes()
-    {
-        return NodesIterator.fromPrimitiveIterator(IntStream.range(0, size).iterator(), size);
+    public int getIdUpperBound() {
+        return idUpperBound;
+    }
+
+    @Override
+    public NodesIterator getNodes() {
+        try {
+            var reader = readerSupplier.get();
+
+            int[] valid_nodes = new int[size];
+            int pos = 0;
+            for (int node = 0; node < getIdUpperBound(); node++) {
+                long node_offset = neighborsOffset +
+                        (node * ((long) Integer.BYTES // ids
+                                + inlineBlockSize // inline elements
+                                + (Integer.BYTES * (long) (maxDegree + 1)) // neighbor count + neighbors)
+                        ));
+                reader.seek(node_offset);
+                if (reader.readInt() != -1) {
+                    valid_nodes[pos++] = node;
+                }
+            }
+            return new NodesIterator.ArrayNodesIterator(valid_nodes, size);
+
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Override
@@ -251,9 +277,15 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         }
 
         @Override
+        public int getIdUpperBound() {
+            return idUpperBound;
+        }
+
+        @Override
         public Bits liveNodes() {
             return Bits.ALL;
         }
+
 
         @Override
         public void close() throws IOException {
