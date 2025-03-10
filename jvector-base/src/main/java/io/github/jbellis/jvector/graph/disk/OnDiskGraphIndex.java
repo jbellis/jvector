@@ -38,7 +38,6 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * A class representing a graph index stored on disk. The base graph contains only graph structure.
@@ -128,9 +127,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     @Override
     public NodesIterator getNodes() {
-        try {
-            var reader = readerSupplier.get();
-
+        try (var reader = readerSupplier.get()) {
             int[] valid_nodes = new int[size];
             int pos = 0;
             for (int node = 0; node < getIdUpperBound(); node++) {
@@ -145,7 +142,6 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
                 }
             }
             return new NodesIterator.ArrayNodesIterator(valid_nodes, size);
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
