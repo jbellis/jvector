@@ -30,13 +30,15 @@ class CommonHeader {
     public final int dimension;
     public final int entryNode;
     public final int maxDegree;
+    public final int idUpperBound;
 
-    CommonHeader(int version, int size, int dimension, int entryNode, int maxDegree) {
+    CommonHeader(int version, int size, int dimension, int entryNode, int maxDegree, int idUpperBound) {
         this.version = version;
         this.size = size;
         this.dimension = dimension;
         this.entryNode = entryNode;
         this.maxDegree = maxDegree;
+        this.idUpperBound = idUpperBound;
     }
 
     void write(DataOutput out) throws IOException {
@@ -48,6 +50,10 @@ class CommonHeader {
         out.writeInt(dimension);
         out.writeInt(entryNode);
         out.writeInt(maxDegree);
+
+        if (version >= 4) {
+            out.writeInt(idUpperBound);
+        }
     }
 
     static CommonHeader load(RandomAccessReader reader) throws IOException {
@@ -65,10 +71,22 @@ class CommonHeader {
         int entryNode = reader.readInt();
         int maxDegree = reader.readInt();
 
-        return new CommonHeader(version, size, dimension, entryNode, maxDegree);
+        int idUpperBound = size;
+        if (version >= 4) {
+            idUpperBound = reader.readInt();
+        }
+
+        return new CommonHeader(version, size, dimension, entryNode, maxDegree, idUpperBound);
     }
 
     int size() {
-        return ((version >= 3 ? 2 : 0) + 4) * Integer.BYTES;
+        int size = 4;
+        if (version >= 3) {
+            size += 2;
+        }
+        if (version >= 4) {
+            size += 1;
+        }
+        return size * Integer.BYTES;
     }
 }

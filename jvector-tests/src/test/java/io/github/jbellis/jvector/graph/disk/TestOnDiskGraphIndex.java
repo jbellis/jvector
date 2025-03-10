@@ -22,6 +22,7 @@ import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.graph.NodesIterator;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.TestVectorGraph;
 import io.github.jbellis.jvector.quantization.PQVectors;
@@ -35,11 +36,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
 import static org.junit.Assert.*;
@@ -180,6 +177,13 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
              var onDiskView = onDiskGraph.getView())
         {
             assertEquals(11, onDiskGraph.getIdUpperBound());
+
+            Set<Integer> nodesInGraph = new HashSet<>();
+            for (NodesIterator it = onDiskGraph.getNodes(); it.hasNext(); ) {
+                nodesInGraph.add(it.next());
+            }
+            assertEquals(nodesInGraph, Set.of(0, 2, 10));
+
             assertEquals(onDiskView.getVector(0), ravv.getVector(2));
             assertEquals(onDiskView.getVector(10), ravv.getVector(1));
             assertEquals(onDiskView.getVector(2), ravv.getVector(0));
