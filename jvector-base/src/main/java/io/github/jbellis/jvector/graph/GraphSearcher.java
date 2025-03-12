@@ -77,7 +77,7 @@ public class GraphSearcher implements Closeable {
         this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.rerankedResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
         this.visited = new IntHashSet();
-        this.pruneSearch = true;
+        this.pruneSearch = false;
     }
 
     private void initializeScoreProvider(SearchScoreProvider scoreProvider) {
