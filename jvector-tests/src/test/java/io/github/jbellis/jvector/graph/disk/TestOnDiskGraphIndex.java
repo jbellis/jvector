@@ -46,11 +46,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.jvector.TestUtil.getNeighborNodes;
@@ -209,7 +205,7 @@ public class TestOnDiskGraphIndex extends RandomizedTest {
             assertEquals(11, onDiskGraph.getIdUpperBound());
 
             Set<Integer> nodesInGraph = new HashSet<>();
-            for (NodesIterator it = onDiskGraph.getNodes(); it.hasNext(); ) {
+            for (NodesIterator it = onDiskGraph.getNodes(0); it.hasNext(); ) {
                 nodesInGraph.add(it.next());
             }
             assertEquals(nodesInGraph, Set.of(0, 2, 10));

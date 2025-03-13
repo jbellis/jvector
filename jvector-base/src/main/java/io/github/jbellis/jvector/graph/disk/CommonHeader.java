@@ -137,7 +137,7 @@ public class CommonHeader {
         if (version >= 4) {
             size += 2 + 2 * V4_MAX_LAYERS;
         }
-        return size * Integer.BYTES;;
+        return size * Integer.BYTES;
     }
 
     @VisibleForTesting

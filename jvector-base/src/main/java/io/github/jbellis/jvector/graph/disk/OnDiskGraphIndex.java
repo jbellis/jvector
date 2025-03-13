@@ -186,13 +186,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
 
     @Override
     public NodesIterator getNodes(int level) {
-        return NodesIterator.fromPrimitiveIterator(
-                IntStream.range(0, size(level)).iterator(),
-                size(level)
-        );
+        int size = size(level);
+        int maxDegree = getDegree(level);
 
         try (var reader = readerSupplier.get()) {
-            int[] valid_nodes = new int[size];
+            int[] valid_nodes = new int[size(level)];
             int pos = 0;
             for (int node = 0; node < getIdUpperBound(); node++) {
                 long node_offset = neighborsOffset +
