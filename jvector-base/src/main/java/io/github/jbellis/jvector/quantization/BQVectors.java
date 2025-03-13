@@ -119,7 +119,7 @@ public abstract class BQVectors implements CompressedVectors {
 
     @Override
     public int getCompressedSize() {
-        return compressedVectors[0].length * Long.BYTES;
+        return bq.compressedVectorSize();
     }
 
     @Override
@@ -129,10 +129,11 @@ public abstract class BQVectors implements CompressedVectors {
 
     @Override
     public long ramBytesUsed() {
-        long[] chunk = compressedVectors[0];
-        if (chunk == null)
+        long[] compressedVector = compressedVectors[0];
+        if (compressedVector == null) {
             return 0;
-        return count() * RamUsageEstimator.sizeOf(compressedVectors[0]);
+        }
+        return count() * RamUsageEstimator.sizeOf(compressedVector);
     }
 
     @Override
@@ -154,7 +155,7 @@ public abstract class BQVectors implements CompressedVectors {
     public String toString() {
         return "BQVectors{" +
                "bq=" + bq +
-               ", count=" + compressedVectors.length +
+               ", count=" + count() +
                '}';
     }
 }

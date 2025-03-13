@@ -70,6 +70,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     final int version;
     final int dimension;
     final NodeAtLevel entryNode;
+    final int idUpperBound;
     final int inlineBlockSize; // total size of all inline elements contributed by features
     final EnumMap<FeatureId, ? extends Feature> features;
     final EnumMap<FeatureId, Integer> inlineOffsets;
@@ -86,6 +87,7 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         this.layerInfo = header.common.layerInfo;
         this.dimension = header.common.dimension;
         this.entryNode = new NodeAtLevel(header.common.layerInfo.size() - 1, header.common.entryNode);
+        this.idUpperBound = header.common.idUpperBound;
         this.features = header.features;
         this.neighborsOffset = neighborsOffset;
         var inlineBlockSize = 0;
@@ -178,12 +180,35 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
     }
 
     @Override
-    public NodesIterator getNodes(int level)
-    {
+    public int getIdUpperBound() {
+        return idUpperBound;
+    }
+
+    @Override
+    public NodesIterator getNodes(int level) {
         return NodesIterator.fromPrimitiveIterator(
                 IntStream.range(0, size(level)).iterator(),
                 size(level)
         );
+
+        try (var reader = readerSupplier.get()) {
+            int[] valid_nodes = new int[size];
+            int pos = 0;
+            for (int node = 0; node < getIdUpperBound(); node++) {
+                long node_offset = neighborsOffset +
+                        (node * ((long) Integer.BYTES // ids
+                                + inlineBlockSize // inline elements
+                                + (Integer.BYTES * (long) (maxDegree + 1)) // neighbor count + neighbors)
+                        ));
+                reader.seek(node_offset);
+                if (reader.readInt() != -1) {
+                    valid_nodes[pos++] = node;
+                }
+            }
+            return new NodesIterator.ArrayNodesIterator(valid_nodes, size);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Override
@@ -362,6 +387,11 @@ public class OnDiskGraphIndex implements GraphIndex, AutoCloseable, Accountable
         @Override
         public NodeAtLevel entryNode() {
             return entryNode;
+        }
+
+        @Override
+        public int getIdUpperBound() {
+            return idUpperBound;
         }
 
         @Override

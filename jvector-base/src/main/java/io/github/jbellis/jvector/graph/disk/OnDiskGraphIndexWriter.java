@@ -91,7 +91,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
 
         // create a mock Header to determine the correct size
         var layerInfo = CommonHeader.LayerInfo.fromGraph(graph, ordinalMapper);
-        var ch = new CommonHeader(version, dimension, 0, layerInfo);
+        var ch = new CommonHeader(version, dimension, 0, layerInfo, 0);
         var placeholderHeader = new Header(ch, featureMap);
         this.headerSize = placeholderHeader.size();
     }
@@ -324,7 +324,8 @@ public class OnDiskGraphIndexWriter implements Closeable {
         var commonHeader = new CommonHeader(version,
                 dimension,
                 ordinalMapper.oldToNew(view.entryNode().node),
-                layerInfo);
+                layerInfo,
+                ordinalMapper.maxOrdinal() + 1);
         var header = new Header(commonHeader, featureMap);
         header.write(out);
         out.flush();

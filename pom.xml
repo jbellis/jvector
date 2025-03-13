@@ -50,6 +50,7 @@
         <module>jvector-tests</module>
         <module>jvector-multirelease</module>
         <module>jvector-examples</module>
+        <module>benchmarks-jmh</module>
     </modules>
     <build>
         <resources>

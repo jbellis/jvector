@@ -612,6 +612,26 @@ final class SimdOps {
         return new ArrayVectorFloat(res);
     }
 
+    static void minInPlace(ArrayVectorFloat v1, ArrayVectorFloat v2) {
+        if (v1.length() != v2.length()) {
+            throw new IllegalArgumentException("Vectors must have the same length");
+        }
+
+        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+
+        // Process the vectorized part
+        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
+            var a = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1.get(), i);
+            var b = FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2.get(), i);
+            a.min(b).intoArray(v1.get(), i);
+        }
+
+        // Process the tail
+        for (int i = vectorizedLength; i < v1.length(); i++) {
+            v1.set(i,  Math.min(v1.get(i), v2.get(i)));
+        }
+    }
+
     static float assembleAndSum(float[] data, int dataBase, ByteSequence<byte[]> baseOffsets) {
         return switch (PREFERRED_BIT_SIZE)
         {
@@ -1104,7 +1124,7 @@ final class SimdOps {
         float value2, diff;
         for (int i = vectorizedLength; i < quantizedVector.length(); i++) {
             value2 = Byte.toUnsignedInt(quantizedVector.get(i));
-            value2 = logisticScale * value2 + logisticBias;
+            value2 = Math.fma(logisticScale, value2, logisticBias);
             value2 = logitNQT(value2, invScaledAlpha, scaledX0);
             diff = vector.get(i) - value2;
             squaredSum += MathUtil.square(diff);

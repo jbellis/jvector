@@ -82,6 +82,9 @@ public interface VectorUtilSupport {
   /** @return a - b, element-wise, starting at aOffset and bOffset respectively */
   VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length);
 
+  /** Calculates the minimum value for every corresponding lane values in v1 and v2, in place (v1 will be modified) */
+  void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2);
+
   /**
    * Calculates the sum of sparse points in a vector.
    * <p>
@@ -300,4 +303,5 @@ public interface VectorUtilSupport {
    * @param nBits the number of bits per dimension
    */
   float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits);
+
 }

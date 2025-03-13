@@ -43,12 +43,14 @@ public class CommonHeader {
     public final int dimension;
     public final int entryNode;
     public final List<LayerInfo> layerInfo;
+    public final int idUpperBound;
 
-    CommonHeader(int version, int dimension, int entryNode, List<LayerInfo> layerInfo) {
+    CommonHeader(int version, int dimension, int entryNode, List<LayerInfo> layerInfo, int idUpperBound) {
         this.version = version;
         this.dimension = dimension;
         this.entryNode = entryNode;
         this.layerInfo = layerInfo;
+        this.idUpperBound = idUpperBound;
     }
 
     void write(RandomAccessWriter out) throws IOException {
@@ -62,6 +64,8 @@ public class CommonHeader {
         out.writeInt(entryNode);
         out.writeInt(layerInfo.get(0).degree);
         if (version >= 4) {
+            out.writeInt(idUpperBound);
+
             if (layerInfo.size() > V4_MAX_LAYERS) {
                 var msg = String.format("Number of layers %d exceeds maximum of %d", layerInfo.size(), V4_MAX_LAYERS);
                 throw new IllegalArgumentException(msg);
@@ -101,10 +105,12 @@ public class CommonHeader {
         int dimension = in.readInt();
         int entryNode = in.readInt();
         int maxDegree = in.readInt();
+        int idUpperBound = size;
         List<LayerInfo> layerInfo;
         if (version < 4) {
             layerInfo = List.of(new LayerInfo(size, maxDegree));
         } else {
+            idUpperBound = in.readInt();
             int numLayers = in.readInt();
             logger.debug("{} layers", numLayers);
             layerInfo = new ArrayList<>();
@@ -120,14 +126,18 @@ public class CommonHeader {
         }
         logger.debug("Common header finished reading at position {}", in.getPosition());
 
-        return new CommonHeader(version, dimension, entryNode, layerInfo);
+        return new CommonHeader(version, dimension, entryNode, layerInfo, idUpperBound);
     }
 
     int size() {
-        return ((version >= 3 ? 2 : 0) // v3: version + magic
-                + 4 // v2 fields
-                + (version >= 4 ? 1 + 2 * V4_MAX_LAYERS : 0)) // v4: layerinfo count + contents
-                * Integer.BYTES;
+        int size = 4;
+        if (version >= 3) {
+            size += 2;
+        }
+        if (version >= 4) {
+            size += 2 + 2 * V4_MAX_LAYERS;
+        }
+        return size * Integer.BYTES;;
     }
 
     @VisibleForTesting
