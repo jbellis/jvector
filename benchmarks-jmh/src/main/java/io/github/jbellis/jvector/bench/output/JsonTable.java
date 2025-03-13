@@ -12,13 +12,14 @@ public class JsonTable implements TableRepresentation {
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     @Override
-    public void addEntry(long elapsedSeconds, long qps, double meanLatency, double p999Latency, double meanVisited) {
+    public void addEntry(long elapsedSeconds, long qps, double meanLatency, double p999Latency, double meanVisited, double recallPercentage) {
         Map<String, Object> entry = new HashMap<>();
         entry.put("elapsed_seconds", elapsedSeconds);
         entry.put("qps", qps);
         entry.put("mean_latency_us", meanLatency);
         entry.put("p999_latency_us", p999Latency);
         entry.put("mean_visited", meanVisited);
+        entry.put("recall", String.format("%.2f%%", recallPercentage)); // Store as formatted string
         results.add(entry);
     }
 

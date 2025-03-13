@@ -34,11 +34,13 @@ public class RandomVectorsTabularBenchmark {
     private GraphIndexBuilder graphIndexBuilder;
     private GraphIndex graphIndex;
     private int originalDimension;
+    private long totalTransactions;
 
     private final AtomicLong transactionCount = new AtomicLong(0);
     private final AtomicLong totalLatency = new AtomicLong(0);
     private final Queue<Long> latencySamples = new ConcurrentLinkedQueue<>(); // Store latencies for P99.9
     private final Queue<Integer> visitedSamples = new ConcurrentLinkedQueue<>();
+    private final Queue<Long> recallSamples = new ConcurrentLinkedQueue<>();
     private ScheduledExecutorService scheduler;
     private long startTime;
 
@@ -68,7 +70,7 @@ public class RandomVectorsTabularBenchmark {
         }
 
         // wrap the raw vectors in a RandomAccessVectorValues
-        ravv = new ListRandomAccessVectorValues(new ArrayList<>(), originalDimension);
+        ravv = new ListRandomAccessVectorValues(baseVectors, originalDimension);
         // score provider using the raw, in-memory vectors
         BuildScoreProvider bsp = BuildScoreProvider.randomAccessScoreProvider(ravv, VectorSimilarityFunction.EUCLIDEAN);
 
@@ -83,18 +85,20 @@ public class RandomVectorsTabularBenchmark {
         transactionCount.set(0);
         totalLatency.set(0);
         latencySamples.clear();
+        visitedSamples.clear();
+        recallSamples.clear();
         startTime = System.currentTimeMillis();
         scheduler = Executors.newScheduledThreadPool(1);
+        totalTransactions = 0;
 
         scheduler.scheduleAtFixedRate(() -> {
             long elapsed = (System.currentTimeMillis() - startTime) / 1000;
             long count = transactionCount.getAndSet(0);
-            long latency = totalLatency.getAndSet(0);
-            double meanLatency = (count > 0) ? (double) latency / count : 0.0;
+            double meanLatency = (totalTransactions > 0) ? (double) totalLatency.get() / totalTransactions : 0.0;
             double p999Latency = calculateP999Latency();
-            double meanVisited = (count > 0) ? (double) visitedSamples.stream().mapToInt(Integer::intValue).sum() / count : 0.0;
-
-            tableRepresentation.addEntry(elapsed, count, meanLatency, p999Latency, meanVisited);
+            double meanVisited = (totalTransactions > 0) ? (double) visitedSamples.stream().mapToInt(Integer::intValue).sum() / totalTransactions : 0.0;
+            double recall = (totalTransactions > 0) ? (double) recallSamples.stream().mapToLong(Long::longValue).sum() / totalTransactions : 0.0;
+            tableRepresentation.addEntry(elapsed, count, meanLatency, p999Latency, meanVisited, recall);
         }, 1, 1, TimeUnit.SECONDS);
     }
 
@@ -112,8 +116,12 @@ public class RandomVectorsTabularBenchmark {
         List<Long> sortedLatencies = new ArrayList<>(latencySamples);
         Collections.sort(sortedLatencies);
 
-        int index = (int) Math.ceil(sortedLatencies.size() * 0.999) - 1;
-        return sortedLatencies.get(Math.max(index, 0));
+        int p_count = sortedLatencies.size() / 1000;
+        int start_index = Math.max(0, sortedLatencies.size() - p_count);
+        int end_index = sortedLatencies.size() - 1;
+        List<Long> subList = sortedLatencies.subList(start_index, end_index);
+        long total = subList.stream().mapToLong(Long::longValue).sum();
+        return (double) total / p_count;
     }
 
     @TearDown
@@ -143,5 +151,7 @@ public class RandomVectorsTabularBenchmark {
         transactionCount.incrementAndGet();
         totalLatency.addAndGet(durationMicro);
         latencySamples.add(durationMicro);
+        totalTransactions++;
     }
+
 }

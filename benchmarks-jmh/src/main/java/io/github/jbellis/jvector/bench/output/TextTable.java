@@ -8,13 +8,19 @@ public class TextTable implements TableRepresentation {
 
     public TextTable() {
         resultsTable.add("\n");
-        resultsTable.add(String.format("%-10s | %-10s | %-15s | %-15s | %-15s", "Elapsed(s)", "QPS", "Mean Latency (µs)", "P99.9 Latency (µs)", "Mean Visited"));
-        resultsTable.add("-----------------------------------------------------------------------");
+        resultsTable.add(String.format(
+                "%-12s | %-12s | %-18s | %-18s | %-15s | %-12s",
+                "Elapsed(s)", "QPS", "Mean Latency (µs)", "P99.9 Latency (µs)", "Mean Visited", "Recall (%)"
+        ));
+        resultsTable.add("-----------------------------------------------------------------------------------------------");
     }
 
     @Override
-    public void addEntry(long elapsedSeconds, long qps, double meanLatency, double p999Latency, double meanVisited) {
-        resultsTable.add(String.format("%-10d | %-10d | %-15.3f | %-15.3f | %-15.3f", elapsedSeconds, qps, meanLatency, p999Latency, meanVisited));
+    public void addEntry(long elapsedSeconds, long qps, double meanLatency, double p999Latency, double meanVisited, double recallPercentage) {
+        resultsTable.add(String.format(
+                "%-12d | %-12d | %-18.3f | %-18.3f | %-15.3f | %10.2f%%",
+                elapsedSeconds, qps, meanLatency, p999Latency, meanVisited, recallPercentage*100
+        ));
     }
 
     @Override
