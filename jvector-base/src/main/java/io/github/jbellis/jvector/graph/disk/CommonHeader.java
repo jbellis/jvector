@@ -18,7 +18,10 @@ package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.annotations.VisibleForTesting;
 import io.github.jbellis.jvector.disk.RandomAccessReader;
+import io.github.jbellis.jvector.disk.RandomAccessWriter;
 import io.github.jbellis.jvector.graph.GraphIndex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -32,6 +35,10 @@ import java.util.stream.IntStream;
  * Base header for OnDiskGraphIndex functionality.
  */
 public class CommonHeader {
+    private static final Logger logger = LoggerFactory.getLogger(CommonHeader.class);
+
+    private static final int V4_MAX_LAYERS = 32;
+
     public final int version;
     public final int dimension;
     public final int entryNode;
@@ -44,11 +51,8 @@ public class CommonHeader {
         this.layerInfo = layerInfo;
     }
 
-    public CommonHeader(int version, GraphIndex graph, int entryNode, int dimension) {
-        this(version, dimension, entryNode, LayerInfo.fromGraph(graph));
-    }
-
-    void write(DataOutput out) throws IOException {
+    void write(RandomAccessWriter out) throws IOException {
+        logger.debug("Writing common header at position {}", out.position());
         if (version >= 3) {
             out.writeInt(OnDiskGraphIndex.MAGIC);
             out.writeInt(version);
@@ -58,52 +62,72 @@ public class CommonHeader {
         out.writeInt(entryNode);
         out.writeInt(layerInfo.get(0).degree);
         if (version >= 4) {
+            if (layerInfo.size() > V4_MAX_LAYERS) {
+                var msg = String.format("Number of layers %d exceeds maximum of %d", layerInfo.size(), V4_MAX_LAYERS);
+                throw new IllegalArgumentException(msg);
+            }
+            logger.debug("Writing {} layers", layerInfo.size());
             out.writeInt(layerInfo.size());
+            // Write actual layer info
             for (LayerInfo info : layerInfo) {
                 out.writeInt(info.size);
                 out.writeInt(info.degree);
+            }
+            // Pad remaining entries with zeros
+            for (int i = layerInfo.size(); i < V4_MAX_LAYERS; i++) {
+                out.writeInt(0); // size
+                out.writeInt(0); // degree
             }
         } else {
             if (layerInfo.size() > 1) {
                 throw new IllegalArgumentException("Layer info is not supported in version " + version);
             }
         }
+        logger.debug("Common header finished writing at position {}", out.position());
     }
 
-    static CommonHeader load(RandomAccessReader reader) throws IOException {
-        int maybeMagic = reader.readInt();
+    static CommonHeader load(RandomAccessReader in) throws IOException {
+        logger.debug("Loading common header at position {}", in.getPosition());
+        int maybeMagic = in.readInt();
         int version;
         int size;
         if (maybeMagic == OnDiskGraphIndex.MAGIC) {
-            version = reader.readInt();
-            size = reader.readInt();
+            version = in.readInt();
+            size = in.readInt();
         } else {
             version = 2;
             size = maybeMagic;
         }
-        int dimension = reader.readInt();
-        int entryNode = reader.readInt();
-        int maxDegree = reader.readInt();
+        int dimension = in.readInt();
+        int entryNode = in.readInt();
+        int maxDegree = in.readInt();
         List<LayerInfo> layerInfo;
         if (version < 4) {
             layerInfo = List.of(new LayerInfo(size, maxDegree));
         } else {
-            int numLayers = reader.readInt();
+            int numLayers = in.readInt();
+            logger.debug("{} layers", numLayers);
             layerInfo = new ArrayList<>();
             for (int i = 0; i < numLayers; i++) {
-                LayerInfo info = new LayerInfo(reader.readInt(), reader.readInt());
+                LayerInfo info = new LayerInfo(in.readInt(), in.readInt());
                 layerInfo.add(info);
             }
+            // Skip over remaining padding entries
+            for (int i = numLayers; i < V4_MAX_LAYERS; i++) {
+                in.readInt();
+                in.readInt();
+            }
         }
+        logger.debug("Common header finished reading at position {}", in.getPosition());
 
         return new CommonHeader(version, dimension, entryNode, layerInfo);
     }
 
     int size() {
-        return ((version >= 3 ? 2 : 0) // version + magic
-                + 4 // v3 fields
-                + (version >= 4 ? 1 + 2 * layerInfo.size() : 0)) // layerinfo count
-                * Integer.BYTES; // layerinfo count + contents
+        return ((version >= 3 ? 2 : 0) // v3: version + magic
+                + 4 // v2 fields
+                + (version >= 4 ? 1 + 2 * V4_MAX_LAYERS : 0)) // v4: layerinfo count + contents
+                * Integer.BYTES;
     }
 
     @VisibleForTesting
@@ -116,9 +140,10 @@ public class CommonHeader {
             this.degree = degree;
         }
 
-        public static List<LayerInfo> fromGraph(GraphIndex graph) {
+        public static List<LayerInfo> fromGraph(GraphIndex graph, OrdinalMapper mapper) {
+            int l0Size = mapper.maxOrdinal() + 1;
             return IntStream.range(0, graph.getMaxLevel() + 1)
-                    .mapToObj(i -> new LayerInfo(graph.size(i), graph.getDegree(i)))
+                    .mapToObj(i -> new LayerInfo(i == 0 ? l0Size : graph.size(i), graph.getDegree(i)))
                     .collect(Collectors.toList());
         }
 

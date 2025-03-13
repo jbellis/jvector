@@ -90,7 +90,8 @@ public class OnDiskGraphIndexWriter implements Closeable {
         this.startOffset = startOffset;
 
         // create a mock Header to determine the correct size
-        var ch = new CommonHeader(version, graph, 0, dimension);
+        var layerInfo = CommonHeader.LayerInfo.fromGraph(graph, ordinalMapper);
+        var ch = new CommonHeader(version, dimension, 0, layerInfo);
         var placeholderHeader = new Header(ch, featureMap);
         this.headerSize = placeholderHeader.size();
     }
@@ -187,7 +188,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
         }
         if (ordinalMapper.maxOrdinal() < graph.size() - 1) {
             var msg = String.format("Ordinal mapper from [0..%d] does not cover all nodes in the graph of size %d",
-                                    ordinalMapper.maxOrdinal(), graph.size());
+                    ordinalMapper.maxOrdinal(), graph.size());
             throw new IllegalStateException(msg);
         }
 
@@ -228,7 +229,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             var neighbors = view.getNeighborsIterator(0, originalOrdinal);
             if (neighbors.size() > graph.maxDegree()) {
                 var msg = String.format("Node %d has more neighbors %d than the graph's max degree %d -- run Builder.cleanup()!",
-                                        originalOrdinal, neighbors.size(), graph.maxDegree());
+                        originalOrdinal, neighbors.size(), graph.maxDegree());
                 throw new IllegalStateException(msg);
             }
             // write neighbors list
@@ -319,10 +320,11 @@ public class OnDiskGraphIndexWriter implements Closeable {
     public synchronized void writeHeader() throws IOException {
         // graph-level properties
         out.seek(startOffset);
+        var layerInfo = CommonHeader.LayerInfo.fromGraph(graph, ordinalMapper);
         var commonHeader = new CommonHeader(version,
-                                            graph,
-                                            ordinalMapper.oldToNew(view.entryNode().node),
-                                            dimension);
+                dimension,
+                ordinalMapper.oldToNew(view.entryNode().node),
+                layerInfo);
         var header = new Header(commonHeader, featureMap);
         header.write(out);
         out.flush();
@@ -425,6 +427,7 @@ public class OnDiskGraphIndexWriter implements Closeable {
             }
 
             if (ordinalMapper == null) {
+                ordinalMapper = new OrdinalMapper.MapMapper(sequentialRenumbering(graphIndex));
                 ordinalMapper = new OrdinalMapper.MapMapper(sequentialRenumbering(graphIndex));
             }
             return new OnDiskGraphIndexWriter(out, version, startOffset, graphIndex, ordinalMapper, dimension, features);
