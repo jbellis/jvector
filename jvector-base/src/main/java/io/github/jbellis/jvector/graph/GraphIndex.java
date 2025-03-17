@@ -152,7 +152,7 @@ public interface GraphIndex extends AutoCloseable, Accountable {
         sb.append("\n");
 
         try (var view = graph.getView()) {
-            for (int level = 0; level < graph.getMaxLevel(); level++) {
+            for (int level = 0; level <= graph.getMaxLevel(); level++) {
                 sb.append(String.format("# Level %d\n", level));
                 NodesIterator it = graph.getNodes(level);
                 while (it.hasNext()) {
