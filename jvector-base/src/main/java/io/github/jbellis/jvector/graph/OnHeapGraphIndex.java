@@ -307,6 +307,11 @@ public class OnHeapGraphIndex implements GraphIndex {
 
     @Override
     public int getMaxLevel() {
+        for (int lvl = 0; lvl < layers.size(); lvl++) {
+            if (layers.get(lvl).size() == 0) {
+                return lvl - 1;
+            }
+        }
         return layers.size() - 1;
     }
 
