@@ -587,7 +587,7 @@ public class GraphIndexBuilder implements Closeable {
                         // doing actual sampling-without-replacement is expensive so we'll loop a fixed number of times instead
                         for (int i = 0; i < 2 * graph.getDegree(level); i++) {
                             int randomNode = liveNodes.get(R.nextInt(liveNodes.size()));
-                            if (randomNode != node && !candidates.contains(randomNode)) {
+                            if (randomNode != node && !candidates.contains(randomNode) && graph.layers.get(level).contains(randomNode)) {
                                 float score = sf.similarityTo(randomNode);
                                 candidates.insertSorted(randomNode, score);
                             }
@@ -610,7 +610,7 @@ public class GraphIndexBuilder implements Closeable {
             int newLevel = graph.getMaxLevel();
             int newEntry = -1;
             outer:
-            while (newLevel > 0) {
+            while (newLevel >= 0) {
                 for (var it = graph.getNodes(newLevel); it.hasNext(); ){
                     int i = it.nextInt();
                     if (!toDelete.get(i)) {
