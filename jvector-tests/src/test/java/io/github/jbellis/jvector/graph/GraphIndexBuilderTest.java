@@ -61,8 +61,6 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
         testRescore(true);
     }
 
-
-    @Test 
     public void testRescore(boolean addHierarchy) {
         // Create test vectors where each vector is [node_id, 0]
         var vectors = new ArrayList<VectorFloat<?>>();
