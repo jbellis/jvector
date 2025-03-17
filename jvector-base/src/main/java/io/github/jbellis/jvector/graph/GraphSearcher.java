@@ -182,7 +182,7 @@ public class GraphSearcher implements Closeable {
         int numVisited = 0;
         for (int lvl = entry.level; lvl > 0; lvl--) {
             // Search this layer with minimal parameters since we just want the best candidate
-            numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl, view.liveNodes());
+            numVisited += searchOneLayer(scoreProvider, 1, 0.0f, lvl, Bits.ALL);
             assert approximateResults.size() == 1 : approximateResults.size();
             setEntryPointsFromPreviousLayer();
         }
