@@ -66,7 +66,7 @@ public class Hdf5VectorsTabularBenchmark {
     private final AtomicInteger testCycle = new AtomicInteger(0);
     private final Queue<Long> latencySamples = new ConcurrentLinkedQueue<>(); // Store latencies for P99.9
     private final Queue<Integer> visitedSamples = new ConcurrentLinkedQueue<>();
-    private final Queue<Long> recallSamples = new ConcurrentLinkedQueue<>();
+    private final Queue<Double> recallSamples = new ConcurrentLinkedQueue<>();
     private ScheduledExecutorService scheduler;
     private long startTime;
 
@@ -112,7 +112,7 @@ public class Hdf5VectorsTabularBenchmark {
             double meanLatency = (totalTransactions > 0) ? (double) totalLatency.get() / totalTransactions : 0.0;
             double p999Latency = calculateP999Latency();
             double meanVisited = (totalTransactions > 0) ? (double) visitedSamples.stream().mapToInt(Integer::intValue).sum() / totalTransactions : 0.0;
-            double recall = (totalTransactions > 0) ? (double) recallSamples.stream().mapToLong(Long::longValue).sum() / totalTransactions : 0.0;
+            double recall = (totalTransactions > 0) ? recallSamples.stream().mapToDouble(Double::doubleValue).sum() / totalTransactions : 0.0;
             tableRepresentation.addEntry(elapsed, count, meanLatency, p999Latency, meanVisited, recall);
             tableRepresentation.print();
         }, 1, 1, TimeUnit.SECONDS);
@@ -182,7 +182,7 @@ public class Hdf5VectorsTabularBenchmark {
         long n = Arrays.stream(searchResult.getNodes())
                 .filter(ns -> gt.contains(ns.node))
                 .count();
-        recallSamples.add(n / (searchResult.getNodes().length));
+        recallSamples.add(((double)n / (searchResult.getNodes().length)));
     }
 
 }
