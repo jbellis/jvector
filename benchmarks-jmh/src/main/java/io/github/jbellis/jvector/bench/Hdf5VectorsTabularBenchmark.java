@@ -71,7 +71,7 @@ public class Hdf5VectorsTabularBenchmark {
     private ScheduledExecutorService scheduler;
     private long startTime;
 
-    private final TableRepresentation tableRepresentation = new PersistentTextTable();
+    private final TableRepresentation tableRepresentation = new TextTable();
 
     @Setup
     public void setup() throws IOException {
