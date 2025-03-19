@@ -15,6 +15,7 @@
  */
 package io.github.jbellis.jvector.bench;
 
+import io.github.jbellis.jvector.bench.output.PersistentTextTable;
 import io.github.jbellis.jvector.bench.output.TableRepresentation;
 import io.github.jbellis.jvector.bench.output.TextTable;
 import io.github.jbellis.jvector.example.util.DataSet;
@@ -70,7 +71,7 @@ public class Hdf5VectorsTabularBenchmark {
     private ScheduledExecutorService scheduler;
     private long startTime;
 
-    private final TableRepresentation tableRepresentation = new TextTable(); // Keep TextTable only for now
+    private final TableRepresentation tableRepresentation = new PersistentTextTable();
 
     @Setup
     public void setup() throws IOException {
@@ -114,7 +115,7 @@ public class Hdf5VectorsTabularBenchmark {
             double meanVisited = (totalTransactions > 0) ? (double) visitedSamples.stream().mapToInt(Integer::intValue).sum() / totalTransactions : 0.0;
             double recall = (totalTransactions > 0) ? recallSamples.stream().mapToDouble(Double::doubleValue).sum() / totalTransactions : 0.0;
             tableRepresentation.addEntry(elapsed, count, meanLatency, p999Latency, meanVisited, recall);
-            tableRepresentation.print();
+            //tableRepresentation.print();
         }, 1, 1, TimeUnit.SECONDS);
     }
 
@@ -140,6 +141,7 @@ public class Hdf5VectorsTabularBenchmark {
         graphIndexBuilder.close();
         scheduler.shutdown();
         tableRepresentation.print();
+        tableRepresentation.tearDown();
     }
 
     @Benchmark
@@ -147,7 +149,6 @@ public class Hdf5VectorsTabularBenchmark {
         long start = System.nanoTime();
         int offset = testCycle.getAndIncrement() % queryVectors.size();
         var queryVector = queryVectors.get(offset);
-        // Your benchmark code here
         var searchResult = GraphSearcher.search(queryVector,
                 10, // number of results
                 ravv, // vectors we're searching, used for scoring
