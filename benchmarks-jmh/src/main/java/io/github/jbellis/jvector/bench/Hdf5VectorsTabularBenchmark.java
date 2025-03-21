@@ -15,9 +15,7 @@
  */
 package io.github.jbellis.jvector.bench;
 
-import io.github.jbellis.jvector.bench.output.PersistentTextTable;
-import io.github.jbellis.jvector.bench.output.TableRepresentation;
-import io.github.jbellis.jvector.bench.output.TextTable;
+import io.github.jbellis.jvector.bench.output.*;
 import io.github.jbellis.jvector.example.util.DataSet;
 import io.github.jbellis.jvector.example.util.DownloadHelper;
 import io.github.jbellis.jvector.example.util.Hdf5Loader;
@@ -53,6 +51,9 @@ public class Hdf5VectorsTabularBenchmark {
     @Param({"glove-100-angular.hdf5"})  // default value
     String hdf5Filename;
 
+    @Param({"TEXT"}) // Default value, can be overridden via CLI
+    String outputFormat;
+
     private RandomAccessVectorValues ravv;
     private List<VectorFloat<?>> baseVectors;
     private List<VectorFloat<?>> queryVectors;
@@ -71,7 +72,25 @@ public class Hdf5VectorsTabularBenchmark {
     private ScheduledExecutorService scheduler;
     private long startTime;
 
-    private final TableRepresentation tableRepresentation = new TextTable();
+    private TableRepresentation tableRepresentation;
+
+    private TableRepresentation getTableRepresentation() {
+        if (outputFormat == null) {
+            outputFormat = "TEXT";
+        }
+        switch (outputFormat) {
+            case "TEXT":
+                return new TextTable();
+            case "JSON":
+                return new JsonTable();
+            case "SQLITE":
+                return new SqliteTable();
+            case "PERSISTENT_TEXT":
+                return new PersistentTextTable();
+            default:
+                throw new IllegalArgumentException("Invalid output format: " + outputFormat);
+        }
+    }
 
     @Setup
     public void setup() throws IOException {
@@ -80,7 +99,7 @@ public class Hdf5VectorsTabularBenchmark {
         baseVectors = dataSet.baseVectors;
         queryVectors = dataSet.queryVectors;
         groundTruth = dataSet.groundTruth;
-
+        tableRepresentation = getTableRepresentation();
         log.info("base vectors size: {}, query vectors size: {}, loaded, dimensions {}",
                 baseVectors.size(), queryVectors.size(), baseVectors.get(0).length());
         originalDimension = baseVectors.get(0).length();
@@ -115,7 +134,6 @@ public class Hdf5VectorsTabularBenchmark {
             double meanVisited = (totalTransactions > 0) ? (double) visitedSamples.stream().mapToInt(Integer::intValue).sum() / totalTransactions : 0.0;
             double recall = (totalTransactions > 0) ? recallSamples.stream().mapToDouble(Double::doubleValue).sum() / totalTransactions : 0.0;
             tableRepresentation.addEntry(elapsed, count, meanLatency, p999Latency, meanVisited, recall);
-            //tableRepresentation.print();
         }, 1, 1, TimeUnit.SECONDS);
     }
 
