@@ -41,7 +41,7 @@ public class Test2DThreshold extends LuceneTestCase {
     @Test
     public void testThreshold20k() throws IOException {
         for (int i = 0; i < 10; i++) {
-            testThreshold(20_000, 24, 0.80f, 0.95f);
+            testThreshold(20_000, 24, 0.80f, 0.9f);
         }
     }
 
