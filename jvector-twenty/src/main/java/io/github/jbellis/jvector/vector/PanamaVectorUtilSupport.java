@@ -1125,13 +1125,13 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     static final FloatVector const1f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 1.f);
     static final FloatVector const05f = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, 0.5f);
 
+    // Explicit target species avoid generic conversion fallbacks and temporary vector arrays.
     FloatVector logisticNQT(FloatVector vector, float alpha, float x0) {
         FloatVector temp = vector.fma(alpha, -alpha * x0);
         VectorMask<Float> isPositive = temp.test(VectorOperators.IS_NEGATIVE).not();
-        IntVector p = temp.add(1, isPositive)
-                .convert(VectorOperators.F2I, 0)
-                .reinterpretAsInts();
-        FloatVector e = p.convert(VectorOperators.I2F, 0).reinterpretAsFloats();
+        IntVector p = (IntVector) temp.add(1, isPositive)
+                .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0);
+        FloatVector e = (FloatVector) p.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
         IntVector m = temp.sub(e).fma(0.5f, 1).reinterpretAsInts();
 
         temp = m.add(p.lanewise(VectorOperators.LSHL, 23)).reinterpretAsFloats();  // temp = m * 2^p
@@ -1151,10 +1151,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         FloatVector z = vector.div(const1f.sub(vector));
 
         IntVector temp = z.reinterpretAsInts();
-        FloatVector p = temp.and(0x7f800000)
+        FloatVector p = (FloatVector) temp.and(0x7f800000)
                 .lanewise(VectorOperators.LSHR, 23).sub(128)
-                .convert(VectorOperators.I2F, 0)
-                .reinterpretAsFloats();
+                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
         FloatVector m = temp.lanewise(VectorOperators.AND, 0x007fffff).add(0x3f800000).reinterpretAsFloats();
 
         return m.add(p).fma(inverseAlpha, x0);
@@ -1190,11 +1189,10 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
          * With part=3, we shift by 24 bits and then extract
          *      Int0\Byte3, Int1\Byte3, etc.
          */
-        var arr = bytes.reinterpretAsInts()
+        FloatVector arr = (FloatVector) bytes.reinterpretAsInts()
                 .lanewise(VectorOperators.LSHR, 8 * part)
                 .lanewise(VectorOperators.AND, 0xff)
-                .convert(VectorOperators.I2F, 0)
-                .reinterpretAsFloats();
+                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
 
         arr = arr.fma(logisticScale, logisticBias);
         return logitNQT(arr, inverseAlpha, x0);
@@ -1252,11 +1250,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             var arr = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
             var recArr = logisticNQT(arr, scaledAlpha, scaledX0);
             recArr = recArr.sub(logisticBias).mul(invLogisticScale);
-            recArr = recArr.add(const05f)
-                    .convert(VectorOperators.F2I, 0)
-                    .reinterpretAsInts()
-                    .convert(VectorOperators.I2F, 0)
-                    .reinterpretAsFloats();
+            IntVector rounded = (IntVector) recArr.add(const05f)
+                    .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0);
+            recArr = (FloatVector) rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
             recArr = recArr.fma(logisticScale, logisticBias);
             recArr = logitNQT(recArr, invScaledAlpha, scaledX0);
 
