@@ -834,54 +834,35 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         final int M          = subspaceCount;
 
         int[] convOffsets = scratchInt256.get();
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
-        FloatVector scale = FloatVector.zero(FloatVector.SPECIES_256).addIndex(blockSize);
-        FloatVector kvec = FloatVector.broadcast(FloatVector.SPECIES_256, k);
-        FloatVector onevec = FloatVector.broadcast(FloatVector.SPECIES_256, 1);
-        FloatVector twovec = FloatVector.broadcast(FloatVector.SPECIES_256, 0.5f);
-
-
+        byte[] codes1 = (byte[]) baseOffsets1.get();
+        byte[] codes2 = (byte[]) baseOffsets2.get();
+        float[] partials = ((ArrayVectorFloat) data).get();
+        int start1 = baseOffsets1.offset() + baseOffsetsOffset1;
+        int start2 = baseOffsets2.offset() + baseOffsetsOffset2;
+        IntVector scale = IntVector.zero(IntVector.SPECIES_256).addIndex(blockSize);
+        // Retain the concrete vector class so C2 can eliminate intermediate vector boxes.
+        // Intrinsifying the arithmetic alone does not ensure allocation-free execution.
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_256));
         for (int i = 0; i + LANES <= M; i += LANES) {
-
-            FloatVector c1v = fromByteSequence(ByteVector.SPECIES_64, baseOffsets1, i + baseOffsets1.offset() + baseOffsetsOffset1)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
-                    .convertShape(VectorOperators.I2F, FSPECIES, 0)
-                    .reinterpretAsFloats();
-
-            FloatVector c2v = fromByteSequence(ByteVector.SPECIES_64, baseOffsets2, i + baseOffsets2.offset() + baseOffsetsOffset2)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
-                    .convertShape(VectorOperators.I2F, FSPECIES, 0)
-                    .reinterpretAsFloats();
-
-            // b) r = min(c1,c2), c = max(c1,c2)
-            var r = c1v.min(c2v);
-            var c = c1v.max(c2v);
-
-            // c) offsetRow = r*k - (r*(r-1))/2
-            var rk          = r.mul(kvec);
-            var triangular  = r.mul(r.sub(onevec)).mul(twovec);
-            var offsetRow   = rk.sub(triangular);
-
-            // d) idxInBlock = offsetRow + (c - r) + (i * blockSize)
-            offsetRow.add(c.sub(r)).add(scale)
-                    .convertShape(VectorOperators.F2I, IntVector.SPECIES_256, 0)
-                    .reinterpretAsInts()
-                    .intoArray(convOffsets, 0);
-
-            // e) gather LANES floats from `partials` at those indices
-            FloatVector chunk = fromVectorFloat(FSPECIES, data, i * blockSize, convOffsets, 0);
-
-            // f) horizontal sum the chunk and add to our scalar accumulator
-            sum = sum.add(chunk);
+            IntVector c1 = ((IntVector) ByteVector.fromArray(ByteVector.SPECIES_64, codes1, start1 + i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)).and(0xff);
+            IntVector c2 = ((IntVector) ByteVector.fromArray(ByteVector.SPECIES_64, codes2, start2 + i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)).and(0xff);
+            IntVector lo = c1.min(c2);
+            IntVector hi = c1.max(c2);
+            // Packed upper-triangular table: lo * k - lo * (lo - 1) / 2 + hi - lo.
+            // Codes are unsigned bytes, so all intermediate indices fit exactly in int.
+            IntVector triangular = lo.mul(lo.sub(1)).lanewise(VectorOperators.LSHR, 1);
+            lo.mul(k).sub(triangular).add(hi.sub(lo)).add(scale).intoArray(convOffsets, 0);
+            FloatVector chunk = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, partials, i * blockSize, convOffsets, 0));
+            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(chunk));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
 
-        //
-        // 3) Remainder: fall back to your scalar code for i % LANES != 0
-        //
+        // Score subspaces remaining after the full SIMD groups.
         for (int i = (M / LANES) * LANES; i < M; i++) {
             int c1 = Byte.toUnsignedInt(baseOffsets1.get(i + baseOffsetsOffset1));
             int c2 = Byte.toUnsignedInt(baseOffsets2.get(i + baseOffsetsOffset2));
@@ -914,52 +895,35 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         final int M          = subspaceCount;
 
         int[] convOffsets = scratchInt512.get();
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
-        FloatVector scale = FloatVector.zero(FloatVector.SPECIES_512).addIndex(blockSize);
-        FloatVector kvec = FloatVector.broadcast(FloatVector.SPECIES_512, k);
-        FloatVector onevec = FloatVector.broadcast(FloatVector.SPECIES_512, 1);
-        FloatVector twovec = FloatVector.broadcast(FloatVector.SPECIES_512, 0.5f);
-
+        byte[] codes1 = (byte[]) baseOffsets1.get();
+        byte[] codes2 = (byte[]) baseOffsets2.get();
+        float[] partials = ((ArrayVectorFloat) data).get();
+        int start1 = baseOffsets1.offset() + baseOffsetsOffset1;
+        int start2 = baseOffsets2.offset() + baseOffsetsOffset2;
+        IntVector scale = IntVector.zero(IntVector.SPECIES_512).addIndex(blockSize);
+        // Retain the concrete vector class so C2 can eliminate intermediate vector boxes.
+        // Intrinsifying the arithmetic alone does not ensure allocation-free execution.
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_512));
         for (int i = 0; i + LANES <= M; i += LANES) {
-            FloatVector c1v = fromByteSequence(ByteVector.SPECIES_128, baseOffsets1, i + baseOffsets1.offset() + baseOffsetsOffset1)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
-                    .convertShape(VectorOperators.I2F, FSPECIES, 0)
-                    .reinterpretAsFloats();
-
-            FloatVector c2v = fromByteSequence(ByteVector.SPECIES_128, baseOffsets2, i + baseOffsets2.offset() + baseOffsetsOffset2)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
-                    .convertShape(VectorOperators.I2F, FSPECIES, 0)
-                    .reinterpretAsFloats();
-
-            // b) r = min(c1,c2), c = max(c1,c2)
-            var r = c1v.min(c2v);
-            var c = c1v.max(c2v);
-
-            // c) offsetRow = r*k - (r*(r-1))/2
-            var rk          = r.mul(kvec);
-            var triangular  = r.mul(r.sub(onevec)).mul(twovec);
-            var offsetRow   = rk.sub(triangular);
-
-            // d) idxInBlock = offsetRow + (c - r) + (i * blockSize)
-            offsetRow.add(c.sub(r)).add(scale)
-                    .convertShape(VectorOperators.F2I, IntVector.SPECIES_512, 0)
-                    .reinterpretAsInts()
-                    .intoArray(convOffsets, 0);
-
-            // e) gather LANES floats from `partials` at those indices
-            FloatVector chunk = fromVectorFloat(FSPECIES, data, i * blockSize, convOffsets, 0);
-
-            // f) horizontal sum the chunk and add to our scalar accumulator
-            sum = sum.add(chunk);
+            IntVector c1 = ((IntVector) ByteVector.fromArray(ByteVector.SPECIES_128, codes1, start1 + i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)).and(0xff);
+            IntVector c2 = ((IntVector) ByteVector.fromArray(ByteVector.SPECIES_128, codes2, start2 + i)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)).and(0xff);
+            IntVector lo = c1.min(c2);
+            IntVector hi = c1.max(c2);
+            // Packed upper-triangular table: lo * k - lo * (lo - 1) / 2 + hi - lo.
+            // Codes are unsigned bytes, so all intermediate indices fit exactly in int.
+            IntVector triangular = lo.mul(lo.sub(1)).lanewise(VectorOperators.LSHR, 1);
+            lo.mul(k).sub(triangular).add(hi.sub(lo)).add(scale).intoArray(convOffsets, 0);
+            FloatVector chunk = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_512, partials, i * blockSize, convOffsets, 0));
+            sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(chunk));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
 
-        //
-        // 3) Remainder: fall back to your scalar code for i % LANES != 0
-        //
+        // Score subspaces remaining after the full SIMD groups.
         for (int i = (M / LANES) * LANES; i < M; i++) {
             int c1 = Byte.toUnsignedInt(baseOffsets1.get(i + baseOffsetsOffset1));
             int c2 = Byte.toUnsignedInt(baseOffsets2.get(i + baseOffsetsOffset2));
