@@ -1148,15 +1148,25 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     // Explicit target species avoid generic conversion fallbacks and temporary vector arrays.
     FloatVector logisticNQT(FloatVector vector, float alpha, float x0) {
-        FloatVector temp = vector.fma(alpha, -alpha * x0);
-        VectorMask<Float> isPositive = temp.test(VectorOperators.IS_NEGATIVE).not();
-        IntVector p = (IntVector) temp.add(1, isPositive)
-                .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0);
-        FloatVector e = (FloatVector) p.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
-        IntVector m = temp.sub(e).fma(0.5f, 1).reinterpretAsInts();
-
-        temp = m.add(p.lanewise(VectorOperators.LSHL, 23)).reinterpretAsFloats();  // temp = m * 2^p
-        return temp.div(temp.add(1));
+        // Reuse class references to keep this concrete conversion chain small enough to inline.
+        var floatType = FloatVector.SPECIES_PREFERRED.vectorType();
+        var intType = IntVector.SPECIES_PREFERRED.vectorType();
+        var maskType = FloatVector.SPECIES_PREFERRED.maskType();
+        vector = (FloatVector) floatType.cast(vector);
+        FloatVector temp = (FloatVector) floatType.cast(vector.fma(alpha, -alpha * x0));
+        VectorMask<Float> isNegative = maskType.cast(temp.test(VectorOperators.IS_NEGATIVE));
+        VectorMask<Float> isPositive = maskType.cast(isNegative.not());
+        FloatVector roundedInput = (FloatVector) floatType.cast(temp.add(1, isPositive));
+        IntVector p = (IntVector) intType.cast(roundedInput.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+        FloatVector e = (FloatVector) floatType.cast(p.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+        FloatVector fraction = (FloatVector) floatType.cast(temp.sub(e));
+        fraction = (FloatVector) floatType.cast(fraction.fma(0.5f, 1));
+        IntVector m = (IntVector) intType.cast(fraction.reinterpretAsInts());
+        IntVector exponent = (IntVector) intType.cast(p.lanewise(VectorOperators.LSHL, 23));
+        m = (IntVector) intType.cast(m.add(exponent));
+        temp = (FloatVector) floatType.cast(m.reinterpretAsFloats()); // temp = m * 2^p
+        FloatVector denominator = (FloatVector) floatType.cast(temp.add(1));
+        return (FloatVector) floatType.cast(temp.div(denominator));
     }
 
     float logisticNQT(float value, float alpha, float x0) {
@@ -1230,7 +1240,11 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-        final var mask = ByteVector.SPECIES_PREFERRED.indexInRange(0, FloatVector.SPECIES_PREFERRED.length());
+        // Match the byte store width to the converted float lane count.
+        final var byteSpecies = FloatVector.SPECIES_PREFERRED.length() > 8
+                ? ByteVector.SPECIES_128 : ByteVector.SPECIES_64;
+        final float[] values = ((ArrayVectorFloat) vector).get();
+        final byte[] output = ((ArrayByteSequence) destination).get();
 
         var delta = maxValue - minValue;
         var scaledAlpha = alpha / delta;
@@ -1239,14 +1253,21 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         var invLogisticScale = 255 / (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias);
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var arr = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
-            arr = logisticNQT(arr, scaledAlpha, scaledX0);
-            arr = arr.sub(logisticBias).mul(invLogisticScale);
-            var bytes = arr.add(const05f)
-                    .convertShape(VectorOperators.F2B, ByteVector.SPECIES_PREFERRED, 0)
-                    .reinterpretAsBytes();
-
-            intoByteSequence(bytes, destination, i, mask);
+            FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, values, i));
+            arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logisticNQT(arr, scaledAlpha, scaledX0));
+            arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(logisticBias));
+            arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.mul(invLogisticScale));
+            arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.add(const05f));
+            // Java float-to-byte conversion narrows through int. Keep both SIMD steps explicit.
+            IntVector integers = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(
+                    arr.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+            ByteVector bytes = (ByteVector) byteSpecies.vectorType().cast(
+                    integers.convertShape(VectorOperators.I2B, byteSpecies, 0));
+            if (FloatVector.SPECIES_PREFERRED.length() == byteSpecies.length()) {
+                bytes.intoArray(output, i);
+            } else {
+                bytes.intoArray(output, i, byteSpecies.indexInRange(0, FloatVector.SPECIES_PREFERRED.length()));
+            }
         }
 
         // Process the tail
@@ -1265,7 +1286,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         int constant = (1 << nBits) - 1;
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
-        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         var delta = maxValue - minValue;
         var scaledAlpha = alpha / delta;
@@ -1276,17 +1297,18 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         var invLogisticScale = 1 / logisticScale;
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var arr = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
-            var recArr = logisticNQT(arr, scaledAlpha, scaledX0);
-            recArr = recArr.sub(logisticBias).mul(invLogisticScale);
-            IntVector rounded = (IntVector) recArr.add(const05f)
-                    .convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0);
-            recArr = (FloatVector) rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
-            recArr = recArr.fma(logisticScale, logisticBias);
-            recArr = logitNQT(recArr, invScaledAlpha, scaledX0);
+            FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vector).get(), i));
+            FloatVector recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logisticNQT(arr, scaledAlpha, scaledX0));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.sub(logisticBias));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.mul(invLogisticScale));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.add(const05f));
+            IntVector rounded = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(recArr.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.fma(logisticScale, logisticBias));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logitNQT(recArr, invScaledAlpha, scaledX0));
 
-            var diff = arr.sub(recArr);
-            squaredSumVec = diff.fma(diff, squaredSumVec);
+            FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(recArr));
+            squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(diff.fma(diff, squaredSumVec));
         }
 
         float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
@@ -1315,20 +1337,19 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
-        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var arr = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
-            var recArr = arr.sub(minValue).mul(constant / delta);
-            recArr = recArr.add(const05f)
-                    .convert(VectorOperators.F2I, 0)
-                    .reinterpretAsInts()
-                    .convert(VectorOperators.I2F, 0)
-                    .reinterpretAsFloats();
-            recArr = recArr.fma(delta / constant, minValue);
+            FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vector).get(), i));
+            FloatVector recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(minValue));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.mul(constant / delta));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.add(const05f));
+            IntVector rounded = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(recArr.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.fma(delta / constant, minValue));
 
-            var diff = arr.sub(recArr);
-            squaredSumVec = diff.fma(diff, squaredSumVec);
+            FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(recArr));
+            squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(diff.fma(diff, squaredSumVec));
         }
 
         float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
@@ -1351,7 +1372,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
                                          float alpha, float x0, float minValue, float maxValue) {
-        FloatVector squaredSumVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
@@ -1364,14 +1385,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
-            var byteArr = fromByteSequence(ByteVector.SPECIES_PREFERRED, quantizedVector, i);
+            ByteVector byteArr = (ByteVector) ByteVector.SPECIES_PREFERRED.vectorType().cast(ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, ((ArrayByteSequence) quantizedVector).get(), i));
 
             for (int j = 0; j < 4; j++) {
-                var v1 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i + floatStep * j);
-                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+                FloatVector v1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vector).get(), i + floatStep * j));
+                FloatVector v2 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j));
 
-                var diff = v1.sub(v2);
-                squaredSumVec = diff.fma(diff, squaredSumVec);
+                FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(v1.sub(v2));
+                squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(diff.fma(diff, squaredSumVec));
             }
         }
 
@@ -1447,24 +1468,24 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         var logisticBias = logisticNQT(minValue, scaledAlpha, scaledX0);
         var logisticScale = (logisticNQT(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255;
 
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
+        FloatVector vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(vector.length());
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
-            var byteArr = fromByteSequence(ByteVector.SPECIES_PREFERRED, quantizedVector, i);
+            ByteVector byteArr = (ByteVector) ByteVector.SPECIES_PREFERRED.vectorType().cast(ByteVector.fromArray(ByteVector.SPECIES_PREFERRED, ((ArrayByteSequence) quantizedVector).get(), i));
 
             for (int j = 0; j < 4; j++) {
-                var va = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i + floatStep * j);
-                var vb = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
+                FloatVector va = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vector).get(), i + floatStep * j));
+                FloatVector vb = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j));
 
-                var vCentroid = fromVectorFloat(FloatVector.SPECIES_PREFERRED, centroid, i + floatStep * j);
-                vb = vb.add(vCentroid);
+                FloatVector vCentroid = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) centroid).get(), i + floatStep * j));
+                vb = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(vb.add(vCentroid));
 
-                vsum = va.fma(vb, vsum);
-                vbMagnitude = vb.fma(vb, vbMagnitude);
+                vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(va.fma(vb, vsum));
+                vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(vb.fma(vb, vbMagnitude));
             }
         }
 
