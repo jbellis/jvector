@@ -380,10 +380,11 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float squareDistance256(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_256, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_256, v2, offset2);
-        var diff = a.sub(b);
-        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+        FloatVector a = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_256, ((ArrayVectorFloat) v1).get(), offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_256, ((ArrayVectorFloat) v2).get(), offset2));
+        FloatVector diff = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(a.sub(b));
+        FloatVector squared = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(diff.mul(diff));
+        return squared.reduceLanes(VectorOperators.ADD);
     }
 
     float squareDistancePreferred(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
