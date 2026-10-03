@@ -704,22 +704,26 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float assembleAndSum512(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
+        // Keep concrete SIMD types visible to C2 to avoid temporary vector/array allocations.
         int[] convOffsets = scratchInt512.get();
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_512);
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_512));
+        float[] values = ((ArrayVectorFloat) data).get();
         int i = 0;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
-        var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase);
+        IntVector scale = (IntVector) IntVector.SPECIES_512.vectorType().cast(IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
-            fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
-                    .reinterpretAsInts()
-                    .add(scale)
-                    .intoArray(convOffsets,0);
+            ByteVector bytes = (ByteVector) ByteVector.SPECIES_128.vectorType().cast(
+                ByteVector.fromArray(ByteVector.SPECIES_128, ((ArrayByteSequence) baseOffsets).get(), i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(
+                bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
+            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.and(BYTE_TO_INT_MASK_512));
+            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.add(scale));
+            codes.intoArray(convOffsets, 0);
 
             var offset = i * dataBase;
-            sum = sum.add(fromVectorFloat(FloatVector.SPECIES_512, data, offset, convOffsets, 0));
+            FloatVector gathered = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_512, values, offset, convOffsets, 0));
+            sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(gathered));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -732,23 +736,27 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float assembleAndSum256(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
+        // Keep concrete SIMD types visible to C2 to avoid temporary vector/array allocations.
         int[] convOffsets = scratchInt256.get();
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_256));
+        float[] values = ((ArrayVectorFloat) data).get();
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
-        var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase);
+        IntVector scale = (IntVector) IntVector.SPECIES_256.vectorType().cast(IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
 
-            fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
-                    .reinterpretAsInts()
-                    .add(scale)
-                    .intoArray(convOffsets,0);
+            ByteVector bytes = (ByteVector) ByteVector.SPECIES_64.vectorType().cast(
+                ByteVector.fromArray(ByteVector.SPECIES_64, ((ArrayByteSequence) baseOffsets).get(), i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(
+                bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
+            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.and(BYTE_TO_INT_MASK_256));
+            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.add(scale));
+            codes.intoArray(convOffsets, 0);
 
             var offset = i * dataBase;
-            sum = sum.add(fromVectorFloat(FloatVector.SPECIES_256, data, offset, convOffsets, 0));
+            FloatVector gathered = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_256, values, offset, convOffsets, 0));
+            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(gathered));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
