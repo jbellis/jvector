@@ -1043,74 +1043,84 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float pqDecodedCosineSimilarity512(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
-        var sum = FloatVector.zero(FloatVector.SPECIES_512);
-        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_512);
-
+        // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
+        // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_512));
+        FloatVector vaMagnitude = sum;
+        float[] partials = ((ArrayVectorFloat) partialSums).get();
+        float[] magnitudes = ((ArrayVectorFloat) aMagnitude).get();
+        byte[] encoded = ((ArrayByteSequence) baseOffsets).get();
         int[] convOffsets = scratchInt512.get();
         int i = 0;
-        int limit = i + ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
-
-        var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount);
+        int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
+        IntVector scale = (IntVector) IntVector.SPECIES_512.vectorType().cast(IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount));
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
+            ByteVector bytes = (ByteVector) ByteVector.SPECIES_128.vectorType().cast(
+                    ByteVector.fromArray(ByteVector.SPECIES_128, encoded, i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(
+                    bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
+            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.and(BYTE_TO_INT_MASK_512));
+            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.add(scale));
+            codes.intoArray(convOffsets, 0);
 
-            fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
-                    .reinterpretAsInts()
-                    .add(scale)
-                    .intoArray(convOffsets,0);
-
-            var offset = i * clusterCount;
-            sum = sum.add(fromVectorFloat(FloatVector.SPECIES_512, partialSums, offset, convOffsets, 0));
-            vaMagnitude = vaMagnitude.add(fromVectorFloat(FloatVector.SPECIES_512, aMagnitude, offset, convOffsets, 0));
+            int offset = i * clusterCount;
+            FloatVector partial = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_512, partials, offset, convOffsets, 0));
+            FloatVector magnitude = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_512, magnitudes, offset, convOffsets, 0));
+            sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(partial));
+            vaMagnitude = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(vaMagnitude.add(magnitude));
         }
 
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
         float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
-
         for (; i < baseOffsetsLength; i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset));
             sumResult += partialSums.get(offset);
             aMagnitudeResult += aMagnitude.get(offset);
         }
-
         return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
     }
 
     float pqDecodedCosineSimilarity256(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
-        var sum = FloatVector.zero(FloatVector.SPECIES_256);
-        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_256);
-
+        // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
+        // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_256));
+        FloatVector vaMagnitude = sum;
+        float[] partials = ((ArrayVectorFloat) partialSums).get();
+        float[] magnitudes = ((ArrayVectorFloat) aMagnitude).get();
+        byte[] encoded = ((ArrayByteSequence) baseOffsets).get();
         int[] convOffsets = scratchInt256.get();
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
-
-        var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(clusterCount);
+        IntVector scale = (IntVector) IntVector.SPECIES_256.vectorType().cast(IntVector.zero(IntVector.SPECIES_256).addIndex(clusterCount));
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+            ByteVector bytes = (ByteVector) ByteVector.SPECIES_64.vectorType().cast(
+                    ByteVector.fromArray(ByteVector.SPECIES_64, encoded, i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(
+                    bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
+            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.and(BYTE_TO_INT_MASK_256));
+            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.add(scale));
+            codes.intoArray(convOffsets, 0);
 
-            fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
-                    .reinterpretAsInts()
-                    .add(scale)
-                    .intoArray(convOffsets,0);
-
-            var offset = i * clusterCount;
-            sum = sum.add(fromVectorFloat(FloatVector.SPECIES_256, partialSums, offset, convOffsets, 0));
-            vaMagnitude = vaMagnitude.add(fromVectorFloat(FloatVector.SPECIES_256, aMagnitude, offset, convOffsets, 0));
+            int offset = i * clusterCount;
+            FloatVector partial = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, partials, offset, convOffsets, 0));
+            FloatVector magnitude = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, magnitudes, offset, convOffsets, 0));
+            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(partial));
+            vaMagnitude = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(vaMagnitude.add(magnitude));
         }
 
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
         float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
-
         for (; i < baseOffsetsLength; i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset));
             sumResult += partialSums.get(offset);
             aMagnitudeResult += aMagnitude.get(offset);
         }
-
         return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
     }
 
