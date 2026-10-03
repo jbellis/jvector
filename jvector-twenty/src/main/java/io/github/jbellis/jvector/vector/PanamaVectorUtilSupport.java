@@ -243,10 +243,12 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float dotProductPreferred(VectorFloat<?> va, int vaoffset, VectorFloat<?> vb, int vboffset, int length) {
+        // Preserve concrete SIMD types when this kernel is inlined into a larger caller.
+        // Otherwise C2 can materialize temporary vector objects and backing arrays.
         if (length == FloatVector.SPECIES_PREFERRED.length())
             return dotPreferred(va, vaoffset, vb, vboffset);
 
-        FloatVector sum0 = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector sum0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
         FloatVector sum1 = sum0;
         FloatVector a0, a1, b0, b1;
 
@@ -258,38 +260,38 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         if (length >= vectorLength * 2)
         {
             length -= vectorLength * 2;
-            a0 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, va, vaoffset + vectorLength * 0);
-            b0 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vb, vboffset + vectorLength * 0);
-            a1 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, va, vaoffset + vectorLength * 1);
-            b1 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vb, vboffset + vectorLength * 1);
+            a0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) va).get(), vaoffset + vectorLength * 0));
+            b0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vb).get(), vboffset + vectorLength * 0));
+            a1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) va).get(), vaoffset + vectorLength * 1));
+            b1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vb).get(), vboffset + vectorLength * 1));
             vaoffset += vectorLength * 2;
             vboffset += vectorLength * 2;
             while (length >= vectorLength * 2)
             {
                 // All instructions in the main loop have no dependencies between them and can be executed in parallel.
                 length -= vectorLength * 2;
-                sum0 = a0.fma(b0, sum0);
-                a0 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, va, vaoffset + vectorLength * 0);
-                b0 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vb, vboffset + vectorLength * 0);
-                sum1 = a1.fma(b1, sum1);
-                a1 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, va, vaoffset + vectorLength * 1);
-                b1 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vb, vboffset + vectorLength * 1);
+                sum0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a0.fma(b0, sum0));
+                a0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) va).get(), vaoffset + vectorLength * 0));
+                b0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vb).get(), vboffset + vectorLength * 0));
+                sum1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a1.fma(b1, sum1));
+                a1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) va).get(), vaoffset + vectorLength * 1));
+                b1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vb).get(), vboffset + vectorLength * 1));
                 vaoffset += vectorLength * 2;
                 vboffset += vectorLength * 2;
             }
-            sum0 = a0.fma(b0, sum0);
-            sum1 = a1.fma(b1, sum1);
+            sum0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a0.fma(b0, sum0));
+            sum1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a1.fma(b1, sum1));
         }
-        sum0 = sum0.add(sum1);
+        sum0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(sum0.add(sum1));
 
         // Process the remaining few vectors
         while (length >= vectorLength) {
             length -= vectorLength;
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, va, vaoffset);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vb, vboffset);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) va).get(), vaoffset));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, ((ArrayVectorFloat) vb).get(), vboffset));
             vaoffset += vectorLength;
             vboffset += vectorLength;
-            sum0 = a.fma(b, sum0);
+            sum0 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.fma(b, sum0));
         }
 
         float resVec = sum0.reduceLanes(VectorOperators.ADD);
@@ -1156,15 +1158,22 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     FloatVector logitNQT(FloatVector vector, float inverseAlpha, float x0) {
-        FloatVector z = vector.div(const1f.sub(vector));
+        // Preserve concrete SIMD types when this kernel is inlined into a larger caller.
+        // Otherwise C2 can materialize temporary vector objects and backing arrays.
+        vector = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(vector);
+        FloatVector denominator = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(const1f.sub(vector));
+        FloatVector z = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(vector.div(denominator));
+        IntVector temp = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(z.reinterpretAsInts());
+        IntVector exponent = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(temp.and(0x7f800000));
+        exponent = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(exponent.lanewise(VectorOperators.LSHR, 23));
+        exponent = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(exponent.sub(128));
+        FloatVector p = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(exponent.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+        IntVector mantissa = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(temp.and(0x007fffff));
+        mantissa = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(mantissa.add(0x3f800000));
+        FloatVector m = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(mantissa.reinterpretAsFloats());
+        FloatVector combined = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(m.add(p));
+        return (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(combined.fma(inverseAlpha, x0));
 
-        IntVector temp = z.reinterpretAsInts();
-        FloatVector p = (FloatVector) temp.and(0x7f800000)
-                .lanewise(VectorOperators.LSHR, 23).sub(128)
-                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
-        FloatVector m = temp.lanewise(VectorOperators.AND, 0x007fffff).add(0x3f800000).reinterpretAsFloats();
-
-        return m.add(p).fma(inverseAlpha, x0);
     }
 
     float logitNQT(float value, float inverseAlpha, float x0) {
@@ -1197,13 +1206,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
          * With part=3, we shift by 24 bits and then extract
          *      Int0\Byte3, Int1\Byte3, etc.
          */
-        FloatVector arr = (FloatVector) bytes.reinterpretAsInts()
-                .lanewise(VectorOperators.LSHR, 8 * part)
-                .lanewise(VectorOperators.AND, 0xff)
-                .convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0);
+        bytes = (ByteVector) ByteVector.SPECIES_PREFERRED.vectorType().cast(bytes);
+        IntVector ints = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(bytes.reinterpretAsInts());
+        ints = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(ints.lanewise(VectorOperators.LSHR, 8 * part));
+        ints = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(ints.and(0xff));
+        FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(ints.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+        arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.fma(logisticScale, logisticBias));
+        return (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logitNQT(arr, inverseAlpha, x0));
 
-        arr = arr.fma(logisticScale, logisticBias);
-        return logitNQT(arr, inverseAlpha, x0);
     }
 
     @Override
@@ -1372,7 +1382,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     @Override
     public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
                                    float alpha, float x0, float minValue, float maxValue) {
-        FloatVector dotProdVec = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        // Preserve concrete SIMD types when this kernel is inlined into a larger caller.
+        // Otherwise C2 can materialize temporary vector objects and backing arrays.
+        FloatVector dotProdVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         int vectorizedLength = ByteVector.SPECIES_PREFERRED.loopBound(quantizedVector.length());
         int floatStep = FloatVector.SPECIES_PREFERRED.length();
@@ -1386,12 +1398,12 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
 
         for (int i = 0; i < vectorizedLength; i += ByteVector.SPECIES_PREFERRED.length()) {
-            var byteArr = fromByteSequence(ByteVector.SPECIES_PREFERRED, quantizedVector, i);
+            var byteArr = (ByteVector) ByteVector.SPECIES_PREFERRED.vectorType().cast(fromByteSequence(ByteVector.SPECIES_PREFERRED, quantizedVector, i));
 
             for (int j = 0; j < 4; j++) {
-                var v1 = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i + floatStep * j);
-                var v2 = nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j);
-                dotProdVec = v1.fma(v2, dotProdVec);
+                var v1 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i + floatStep * j));
+                var v2 = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(nvqDequantize8bit(byteArr, invScaledAlpha, scaledX0, logisticScale, logisticBias, j));
+                dotProdVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(v1.fma(v2, dotProdVec));
             }
         }
 
