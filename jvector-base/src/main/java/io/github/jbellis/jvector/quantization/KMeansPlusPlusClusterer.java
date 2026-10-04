@@ -258,9 +258,11 @@ public class KMeansPlusPlusClusterer {
 
             if (newAssignment != oldAssignment) {
                 centroidDenoms[oldAssignment] = centroidDenoms[oldAssignment] - 1;
-                subInPlace(centroidNums[oldAssignment], point);
                 centroidDenoms[newAssignment] = centroidDenoms[newAssignment] + 1;
-                addInPlace(centroidNums[newAssignment], point);
+                if (!VectorUtil.trySubtractAddInPlace(centroidNums[oldAssignment], centroidNums[newAssignment], point)) {
+                    subInPlace(centroidNums[oldAssignment], point);
+                    addInPlace(centroidNums[newAssignment], point);
+                }
                 assignments[i] = newAssignment;
                 changedCount++;
             }
@@ -367,9 +369,13 @@ public class KMeansPlusPlusClusterer {
                 // no points assigned to this cluster
                 initializeCentroidToRandomPoint(i);
             } else {
-                var centroid = centroidNums[i].copy();
-                scale(centroid, 1.0f / centroidDenoms[i]);
-                centroids.copyFrom(centroid, 0, i * centroid.length(), centroid.length());
+                var sum = centroidNums[i];
+                float multiplier = 1.0f / centroidDenoms[i];
+                if (!VectorUtil.tryScaleTo(sum, centroids, i * sum.length(), multiplier)) {
+                    var centroid = sum.copy();
+                    scale(centroid, multiplier);
+                    centroids.copyFrom(centroid, 0, i * centroid.length(), centroid.length());
+                }
             }
         }
     }

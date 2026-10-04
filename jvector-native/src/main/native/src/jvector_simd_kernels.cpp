@@ -598,6 +598,70 @@ HWY_FLATTEN void scale_f32(float *HWY_RESTRICT v,
     }
 }
 
+// Normalize into the final centroid region without a copied Java vector.
+HWY_FLATTEN void scale_to_f32(const float *source, float *destination,
+                              size_t destinationOffset, float multiplier, size_t length)
+{
+    destination += destinationOffset;
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    const auto factor = hn::Set(d, multiplier);
+    size_t i = 0;
+    for (; i + lanes <= length; i += lanes) {
+        hn::StoreU(hn::Mul(hn::LoadU(d, source + i), factor), d, destination + i);
+    }
+    if (i < length) {
+        const size_t remaining = length - i;
+        hn::StoreN(hn::Mul(hn::LoadN(d, source + i, remaining), factor), d,
+                   destination + i, remaining);
+    }
+}
+
+// Load each point chunk once while updating disjoint old/new cluster sums.
+// Each coordinate still performs exactly one subtraction and one addition.
+template<class D>
+HWY_INLINE void SubtractAddInPlaceImpl(D d, float *HWY_RESTRICT oldSum,
+                                       float *HWY_RESTRICT newSum,
+                                       const float *HWY_RESTRICT point, size_t length)
+{
+    const size_t lanes = hn::Lanes(d);
+    size_t i = 0;
+    for (; i + lanes <= length; i += lanes) {
+        const auto value = hn::LoadU(d, point + i);
+        const auto oldValue = hn::Sub(hn::LoadU(d, oldSum + i), value);
+        const auto newValue = hn::Add(hn::LoadU(d, newSum + i), value);
+        hn::StoreU(oldValue, d, oldSum + i);
+        hn::StoreU(newValue, d, newSum + i);
+    }
+    if (i < length) {
+        const size_t remaining = length - i;
+        const auto value = hn::LoadN(d, point + i, remaining);
+        const auto oldValue = hn::Sub(hn::LoadN(d, oldSum + i, remaining), value);
+        const auto newValue = hn::Add(hn::LoadN(d, newSum + i, remaining), value);
+        hn::StoreN(oldValue, d, oldSum + i, remaining);
+        hn::StoreN(newValue, d, newSum + i, remaining);
+    }
+}
+
+HWY_FLATTEN void subtract_add_in_place_f32(float *oldSum, float *newSum,
+                                          const float *point, size_t length)
+{
+#if HWY_MAX_BYTES > 16
+    if (length <= 4) {
+        SubtractAddInPlaceImpl(HWY_CAPPED(float, 4){}, oldSum, newSum, point, length);
+        return;
+    }
+#if HWY_MAX_BYTES > 32
+    if (length <= 8) {
+        SubtractAddInPlaceImpl(HWY_CAPPED(float, 8){}, oldSum, newSum, point, length);
+        return;
+    }
+#endif
+#endif
+    SubtractAddInPlaceImpl(hn::ScalableTag<float>{}, oldSum, newSum, point, length);
+}
+
+
 JV_RENAME_REGS
 HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
 {

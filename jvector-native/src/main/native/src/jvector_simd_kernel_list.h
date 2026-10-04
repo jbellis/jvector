@@ -49,6 +49,9 @@
     KERNEL_ENTRY(float, min_f32, (const float *v, size_t length), (v, length)) \
     KERNEL_ENTRY(void, min_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(float, sum_f32, (const float *v, size_t length), (v, length)) \
+    /* PQ training */ \
+    KERNEL_ENTRY(void, scale_to_f32, (const float *source, float *destination, size_t destinationOffset, float multiplier, size_t length), (source, destination, destinationOffset, multiplier, length)) \
+    KERNEL_ENTRY(void, subtract_add_in_place_f32, (float *oldSum, float *newSum, const float *point, size_t length), (oldSum, newSum, point, length)) \
     /* PQ kernels */ \
     KERNEL_ENTRY(int, closest_centroid_f32, (const float *point, size_t pointOffset, const float *centroids, int centroidCount, size_t dimension), (point, pointOffset, centroids, centroidCount, dimension)) \
     KERNEL_ENTRY(float, assemble_and_sum_f32, (const float *data, int dataBase, const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength), (data, dataBase, baseOffsets, baseOffsetsOffset, baseOffsetsLength)) \

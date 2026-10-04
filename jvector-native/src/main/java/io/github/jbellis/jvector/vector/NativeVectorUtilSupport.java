@@ -276,6 +276,37 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public boolean tryScaleTo(VectorFloat<?> source, VectorFloat<?> destination,
+                              int destinationOffset, float multiplier) {
+        java.util.Objects.checkFromIndexSize(destinationOffset, source.length(), destination.length());
+        var src = ((MemorySegmentVectorFloat) source).get();
+        var dst = ((MemorySegmentVectorFloat) destination).get();
+        if (src.asOverlappingSlice(dst).isPresent()) {
+            throw new IllegalArgumentException("Source and destination storage must not overlap");
+        }
+        NativeSimdOps.scale_to_f32(src, dst, destinationOffset, multiplier, source.length());
+        return true;
+    }
+
+    @Override
+    public boolean trySubtractAddInPlace(VectorFloat<?> oldSum, VectorFloat<?> newSum,
+                                        VectorFloat<?> point) {
+        if (oldSum.length() != point.length() || newSum.length() != point.length()) {
+            throw new IllegalArgumentException("Cluster sums and point must have equal lengths");
+        }
+        var oldSegment = ((MemorySegmentVectorFloat) oldSum).get();
+        var newSegment = ((MemorySegmentVectorFloat) newSum).get();
+        var pointSegment = ((MemorySegmentVectorFloat) point).get();
+        if (oldSegment.asOverlappingSlice(newSegment).isPresent()
+                || oldSegment.asOverlappingSlice(pointSegment).isPresent()
+                || newSegment.asOverlappingSlice(pointSegment).isPresent()) {
+            throw new IllegalArgumentException("Cluster sums and point storage must not overlap");
+        }
+        NativeSimdOps.subtract_add_in_place_f32(oldSegment, newSegment, pointSegment, point.length());
+        return true;
+    }
+
+    @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         var nativeCodebook = ((MemorySegmentVectorFloat) codebook).get();
         var nativeQuery = ((MemorySegmentVectorFloat) query).get();

@@ -112,6 +112,16 @@ public final class VectorUtil {
     return nearest;
   }
 
+  public static boolean tryScaleTo(VectorFloat<?> source, VectorFloat<?> destination,
+                                   int destinationOffset, float multiplier) {
+    return impl.tryScaleTo(source, destination, destinationOffset, multiplier);
+  }
+
+  public static boolean trySubtractAddInPlace(VectorFloat<?> oldSum, VectorFloat<?> newSum,
+                                             VectorFloat<?> point) {
+    return impl.trySubtractAddInPlace(oldSum, newSum, point);
+  }
+
   private static boolean centroidDistancesAreFinite(VectorFloat<?> point, int pointOffset,
                                                     VectorFloat<?> centroids, int centroidCount, int dimension) {
     for (int i = 0; i < centroidCount; i++) {

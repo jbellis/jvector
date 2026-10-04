@@ -64,6 +64,26 @@ public interface VectorUtilSupport {
     return -1;
   }
 
+  /**
+   * Optionally writes {@code source * multiplier} directly into a destination region.
+   * Returns false without modifying the destination when unsupported. The source
+   * and destination regions must not overlap.
+   */
+  default boolean tryScaleTo(VectorFloat<?> source, VectorFloat<?> destination,
+                             int destinationOffset, float multiplier) {
+    return false;
+  }
+
+  /**
+   * Optionally subtracts a point from its old cluster sum, then adds it to its new
+   * cluster sum in one call. All three vectors must have equal lengths and disjoint
+   * storage. Returns false without modifying the sums when unsupported.
+   */
+  default boolean trySubtractAddInPlace(VectorFloat<?> oldSum, VectorFloat<?> newSum,
+                                       VectorFloat<?> point) {
+    return false;
+  }
+
   /** returns the sum of the given vectors. */
   VectorFloat<?> sum(List<VectorFloat<?>> vectors);
 

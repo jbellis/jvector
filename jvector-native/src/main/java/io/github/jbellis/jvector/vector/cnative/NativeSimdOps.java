@@ -1573,6 +1573,48 @@ public class NativeSimdOps {
         }
     }
 
+    private static class scale_to_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER, NativeSimdOps.C_POINTER, NativeSimdOps.C_LONG, NativeSimdOps.C_FLOAT, NativeSimdOps.C_LONG);
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("scale_to_f32");
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    public static FunctionDescriptor scale_to_f32$descriptor() { return scale_to_f32.DESC; }
+    public static MethodHandle scale_to_f32$handle() { return scale_to_f32.HANDLE; }
+    public static MemorySegment scale_to_f32$address() { return scale_to_f32.ADDR; }
+
+    public static void scale_to_f32(MemorySegment source, MemorySegment destination, long destinationOffset, float multiplier, long length) {
+        var mh$ = scale_to_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) { traceDowncall("scale_to_f32", source, destination, destinationOffset, multiplier, length); }
+            mh$.invokeExact(source, destination, destinationOffset, multiplier, length);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class subtract_add_in_place_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER, NativeSimdOps.C_POINTER, NativeSimdOps.C_POINTER, NativeSimdOps.C_LONG);
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("subtract_add_in_place_f32");
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    public static FunctionDescriptor subtract_add_in_place_f32$descriptor() { return subtract_add_in_place_f32.DESC; }
+    public static MethodHandle subtract_add_in_place_f32$handle() { return subtract_add_in_place_f32.HANDLE; }
+    public static MemorySegment subtract_add_in_place_f32$address() { return subtract_add_in_place_f32.ADDR; }
+
+    public static void subtract_add_in_place_f32(MemorySegment oldSum, MemorySegment newSum, MemorySegment point, long length) {
+        var mh$ = subtract_add_in_place_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) { traceDowncall("subtract_add_in_place_f32", oldSum, newSum, point, length); }
+            mh$.invokeExact(oldSum, newSum, point, length);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class sub_in_place_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,
