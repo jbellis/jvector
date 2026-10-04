@@ -261,6 +261,21 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public int tryClosestCentroid(VectorFloat<?> point, int pointOffset,
+                               VectorFloat<?> centroids, int centroidCount, int dimension) {
+        if (centroidCount <= 0) {
+            throw new IllegalArgumentException("centroidCount must be positive");
+        }
+        java.util.Objects.checkFromIndexSize(pointOffset, dimension, point.length());
+        if ((long) centroidCount * dimension > centroids.length()) {
+            throw new IndexOutOfBoundsException("centroids do not contain centroidCount vectors");
+        }
+        return NativeSimdOps.closest_centroid_f32(
+                ((MemorySegmentVectorFloat) point).get(), pointOffset,
+                ((MemorySegmentVectorFloat) centroids).get(), centroidCount, dimension);
+    }
+
+    @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         var nativeCodebook = ((MemorySegmentVectorFloat) codebook).get();
         var nativeQuery = ((MemorySegmentVectorFloat) query).get();

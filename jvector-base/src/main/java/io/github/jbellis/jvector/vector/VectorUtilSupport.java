@@ -53,6 +53,17 @@ public interface VectorUtilSupport {
   /** Calculates the sum of squared differences of float arrays of differing sizes, or a subset of the data */
   float squareDistance(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length);
 
+  /**
+   * Optionally finds the closest contiguous centroid in one bulk operation.
+   * Returns {@code -1} when unsupported so callers can retain their Java loop
+   * in its original compilation context. Supported implementations retain the
+   * first centroid on equal distances and must validate the supplied regions.
+   */
+  default int tryClosestCentroid(VectorFloat<?> point, int pointOffset,
+                                VectorFloat<?> centroids, int centroidCount, int dimension) {
+    return -1;
+  }
+
   /** returns the sum of the given vectors. */
   VectorFloat<?> sum(List<VectorFloat<?>> vectors);
 

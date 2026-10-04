@@ -399,6 +399,26 @@ HWY_FLATTEN float euclidean_f32(
     return L2SquareDistance(a, aoffset, b, boffset, length);
 }
 
+// Keep the centroid scan native so even tiny PQ subvectors need only one downcall.
+// Reuse exactly the single-distance kernel and strict comparison: neither the
+// reduction order nor first-centroid tie handling changes.
+HWY_FLATTEN int closest_centroid_f32(const float *point, size_t pointOffset,
+                                    const float *centroids, int centroidCount,
+                                    size_t dimension)
+{
+    float minDistance = FLT_MAX;
+    int nearest = 0;
+    for (int i = 0; i < centroidCount; ++i) {
+        float distance = L2SquareDistance(point, pointOffset, centroids,
+                                          static_cast<size_t>(i) * dimension, dimension);
+        if (distance < minDistance) {
+            minDistance = distance;
+            nearest = i;
+        }
+    }
+    return nearest;
+}
+
 // =============================================================================
 // Element-wise in-place arithmetic and reduction kernels
 // =============================================================================

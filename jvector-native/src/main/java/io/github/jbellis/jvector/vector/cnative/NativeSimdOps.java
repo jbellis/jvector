@@ -1393,6 +1393,68 @@ public class NativeSimdOps {
         }
     }
 
+    private static class closest_centroid_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeSimdOps.C_INT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("closest_centroid_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * int closest_centroid_f32(const float *point, size_t pointOffset, const float *centroids, int centroidCount, size_t dimension)
+     * }
+     */
+    public static FunctionDescriptor closest_centroid_f32$descriptor() {
+        return closest_centroid_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * int closest_centroid_f32(const float *point, size_t pointOffset, const float *centroids, int centroidCount, size_t dimension)
+     * }
+     */
+    public static MethodHandle closest_centroid_f32$handle() {
+        return closest_centroid_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * int closest_centroid_f32(const float *point, size_t pointOffset, const float *centroids, int centroidCount, size_t dimension)
+     * }
+     */
+    public static MemorySegment closest_centroid_f32$address() {
+        return closest_centroid_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * int closest_centroid_f32(const float *point, size_t pointOffset, const float *centroids, int centroidCount, size_t dimension)
+     * }
+     */
+    public static int closest_centroid_f32(MemorySegment point, long pointOffset, MemorySegment centroids, int centroidCount, long dimension) {
+        var mh$ = closest_centroid_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("closest_centroid_f32", point, pointOffset, centroids, centroidCount, dimension);
+            }
+            return (int)mh$.invokeExact(point, pointOffset, centroids, centroidCount, dimension);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class add_in_place_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,

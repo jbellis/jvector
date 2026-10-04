@@ -100,6 +100,29 @@ public final class VectorUtil {
   }
 
   /**
+   * Tries a bulk closest-centroid operation by squared L2 distance. Returns -1
+   * when unsupported, allowing callers to retain their existing Java scan.
+   * Equal distances retain the first centroid. No distance array is allocated.
+   */
+  public static int tryClosestCentroid(VectorFloat<?> point, int pointOffset,
+                                    VectorFloat<?> centroids, int centroidCount, int dimension) {
+    int nearest = impl.tryClosestCentroid(point, pointOffset, centroids, centroidCount, dimension);
+    // Preserve the finite-distance assertions of the former Java centroid loop.
+    assert nearest < 0 || centroidDistancesAreFinite(point, pointOffset, centroids, centroidCount, dimension);
+    return nearest;
+  }
+
+  private static boolean centroidDistancesAreFinite(VectorFloat<?> point, int pointOffset,
+                                                    VectorFloat<?> centroids, int centroidCount, int dimension) {
+    for (int i = 0; i < centroidCount; i++) {
+      if (!Float.isFinite(impl.squareDistance(point, pointOffset, centroids, i * dimension, dimension))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Modifies the argument to be unit length, dividing by its l2-norm. IllegalArgumentException is
    * thrown for zero vectors.
    *

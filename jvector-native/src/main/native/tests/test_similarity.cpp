@@ -46,6 +46,7 @@
 //     size  71          — 4x main + 7-element tail
 
 #include "test_helpers.h"
+#include <limits>
 
 // ---------------------------------------------------------------------------
 // Reference scalar implementations
@@ -268,4 +269,29 @@ TEST(IsaDispatch, MaxIsaEnvHonoured)
     // Active tier must be <= requested cap.
     EXPECT_LE(active_idx, env_idx)
         << "Active ISA (" << active << ") exceeds requested cap (" << env << ")";
+}
+
+// The batched scan must choose exactly what repeated calls to this ISA's
+// existing L2 kernel choose, including ties and offset/tail paths.
+TEST(ClosestCentroid, MatchesSingleDistances) {
+    for (size_t dimension : {size_t(0), size_t(1), size_t(3), size_t(4), size_t(7),
+                             size_t(8), size_t(9), size_t(16), size_t(17), size_t(65)}) {
+        auto point = make_vec(dimension + 3, 0.7f);
+        for (int count : {1, 2, 17, 256}) {
+            auto centroids = make_vec(dimension * count, 1.3f);
+            float best = std::numeric_limits<float>::max();
+            int expected = 0;
+            for (int i = 0; i < count; ++i) {
+                float distance = euclidean_f32(point.data(), 3, centroids.data(), i * dimension, dimension);
+                if (distance < best) { best = distance; expected = i; }
+            }
+            EXPECT_EQ(closest_centroid_f32(point.data(), 3, centroids.data(), count, dimension), expected);
+        }
+    }
+}
+
+TEST(ClosestCentroid, KeepsFirstEqualDistance) {
+    float point[] = {0};
+    float centroids[] = {2, -2, 3};
+    EXPECT_EQ(closest_centroid_f32(point, 0, centroids, 3, 1), 0);
 }
