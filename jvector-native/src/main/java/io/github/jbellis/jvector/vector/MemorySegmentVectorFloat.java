@@ -27,23 +27,25 @@ import java.nio.Buffer;
 import java.util.Objects;
 
 /**
- * VectorFloat implementation backed by an on-heap MemorySegment.
+ * VectorFloat backed by a float array with a lazily created on-heap MemorySegment view.
  */
 final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment>, FloatArray
 {
-    private final MemorySegment segment;
+    // Array-only Java operations do not need a native view. Publish it once on first native use.
+    private volatile MemorySegment segment;
+    private final float[] data;
 
     MemorySegmentVectorFloat(int length) {
-        segment = MemorySegment.ofArray(new float[length]);
+        this(new float[length]);
     }
 
     MemorySegmentVectorFloat(Buffer buffer) {
         this(buffer.remaining());
-        segment.copyFrom(MemorySegment.ofBuffer(buffer));
+        get().copyFrom(MemorySegment.ofBuffer(buffer));
     }
 
     MemorySegmentVectorFloat(float[] data) {
-        this.segment = MemorySegment.ofArray(data);
+        this.data = data;
     }
 
     @Override
@@ -51,37 +53,44 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     {
         int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
         int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        return OH_BYTES + REF_BYTES + segment.byteSize();
+        return OH_BYTES + 2L * REF_BYTES + (long) data.length * Float.BYTES;
     }
 
     @Override
     public MemorySegment get()
     {
-        return segment;
+        MemorySegment result = segment;
+        if (result == null) {
+            synchronized (this) {
+                result = segment;
+                if (result == null) {
+                    segment = result = MemorySegment.ofArray(data);
+                }
+            }
+        }
+        return result;
     }
 
     @Override
     public float get(int n)
     {
-        // this is (unfortunately) meaningfully better performing than getting at an offset in the memory segment
-        return ((float[])segment.heapBase().get())[n];
+        return data[n];
     }
 
     @Override
     public void set(int n, float value)
     {
-        // this is (unfortunately) meaningfully better performing than setting at an offset in the memory segment
-        ((float[])segment.heapBase().get())[n] = value;
+        data[n] = value;
     }
 
     @Override
     public void zero() {
-        segment.fill((byte) 0);
+        java.util.Arrays.fill(data, 0.0f);
     }
 
     @Override
     public int length() {
-        return (int) (segment.byteSize() / Float.BYTES);
+        return data.length;
     }
 
     @Override
@@ -108,10 +117,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     @Override
     public void copyFrom(VectorFloat<?> src, int srcOffset, int destOffset, int length)
     {
-        if (src instanceof MemorySegmentVectorFloat csrc) {
-            segment.asSlice((long) destOffset * Float.BYTES, (long) length * Float.BYTES)
-                    .copyFrom(csrc.segment.asSlice((long) srcOffset * Float.BYTES, (long) length * Float.BYTES));
-        } else if (src instanceof FloatArray csrc) {
+        if (src instanceof FloatArray csrc) {
             System.arraycopy(csrc.array(), srcOffset, array(), destOffset, length);
         } else {
             Objects.checkFromIndexSize(srcOffset, length, src.length());
@@ -145,7 +151,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MemorySegmentVectorFloat that = (MemorySegmentVectorFloat) o;
-        return segment.mismatch(that.segment) == -1;
+        return get().mismatch(that.get()) == -1;
     }
 
     @Override
@@ -155,6 +161,6 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
 
     @Override
     public float[] array() {
-        return (float[])segment.heapBase().get();
+        return data;
     }
 }

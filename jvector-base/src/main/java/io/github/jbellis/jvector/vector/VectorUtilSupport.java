@@ -84,6 +84,18 @@ public interface VectorUtilSupport {
     return false;
   }
 
+  /**
+   * Optionally computes squared distances to one KMeans++ centroid into existing
+   * scratch, then updates the existing componentwise minima. Points must have the
+   * centroid's dimension; all arrays must be disjoint. Returns false without
+   * modifying either output when unsupported. The caller retains its original
+   * distance/minimum loops for other providers and dimensions.
+   */
+  default boolean tryUpdateKMeansDistances(VectorFloat<?>[] points, VectorFloat<?> centroid,
+                                           VectorFloat<?> minima, VectorFloat<?> scratch) {
+    return false;
+  }
+
   /** returns the sum of the given vectors. */
   VectorFloat<?> sum(List<VectorFloat<?>> vectors);
 

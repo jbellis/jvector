@@ -188,10 +188,12 @@ public class KMeansPlusPlusClusterer {
         VectorFloat<?> firstCentroid = points[random.nextInt(points.length)];
         centroids.copyFrom(firstCentroid, 0, 0, firstCentroid.length());
         VectorFloat<?> newDistancesVector = vectorTypeSupport.createFloatVector(points.length);
-        for (int i = 0; i < points.length; i++) {
-            newDistancesVector.set(i, squareL2Distance(points[i], firstCentroid));
+        if (!VectorUtil.tryUpdateKMeansDistances(points, firstCentroid, distancesVector, newDistancesVector)) {
+            for (int i = 0; i < points.length; i++) {
+                newDistancesVector.set(i, squareL2Distance(points[i], firstCentroid));
+            }
+            VectorUtil.minInPlace(distancesVector, newDistancesVector);
         }
-        VectorUtil.minInPlace(distancesVector, newDistancesVector);
 
         // For each subsequent centroid
         for (int i = 1; i < k; i++) {
@@ -216,10 +218,12 @@ public class KMeansPlusPlusClusterer {
 
             // Update distances, but only if the new centroid provides a closer distance
             // All entries of newDistancesVector is overwritten with the updated squareL2Distance value
-            for (int j = 0; j < distancesLength; j++) {
-                newDistancesVector.set(j, squareL2Distance(points[j], nextCentroid));
+            if (!VectorUtil.tryUpdateKMeansDistances(points, nextCentroid, distancesVector, newDistancesVector)) {
+                for (int j = 0; j < distancesLength; j++) {
+                    newDistancesVector.set(j, squareL2Distance(points[j], nextCentroid));
+                }
+                VectorUtil.minInPlace(distancesVector, newDistancesVector);
             }
-            VectorUtil.minInPlace(distancesVector, newDistancesVector);
         }
         assertFinite(centroids);
         return centroids;

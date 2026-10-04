@@ -122,6 +122,11 @@ public final class VectorUtil {
     return impl.trySubtractAddInPlace(oldSum, newSum, point);
   }
 
+  public static boolean tryUpdateKMeansDistances(VectorFloat<?>[] points, VectorFloat<?> centroid,
+                                                  VectorFloat<?> minima, VectorFloat<?> scratch) {
+    return impl.tryUpdateKMeansDistances(points, centroid, minima, scratch);
+  }
+
   private static boolean centroidDistancesAreFinite(VectorFloat<?> point, int pointOffset,
                                                     VectorFloat<?> centroids, int centroidCount, int dimension) {
     for (int i = 0; i < centroidCount; i++) {

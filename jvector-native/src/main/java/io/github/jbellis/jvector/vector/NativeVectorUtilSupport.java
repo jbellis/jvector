@@ -60,6 +60,12 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public boolean tryUpdateKMeansDistances(VectorFloat<?>[] points, VectorFloat<?> centroid,
+                                           VectorFloat<?> minima, VectorFloat<?> scratch) {
+        return NativeKMeansInitialization.update(points, centroid, minima, scratch);
+    }
+
+    @Override
     protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset) {
         return FloatVector.fromMemorySegment(SPEC, ((MemorySegmentVectorFloat) vector).get(), vector.offset(offset), ByteOrder.LITTLE_ENDIAN);
     }
