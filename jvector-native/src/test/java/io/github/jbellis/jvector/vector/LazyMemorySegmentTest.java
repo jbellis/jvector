@@ -30,9 +30,11 @@ class LazyMemorySegmentTest {
         float[] data = {-0.0f, 1, 2, 3, 4, 5, 6, 7};
         var v = new MemorySegmentVectorFloat(data);
         assertSame(data, v.array());
+        assertEquals(1, java.util.Arrays.stream(MemorySegmentVectorFloat.class.getDeclaredFields())
+                .filter(f -> !java.lang.reflect.Modifier.isStatic(f.getModifiers())).count());
         var field = MemorySegmentVectorFloat.class.getDeclaredField("segment");
         field.setAccessible(true);
-        assertNull(field.get(v));
+        assertSame(data, field.get(v));
         try (var pool = Executors.newFixedThreadPool(48)) {
             var barrier = new CyclicBarrier(48);
             var tasks = new ArrayList<Future<MemorySegment>>();
@@ -53,13 +55,14 @@ class LazyMemorySegmentTest {
 
     @Test
     void copiesZeroBufferAndNativeUseKeepStorageSemantics() throws Exception {
+        assertThrows(NullPointerException.class, () -> new MemorySegmentVectorFloat((float[]) null));
         float[] data = {-0.0f, Float.intBitsToFloat(0x7fc00123), 2, 3, 4, 5, 6, 7};
         var original = new MemorySegmentVectorFloat(data);
         var copy = (MemorySegmentVectorFloat) original.copy();
         var field = MemorySegmentVectorFloat.class.getDeclaredField("segment");
         field.setAccessible(true);
-        assertNull(field.get(original));
-        assertNull(field.get(copy));
+        assertSame(data, field.get(original));
+        assertSame(copy.array(), field.get(copy));
         assertNotSame(data, copy.array());
         for (int i = 0; i < data.length; i++)
             assertEquals(Float.floatToRawIntBits(data[i]), Float.floatToRawIntBits(copy.get(i)));

@@ -31,9 +31,9 @@ import java.util.Objects;
  */
 final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment>, FloatArray
 {
-    // Array-only Java operations do not need a native view. Publish it once on first native use.
-    private volatile MemorySegment segment;
-    private final float[] data;
+    // Reuse the original single reference slot: an array until native access,
+    // then its MemorySegment view. The view keeps the same array alive.
+    private volatile Object segment;
 
     MemorySegmentVectorFloat(int length) {
         this(new float[length]);
@@ -45,7 +45,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     }
 
     MemorySegmentVectorFloat(float[] data) {
-        this.data = data;
+        this.segment = java.util.Objects.requireNonNull(data);
     }
 
     @Override
@@ -53,44 +53,54 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     {
         int OH_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_HEADER;
         int REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
-        return OH_BYTES + 2L * REF_BYTES + (long) data.length * Float.BYTES;
+        return OH_BYTES + REF_BYTES + (long) length() * Float.BYTES;
     }
 
     @Override
     public MemorySegment get()
     {
-        MemorySegment result = segment;
-        if (result == null) {
-            synchronized (this) {
-                result = segment;
-                if (result == null) {
-                    segment = result = MemorySegment.ofArray(data);
-                }
-            }
+        Object current = segment;
+        if (current instanceof MemorySegment view) {
+            return view;
         }
-        return result;
+        synchronized (this) {
+            current = segment;
+            if (current instanceof MemorySegment view) {
+                return view;
+            }
+            MemorySegment view = MemorySegment.ofArray((float[]) current);
+            segment = view;
+            return view;
+        }
     }
 
     @Override
     public float get(int n)
     {
-        return data[n];
+        return array()[n];
     }
 
     @Override
     public void set(int n, float value)
     {
-        data[n] = value;
+        array()[n] = value;
     }
 
     @Override
     public void zero() {
-        java.util.Arrays.fill(data, 0.0f);
+        Object current = segment;
+        if (current instanceof float[] data) {
+            java.util.Arrays.fill(data, 0.0f);
+        } else {
+            ((MemorySegment) current).fill((byte) 0);
+        }
     }
 
     @Override
     public int length() {
-        return data.length;
+        Object current = segment;
+        return current instanceof float[] data
+                ? data.length : (int) (((MemorySegment) current).byteSize() / Float.BYTES);
     }
 
     @Override
@@ -161,6 +171,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
 
     @Override
     public float[] array() {
-        return data;
+        Object current = segment;
+        return current instanceof float[] data ? data : (float[]) ((MemorySegment) current).heapBase().get();
     }
 }
