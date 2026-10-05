@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
+import io.github.jbellis.jvector.quantization.NVQuantization;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.jupiter.api.Test;
 import java.util.*;
@@ -52,9 +53,15 @@ class NvqSIMDTest {
                 values.add(new MemorySegmentVectorFloat(data));
             }
             var ravv = new ListRandomAccessVectorValues(values, dim);
-            var result = new MemorySegmentVectorFloat(dim);
-            assertTrue(NativeNVQArithmetic.sum(ravv, result));
-            for (int i = 0; i < dim; i++) assertEquals(Float.floatToRawIntBits(expected[i]), Float.floatToRawIntBits(result.get(i)));
+            for (boolean nativeViews : new boolean[]{false, true}) {
+                // PQ has already requested native views before the full NVQ compute phase.
+                if (nativeViews) for (var value : values) ((MemorySegmentVectorFloat)value).get();
+                var result = NVQuantization.compute(ravv, 1).globalMean;
+                for (int i = 0; i < dim; i++) {
+                    assertEquals(Float.floatToRawIntBits(expected[i] * (1.0f / values.size())),
+                                 Float.floatToRawIntBits(result.get(i)), "mean " + dim + ":" + i);
+                }
+            }
         }
     }
 }

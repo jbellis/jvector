@@ -35,16 +35,6 @@ import java.util.List;
  */
 public interface VectorUtilSupport {
 
-  /**
-   * Optionally sums vectors in ordinal order into an existing zeroed destination.
-   * The source may reuse its storage between reads. Returns false without writes
-   * when unsupported; no source vector references or native views are retained.
-   */
-  default boolean trySumVectors(io.github.jbellis.jvector.graph.RandomAccessVectorValues vectors,
-                                VectorFloat<?> destination) {
-    return false;
-  }
-
   /** Calculates the dot product of the given float arrays. */
   float dotProduct(VectorFloat<?> a, VectorFloat<?> b);
 

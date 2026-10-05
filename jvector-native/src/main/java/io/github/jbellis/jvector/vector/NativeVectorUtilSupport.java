@@ -66,12 +66,6 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
-    public boolean trySumVectors(io.github.jbellis.jvector.graph.RandomAccessVectorValues vectors,
-                                 VectorFloat<?> destination) {
-        return NativeNVQArithmetic.sum(vectors, destination);
-    }
-
-    @Override
     public float min(VectorFloat<?> vector) {
         return NativeNVQArithmetic.min(vector);
     }

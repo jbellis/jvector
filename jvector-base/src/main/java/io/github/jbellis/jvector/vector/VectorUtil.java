@@ -283,11 +283,6 @@ public final class VectorUtil {
     return impl.nvqLoss(vector, growthRate, midpoint, minValue, maxValue, nBits);
   }
 
-  public static boolean trySumVectors(io.github.jbellis.jvector.graph.RandomAccessVectorValues vectors,
-                                      VectorFloat<?> destination) {
-    return impl.trySumVectors(vectors, destination);
-  }
-
   public static float tryNvqGrowthRate(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
     return impl.tryNvqGrowthRate(vector, minValue, maxValue, nBits);
   }

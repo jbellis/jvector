@@ -16,34 +16,12 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 
 /** Array SIMD for NVQ's inherited Java arithmetic, without creating native views. */
 final class NativeNVQArithmetic {
-    static boolean sum(RandomAccessVectorValues vectors, VectorFloat<?> destination) {
-        if (!(destination instanceof MemorySegmentVectorFloat out)) return false;
-        float[] result = out.array();
-        var species = FloatVector.SPECIES_PREFERRED;
-        var type = species.vectorType();
-        int bound = species.loopBound(result.length);
-        // Preserve each coordinate's original sequential addition order.
-        for (int ordinal = 0; ordinal < vectors.size(); ordinal++) {
-            float[] point = ((MemorySegmentVectorFloat)vectors.getVector(ordinal)).array();
-            if (point.length != result.length) throw new IllegalArgumentException("Vector dimensions differ");
-            int i = 0;
-            for (; i < bound; i += species.length()) {
-                var a = (FloatVector)type.cast(FloatVector.fromArray(species, result, i));
-                var b = (FloatVector)type.cast(FloatVector.fromArray(species, point, i));
-                ((FloatVector)type.cast(a.add(b))).intoArray(result, i);
-            }
-            for (; i < result.length; i++) result[i] += point[i];
-        }
-        return true;
-    }
-
     static float min(VectorFloat<?> vector) {
         float[] data = ((MemorySegmentVectorFloat)vector).array();
         var species = FloatVector.SPECIES_PREFERRED;
