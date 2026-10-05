@@ -524,31 +524,36 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
             float midpoint = 0;
 
             if (learn) {
-                NonuniformQuantizationLossFunction lossFunction = new NonuniformQuantizationLossFunction(bitsPerDimension);
-                lossFunction.setVector(vector, minValue, maxValue);
+                float nativeGrowthRate = VectorUtil.tryNvqGrowthRate(vector, minValue, maxValue, bitsPerDimension.getInt());
+                if (!Float.isNaN(nativeGrowthRate)) {
+                    growthRate = nativeGrowthRate;
+                } else {
+                    NonuniformQuantizationLossFunction lossFunction = new NonuniformQuantizationLossFunction(bitsPerDimension);
+                    lossFunction.setVector(vector, minValue, maxValue);
 
-                float growthRateCoarse = 1e-2f;
-                float bestLossValue = Float.MIN_VALUE;
-                float[] tempSolution = {growthRateCoarse, 0.f};
-                for (float gr = 1e-6f; gr < 20.f; gr += 1f) {
-                    tempSolution[0] = gr;
-                    float lossValue = lossFunction.compute(tempSolution);
-                    if (lossValue > bestLossValue) {
-                        bestLossValue = lossValue;
-                        growthRateCoarse = gr;
+                    float growthRateCoarse = 1e-2f;
+                    float bestLossValue = Float.MIN_VALUE;
+                    float[] tempSolution = {growthRateCoarse, 0.f};
+                    for (float gr = 1e-6f; gr < 20.f; gr += 1f) {
+                        tempSolution[0] = gr;
+                        float lossValue = lossFunction.compute(tempSolution);
+                        if (lossValue > bestLossValue) {
+                            bestLossValue = lossValue;
+                            growthRateCoarse = gr;
+                        }
                     }
-                }
-                float growthRateFineTuned = growthRateCoarse;
-                for (float gr = growthRateCoarse - 1; gr < growthRateCoarse + 1; gr += 0.1f) {
-                    tempSolution[0] = gr;
-                    float lossValue = lossFunction.compute(tempSolution);
-                    if (lossValue > bestLossValue) {
-                        bestLossValue = lossValue;
-                        growthRateFineTuned = gr;
+                    float growthRateFineTuned = growthRateCoarse;
+                    for (float gr = growthRateCoarse - 1; gr < growthRateCoarse + 1; gr += 0.1f) {
+                        tempSolution[0] = gr;
+                        float lossValue = lossFunction.compute(tempSolution);
+                        if (lossValue > bestLossValue) {
+                            bestLossValue = lossValue;
+                            growthRateFineTuned = gr;
+                        }
                     }
-                }
 
-                growthRate = growthRateFineTuned;
+                    growthRate = growthRateFineTuned;
+                }
             }
             //---------------------------------------------------------------------------
 

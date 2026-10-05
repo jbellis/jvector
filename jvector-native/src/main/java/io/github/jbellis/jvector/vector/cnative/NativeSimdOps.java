@@ -2717,6 +2717,68 @@ public class NativeSimdOps {
         }
     }
 
+    private static class nvq_growth_rate {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_INT
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("nvq_growth_rate");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * float nvq_growth_rate(const float *vector, size_t length, float minValue, float maxValue, int nBits)
+     * }
+     */
+    public static FunctionDescriptor nvq_growth_rate$descriptor() {
+        return nvq_growth_rate.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * float nvq_growth_rate(const float *vector, size_t length, float minValue, float maxValue, int nBits)
+     * }
+     */
+    public static MethodHandle nvq_growth_rate$handle() {
+        return nvq_growth_rate.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * float nvq_growth_rate(const float *vector, size_t length, float minValue, float maxValue, int nBits)
+     * }
+     */
+    public static MemorySegment nvq_growth_rate$address() {
+        return nvq_growth_rate.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float nvq_growth_rate(const float *vector, size_t length, float minValue, float maxValue, int nBits)
+     * }
+     */
+    public static float nvq_growth_rate(MemorySegment vector, long length, float minValue, float maxValue, int nBits) {
+        var mh$ = nvq_growth_rate.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("nvq_growth_rate", vector, length, minValue, maxValue, nBits);
+            }
+            return (float)mh$.invokeExact(vector, length, minValue, maxValue, nBits);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class nvq_square_l2_distance_8bit {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,

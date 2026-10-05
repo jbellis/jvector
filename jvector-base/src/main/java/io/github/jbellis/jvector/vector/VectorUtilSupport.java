@@ -285,4 +285,13 @@ public interface VectorUtilSupport {
    */
   float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits);
 
+  /**
+   * Optionally performs the existing coarse/fine NVQ growth-rate search in one
+   * call. Returns NaN when unsupported; the caller then uses its Java search.
+   * Implementations must preserve the candidate sequence and strict winner test.
+   */
+  default float tryNvqGrowthRate(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+    return Float.NaN;
+  }
+
 }

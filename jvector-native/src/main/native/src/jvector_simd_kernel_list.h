@@ -64,6 +64,7 @@
     KERNEL_ENTRY(void, nvq_quantize_8bit, (const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination), (vector, length, alpha, x0, minValue, maxValue, destination)) \
     KERNEL_ENTRY(float, nvq_loss, (const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, int nBits), (vector, length, alpha, x0, minValue, maxValue, nBits)) \
     KERNEL_ENTRY(float, nvq_uniform_loss, (const float *vector, size_t length, float minValue, float maxValue, int nBits), (vector, length, minValue, maxValue, nBits)) \
+    KERNEL_ENTRY(float, nvq_growth_rate, (const float *vector, size_t length, float minValue, float maxValue, int nBits), (vector, length, minValue, maxValue, nBits)) \
     KERNEL_ENTRY(float, nvq_square_l2_distance_8bit, (const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue), (vector, quantized, length, alpha, x0, minValue, maxValue)) \
     KERNEL_ENTRY(float, nvq_dot_product_8bit, (const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue), (vector, quantized, length, alpha, x0, minValue, maxValue)) \
     KERNEL_ENTRY(int64_t, nvq_cosine_8bit_packed, (const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float *centroid), (vector, quantized, length, alpha, x0, minValue, maxValue, centroid)) \

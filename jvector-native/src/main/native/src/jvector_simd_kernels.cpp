@@ -1568,6 +1568,32 @@ HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
     return result;
 }
 
+// Keep the Java candidate order, float increments, baseline ratio, and strict
+// greater-than tie rule. Reuse the same loss kernels, within one native dispatch.
+HWY_FLATTEN float nvq_growth_rate(const float *vector, size_t length,
+                                 float minValue, float maxValue, int nBits)
+{
+    const float baseline = nvq_uniform_loss(vector, length, minValue, maxValue, nBits);
+    float coarse = 1e-2f;
+    float best = 0x1p-149f;  // Java Float.MIN_VALUE (smallest positive subnormal).
+    for (float gr = 1e-6f; gr < 20.0f; gr += 1.0f) {
+        const float value = baseline / nvq_loss(vector, length, gr, 0.0f, minValue, maxValue, nBits);
+        if (value > best) {
+            best = value;
+            coarse = gr;
+        }
+    }
+    float fine = coarse;
+    for (float gr = coarse - 1.0f; gr < coarse + 1.0f; gr += 0.1f) {
+        const float value = baseline / nvq_loss(vector, length, gr, 0.0f, minValue, maxValue, nBits);
+        if (value > best) {
+            best = value;
+            fine = gr;
+        }
+    }
+    return fine;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Two dequantization helpers — used by the three NVQ 8-bit scoring kernels.
 //

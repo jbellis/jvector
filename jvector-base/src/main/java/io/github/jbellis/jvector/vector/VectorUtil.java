@@ -274,6 +274,10 @@ public final class VectorUtil {
     return impl.nvqLoss(vector, growthRate, midpoint, minValue, maxValue, nBits);
   }
 
+  public static float tryNvqGrowthRate(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+    return impl.tryNvqGrowthRate(vector, minValue, maxValue, nBits);
+  }
+
   public static float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
     return impl.nvqUniformLoss(vector, minValue, maxValue, nBits);
   }

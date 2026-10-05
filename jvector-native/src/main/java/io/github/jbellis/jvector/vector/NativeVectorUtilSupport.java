@@ -351,6 +351,13 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public float tryNvqGrowthRate(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        if (nBits != 8) return Float.NaN;
+        return NativeSimdOps.nvq_growth_rate(((MemorySegmentVectorFloat) vector).get(),
+                                            vector.length(), minValue, maxValue, nBits);
+    }
+
+    @Override
     public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
         return NativeSimdOps.nvq_loss(
                 ((MemorySegmentVectorFloat) vector).get(),
