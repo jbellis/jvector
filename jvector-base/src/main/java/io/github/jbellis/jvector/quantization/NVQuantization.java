@@ -152,7 +152,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
         try (var cursor = VectorAccess.openRange(ravv, 0, ravv.size())) {
             while (cursor.next()) VectorUtil.addInPlace(globalMean, cursor.vector());
         }
-        VectorUtil.scale(globalMean, 1.0f / ravv.size());
+        VectorUtil.nvqScale(globalMean, 1.0f / ravv.size());
         return create(globalMean, nSubVectors);
     }
 
@@ -202,7 +202,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     @Override
     public void encodeTo(VectorFloat<?> v, NVQuantization.QuantizedVector dest) {
-        var tempVector = VectorUtil.sub(v, globalMean);
+        var tempVector = VectorUtil.nvqSub(v, globalMean);
         QuantizedVector.quantizeTo(getSubVectors(tempVector), bitsPerDimension, learn, dest);
     }
 
@@ -357,7 +357,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     public double reconstructionError(VectorFloat<?> vector) {
         final var encodedVector = QuantizedVector.createEmpty(subvectorSizesAndOffsets, bitsPerDimension);
 
-        final var tempVector = VectorUtil.sub(vector, globalMean);
+        final var tempVector = VectorUtil.nvqSub(vector, globalMean);
         QuantizedVector.quantizeTo(getSubVectors(tempVector), bitsPerDimension, learn, encodedVector);
         final var vectorSubVectors = this.getSubVectors(tempVector);
 
@@ -515,7 +515,7 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
          * @param dest the destination subvector
          */
         public static void quantizeTo(VectorFloat<?> vector, BitsPerDimension bitsPerDimension, boolean learn, QuantizedSubVector dest) {
-            var minValue = VectorUtil.min(vector);
+            var minValue = VectorUtil.nvqMin(vector);
             var maxValue = VectorUtil.max(vector);
 
             //-----------------------------------------------------------------

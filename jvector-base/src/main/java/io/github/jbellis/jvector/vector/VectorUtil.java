@@ -250,6 +250,12 @@ public final class VectorUtil {
     return impl.pqDecodedCosineSimilarity(encoded, encodedOffset, encodedLength, clusterCount, partialSums, aMagnitude, bMagnitude);
   }
 
+  public static float nvqMin(VectorFloat<?> vector) { return impl.nvqMin(vector); }
+
+  public static void nvqScale(VectorFloat<?> vector, float multiplier) { impl.nvqScale(vector, multiplier); }
+
+  public static VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) { return impl.nvqSub(a, b); }
+
   public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
     return impl.nvqDotProduct8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
   }

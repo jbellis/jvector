@@ -206,6 +206,13 @@ public interface VectorUtilSupport {
 
     return (float) (sum / Math.sqrt(aMag * bMagnitude));
   }
+  /** NVQ setup arithmetic; defaults preserve the provider's shared implementations. */
+  default float nvqMin(VectorFloat<?> vector) { return min(vector); }
+
+  default void nvqScale(VectorFloat<?> vector, float multiplier) { scale(vector, multiplier); }
+
+  default VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) { return sub(a, b); }
+
   /**
    * Computes the dot product between a vector and a 8-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.

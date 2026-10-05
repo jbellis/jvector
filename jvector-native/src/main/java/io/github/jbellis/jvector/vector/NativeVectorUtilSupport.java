@@ -66,23 +66,18 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
-    public float min(VectorFloat<?> vector) {
+    public float nvqMin(VectorFloat<?> vector) {
         return NativeNVQArithmetic.min(vector);
     }
 
     @Override
-    public void scale(VectorFloat<?> vector, float multiplier) {
+    public void nvqScale(VectorFloat<?> vector, float multiplier) {
         NativeNVQArithmetic.scale(vector, multiplier);
     }
 
     @Override
-    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
-        return NativeNVQArithmetic.sub(a, aOffset, b, bOffset, length);
-    }
-
-    @Override
-    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, float value, int length) {
-        return NativeNVQArithmetic.sub(a, aOffset, value, length);
+    public VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) {
+        return NativeNVQArithmetic.sub(a, 0, b, 0, a.length());
     }
 
     @Override

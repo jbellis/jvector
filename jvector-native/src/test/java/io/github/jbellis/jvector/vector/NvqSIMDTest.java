@@ -41,6 +41,13 @@ class NvqSIMDTest {
         }
     }
 
+    @Test void nvqSetupDoesNotOverrideSharedPqArithmetic() {
+        var methods = Arrays.stream(NativeVectorUtilSupport.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName).toList();
+        for (String shared : new String[]{"min", "scale", "sub"}) assertFalse(methods.contains(shared), shared);
+        for (String scoped : new String[]{"nvqMin", "nvqScale", "nvqSub"}) assertTrue(methods.contains(scoped), scoped);
+    }
+
     @Test void meanPreservesSequentialOrderAndInputs() {
         VectorizationProvider.getInstance();
         Random random = new Random(60);

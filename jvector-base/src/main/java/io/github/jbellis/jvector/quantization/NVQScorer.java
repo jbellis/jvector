@@ -76,7 +76,7 @@ public class NVQScorer {
         /* Each sub-vector of query vector (full resolution) will be compared to NVQ quantized sub-vectors that were
          * first de-meaned by subtracting the global mean.
          */
-        var shiftedQuery = VectorUtil.sub(query, this.nvq.globalMean);
+        var shiftedQuery = VectorUtil.nvqSub(query, this.nvq.globalMean);
         var querySubVectors = this.nvq.getSubVectors(shiftedQuery);
 
         switch (this.nvq.bitsPerDimension) {

@@ -66,19 +66,4 @@ final class NativeNVQArithmetic {
         return result;
     }
 
-    static VectorFloat<?> sub(VectorFloat<?> a, int offset, float value, int length) {
-        float[] lhs = ((MemorySegmentVectorFloat)a).array();
-        var result = new MemorySegmentVectorFloat(length);
-        float[] data = result.array();
-        var species = FloatVector.SPECIES_PREFERRED;
-        var type = species.vectorType();
-        var rhs = (FloatVector)type.cast(FloatVector.broadcast(species, value));
-        int bound = species.loopBound(length), i = 0;
-        for (; i < bound; i += species.length()) {
-            var x = (FloatVector)type.cast(FloatVector.fromArray(species, lhs, offset+i));
-            ((FloatVector)type.cast(x.sub(rhs))).intoArray(data, i);
-        }
-        for (; i < length; i++) data[i] = lhs[offset+i] - value;
-        return result;
-    }
 }
