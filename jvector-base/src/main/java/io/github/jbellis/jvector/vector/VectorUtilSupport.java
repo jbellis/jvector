@@ -35,6 +35,16 @@ import java.util.List;
  */
 public interface VectorUtilSupport {
 
+  /**
+   * Optionally sums vectors in ordinal order into an existing zeroed destination.
+   * The source may reuse its storage between reads. Returns false without writes
+   * when unsupported; no source vector references or native views are retained.
+   */
+  default boolean trySumVectors(io.github.jbellis.jvector.graph.RandomAccessVectorValues vectors,
+                                VectorFloat<?> destination) {
+    return false;
+  }
+
   /** Calculates the dot product of the given float arrays. */
   float dotProduct(VectorFloat<?> a, VectorFloat<?> b);
 
@@ -245,6 +255,16 @@ public interface VectorUtilSupport {
    * @return the cosine similarity
    */
   float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid);
+
+  default boolean supportsNvqCosine8bitPacked() { return false; }
+
+  /** Low 32 bits: dot sum; high 32 bits: reconstructed squared magnitude. */
+  default long nvqCosine8bitPacked(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate,
+                                  float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
+    float[] result = nvqCosine8bit(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
+    return Integer.toUnsignedLong(Float.floatToRawIntBits(result[0]))
+           | ((long)Float.floatToRawIntBits(result[1]) << 32);
+  }
 
   /**
    * When computing distances, the unpacking of am NVQ quantized vector is faster if we do not do it in sequential order.

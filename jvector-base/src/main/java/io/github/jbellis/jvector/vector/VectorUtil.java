@@ -258,6 +258,15 @@ public final class VectorUtil {
     return impl.nvqSquareL2Distance8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
   }
 
+  public static boolean supportsNvqCosine8bitPacked() {
+    return impl.supportsNvqCosine8bitPacked();
+  }
+
+  public static long nvqCosine8bitPacked(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate,
+                                        float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
+    return impl.nvqCosine8bitPacked(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
+  }
+
   public static float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
     return impl.nvqCosine8bit(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
   }
@@ -272,6 +281,11 @@ public final class VectorUtil {
 
   public static float nvqLoss(VectorFloat<?> vector, float growthRate, float midpoint, float minValue, float maxValue, int nBits) {
     return impl.nvqLoss(vector, growthRate, midpoint, minValue, maxValue, nBits);
+  }
+
+  public static boolean trySumVectors(io.github.jbellis.jvector.graph.RandomAccessVectorValues vectors,
+                                      VectorFloat<?> destination) {
+    return impl.trySumVectors(vectors, destination);
   }
 
   public static float tryNvqGrowthRate(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {

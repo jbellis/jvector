@@ -115,6 +115,25 @@ public class NVQScorer {
                     VectorUtil.nvqShuffleQueryInPlace8bit(meanSubVectors[i]);
                 }
 
+                if (VectorUtil.supportsNvqCosine8bitPacked()) {
+                    return vector2 -> {
+                        float cos = 0;
+                        float squaredNormalization = 0;
+                        for (int i = 0; i < querySubVectors.length; i++) {
+                            var svDB = vector2.subVectors[i];
+                            long partialCosSim = VectorUtil.nvqCosine8bitPacked(querySubVectors[i],
+                                    svDB.bytes, svDB.growthRate, svDB.midpoint,
+                                    svDB.minValue, svDB.maxValue,
+                                    meanSubVectors[i]);
+                            cos += Float.intBitsToFloat((int)partialCosSim);
+                            squaredNormalization += Float.intBitsToFloat((int)(partialCosSim >>> 32));
+                        }
+                        float cosine = (cos / queryNorm) / (float) Math.sqrt(squaredNormalization);
+
+                        return (1 + cosine) / 2;
+                    };
+                }
+
                 return vector2 -> {
                     float cos = 0;
                     float squaredNormalization = 0;

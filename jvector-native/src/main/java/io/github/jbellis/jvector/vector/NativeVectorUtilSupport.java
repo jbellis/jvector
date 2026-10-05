@@ -66,6 +66,32 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public boolean trySumVectors(io.github.jbellis.jvector.graph.RandomAccessVectorValues vectors,
+                                 VectorFloat<?> destination) {
+        return NativeNVQArithmetic.sum(vectors, destination);
+    }
+
+    @Override
+    public float min(VectorFloat<?> vector) {
+        return NativeNVQArithmetic.min(vector);
+    }
+
+    @Override
+    public void scale(VectorFloat<?> vector, float multiplier) {
+        NativeNVQArithmetic.scale(vector, multiplier);
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        return NativeNVQArithmetic.sub(a, aOffset, b, bOffset, length);
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, float value, int length) {
+        return NativeNVQArithmetic.sub(a, aOffset, value, length);
+    }
+
+    @Override
     protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset) {
         return FloatVector.fromMemorySegment(SPEC, ((MemorySegmentVectorFloat) vector).get(), vector.offset(offset), ByteOrder.LITTLE_ENDIAN);
     }
@@ -391,6 +417,20 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
                 ((MemorySegmentByteSequence) quantizedVector).get(),
                 (long) vector.length(),
                 alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public boolean supportsNvqCosine8bitPacked() { return true; }
+
+    @Override
+    public long nvqCosine8bitPacked(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                    float alpha, float x0, float minValue, float maxValue,
+                                    VectorFloat<?> centroid) {
+        return NativeSimdOps.nvq_cosine_8bit_packed(
+                ((MemorySegmentVectorFloat) vector).get(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                (long) vector.length(), alpha, x0, minValue, maxValue,
+                ((MemorySegmentVectorFloat) centroid).get());
     }
 
     @Override

@@ -1404,7 +1404,7 @@ static HWY_INLINE float logisticNQT_scalar(float value, float alpha, float x0)
 //   logisticNQT(...)       — forward logistic
 //   scale and shift
 //   ConvertTo(int32) after +0.5  — round toward nearest for positive values
-//   StoreU to tmp[] + scalar clamp and byte-cast
+//   Saturating DemoteTo(uint8) + StoreU/StoreN
 //
 // Cosine packing: nvq_cosine_8bit_packed returns an int64_t whose low 32 bits
 // are the IEEE-754 bits of `sum` and whose high 32 bits are `bMagnitude`, so
@@ -1421,9 +1421,8 @@ HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
     using Int32Tag = hn::RebindToSigned<FloatTag>;
     FloatTag d_f;
     Int32Tag d_i;
-    constexpr size_t kMaxLanes = hn::MaxLanes(d_f);
     const size_t kLanes = hn::Lanes(d_f);
-    alignas(64) int32_t tmp[kMaxLanes];
+    const hn::Rebind<uint8_t, Int32Tag> d_b;
 
     float delta            = maxValue - minValue;
     float scaledAlpha      = alpha / delta;
@@ -1439,14 +1438,9 @@ HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
                               hn::Set(d_f, invLogisticScale)),
                       hn::Set(d_f, 0.5f));
         auto fi = hn::ConvertTo(d_i, arr);
-        hn::StoreU(fi, d_i, tmp);
-        for (size_t j = 0; j < kLanes; j++) {
-            int v = tmp[j];
-            destination[i + j] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
-        }
+        hn::StoreU(hn::DemoteTo(d_b, fi), d_b, destination + i);
     }
-    // Tail: LoadN zero-pads lanes beyond `remaining`; only write the first
-    // `remaining` bytes from tmp[] so the padding lanes are never observed.
+    // Tail: LoadN zero-pads; StoreN writes only the valid byte lanes.
     const size_t remaining = length - i;
     if (remaining > 0) {
         auto arr = hn::LoadN(d_f, vector + i, remaining);
@@ -1454,11 +1448,7 @@ HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
         arr = hn::Add(hn::Mul(hn::Sub(arr, hn::Set(d_f, logisticBias)),
                               hn::Set(d_f, invLogisticScale)),
                       hn::Set(d_f, 0.5f));
-        hn::StoreU(hn::ConvertTo(d_i, arr), d_i, tmp);
-        for (size_t j = 0; j < remaining; j++) {
-            int v = tmp[j];
-            destination[i + j] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
-        }
+        hn::StoreN(hn::DemoteTo(d_b, hn::ConvertTo(d_i, arr)), d_b, destination + i, remaining);
     }
 }
 
@@ -1812,34 +1802,15 @@ HWY_FLATTEN void nvq_shuffle_query_in_place_8bit(float *HWY_RESTRICT vector,
     FloatTag d_f;
     const size_t kLanes = hn::Lanes(d_f);
     const size_t step   = 4 * kLanes;   // block size = number of bytes in a full-width vector
-    const size_t mn1    = step - 1;
-
-    // Maximum step across all ISAs compiled for: 4 * 16 = 64 (AVX-512).
-    // Declared outside the loop so the stack frame is allocated once.
-    constexpr size_t kMaxStep = 4 * hn::MaxLanes(FloatTag{});
-    bool visited[kMaxStep];
-
-    size_t offset = 0;
-    while (offset + step <= length) {
-        float *arr = vector + offset;
-        memset(visited, 0, step);  // only zero the portion we will inspect
-
-        // In-place cyclic transposition: for each unvisited cycle, rotate
-        // elements along the cycle defined by a -> (kLanes * a) % mn1.
-        // This maps shuffled[p] = original[(p % kLanes) * 4 + (p / kLanes)],
-        // which is the inverse of the FastLanes interleaving.
-        for (size_t cycle = 1; cycle < step; ++cycle) {
-            if (visited[cycle]) continue;
-            size_t a = cycle;
-            do {
-                a = (a == mn1) ? mn1 : (kLanes * a) % mn1;
-                float temp = arr[a];
-                arr[a]     = arr[cycle];
-                arr[cycle] = temp;
-                visited[a] = true;
-            } while (a != cycle);
-        }
-        offset += step;
+    for (size_t offset = 0; offset + step <= length; offset += step) {
+        // Load all four interleaved streams before storing: the source aliases
+        // the destination. The incomplete final block remains unshuffled.
+        hn::Vec<FloatTag> a, b, c, d;
+        hn::LoadInterleaved4(d_f, vector + offset, a, b, c, d);
+        hn::StoreU(a, d_f, vector + offset);
+        hn::StoreU(b, d_f, vector + offset + kLanes);
+        hn::StoreU(c, d_f, vector + offset + 2 * kLanes);
+        hn::StoreU(d, d_f, vector + offset + 3 * kLanes);
     }
 }
 
