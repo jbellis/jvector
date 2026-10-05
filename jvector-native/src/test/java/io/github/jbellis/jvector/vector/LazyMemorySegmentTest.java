@@ -26,6 +26,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LazyMemorySegmentTest {
     @Test
+    void scalarReadsAndWritesPreserveBitsAndBoundsBeforeAndAfterNativeUse() {
+        float[] data = {-0.0f, Float.intBitsToFloat(0x7fc00123), Float.POSITIVE_INFINITY, 3};
+        var v = new MemorySegmentVectorFloat(data);
+        for (int phase = 0; phase < 2; phase++) {
+            for (int i = 0; i < data.length; i++)
+                assertEquals(Float.floatToRawIntBits(data[i]), Float.floatToRawIntBits(v.get(i)));
+            v.set(3, -0.0f);
+            assertEquals(0x80000000, Float.floatToRawIntBits(data[3]));
+            data[3] = Float.intBitsToFloat(0x7fc00456);
+            assertEquals(0x7fc00456, Float.floatToRawIntBits(v.get(3)));
+            assertThrows(ArrayIndexOutOfBoundsException.class, () -> v.get(-1));
+            assertThrows(ArrayIndexOutOfBoundsException.class, () -> v.get(Integer.MAX_VALUE));
+            assertThrows(ArrayIndexOutOfBoundsException.class, () -> v.set(data.length, 0));
+            v.get();
+        }
+    }
+
+    @Test
     void concurrentFirstUsePublishesOneViewOfTheOriginalArray() throws Exception {
         float[] data = {-0.0f, 1, 2, 3, 4, 5, 6, 7};
         var v = new MemorySegmentVectorFloat(data);

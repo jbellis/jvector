@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.Buffer;
 import java.util.Objects;
 
@@ -77,13 +78,31 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     @Override
     public float get(int n)
     {
-        return array()[n];
+        Object current = segment;
+        if (current instanceof float[] data) {
+            return data[n];
+        }
+        MemorySegment view = (MemorySegment) current;
+        if (n < 0 || n >= view.byteSize() / Float.BYTES) {
+            throw new ArrayIndexOutOfBoundsException(n);
+        }
+        // heapBase() returns an Optional that can escape in scalar callers.
+        return view.getAtIndex(ValueLayout.JAVA_FLOAT, n);
     }
 
     @Override
     public void set(int n, float value)
     {
-        array()[n] = value;
+        Object current = segment;
+        if (current instanceof float[] data) {
+            data[n] = value;
+        } else {
+            MemorySegment view = (MemorySegment) current;
+            if (n < 0 || n >= view.byteSize() / Float.BYTES) {
+                throw new ArrayIndexOutOfBoundsException(n);
+            }
+            view.setAtIndex(ValueLayout.JAVA_FLOAT, n, value);
+        }
     }
 
     @Override

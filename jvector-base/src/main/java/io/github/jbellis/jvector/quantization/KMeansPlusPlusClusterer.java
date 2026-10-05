@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.quantization;
 import io.github.jbellis.jvector.vector.Matrix;
 import io.github.jbellis.jvector.vector.VectorUtil;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
+import io.github.jbellis.jvector.vector.types.FloatArray;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
@@ -183,6 +184,9 @@ public class KMeansPlusPlusClusterer {
         Arrays.fill(distances, Float.MAX_VALUE);
         VectorFloat<?> distancesVector = vectorTypeSupport.createFloatVector(distances);
         int distancesLength = points.length;
+        // Keep the scalar probability scan on existing array storage when available.
+        // The vector and array share updates; no vector wrapper is needed per read.
+        float[] distanceValues = distancesVector instanceof FloatArray ? ((FloatArray) distancesVector).array() : null;
 
         // Choose the first centroid randomly
         VectorFloat<?> firstCentroid = points[random.nextInt(points.length)];
@@ -202,7 +206,7 @@ public class KMeansPlusPlusClusterer {
             float r = random.nextFloat() * totalDistance;
             int selectedIdx = -1;
             for (int j = 0; j < distancesLength; j++) {
-                r -= distancesVector.get(j);
+                r -= distanceValues != null ? distanceValues[j] : distancesVector.get(j);
                 if (r < 1e-6) {
                     selectedIdx = j;
                     break;
