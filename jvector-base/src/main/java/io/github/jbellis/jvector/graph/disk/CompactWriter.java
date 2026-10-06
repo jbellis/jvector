@@ -78,10 +78,9 @@ final class CompactWriter implements AutoCloseable {
     private ThreadLocal<ByteBuffer> pqCacheViewPerThread;
     private ThreadLocal<byte[]> pqCodeBufPerThread;
 
-    CompactWriter(Path outputPath,
+    CompactWriter(CompactionDestination.OutputReservation reservation,
                   int maxOrdinal,
                   int numBaseLayerNodes,
-                  long startOffset,
                   List<CommonHeader.LayerInfo> layerInfo,
                   int entryNode,
                   int dimension,
@@ -102,9 +101,9 @@ final class CompactWriter implements AutoCloseable {
             throw new IllegalStateException(
                     "Fused PQ requires a format version that supports it; version " + version + " does not");
         }
-        this.outputPath = outputPath;
-        this.writer = new BufferedRandomAccessWriter(outputPath);
-        this.startOffset = startOffset;
+        this.outputPath = reservation.file();
+        this.writer = new BufferedRandomAccessWriter(reservation.file());
+        this.startOffset = reservation.startOffset();
         this.configuredLayerInfo = new ArrayList<>(layerInfo);
         this.configuredLayerDegrees = new ArrayList<>(layerDegrees);
         this.baseDegree = layerDegrees.get(0);
