@@ -19,7 +19,8 @@ import io.github.jbellis.jvector.graph.NodesIterator;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.concurrent.locks.StampedLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.IntStream;
 
 /**
@@ -35,9 +36,7 @@ public class DenseIntMap<T> implements IntMap<T> {
     // - writelock to resize the array
     // - readlock to update the array with put or remove
     // - no lock to read the array, volatile is enough
-    // Hold a real read lock for updates; optimistic retries previously caused
-    // permanent size-accounting inconsistencies (see issue #218).
-    private final StampedLock sl = new StampedLock();
+    private final ReadWriteLock rwl = new ReentrantReadWriteLock();
     private volatile AtomicReferenceArray<T> objects;
     private final AtomicInteger size;
 
@@ -53,7 +52,7 @@ public class DenseIntMap<T> implements IntMap<T> {
         }
 
         ensureCapacity(key);
-        long stamp = sl.readLock();
+        rwl.readLock().lock();
         try {
             var success = objects.compareAndSet(key, existing, value);
             var isInsert = success && existing == null;
@@ -62,7 +61,7 @@ public class DenseIntMap<T> implements IntMap<T> {
             }
             return success;
         } finally {
-            sl.unlockRead(stamp);
+            rwl.readLock().unlock();
         }
     }
 
@@ -85,7 +84,7 @@ public class DenseIntMap<T> implements IntMap<T> {
             return;
         }
 
-        long stamp = sl.writeLock();
+        rwl.writeLock().lock();
         try {
             var oldArray = objects;
             if (node >= oldArray.length()) {
@@ -97,7 +96,7 @@ public class DenseIntMap<T> implements IntMap<T> {
                 objects = newArray;
             }
         } finally {
-            sl.unlockWrite(stamp);
+            rwl.writeLock().unlock();
         }
     }
 
@@ -111,7 +110,7 @@ public class DenseIntMap<T> implements IntMap<T> {
             return null;
         }
 
-        long stamp = sl.readLock();
+        rwl.readLock().lock();
         try {
             if (objects.compareAndSet(key, old, null)) {
                 size.decrementAndGet();
@@ -120,7 +119,7 @@ public class DenseIntMap<T> implements IntMap<T> {
                 return null;
             }
         } finally {
-            sl.unlockRead(stamp);
+            rwl.readLock().unlock();
         }
     }
 
