@@ -42,6 +42,14 @@ public interface ReaderSupplier extends AutoCloseable {
     }
 
     /**
+     * Hints that the byte range {@code [offset, offset + length)} will be needed soon,
+     * allowing the OS to start fetching it asynchronously (POSIX_FADV_WILLNEED equivalent).
+     * Returns immediately; best-effort and a no-op by default.
+     */
+    default void willNeed(long offset, long length) {
+    }
+
+    /**
      * Releases the supplier's underlying resource. Two implementation families exist, with very
      * different safety under concurrency:
      * <ul>

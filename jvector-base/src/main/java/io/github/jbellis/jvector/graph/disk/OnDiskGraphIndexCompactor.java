@@ -86,6 +86,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     private final int taskWindowSize;
     private final VectorSimilarityFunction similarityFunction;
     private boolean refineAfterCompaction = false;
+    private io.github.jbellis.jvector.util.work.ProgressLimiter progressLimiter =
+        io.github.jbellis.jvector.util.work.ProgressLimiter.UNLIMITED;
 
     /**
      * Whether to run the second-pass neighbor refinement after the merged graph is written
@@ -97,6 +99,27 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     @Experimental
     public void setRefineAfterCompaction(boolean refineAfterCompaction) {
         this.refineAfterCompaction = refineAfterCompaction;
+    }
+
+    /**
+     * Installs the host's progress + rate-limit control surface. Called by the embedding host
+     * before {@link #compact}; the default is {@link io.github.jbellis.jvector.util.work.ProgressLimiter#UNLIMITED}.
+     */
+    @Experimental
+    public void setProgressLimiter(io.github.jbellis.jvector.util.work.ProgressLimiter progressLimiter) {
+        this.progressLimiter = progressLimiter != null
+            ? progressLimiter
+            : io.github.jbellis.jvector.util.work.ProgressLimiter.UNLIMITED;
+    }
+
+    /**
+     * Returns the ordinal remappers actually used by the last {@link #compact} call, in source order.
+     * In this implementation the caller-supplied remappers are used verbatim (no similarity-order
+     * reordering), so this returns the same list passed to the constructor.
+     */
+    @Experimental
+    public List<OrdinalMapper> effectiveRemappers() {
+        return remappers;
     }
     /**
      * Constructs a new OnDiskGraphIndexCompactor for graphs without a non-fused compressed sidecar.

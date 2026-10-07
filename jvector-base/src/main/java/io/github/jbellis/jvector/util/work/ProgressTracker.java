@@ -48,8 +48,16 @@ public interface ProgressTracker {
     }
 
     /** Closeable lifetime token returned by {@link #startPhase}. */
-    @FunctionalInterface
     interface PhaseScope extends AutoCloseable {
+        /**
+         * Reports cumulative progress within this phase. Called from workers; implementations
+         * must be thread-safe and must not throw.
+         *
+         * @param completed work done so far in this phase, in phase-defined units
+         * @param total     total work for this phase, or {@code -1} if not yet known
+         */
+        default void onProgress(long completed, long total) { }
+
         @Override
         void close();
 
