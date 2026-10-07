@@ -128,11 +128,12 @@ public abstract class QuantizationCompactionStrategy {
     }
 
     /**
-     * Writes the merged compressed-vectors sidecar file. Called by the compactor's
-     * {@code compact(graphPath, compressedPath)} entry point after the graph is fully written.
-     * Throws {@link UnsupportedOperationException} by default; sidecar strategies override.
+     * Writes the merged compressed-vectors sidecar body into {@code compressedPath} starting at
+     * {@code startOffset}. The region {@code [0, startOffset)} is left untouched, allowing the
+     * caller to place its own header there. Called by the compactor after the graph is fully
+     * written. Throws {@link UnsupportedOperationException} by default; sidecar strategies override.
      */
-    public void writeSidecar(Path compressedPath) throws IOException {
+    public void writeSidecar(Path compressedPath, long startOffset) throws IOException {
         throw new UnsupportedOperationException(this + " does not write a sidecar");
     }
 

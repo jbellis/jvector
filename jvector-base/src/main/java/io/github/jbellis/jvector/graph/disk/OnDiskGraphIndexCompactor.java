@@ -112,6 +112,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             : io.github.jbellis.jvector.util.work.ProgressLimiter.UNLIMITED;
     }
 
+    private final List<OrdinalMapper> effectiveRemappers;
+
     /**
      * Returns the ordinal remappers actually used by the last {@link #compact} call, in source order.
      * In this implementation the caller-supplied remappers are used verbatim (no similarity-order
@@ -119,7 +121,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      */
     @Experimental
     public List<OrdinalMapper> effectiveRemappers() {
-        return remappers;
+        return effectiveRemappers;
     }
     /**
      * Constructs a new OnDiskGraphIndexCompactor for graphs without a non-fused compressed sidecar.
@@ -172,6 +174,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         this.sources = sources;
         this.sourceCompressed = (sourceCompressed == null || sourceCompressed.isEmpty()) ? null : sourceCompressed;
         this.remappers = remappers;
+        this.effectiveRemappers = remappers;
         this.liveNodes = liveNodes;
         this.numLiveNodesPerSource = new ArrayList<>(this.sources.size());
         for (int s = 0; s < this.sources.size(); s++) {
@@ -345,20 +348,49 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      */
     @Experimental
     public void compact(CompactionDestination destination) throws IOException {
+        compact(destination, null);
+    }
+
+    /**
+     * Compaction entry point for graphs that may ship a non-fused compressed sidecar. Writes the
+     * graph to {@code destination} and (if {@code compressedDestination} is non-null) the merged
+     * compressed sidecar vectors to {@code compressedDestination}.
+     */
+    @Experimental
+    public void compact(CompactionDestination destination, CompactionDestination compressedDestination) throws IOException {
+        QuantizationCompactionStrategy inlineStrategy = detectInlineStrategy();
+        QuantizationCompactionStrategy sidecarStrategy = detectSidecarStrategy();
+
         try (CompactionDestination.OutputReservation reservation = destination.open()) {
-            QuantizationCompactionStrategy strategy = detectInlineStrategy();
+            if (sidecarStrategy != QuantizationCompactionStrategy.NONE) {
+                sidecarStrategy.retrain(similarityFunction);
+            }
             try {
-                compactGraphImpl(reservation, strategy);
-                releaseSourcesBeforeRefine(strategy);
+                compactGraphImpl(reservation, inlineStrategy);
+                if (sidecarStrategy == QuantizationCompactionStrategy.NONE) {
+                    releaseSourcesBeforeRefine(inlineStrategy);
+                }
                 if (refineAfterCompaction) {
-                    refineCompactedGraph(reservation, strategy);
+                    refineCompactedGraph(reservation, inlineStrategy);
                 }
             } finally {
                 // Delayed until after refinement so refineCompactedGraph can read from the
                 // pre-encoded code cache appended past the projected EOF; onAfterClose unmaps
                 // it and truncates, leaving the file at its true final size.
-                strategy.onAfterClose(reservation.file());
+                inlineStrategy.onAfterClose(reservation.file());
             }
+
+            if (compressedDestination != null) {
+                if (sidecarStrategy == QuantizationCompactionStrategy.NONE) {
+                    throw new IllegalStateException("compressedDestination provided but no sidecar strategy found");
+                }
+                try (CompactionDestination.OutputReservation compressedReservation = compressedDestination.open()) {
+                    sidecarStrategy.writeSidecar(compressedReservation.file(), compressedReservation.startOffset());
+                    long compressedBodyLength = Files.size(compressedReservation.file()) - compressedReservation.startOffset();
+                    compressedReservation.commit(compressedBodyLength);
+                }
+            }
+
             long bodyLength = Files.size(reservation.file()) - reservation.startOffset();
             reservation.commit(bodyLength);
         }
@@ -380,24 +412,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                     "compact(graphPath, compressedPath) requires sourceCompressed to be supplied to the constructor");
         }
         Objects.requireNonNull(compressedPath, "compressedPath");
-
-        // Graph compaction proceeds without fused-PQ retrain (validateCompressed forbids
-        // FUSED_PQ when sourceCompressed is set), then the sidecar is written below.
-        QuantizationCompactionStrategy inlineStrategy = detectInlineStrategy();
-        QuantizationCompactionStrategy sidecarStrategy = detectSidecarStrategy();
-        try (CompactionDestination.OutputReservation reservation = CompactionDestination.file(graphPath).open()) {
-            sidecarStrategy.retrain(similarityFunction);
-            compactGraphImpl(reservation, inlineStrategy);
-            if (refineAfterCompaction) {
-                refineCompactedGraph(reservation, inlineStrategy);
-            }
-            sidecarStrategy.writeSidecar(compressedPath);
-            reservation.commit(Files.size(graphPath));
-        } catch (IOException e) {
-            throw new RuntimeException("Sidecar compaction failed", e);
-        } finally {
-            inlineStrategy.onAfterClose(graphPath);
-        }
+        compact(CompactionDestination.file(graphPath), CompactionDestination.file(compressedPath));
     }
 
     /**

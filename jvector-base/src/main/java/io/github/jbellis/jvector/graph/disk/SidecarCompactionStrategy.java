@@ -83,7 +83,7 @@ public final class SidecarCompactionStrategy extends QuantizationCompactionStrat
     }
 
     @Override
-    public void writeSidecar(Path compressedPath) throws IOException {
+    public void writeSidecar(Path compressedPath, long startOffset) throws IOException {
         if (retrainedCompressor == null) {
             throw new IllegalStateException("retrain() must be called before writeSidecar()");
         }
@@ -92,10 +92,11 @@ public final class SidecarCompactionStrategy extends QuantizationCompactionStrat
         final int count = ctx.maxOrdinal + 1;
         final int chunkCount = (count + vectorsPerChunk - 1) / vectorsPerChunk;
 
-        log.info("Streaming {} merged ordinals to {} ({} chunks of up to {} entries each)",
-                count, compressedPath, chunkCount, vectorsPerChunk);
+        log.info("Streaming {} merged ordinals to {} at offset {} ({} chunks of up to {} entries each)",
+                count, compressedPath, startOffset, chunkCount, vectorsPerChunk);
 
         try (var out = new BufferedRandomAccessWriter(compressedPath)) {
+            out.seek(startOffset);
             formatHandle.writeSidecarHeader(out, retrainedCompressor, count);
 
             int parallelism = Math.max(ctx.taskWindowSize, 1);
