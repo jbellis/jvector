@@ -256,6 +256,10 @@ public final class VectorUtil {
 
   public static VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) { return impl.nvqSub(a, b); }
 
+  public static VectorFloat<?> nvqSub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+    return impl.nvqSub(a, aOffset, b, bOffset, length);
+  }
+
   public static float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue) {
     return impl.nvqDotProduct8bit(vector, bytes, growthRate, midpoint, minValue, maxValue);
   }

@@ -213,6 +213,10 @@ public interface VectorUtilSupport {
 
   default VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) { return sub(a, b); }
 
+  default VectorFloat<?> nvqSub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+    return sub(a, aOffset, b, bOffset, length);
+  }
+
   /**
    * Computes the dot product between a vector and a 8-bit quantized vector (described by its parameters).
    * We assume that the number of dimensions of the vector and the quantized vector match.

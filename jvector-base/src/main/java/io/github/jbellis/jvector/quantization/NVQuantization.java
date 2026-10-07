@@ -202,8 +202,13 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
      */
     @Override
     public void encodeTo(VectorFloat<?> v, NVQuantization.QuantizedVector dest) {
-        var tempVector = VectorUtil.nvqSub(v, globalMean);
-        QuantizedVector.quantizeTo(getSubVectors(tempVector), bitsPerDimension, learn, dest);
+        // Shift each subvector directly, avoiding a full-vector temporary and slice copies.
+        for (int i = 0; i < subvectorSizesAndOffsets.length; i++) {
+            int size = subvectorSizesAndOffsets[i][0];
+            int offset = subvectorSizesAndOffsets[i][1];
+            var subvector = VectorUtil.nvqSub(v, offset, globalMean, offset, size);
+            QuantizedSubVector.quantizeTo(subvector, bitsPerDimension, learn, dest.subVectors[i]);
+        }
     }
 
     /**
