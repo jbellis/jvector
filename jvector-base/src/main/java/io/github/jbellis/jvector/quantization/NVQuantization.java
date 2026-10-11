@@ -179,8 +179,10 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     @Override
     public NVQVectors encodeAll(RandomAccessVectorValues ravv, ForkJoinPool parallelExecutor) {
         var encoded = new QuantizedVector[ravv.size()];
-        VectorAccess.forEach(ravv, ravv.size(), java.util.function.IntUnaryOperator.identity(),
-                parallelExecutor, (ordinal, vector) -> encoded[ordinal] = encode(vector));
+        // VectorCompressor requires missing ordinals to encode as zero vectors.
+        var zero = vectorTypeSupport.createFloatVector(originalDimension);
+        VectorAccess.forEach(ravv, parallelExecutor,
+                (ordinal, vector) -> encoded[ordinal] = encode(vector == null ? zero : vector));
         return new NVQVectors(this, encoded);
     }
 

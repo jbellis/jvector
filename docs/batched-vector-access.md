@@ -155,10 +155,28 @@ restores the original sample order and duplicates. PQ's sample policy and centro
 learning are unchanged. The point-access fallback retains the existing parallel
 path and avoids copying non-shared resident vectors.
 
-PQ and NVQ bulk encoding use `VectorAccess.forEach`; NVQ's mean computation uses a
+PQ, NVQ, and binary quantization bulk encoding use `VectorAccess.forEach`; NVQ's mean computation uses a
 range cursor and preserves its accumulation order. Existing calls to
 `ProductQuantization.compute`, `encodeAll`, and `NVQuantization.compute` accept the
 file source directly, as shown in the runnable quantization example.
+
+For a new quantizer, use the full-scan overload without generating all ordinals:
+
+```java
+VectorAccess.forEach(source, executor, (ordinal, vector) -> {
+    // Encode or consume the borrowed vector here; copy it only if retaining it.
+    encoded[ordinal] = compressor.encode(vector);
+});
+```
+
+Use `copySelected` for retained training samples, `openRange` for an ordered
+sequential reduction, and the mapped `forEach` overload when output positions
+refer to different input ordinals. These utilities work with existing sources
+without buffered hooks. Full-precision graph construction continues using
+thread-local random-access views; it does not require quantization or batching.
+The source does not change distance metrics, quantizer parameters, graph pruning,
+or hierarchy. Algorithm restrictions still apply, such as FusedPQ requiring
+256 clusters and anisotropic PQ requiring normalized training vectors.
 
 Other quantizers and indexes can adopt the same utilities independently. Existing
 integrations can continue supplying ordinary `RandomAccessVectorValues`; they do
@@ -201,6 +219,8 @@ reads and payload allocation, not physical device I/O.
 ## Ownership and closure
 
 - A cursor has one consumer. Independent cursors can run concurrently.
+- A failed advance invalidates the cursor. Its value and ordinal are unavailable;
+  open a new cursor to retry. Other views remain usable if the source is still open.
 - A shared cursor vector is borrowed until the next advance or close. Call `.copy()`
   before retaining it. Non-shared resident sources allow retention without copying.
 - Point-access views have their own scratch vector and are single-consumer. Use

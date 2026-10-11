@@ -84,6 +84,60 @@ public class TestVectorAccess {
         assertThrows(IndexOutOfBoundsException.class, () -> VectorAccess.openSelection(source, new int[] {1}, 0, 1));
         try (var cursor = VectorAccess.openRange(source, 0, 0)) { assertFalse(cursor.next()); }
     }
+
+    @Test public void fullScanFallbackVisitsEachPositionOnceIncludingEmptySources() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var vectors = java.util.stream.IntStream.range(0, 19)
+                .<VectorFloat<?>>mapToObj(i -> vts.createFloatVector(new float[] {i})).collect(java.util.stream.Collectors.toList());
+        var source = new ListRandomAccessVectorValues(vectors, 1);
+        var visits = new java.util.concurrent.atomic.AtomicIntegerArray(source.size());
+        var pool = new ForkJoinPool(3);
+        try {
+            VectorAccess.forEach(source, pool, (ordinal, vector) -> {
+                assertEquals(ordinal, vector.get(0), 0f);
+                visits.incrementAndGet(ordinal);
+            });
+            for (int i = 0; i < source.size(); i++) assertEquals(1, visits.get(i));
+            var empty = new ListRandomAccessVectorValues(java.util.List.of(), 1);
+            VectorAccess.forEach(empty, pool, (ordinal, vector) -> fail("Empty source invoked consumer"));
+        } finally { pool.shutdown(); }
+    }
+
+    @Test public void fullScanClosesItsCursorWhenConsumerFails() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var resident = new ListRandomAccessVectorValues(java.util.List.of(
+                vts.createFloatVector(new float[] {1}), vts.createFloatVector(new float[] {2})), 1);
+        var closed = new java.util.concurrent.atomic.AtomicInteger();
+        BatchedVectorValues source = new BatchedVectorValues() {
+            public int size() { return resident.size(); }
+            public int dimension() { return resident.dimension(); }
+            public boolean isValueShared() { return false; }
+            public RandomAccessVectorValues copy() { return this; }
+            public VectorFloat<?> getVector(int ordinal) { return resident.getVector(ordinal); }
+            public VectorCursor openSelection(int[] ordinals, int offset, int count) {
+                throw new AssertionError("Full scan should use range access");
+            }
+            public VectorCursor openRange(int start, int end) {
+                var cursor = VectorAccess.openRange(resident, start, end);
+                return new VectorCursor() {
+                    public boolean next() { return cursor.next(); }
+                    public int ordinal() { return cursor.ordinal(); }
+                    public VectorFloat<?> vector() { return cursor.vector(); }
+                    public boolean isValueShared() { return cursor.isValueShared(); }
+                    public void close() { cursor.close(); closed.incrementAndGet(); }
+                };
+            }
+        };
+        var pool = new ForkJoinPool(1);
+        try {
+            assertThrows(IllegalStateException.class, () -> VectorAccess.forEach(source, pool,
+                    (ordinal, vector) -> { throw new IllegalStateException("sink failed"); }));
+            assertEquals(1, closed.get());
+            VectorAccess.forEach(source, pool, (ordinal, vector) -> assertEquals(ordinal + 1, vector.get(0), 0f));
+            assertEquals(2, closed.get());
+        } finally { pool.shutdown(); }
+    }
+
     @Test public void unsharedPointSourceDoesNotNeedCopy() {
         var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
         var values = java.util.List.of(vts.createFloatVector(new float[] {1}), vts.createFloatVector(new float[] {2}));
@@ -108,7 +162,39 @@ public class TestVectorAccess {
         var pool = new ForkJoinPool(2);
         try {
             assertSame(values.get(1), VectorAccess.copySelected(source, new int[] {1}, pool).get(0));
-            VectorAccess.forEach(source, source.size(), java.util.function.IntUnaryOperator.identity(), pool, (ordinal, vector) -> assertSame(values.get(ordinal), vector));
+            VectorAccess.forEach(source, pool, (ordinal, vector) -> assertSame(values.get(ordinal), vector));
         } finally { pool.shutdown(); }
+    }
+
+    @Test public void failedPointAdvanceInvalidatesCursor() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var value = vts.createFloatVector(new float[] {1});
+        var failure = new IllegalStateException("Source read failed");
+        RandomAccessVectorValues source = new RandomAccessVectorValues() {
+            public int size() { return 3; }
+            public int dimension() { return 1; }
+            public boolean isValueShared() { return false; }
+            public RandomAccessVectorValues copy() { throw new UnsupportedOperationException(); }
+            public VectorFloat<?> getVector(int ordinal) {
+                if (ordinal == 1) throw failure;
+                return value;
+            }
+        };
+        for (boolean selection : new boolean[] {false, true}) {
+            for (int start : new int[] {0, 1}) {
+                try (var cursor = selection
+                        ? VectorAccess.openSelection(source, new int[] {0, 1, 2}, start, 3 - start)
+                        : VectorAccess.openRange(source, start, 3)) {
+                    if (start == 0) { assertTrue(cursor.next()); assertSame(value, cursor.vector()); }
+                    assertSame(failure, assertThrows(IllegalStateException.class, cursor::next));
+                    assertThrows(IllegalStateException.class, cursor::vector);
+                    assertThrows(IllegalStateException.class, cursor::ordinal);
+                    assertThrows(IllegalStateException.class, cursor::next);
+                }
+            }
+        }
+        try (var cursor = VectorAccess.openRange(source, 2, 3)) {
+            assertTrue(cursor.next()); assertSame(value, cursor.vector()); assertFalse(cursor.next());
+        }
     }
 }
