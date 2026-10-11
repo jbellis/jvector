@@ -89,6 +89,34 @@ public class TestBuildScoreProviderBorrowedVectors {
         }
     }
 
+    @Test public void centroidUsesRangeAndNormalizesItsSnapshot() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var resident = new ListRandomAccessVectorValues(Arrays.asList(
+                vts.createFloatVector(new float[] {1f, 0f}), null,
+                vts.createFloatVector(new float[] {0f, 1f})), 2);
+        var sizes = new java.util.concurrent.atomic.AtomicInteger();
+        var ranges = new java.util.concurrent.atomic.AtomicInteger();
+        var source = new BatchedVectorValues() {
+            public int size() { return sizes.getAndIncrement() == 0 ? 3 : 4; }
+            public int dimension() { return 2; }
+            public boolean isValueShared() { return false; }
+            public RandomAccessVectorValues copy() { throw new UnsupportedOperationException(); }
+            public VectorFloat<?> getVector(int ordinal) { throw new AssertionError("Point read"); }
+            public VectorCursor openRange(int start, int end) {
+                ranges.incrementAndGet();
+                return VectorAccess.openRange(resident, start, end);
+            }
+            public VectorCursor openSelection(int[] ordinals, int offset, int count) {
+                throw new AssertionError("Selection");
+            }
+        };
+        var centroid = BuildScoreProvider.randomAccessScoreProvider(source,
+                VectorSimilarityFunction.DOT_PRODUCT).approximateCentroid();
+        assertEquals(1, ranges.get());
+        assertEquals(1f / 3, centroid.get(0), 0f);
+        assertEquals(1f / 3, centroid.get(1), 0f);
+    }
+
     @Test public void residentAnchorsAreNotCopied() {
         var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
         var zero = vts.createFloatVector(new float[] {1f, 0f, 0f});
