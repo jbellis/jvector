@@ -24,7 +24,7 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class TestBuildScoreProviderBorrowedVectors {
-    private static final class Borrowed implements RandomAccessVectorValues {
+    private static class Borrowed implements RandomAccessVectorValues {
         final RandomAccessVectorValues source;
         final VectorFloat<?> scratch;
         Borrowed(RandomAccessVectorValues source) {
@@ -37,6 +37,32 @@ public class TestBuildScoreProviderBorrowedVectors {
         public RandomAccessVectorValues copy() { return new Borrowed(source); }
         public VectorFloat<?> getVector(int ordinal) { source.getVectorInto(ordinal, scratch, 0); return scratch; }
     }
+    @Test public void borrowedNodeScorersDoNotMaterializeAnchorsAtCreation() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var resident = new ListRandomAccessVectorValues(List.of(
+                vts.createFloatVector(new float[] {1f, 0f}),
+                vts.createFloatVector(new float[] {0f, 1f})), 2);
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        class Counting extends Borrowed {
+            Counting() { super(resident); }
+            @Override public RandomAccessVectorValues copy() { return new Counting(); }
+            @Override public VectorFloat<?> getVector(int ordinal) {
+                reads.incrementAndGet();
+                return super.getVector(ordinal);
+            }
+        }
+        var bsp = BuildScoreProvider.randomAccessScoreProvider(new Counting(), VectorSimilarityFunction.DOT_PRODUCT);
+        var search = bsp.searchProviderFor(0).scoreFunction();
+        var diversity = bsp.diversityProviderFor(0).scoreFunction();
+        var direct = bsp.diversityScoreFunctionFor(0);
+        assertEquals(0, reads.get());
+        float expected = VectorSimilarityFunction.DOT_PRODUCT.compare(resident.getVector(0), resident.getVector(1));
+        assertEquals(expected, search.similarityTo(1), 0f);
+        assertEquals(expected, diversity.similarityTo(1), 0f);
+        assertEquals(expected, direct.similarityTo(1), 0f);
+        assertEquals(6, reads.get());
+    }
+
     @Test public void residentAnchorsAreNotCopied() {
         var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
         var zero = vts.createFloatVector(new float[] {1f, 0f, 0f});
