@@ -202,4 +202,38 @@ public class TestFvecFileVectorValues {
             }
         } finally { Files.delete(malformed); }
     }
+
+    @Test(timeout = 10000) public void failedAdvanceInvalidatesCursorAndReleasesItsReads() throws Exception {
+        // Cover first selection, middle of a batch, and transition to the next batch.
+        for (int invalidOrdinal : new int[] {1, 2}) {
+            var path = file(257, 17);
+            var bytes = ByteBuffer.wrap(Files.readAllBytes(path)).order(ByteOrder.LITTLE_ENDIAN);
+            bytes.putInt(invalidOrdinal * 18 * 4, 99);
+            Files.write(path, bytes.array());
+            try (var source = FvecFileVectorValues.open(path, FvecFileVectorValues.Options.defaults()
+                    .withBatchVectors(2).withReadAhead(3))) {
+                try (var cursor = source.openRange(0, 5)) {
+                    for (int ordinal = 0; ordinal < invalidOrdinal; ordinal++) {
+                        assertTrue(cursor.next()); equal(ordinal, cursor.vector());
+                    }
+                    assertThrows(UncheckedIOException.class, cursor::next);
+                    assertThrows(IllegalStateException.class, cursor::vector);
+                    assertThrows(IllegalStateException.class, cursor::ordinal);
+                    assertThrows(IllegalStateException.class, cursor::next);
+                }
+                // The source and other cursors remain usable after this cursor fails.
+                try (var cursor = source.openSelection(new int[] {invalidOrdinal}, 0, 1)) {
+                    assertThrows(UncheckedIOException.class, cursor::next);
+                    assertThrows(IllegalStateException.class, cursor::vector);
+                    assertThrows(IllegalStateException.class, cursor::next);
+                }
+                try (var cursor = source.openRange(5, 7)) {
+                    assertTrue(cursor.next()); equal(5, cursor.vector());
+                    assertTrue(cursor.next()); equal(6, cursor.vector());
+                }
+                equal(8, source.getVector(8));
+                assertTrue(source.statistics().bufferBytes <= source.statistics().bufferLimitBytes);
+            } finally { Files.delete(path); }
+        }
+    }
 }

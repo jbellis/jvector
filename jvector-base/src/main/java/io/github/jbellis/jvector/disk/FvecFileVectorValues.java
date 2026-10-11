@@ -257,15 +257,24 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
             if (cursorClosed) throw new IllegalStateException("Cursor is closed");
             if (position == count) return false;
             if (++position == count) { release(); return false; }
-            int row = position % storage.batchVectors;
-            if (row == 0) {
-                if (current != null) current.consumed = true;
-                prefetch(position);
-                current = storage.decode(request(position), row, value, 0);
-            } else if (!storage.tryDecode(current, row, value, 0)) {
-                current = storage.decode(current.request, row, value, 0);
+            try {
+                int row = position % storage.batchVectors;
+                if (row == 0) {
+                    if (current != null) current.consumed = true;
+                    prefetch(position);
+                    current = storage.decode(request(position), row, value, 0);
+                } else if (!storage.tryDecode(current, row, value, 0)) {
+                    current = storage.decode(current.request, row, value, 0);
+                }
+                return true;
+            } catch (RuntimeException | Error failure) {
+                // A failed advance cannot expose stale data or resume at the next ordinal.
+                try { close(); }
+                catch (RuntimeException | Error cleanup) {
+                    if (cleanup != failure) failure.addSuppressed(cleanup);
+                }
+                throw failure;
             }
-            return true;
         }
 
         private void checkPosition() {
