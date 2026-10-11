@@ -180,7 +180,8 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
         boolean sequential = ordinal == previousOrdinal + 1;
         boolean withinCurrent = currentRead != null && ordinal >= currentRead.request.start
                 && ordinal < currentRead.request.start + currentRead.request.count;
-        if (!sequential && storage.pointReaders.length != 0) {
+        // A point call is not a scan: adjacent graph ordinals must not enter the shared scheduler.
+        if (storage.pointReaders.length != 0) {
             if (currentRead != null) currentRead.consumed = true;
             currentRead = null;
             storage.readPointInto(ordinal, destination, offset);
