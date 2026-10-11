@@ -73,33 +73,45 @@ public class TestBufferedExactQueries {
                 VectorSimilarityFunction.DOT_PRODUCT), 17, 8, 32, 1.2f, 1.2f, true, true, pool, pool)) {
             OnDiskGraphIndex.write(builder.build(resident), resident, path);
             try (var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(path))) {
-                for (var metric : VectorSimilarityFunction.values()) {
-                    DataSet dataset = new DataSet() {
-                        public String getName() { return "point-only"; }
-                        public int getDimension() { return 17; }
-                        public VectorSimilarityFunction getSimilarityFunction() { return metric; }
-                        public List<VectorFloat<?>> getBaseVectors() { return vectors; }
-                        public List<VectorFloat<?>> getQueryVectors() { return List.of(vectors.get(0)); }
-                        public List<List<Integer>> getGroundTruth() { return List.of(List.of(0)); }
-                        public RandomAccessVectorValues getBaseRavv() { return root; }
-                    };
-                    try (var system = new Grid.ConfiguredSystem(dataset, index, null, Set.of(FeatureId.INLINE_VECTORS))) {
-                        var tasks = new ArrayList<Callable<Void>>();
-                        for (int worker = 0; worker < 8; worker++) {
-                            final int id = worker;
-                            tasks.add(() -> {
-                                try (var view = index.getView()) {
-                                    for (int iteration = 0; iteration < 100; iteration++) {
-                                        var query = vectors.get((iteration + id) % vectors.size());
-                                        var scores = system.scoreProviderFor(query, view).scoreFunction();
-                                        int ordinal = (iteration * 7 + id) % vectors.size();
-                                        assertEquals(metric.compare(query, vectors.get(ordinal)), scores.similarityTo(ordinal), 0f);
+                for (boolean stored : new boolean[] {false, true}) {
+                    for (var metric : VectorSimilarityFunction.values()) {
+                        DataSet dataset = new DataSet() {
+                            public String getName() { return "point-only"; }
+                            public int getDimension() { return 17; }
+                            public VectorSimilarityFunction getSimilarityFunction() { return metric; }
+                            public List<VectorFloat<?>> getBaseVectors() { return vectors; }
+                            public List<VectorFloat<?>> getQueryVectors() { return List.of(vectors.get(0)); }
+                            public List<List<Integer>> getGroundTruth() { return List.of(List.of(0)); }
+                            public RandomAccessVectorValues getBaseRavv() {
+                                if (!stored) return root;
+                                return new Borrowed(resident) {
+                                    @Override public VectorFloat<?> getVector(int ordinal) {
+                                        throw new AssertionError("Stored scorer reread input dataset");
                                     }
-                                }
-                                return null;
-                            });
+                                    @Override public RandomAccessVectorValues copy() {
+                                        throw new AssertionError("Stored scorer copied input source");
+                                    }
+                                };
+                            }
+                        };
+                        try (var system = new Grid.ConfiguredSystem(dataset, index, null, stored ? Set.of(FeatureId.INLINE_VECTORS) : Set.of())) {
+                            var tasks = new ArrayList<Callable<Void>>();
+                            for (int worker = 0; worker < 8; worker++) {
+                                final int id = worker;
+                                tasks.add(() -> {
+                                    try (var view = index.getView()) {
+                                        for (int iteration = 0; iteration < 100; iteration++) {
+                                            var query = vectors.get((iteration + id) % vectors.size());
+                                            var scores = system.scoreProviderFor(query, view).scoreFunction();
+                                            int ordinal = (iteration * 7 + id) % vectors.size();
+                                            assertEquals(metric.compare(query, vectors.get(ordinal)), scores.similarityTo(ordinal), 0f);
+                                        }
+                                    }
+                                    return null;
+                                });
+                            }
+                            for (var task : workers.invokeAll(tasks)) task.get();
                         }
-                        for (var task : workers.invokeAll(tasks)) task.get();
                     }
                 }
             }

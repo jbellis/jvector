@@ -110,11 +110,15 @@ public interface BuildScoreProvider {
         var vectorsCopy = ravv.threadLocalSupplier();
 
         return new BuildScoreProvider() {
-            private VectorFloat<?> anchorFor(int node) {
-                var source = vectors.get();
-                var vector = source.getVector(node);
-                // A scorer can outlive the next read from a borrowed source view.
-                return source.isValueShared() ? vector.copy() : vector;
+            private ScoreFunction.ExactScoreFunction scoreFunctionFor(int node1) {
+                if (ravv.isValueShared()) {
+                    // Resolve both ordinals using separate borrowed views; no anchor escapes a read.
+                    return node2 -> similarityFunction.compare(vectors.get().getVector(node1),
+                            vectorsCopy.get().getVector(node2));
+                }
+                var vector = vectors.get().getVector(node1);
+                var vc = vectorsCopy.get();
+                return node2 -> similarityFunction.compare(vector, vc.getVector(node2));
             }
 
             @Override
@@ -144,23 +148,17 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(int node1) {
-                var v = anchorFor(node1);
-                return searchProviderFor(v);
+                return new DefaultSearchScoreProvider(scoreFunctionFor(node1));
             }
 
             @Override
             public SearchScoreProvider diversityProviderFor(int node1) {
-                var v = anchorFor(node1);
-                var vc = vectorsCopy.get();
-                return DefaultSearchScoreProvider.exact(v, similarityFunction, vc);
+                return new DefaultSearchScoreProvider(scoreFunctionFor(node1));
             }
 
             @Override
             public ScoreFunction diversityScoreFunctionFor(int node1) {
-                var v = anchorFor(node1);
-                var vc = vectorsCopy.get();
-                // don't use ESF.reranker, we need thread safety here
-                return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(v, vc.getVector(node2));
+                return scoreFunctionFor(node1);
             }
         };
     }

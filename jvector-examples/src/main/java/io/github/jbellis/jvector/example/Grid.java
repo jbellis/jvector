@@ -1153,6 +1153,10 @@ public class Grid {
             } else {
                 // if we're not compressing then just use the exact score function
                 if (cv == null) {
+                    if (features.contains(FeatureId.INLINE_VECTORS)) {
+                        // Use the stored vectors instead of rereading the input dataset during queries.
+                        return new DefaultSearchScoreProvider(scoringView.rerankerFor(queryVector, ds.getSimilarityFunction()));
+                    }
                     return DefaultSearchScoreProvider.exact(queryVector, ds.getSimilarityFunction(), exactVectors.get());
                 }
 
