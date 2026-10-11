@@ -157,7 +157,8 @@ public interface BuildScoreProvider {
             public VectorFloat<?> approximateCentroid() {
                 var vv = vectors.get();
                 var centroid = vts.createFloatVector(vv.dimension());
-                try (var cursor = VectorAccess.openRange(vv, 0, vv.size())) {
+                int size = vv.size();
+                try (var cursor = VectorAccess.openRange(vv, 0, size)) {
                     while (cursor.next()) {
                         var v = cursor.vector();
                         if (v != null) { // MapRandomAccessVectorValues is not necessarily dense
@@ -165,7 +166,7 @@ public interface BuildScoreProvider {
                         }
                     }
                 }
-                VectorUtil.scale(centroid, 1.0f / vv.size());
+                VectorUtil.scale(centroid, 1.0f / size);
                 return centroid;
             }
 

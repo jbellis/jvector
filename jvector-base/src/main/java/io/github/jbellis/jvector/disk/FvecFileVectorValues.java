@@ -43,13 +43,16 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
 
 /**
  * A read-only, fixed-dimension fvecs source with bounded asynchronous range/selection
  * reads. The file must remain unchanged while open. Copies share the channel, executor
- * and reusable buffer budget; each copy and cursor has its own borrowed vector.
+ * and reusable payload budget, including cached point vectors; each copy and cursor
+ * has its own borrowed vector.
  *
  * <p>Close all cursors and stop consumers before closing the source. Closing the root
  * releases all resources, including resources used by copies. No memory mapping or
@@ -59,6 +62,7 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
     private static final VectorTypeSupport VTS = VectorizationProvider.getInstance().getVectorTypeSupport();
     private static final long DEFAULT_MAX_BYTES = 64L << 20;
     private static final int MAX_ZERO_READS = 16;
+    private static final int MAX_POINT_ROWS = 4096;
     private final Storage storage;
     private final boolean ownsStorage;
     private final VectorFloat<?> scratch;
@@ -176,6 +180,13 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
         boolean sequential = ordinal == previousOrdinal + 1;
         boolean withinCurrent = currentRead != null && ordinal >= currentRead.request.start
                 && ordinal < currentRead.request.start + currentRead.request.count;
+        if (!sequential && storage.pointReaders.length != 0) {
+            if (currentRead != null) currentRead.consumed = true;
+            currentRead = null;
+            storage.readPointInto(ordinal, destination, offset);
+            previousOrdinal = ordinal;
+            return;
+        }
         if (!withinCurrent) {
             if (currentRead != null) currentRead.consumed = true;
             int first = sequential ? ordinal / storage.batchVectors * storage.batchVectors : ordinal;
@@ -204,7 +215,7 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
     /** Cumulative source I/O counters; bytes are logical input reads, not device traffic. */
     public Statistics statistics() {
         synchronized (storage) {
-            return new Statistics(storage.reads.sum(), storage.bytes.sum(), storage.allocatedBytes, storage.budget);
+            return new Statistics(storage.reads.sum(), storage.bytes.sum(), storage.allocatedBytes + storage.pointRowBytes.sum(), storage.budget);
         }
     }
 
@@ -332,8 +343,29 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
         }
     }
 
+    /** Exclusively leased point-read resources; channel count is bounded by the I/O limit. */
+    private static final class PointReader {
+        final int index;
+        final Semaphore permit = new Semaphore(1);
+        Buffer buffer;
+        volatile FileChannel channel;
+        PointReader(int index, int bytes) { this.index = index; buffer = new Buffer(bytes); }
+    }
+
+    /** Fixed cache slot; only this slot is locked while copying its vector. */
+    private static final class PointRow {
+        int ordinal = -1;
+        VectorFloat<?> vector;
+    }
+
     private static final class Storage {
         final FileChannel channel;
+        final Path path;
+        final PointReader[] pointReaders;
+        final ThreadLocal<PointReader> pointHint;
+        final long pointBytes;
+        final PointRow[] pointRows;
+        final LongAdder pointRowBytes = new LongAdder();
         final int dimension, size, rowBytes, batchVectors, readAhead, slots;
         final long budget;
         final ThreadPoolExecutor executor;
@@ -345,6 +377,7 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
         volatile boolean closed;
 
         Storage(Path path, long maxBytes, int threads, int maxBatch, int ahead) throws IOException {
+            this.path = path;
             channel = FileChannel.open(path, StandardOpenOption.READ);
             try {
                 ByteBuffer header = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
@@ -358,11 +391,28 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
                     throw new IOException("Invalid fvec file length: " + length);
                 size = (int) (length / rowBytes);
                 budget = Math.max(rowBytes, Math.min(maxBytes, length / 100));
-                // Leave room for concurrent consumers and their three-batch look-ahead.
-                long concurrentRows = budget / rowBytes / threads / (ahead + 1L);
+                // Point reads bypass asynchronous cache scheduling; their buffers share the same budget.
+                int points = (int) Math.min(threads, Math.min((budget - rowBytes) / rowBytes,
+                        Math.max(1, budget / rowBytes / 16)));
+                pointBytes = (long) points * rowBytes;
+                pointReaders = new PointReader[points];
+                for (int i = 0; i < points; i++) pointReaders[i] = new PointReader(i, rowBytes);
+                var nextPointReader = new AtomicInteger();
+                pointHint = points == 0 ? null : ThreadLocal.withInitial(() ->
+                        pointReaders[Math.floorMod(nextPointReader.getAndIncrement(), points)]);
+                // Bound point-cache metadata too; narrow vectors must not create millions of slots.
+                long available = budget - pointBytes;
+                int rows = points == 0 ? 0 : (int) Math.min(Math.min(size, MAX_POINT_ROWS),
+                        Math.max(0, (available - rowBytes) / 2 / (dimension * (long) Float.BYTES)));
+                pointRows = new PointRow[rows];
+                for (int i = 0; i < rows; i++) pointRows[i] = new PointRow();
+                long batchBudget = available - (long) rows * dimension * Float.BYTES;
+                // Leave room for concurrent consumers and their configured look-ahead.
+                long concurrentRows = batchBudget / rowBytes / threads / (ahead + 1L);
                 batchVectors = (int) Math.max(1, Math.min(Math.min(maxBatch, Integer.MAX_VALUE / rowBytes), concurrentRows));
                 readAhead = ahead;
-                slots = (int) Math.min(Integer.MAX_VALUE, budget / (batchVectors * (long) rowBytes));
+                slots = (int) Math.min(Integer.MAX_VALUE, batchBudget / (batchVectors * (long) rowBytes));
+                allocatedBytes = pointBytes;
                 executor = new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
                         new ArrayBlockingQueue<>(slots), runnable -> {
                             Thread t = new Thread(runnable, "jvector-input-io"); t.setDaemon(true); return t;
@@ -370,7 +420,28 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
             } catch (Throwable failure) { channel.close(); throw failure; }
         }
 
+        private FileChannel pointChannel(PointReader reader) throws IOException {
+            // Caller owns the lease; interruption can close only this channel.
+            if (reader.channel == null || !reader.channel.isOpen())
+                reader.channel = FileChannel.open(path, StandardOpenOption.READ);
+            return reader.channel;
+        }
+
         private void read(Request request, Buffer buffer) throws IOException {
+            PointReader reader = null;
+            try {
+                // Bulk and point reads share leases, bounding total I/O without a second global permit.
+                if (pointReaders.length != 0) reader = borrowPointReader();
+                readWithChannel(request, buffer, reader == null ? channel : pointChannel(reader));
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Input read interrupted", error);
+            } finally {
+                if (reader != null) reader.permit.release();
+            }
+        }
+
+        private void readWithChannel(Request request, Buffer buffer, FileChannel input) throws IOException {
             synchronized (buffer) {
                 buffer.bb.clear();
                 boolean contiguous = true;
@@ -378,16 +449,77 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
                     contiguous = request.ordinal(i) == request.ordinal(0) + i;
                 if (contiguous) {
                     buffer.bb.limit(request.count * rowBytes);
-                    readFully(channel, buffer.bb, (long) request.ordinal(0) * rowBytes);
+                    readFully(input, buffer.bb, (long) request.ordinal(0) * rowBytes);
                     reads.increment(); bytes.add((long) request.count * rowBytes);
                 } else {
                     for (int i = 0; i < request.count; i++) {
                         buffer.bb.limit((i + 1) * rowBytes);
-                        readFully(channel, buffer.bb, (long) request.ordinal(i) * rowBytes);
+                        readFully(input, buffer.bb, (long) request.ordinal(i) * rowBytes);
                         reads.increment(); bytes.add(rowBytes);
                     }
                 }
                 buffer.bb.flip();
+            }
+        }
+
+        private PointReader borrowPointReader() throws InterruptedException {
+            var hint = pointHint.get();
+            for (int i = 0; i < pointReaders.length; i++) {
+                var candidate = pointReaders[(hint.index + i) % pointReaders.length];
+                if (candidate.permit.tryAcquire()) return candidate;
+            }
+            // All readers are busy. Block instead of spinning on cache or queue state.
+            hint.permit.acquire();
+            return hint;
+        }
+
+        void readPointInto(int ordinal, VectorFloat<?> destination, int offset) {
+            if (pointRows.length == 0) {
+                readPointUncachedInto(ordinal, destination, offset);
+                return;
+            }
+            int hash = ordinal;
+            hash ^= hash >>> 16;
+            hash *= 0x85ebca6b;
+            hash ^= hash >>> 13;
+            hash *= 0xc2b2ae35;
+            hash ^= hash >>> 16;
+            var row = pointRows[(hash & Integer.MAX_VALUE) % pointRows.length];
+            synchronized (row) {
+                if (row.ordinal != ordinal) {
+                    // Failed reads cannot attach the old ordinal to overwritten data.
+                    row.ordinal = -1;
+                    if (row.vector == null) {
+                        row.vector = VTS.createFloatVector(dimension);
+                        pointRowBytes.add((long) dimension * Float.BYTES);
+                    }
+                    readPointUncachedInto(ordinal, row.vector, 0);
+                    row.ordinal = ordinal;
+                }
+                destination.copyFrom(row.vector, 0, offset, dimension);
+            }
+        }
+
+        private void readPointUncachedInto(int ordinal, VectorFloat<?> destination, int offset) {
+            PointReader reader = null;
+            try {
+                reader = borrowPointReader();
+                pointHint.set(reader);
+                var input = pointChannel(reader);
+                var buffer = reader.buffer;
+                buffer.bb.clear();
+                readFully(input, buffer.bb, (long) ordinal * rowBytes);
+                buffer.bb.flip();
+                if (buffer.readInt() != dimension)
+                    throw new IOException("Unexpected fvec dimension at " + ordinal);
+                VTS.readFloatVector(buffer, dimension, destination, offset);
+                reads.increment(); bytes.add(rowBytes);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Input read interrupted", error);
+            } catch (IOException error) { throw new UncheckedIOException(error); }
+            finally {
+                if (reader != null) reader.permit.release();
             }
         }
 
@@ -533,8 +665,24 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
                 try { executor.awaitTermination(1, TimeUnit.SECONDS); }
                 catch (InterruptedException e) { interrupted = true; }
             }
+            IOException failure = null;
+            for (PointReader reader : pointReaders) {
+                try { if (reader.channel != null) reader.channel.close(); }
+                catch (IOException error) {
+                    if (failure == null) failure = error; else failure.addSuppressed(error);
+                } finally { reader.channel = null; reader.buffer = null; }
+            }
+            if (pointHint != null) pointHint.remove();
+            for (PointRow row : pointRows) { row.vector = null; row.ordinal = -1; }
+            pointRowBytes.reset();
             try { channel.close(); }
-            finally { synchronized (this) { cache.clear(); free.clear(); } if (interrupted) Thread.currentThread().interrupt(); }
+            catch (IOException error) {
+                if (failure == null) failure = error; else failure.addSuppressed(error);
+            } finally {
+                synchronized (this) { cache.clear(); free.clear(); }
+                if (interrupted) Thread.currentThread().interrupt();
+            }
+            if (failure != null) throw failure;
         }
     }
 
