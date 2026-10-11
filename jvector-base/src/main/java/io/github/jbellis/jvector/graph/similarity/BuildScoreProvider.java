@@ -110,6 +110,13 @@ public interface BuildScoreProvider {
         var vectorsCopy = ravv.threadLocalSupplier();
 
         return new BuildScoreProvider() {
+            private VectorFloat<?> anchorFor(int node) {
+                var source = vectors.get();
+                var vector = source.getVector(node);
+                // A scorer can outlive the next read from a borrowed source view.
+                return source.isValueShared() ? vector.copy() : vector;
+            }
+
             @Override
             public boolean isExact() {
                 return true;
@@ -137,22 +144,20 @@ public interface BuildScoreProvider {
 
             @Override
             public SearchScoreProvider searchProviderFor(int node1) {
-                RandomAccessVectorValues randomAccessVectorValues = vectors.get();
-                var v = randomAccessVectorValues.getVector(node1);
+                var v = anchorFor(node1);
                 return searchProviderFor(v);
             }
 
             @Override
             public SearchScoreProvider diversityProviderFor(int node1) {
-                RandomAccessVectorValues randomAccessVectorValues = vectors.get();
-                var v = randomAccessVectorValues.getVector(node1);
+                var v = anchorFor(node1);
                 var vc = vectorsCopy.get();
                 return DefaultSearchScoreProvider.exact(v, similarityFunction, vc);
             }
 
             @Override
             public ScoreFunction diversityScoreFunctionFor(int node1) {
-                var v = vectors.get().getVector(node1);
+                var v = anchorFor(node1);
                 var vc = vectorsCopy.get();
                 // don't use ESF.reranker, we need thread safety here
                 return (ScoreFunction.ExactScoreFunction) node2 -> similarityFunction.compare(v, vc.getVector(node2));
