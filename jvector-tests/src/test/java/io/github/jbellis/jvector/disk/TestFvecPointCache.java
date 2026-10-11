@@ -52,6 +52,28 @@ public class TestFvecPointCache {
         } finally { Files.delete(file); }
     }
 
+    @Test public void adjacentPointRequestsDoNotTriggerScanReadAhead() throws Exception {
+        int rows = 10000, dimensions = 17;
+        var file = Files.createTempFile("point-scan-separation", ".fvecs");
+        var bytes = ByteBuffer.allocate(rows * (dimensions + 1) * 4).order(ByteOrder.LITTLE_ENDIAN);
+        for (int row = 0; row < rows; row++) {
+            bytes.putInt(dimensions);
+            for (int d = 0; d < dimensions; d++) bytes.putFloat(row + d / 32f);
+        }
+        Files.write(file, bytes.array());
+        var source = FvecFileVectorValues.open(file, FvecFileVectorValues.Options.defaults()
+                .withIoThreads(4).withBatchVectors(8).withReadAhead(3));
+        try {
+            for (int ordinal = 100; ordinal < 103; ordinal++)
+                assertEquals(ordinal, source.getVector(ordinal).get(0), 0f);
+        } finally {
+            source.close();
+            Files.delete(file);
+        }
+        // Closing drains speculative reads; exactly the three requested records should have been read.
+        assertEquals(3, source.statistics().reads);
+    }
+
     @Test public void pointsShareBoundedCachedRowsWithoutSharingScratch() throws Exception {
         int rows = 10000, dimensions = 17;
         var file = Files.createTempFile("point-cache-check", ".fvecs");
