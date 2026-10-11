@@ -57,7 +57,7 @@ for (int i = 0; i < source.size(); i++) {
 
 ### Ordinal assignment
 
-Each source assigns its own local ordinals. The compactor merges the upper layers first (see "Hierarchical Levels"), then builds the output mapping: sources in ascending-size order, and within a source by the level-1 node of the merged hierarchy each node descends to (an exact greedy descent through the resident merged upper layers, refined by a width-8 beam over level 1, keyed by a breadth-first walk position over the merged level-1 graph). When no source has an upper layer there are no cells, and level 0 falls back to the graph search.
+Each source assigns its own local ordinals. The compactor merges the upper layers first (see "Hierarchical Levels"), then builds the output mapping: sources in ascending-size order, and within a source by the level-1 node of the merged hierarchy each node descends to (an exact greedy descent through the merged upper layers, refined by a width-8 beam over level 1, keyed by a breadth-first walk position over the merged level-1 graph). When no source has an upper layer there are no cells, and level 0 falls back to the graph search.
 
 
 ### PQ Retraining
@@ -112,7 +112,7 @@ The compactor also trains a product quantization with four dimensions per subspa
 
 Level 0 (base layer) stores inline vectors, FusedPQ codes, and the neighbor list. Upper levels store only the neighbor list (plus PQ codes at level 1 for cross-level searching).
 
-The upper layers are merged before level 0: for each live upper-layer node the compactor keeps its retained same-source edges, adds candidates from a greedy descent and a beam search in every other source's upper layers, and diversity-selects the result. The merged lists are held in memory (a few per cent of the nodes) until the ordinals exist, and the merged level 1 — every source's level-1 nodes with their merged edges — is the cell hierarchy the ordinal assignment and the cell join run on. They are written after level 0.
+The upper layers are merged before level 0: for each live upper-layer node the compactor keeps its retained same-source edges, adds candidates from a greedy descent and a beam search in every other source's upper layers, and diversity-selects the result. The merged lists are held in memory (a few per cent of the nodes) until the ordinals exist, and the merged level 1 — every source's level-1 nodes with their merged edges — is the cell hierarchy the ordinal assignment and the cell join run on. Its adjacency and the levels above it stay on the heap; the level-1 vectors (about 3 % of the dataset) are written once to a file beside the output and read through a read-only mapping, so they are page cache rather than a fixed heap cost. They are written after level 0.
 
 Processing is batched per source and run in parallel across sources using a `ForkJoinPool`. A backpressure window keeps at most `taskWindowSize` batches in-flight at once, bounding memory use.
 

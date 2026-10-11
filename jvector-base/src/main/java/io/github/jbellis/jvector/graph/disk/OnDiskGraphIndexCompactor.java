@@ -20,7 +20,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
@@ -623,6 +626,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         } catch (IOException | ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
         }
+        try {
         remappers = buildRegionOrdinalMappers(pq);
         if (cellMap != null) {
             log.info("Level-0 candidates are scanned and scored on the vectors themselves ({} B per node in scratch)",
@@ -672,6 +676,12 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             log.info("Compaction complete: {}", outputPath);
         } catch (IOException | ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
+        }
+        } finally {
+            if (cellMap != null) {
+                cellMap.close();   // the level-1 vector mapping
+                cellMap = null;
+            }
         }
     }
 
@@ -1074,10 +1084,11 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     }
 
     /**
-     * The merged upper layers as a resident {@link HubMap}. Node ids are per-source offsets
-     * ({@code idOffset[src] + node}) so every source's nodes share one id space.
+     * The merged upper layers as a {@link HubMap}. Node ids are per-source offsets
+     * ({@code idOffset[src] + node}) so every source's nodes share one id space. The level-1 vectors
+     * go to a file beside the output and are mapped read-only; the levels above stay on the heap.
      */
-    private HubMap buildMergedHubMap() {
+    private HubMap buildMergedHubMap() throws IOException {
         long t0 = System.nanoTime();
         int numSources = sources.size();
         int[] idOffset = new int[numSources + 1];
@@ -1104,9 +1115,13 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             int[] adj = new int[n * degree];
             int[] ns = mergedNbrSrc[level], nn = mergedNbrNode[level];
             for (int e = 0; e < n * degree; e++) adj[e] = ns[e] < 0 ? -1 : idOffset[ns[e]] + nn[e];
-            if ((long) n * dimension > Integer.MAX_VALUE - 8) throw new IllegalStateException("merged hub map: level " + level + " too large");
-            final VectorFloat<?> levelVectors = vectorTypeSupport.createFloatVector(n * dimension);
+            final boolean mapped = level == 1;   // level 1: vectors to a file instead of the heap
+            if (!mapped && (long) n * dimension > Integer.MAX_VALUE - 8) throw new IllegalStateException("merged hub map: level " + level + " too large");
+            final VectorFloat<?> levelVectors = mapped ? null : vectorTypeSupport.createFloatVector(n * dimension);
             final float[] levelNorms = h.cosine ? new float[n] : null;
+            final Path file = mapped ? Files.createTempFile(spillParent, "hub-level1-", ".vec") : null;
+            final FileChannel fc = mapped ? FileChannel.open(file, StandardOpenOption.WRITE) : null;
+            final int rowBytes = 4 * dimension;
             int chunk = Math.max(1024, n / (4 * taskWindowSize) + 1);
             List<Callable<Void>> tasks = new ArrayList<>();
             for (int from = 0; from < n; from += chunk) {
@@ -1114,13 +1129,23 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                 tasks.add(() -> {
                     OnDiskGraphIndex.View[] views = new OnDiskGraphIndex.View[numSources];
                     VectorFloat<?> vec = vectorTypeSupport.createFloatVector(dimension);
+                    ByteBuffer buf = mapped ? ByteBuffer.allocateDirect((hi - lo) * rowBytes).order(ByteOrder.nativeOrder()) : null;
+                    FloatBuffer rows = mapped ? buf.asFloatBuffer() : null;
                     try {
                         for (int i = lo; i < hi; i++) {
                             int src = ms[i];
                             if (views[src] == null) views[src] = sources.get(src).getView();
                             views[src].getVectorInto(mn[i], vec, 0);
-                            levelVectors.copyFrom(vec, 0, i * dimension, dimension);
                             if (levelNorms != null) levelNorms[i] = (float) Math.sqrt(VectorUtil.dotProduct(vec, vec));
+                            if (!mapped) {
+                                levelVectors.copyFrom(vec, 0, i * dimension, dimension);
+                                continue;
+                            }
+                            for (int d = 0; d < dimension; d++) rows.put(vec.get(d));
+                        }
+                        if (mapped) {
+                            long at = (long) lo * rowBytes;
+                            while (buf.hasRemaining()) at += fc.write(buf, at);
                         }
                     } finally {
                         for (var v : views) if (v != null) v.close();
@@ -1132,9 +1157,13 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             h.adjacency[level] = adj;
             h.vectors[level] = levelVectors;
             h.norms[level] = levelNorms;
+            if (mapped) {
+                fc.close();
+                h.mapLevel1(file);
+            }
         }
-        log.info("Merged cells: hub map from the merged upper layers (levels 1..{}, {} level-1 nodes) in {} ms",
-                 topLevel, h.nodes[1].length, (System.nanoTime() - t0) / 1_000_000);
+        log.info("Merged cells: hub map from the merged upper layers (levels 1..{}, {} level-1 nodes, {} MB of level-1 vectors mapped) in {} ms",
+                 topLevel, h.nodes[1].length, ((long) h.nodes[1].length * 4 * dimension) >> 20, (System.nanoTime() - t0) / 1_000_000);
         return h;
     }
 
@@ -2119,7 +2148,11 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         HubMap hubMap = null;
         int[] walkPosition = null;
         if (regionMode) {
-            hubMap = buildMergedHubMap();
+            try {
+                hubMap = buildMergedHubMap();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
             walkPosition = hubMap.walkPositions();
             log.info("Region ordinals: merged hierarchy (levels 1..{}), {} level-1 nodes walked",
                      hubMap.topLevel, hubMap.nodes[1].length);
@@ -2235,6 +2268,9 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             }
         }
         assert next == totalOrdinals : next + " ordinals assigned for " + totalOrdinals + " live nodes";
+        if (hubMap != null && cellMap == null) {
+            hubMap.close();   // ordered the ordinals only; level-0 candidates come from the graph search
+        }
 
         this.maxOrdinal = next - 1;
         List<OrdinalMapper> mappers = new ArrayList<>(numSources);
