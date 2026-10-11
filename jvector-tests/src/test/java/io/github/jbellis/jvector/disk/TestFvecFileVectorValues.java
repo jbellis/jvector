@@ -139,6 +139,71 @@ public class TestFvecFileVectorValues {
         }
     }
 
+    @Test(timeout = 60000) public void concurrentRandomPointsAndScansRespectTheSharedBudget() throws Exception {
+        var path = file(65537, 17);
+        try {
+            for (int ahead : new int[] {0, 3}) {
+                try (var source = FvecFileVectorValues.open(path, FvecFileVectorValues.Options.defaults()
+                        .withMaxBufferBytes(32768).withIoThreads(16).withBatchVectors(7).withReadAhead(ahead))) {
+                    var executor = Executors.newFixedThreadPool(48);
+                    try {
+                        var tasks = new ArrayList<Callable<Void>>();
+                        for (int worker = 0; worker < 48; worker++) {
+                            final int seed = worker;
+                            tasks.add(() -> {
+                                try (var copy = source.copy()) {
+                                    for (int i = 0; i < 256; i++) {
+                                        int ordinal = Math.floorMod(seed * 8191 + i * 7919, source.size());
+                                        equal(ordinal, copy.getVector(ordinal));
+                                    }
+                                }
+                                int first = seed * 127;
+                                try (var cursor = source.openRange(first, first + 64)) {
+                                    int ordinal = first;
+                                    while (cursor.next()) equal(ordinal++, cursor.vector());
+                                    assertEquals(first + 64, ordinal);
+                                }
+                                int[] ordinals = {source.size() - 1, seed, 0, seed, 32768};
+                                try (var cursor = source.openSelection(ordinals, 0, ordinals.length)) {
+                                    int i = 0;
+                                    while (cursor.next()) equal(ordinals[i++], cursor.vector());
+                                    assertEquals(ordinals.length, i);
+                                }
+                                assertTrue(source.statistics().bufferBytes <= source.statistics().bufferLimitBytes);
+                                return null;
+                            });
+                        }
+                        for (var future : executor.invokeAll(tasks)) future.get();
+                    } finally { executor.shutdown(); }
+                    assertTrue(source.statistics().bufferBytes <= source.statistics().bufferLimitBytes);
+                }
+            }
+        } finally { Files.delete(path); }
+    }
+
+    @Test(timeout = 10000) public void interruptedPointReadDoesNotCloseSharedSource() throws Exception {
+        var path = file(4096, 17);
+        try (var source = FvecFileVectorValues.open(path);
+             var copy = source.copy()) {
+            Thread.currentThread().interrupt();
+            try {
+                copy.getVector(127);
+                fail("Interrupted point read must fail");
+            } catch (RuntimeException expected) {
+                assertTrue(Thread.currentThread().isInterrupted());
+            } finally { Thread.interrupted(); }
+            // Clearing the caller interruption permits reuse; other views and cursors remain usable.
+            equal(127, copy.getVector(127));
+            equal(127, source.getVector(127));
+            try (var cursor = source.openRange(0, 128)) {
+                int ordinal = 0;
+                while (cursor.next()) equal(ordinal++, cursor.vector());
+                assertEquals(128, ordinal);
+            }
+            assertTrue(source.statistics().bufferBytes <= source.statistics().bufferLimitBytes);
+        } finally { Thread.interrupted(); Files.delete(path); }
+    }
+
     @Test(timeout=60000) public void materializationOrderAndEncodingMatchResidentSource() throws Exception {
         var path = file(2049, 17);
         var pool = new ForkJoinPool(8);
