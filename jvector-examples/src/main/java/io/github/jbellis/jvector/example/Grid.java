@@ -1121,6 +1121,7 @@ public class Grid {
         ImmutableGraphIndex index;
         CompressedVectors cv;
         Set<FeatureId> features;
+        private final Supplier<RandomAccessVectorValues> exactVectors;
 
         private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
             return new GraphSearcher(index);
@@ -1131,6 +1132,8 @@ public class Grid {
             this.index = index;
             this.cv = cv;
             this.features = features;
+            // File-backed sources borrow scratch storage; concurrent scorers need separate views.
+            this.exactVectors = ds.getBaseRavv().threadLocalSupplier();
         }
 
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, ImmutableGraphIndex.View view) {
@@ -1141,7 +1144,7 @@ public class Grid {
             } else {
                 // if we're not compressing then just use the exact score function
                 if (cv == null) {
-                    return DefaultSearchScoreProvider.exact(queryVector, ds.getSimilarityFunction(), ds.getBaseRavv());
+                    return DefaultSearchScoreProvider.exact(queryVector, ds.getSimilarityFunction(), exactVectors.get());
                 }
 
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.getSimilarityFunction());

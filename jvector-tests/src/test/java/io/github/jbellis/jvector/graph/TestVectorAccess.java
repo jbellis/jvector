@@ -84,4 +84,31 @@ public class TestVectorAccess {
         assertThrows(IndexOutOfBoundsException.class, () -> VectorAccess.openSelection(source, new int[] {1}, 0, 1));
         try (var cursor = VectorAccess.openRange(source, 0, 0)) { assertFalse(cursor.next()); }
     }
+    @Test public void unsharedPointSourceDoesNotNeedCopy() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var values = java.util.List.of(vts.createFloatVector(new float[] {1}), vts.createFloatVector(new float[] {2}));
+        RandomAccessVectorValues source = new RandomAccessVectorValues() {
+            public int size() { return values.size(); }
+            public int dimension() { return 1; }
+            public boolean isValueShared() { return false; }
+            public VectorFloat<?> getVector(int ordinal) { return values.get(ordinal); }
+            public RandomAccessVectorValues copy() { throw new UnsupportedOperationException("No copy needed"); }
+        };
+        try (var cursor = VectorAccess.openRange(source, 0, 2)) {
+            assertTrue(cursor.next()); assertSame(values.get(0), cursor.vector());
+            assertTrue(cursor.next()); assertSame(values.get(1), cursor.vector());
+            assertFalse(cursor.next());
+        }
+        try (var cursor = VectorAccess.openSelection(source, new int[] {1, 0, 1}, 0, 3)) {
+            for (int ordinal : new int[] {1, 0, 1}) {
+                assertTrue(cursor.next()); assertEquals(ordinal, cursor.ordinal()); assertSame(values.get(ordinal), cursor.vector());
+            }
+            assertFalse(cursor.next());
+        }
+        var pool = new ForkJoinPool(2);
+        try {
+            assertSame(values.get(1), VectorAccess.copySelected(source, new int[] {1}, pool).get(0));
+            VectorAccess.forEach(source, source.size(), java.util.function.IntUnaryOperator.identity(), pool, (ordinal, vector) -> assertSame(values.get(ordinal), vector));
+        } finally { pool.shutdown(); }
+    }
 }

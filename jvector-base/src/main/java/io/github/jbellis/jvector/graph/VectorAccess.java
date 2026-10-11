@@ -58,7 +58,7 @@ public final class VectorAccess {
     }
 
     private static VectorCursor pointCursor(RandomAccessVectorValues source, int start, int count, int[] ordinals) {
-        RandomAccessVectorValues values = source.copy();
+        RandomAccessVectorValues values = source.isValueShared() ? source.copy() : source;
         return new VectorCursor() {
             int position = -1;
             VectorFloat<?> current;
