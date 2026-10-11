@@ -50,6 +50,7 @@ import io.github.jbellis.jvector.graph.similarity.DefaultSearchScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.quantization.CompressedVectors;
+import io.github.jbellis.jvector.quantization.BQVectors;
 import io.github.jbellis.jvector.quantization.NVQuantization;
 import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
@@ -396,10 +397,18 @@ public class Grid {
         var floatVectors = ds.getBaseRavv();
 
         // Record the encoding time if asked for....
-        PQVectors pq = (PQVectors) ((constructionMetrics != null)
-                ? constructionMetrics.index("PQ").timeEncode(() -> buildCompressor.encodeAll(floatVectors))
-                : buildCompressor.encodeAll(floatVectors));
-        var bsp = BuildScoreProvider.pqBuildScoreProvider(ds.getSimilarityFunction(), pq);
+        var encoded = (constructionMetrics != null)
+                ? constructionMetrics.index(buildCompressor instanceof ProductQuantization ? "PQ" : "BQ")
+                        .timeEncode(() -> buildCompressor.encodeAll(floatVectors))
+                : buildCompressor.encodeAll(floatVectors);
+        if (!(encoded instanceof PQVectors) && !(encoded instanceof BQVectors))
+            throw new IllegalArgumentException("Disk construction supports PQ or BQ build compression");
+        PQVectors pq = encoded instanceof PQVectors ? (PQVectors) encoded : null;
+        if (pq == null && featureSets.stream().anyMatch(fs -> fs.contains(FeatureId.FUSED_PQ)))
+            throw new IllegalArgumentException("FusedPQ requires PQ build compression with 256 clusters");
+        var bsp = pq != null
+                ? BuildScoreProvider.pqBuildScoreProvider(ds.getSimilarityFunction(), pq)
+                : BuildScoreProvider.bqBuildScoreProvider((BQVectors) encoded);
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp, floatVectors.dimension(), M, efConstruction, neighborOverflow, 1.2f, addHierarchy, refineFinalGraph);
 
         // use the inline vectors index as the score provider for graph construction
@@ -415,7 +424,7 @@ public class Grid {
             } else {
                 graphPath = outputDir.resolve("graph" + n++);
             }
-            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors, pq.getCompressor(), constructionMetrics);
+            var bws = builderWithSuppliers(features, builder.getGraph(), graphPath, floatVectors, pq == null ? null : pq.getCompressor(), constructionMetrics);
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);

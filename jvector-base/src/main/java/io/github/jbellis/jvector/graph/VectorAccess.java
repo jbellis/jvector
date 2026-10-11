@@ -67,8 +67,14 @@ public final class VectorAccess {
                 if (closed) throw new IllegalStateException("Cursor is closed");
                 if (position == count) return false;
                 if (++position == count) { current = null; return false; }
-                current = values.getVector(ordinals == null ? start + position : ordinals[start + position]);
-                return true;
+                try {
+                    current = values.getVector(ordinals == null ? start + position : ordinals[start + position]);
+                    return true;
+                } catch (RuntimeException | Error failure) {
+                    // Match file cursors: a failed advance invalidates the current value.
+                    close();
+                    throw failure;
+                }
             }
             private void checkPosition() {
                 if (closed || position < 0 || position >= count) throw new IllegalStateException("No current vector");
@@ -118,6 +124,30 @@ public final class VectorAccess {
             }
         })).join();
         return Arrays.asList(result);
+    }
+
+    /**
+     * Consume a full scan without materializing an ordinal array. Future compressors can
+     * use this method for encoding and openSelection/copySelected for training samples.
+     * Ordinary sources retain their existing thread-local point-access path.
+     */
+    public static void forEach(RandomAccessVectorValues source, ForkJoinPool executor,
+                               VectorConsumer consumer) {
+        if (!(source instanceof BatchedVectorValues)) {
+            forEach(source, source.size(), IntUnaryOperator.identity(), executor, consumer);
+            return;
+        }
+        int count = source.size();
+        int partitions = Math.min(count, executor.getParallelism());
+        executor.submit(() -> IntStream.range(0, partitions).parallel().forEach(part -> {
+            int start = (int) ((long) part * count / partitions);
+            int end = (int) ((long) (part + 1) * count / partitions);
+            try (var cursor = openRange(source, start, end)) {
+                int i = start;
+                while (cursor.next()) consumer.accept(i++, cursor.vector());
+                if (i != end) throw new IllegalStateException("Incomplete vector range");
+            }
+        })).join();
     }
 
     /**
