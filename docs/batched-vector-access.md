@@ -172,8 +172,11 @@ VectorAccess.forEach(source, executor, (ordinal, vector) -> {
 Use `copySelected` for retained training samples, `openRange` for an ordered
 sequential reduction, and the mapped `forEach` overload when output positions
 refer to different input ordinals. These utilities work with existing sources
-without buffered hooks. Full-precision graph construction continues using
-thread-local random-access views; it does not require quantization or batching.
+without buffered hooks. Full-precision graph construction uses thread-local
+random-access views and an ordered range for centroid scans when available.
+It does not require quantization or batching. Repeated unpredictable raw-vector
+reads can still make file-backed exact construction slower than resident input;
+range and sample prefetching cannot eliminate those dependent point reads.
 The source does not change distance metrics, quantizer parameters, graph pruning,
 or hierarchy. Algorithm restrictions still apply, such as FusedPQ requiring
 256 clusters and anisotropic PQ requiring normalized training vectors.
@@ -200,14 +203,18 @@ try (var source = FvecFileVectorValues.open(path, options)) {
 The default I/O worker count follows `PhysicalCoreExecutor`, the compute sizing
 used by Grid and BenchYAML. It adapts to the machine and honors
 `-Djvector.physical_core_count`; there is no fixed core count. Blocking file reads
-run on a separate source-owned pool so they do not occupy compute workers.
+for range and selection cursors run on a separate source-owned pool. Unpredictable
+point reads execute on the requesting thread using exclusively leased channels;
+point and asynchronous reads share the I/O concurrency limit. A bounded cache of
+point vectors shares the payload budget and reduces repeated record reads.
 `withIoThreads(count)` remains available for explicit benchmark tuning. The
 quantization example uses the shared compute pool and does not shut it down.
 
 Other defaults are at most 64 vectors per batch and three batches of
 read-ahead. Payload capacity is capped at `min(1% of file bytes, 64 MiB)`, with one
 record as the minimum. A configured maximum is also capped at 1% of the file.
-Copies and cursors share the budget, including queued, in-flight and ready payloads.
+Copies and cursors share the budget, including queued, in-flight and ready payloads,
+point-read buffers and cached point vectors. Point-cache metadata is also bounded.
 Read-ahead zero disables speculative batches. Selected reads fetch requested records
 without reading the gaps between sparse samples.
 
