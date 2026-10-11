@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.graph;
 
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
+import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.*;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.util.*;
@@ -61,6 +62,31 @@ public class TestBuildScoreProviderBorrowedVectors {
         assertEquals(expected, diversity.similarityTo(1), 0f);
         assertEquals(expected, direct.similarityTo(1), 0f);
         assertEquals(6, reads.get());
+    }
+
+    @Test public void borrowedDiversityScorersReuseStorageAndRefreshTheirAnchor() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var resident = new ListRandomAccessVectorValues(List.of(
+                vts.createFloatVector(new float[] {1f, 0f, 0f}),
+                vts.createFloatVector(new float[] {0f, 1f, 0f}),
+                vts.createFloatVector(new float[] {1f, 1f, 0f})), 3);
+        for (var metric : VectorSimilarityFunction.values()) {
+            var bsp = BuildScoreProvider.randomAccessScoreProvider(new Borrowed(resident), metric);
+            ScoreFunction previous = null;
+            for (int node = 0; node < 3; node++) {
+                var scorer = bsp.borrowedDiversityScoreFunctionFor(node);
+                if (previous != null) assertSame(previous, scorer);
+                for (int peer = 0; peer < 3; peer++) {
+                    assertEquals(metric.compare(resident.getVector(node), resident.getVector(peer)),
+                            scorer.similarityTo(peer), 0f);
+                }
+                previous = scorer;
+            }
+            // Ordinary scorers remain independent of the reusable factory.
+            var ordinary = bsp.diversityScoreFunctionFor(0);
+            bsp.borrowedDiversityScoreFunctionFor(1);
+            assertEquals(metric.compare(resident.getVector(0), resident.getVector(2)), ordinary.similarityTo(2), 0f);
+        }
     }
 
     @Test public void residentAnchorsAreNotCopied() {
