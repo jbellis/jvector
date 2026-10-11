@@ -60,7 +60,8 @@ public class VamanaDiversityProvider implements DiversityProvider {
 
                 int cNode = neighbors.getNode(i);
                 float cScore = neighbors.getScore(i);
-                var sf = scoreProvider.diversityScoreFunctionFor(cNode);
+                // The scorer is consumed here before the next candidate can reuse its state.
+                var sf = scoreProvider.borrowedDiversityScoreFunctionFor(cNode);
                 if (isDiverse(cNode, cScore, neighbors, sf, selected, currentAlpha)) {
                     selected.set(i);
                     nSelected++;
