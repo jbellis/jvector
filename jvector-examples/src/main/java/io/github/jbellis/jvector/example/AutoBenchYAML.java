@@ -165,25 +165,29 @@ public class AutoBenchYAML {
                         // Mark dataset as completed and update checkpoint, passing results
                         checkpointManager.markDatasetCompleted(datasetName, datasetResults);
 
-                        // Compaction regression — failures are non-fatal and don't block checkpointing
-                        try {
-                            logger.info("Running compaction benchmark for dataset: {}", datasetName);
-                            List<BenchResult> datasetCompactionResults;
-                            if (loading == BaseVectorLoading.BUFFERED) {
-                                // This legacy validation queries raw originals; keep its resident source.
-                                try (var resident = DataSets.loadDataSet(datasetName, BaseVectorLoading.PRELOAD)
-                                        .orElseThrow(() -> new RuntimeException("Dataset " + datasetName + " not found"))
-                                        .getDataSet()) {
-                                    datasetCompactionResults = CompactionBench.run(resident);
+                        // Compaction regression is opt-in; failures remain non-fatal.
+                        if (config.isCompactionEnabled()) {
+                            try {
+                                logger.info("Running compaction benchmark for dataset: {}", datasetName);
+                                List<BenchResult> datasetCompactionResults;
+                                if (loading == BaseVectorLoading.BUFFERED) {
+                                    // This legacy validation queries raw originals; keep its resident source.
+                                    try (var resident = DataSets.loadDataSet(datasetName, BaseVectorLoading.PRELOAD)
+                                            .orElseThrow(() -> new RuntimeException("Dataset " + datasetName + " not found"))
+                                            .getDataSet()) {
+                                        datasetCompactionResults = CompactionBench.run(resident);
+                                    }
+                                } else {
+                                    datasetCompactionResults = CompactionBench.run(ds);
                                 }
-                            } else {
-                                datasetCompactionResults = CompactionBench.run(ds);
+                                compactionResults.addAll(datasetCompactionResults);
+                                logger.info("Compaction benchmark completed for dataset: {} ({} configs)",
+                                        datasetName, datasetCompactionResults.size());
+                            } catch (Exception e) {
+                                logger.error("Compaction benchmark failed for dataset {}", datasetName, e);
                             }
-                            compactionResults.addAll(datasetCompactionResults);
-                            logger.info("Compaction benchmark completed for dataset: {} ({} configs)",
-                                    datasetName, datasetCompactionResults.size());
-                        } catch (Exception e) {
-                            logger.error("Compaction benchmark failed for dataset {}", datasetName, e);
+                        } else {
+                            logger.info("Skipping compaction benchmark for dataset: {} (withCompaction not enabled)", datasetName);
                         }
                     }
                 } catch (Exception e) {

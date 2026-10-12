@@ -57,6 +57,24 @@ public class TestDatasetPrefetching {
             assertTrue(MultiConfig.getConfig(file.toString()).useDatasetPrefetching);
         } finally { Files.delete(file); }
     }
+    @Test public void datasetPrefetchingAndCompactionOptionsAreIndependent() throws Exception {
+        var file = Files.createTempFile("prefetch-compaction-flags", ".yml");
+        try {
+            String common = "yamlSchemaVersion: 1\nonDiskIndexVersion: 6\nuseDatasetPrefetching: true\n";
+            Files.writeString(file, common);
+            var config = MultiConfig.getConfig(file.toString());
+            assertTrue(config.useDatasetPrefetching);
+            assertFalse(config.isCompactionEnabled());
+            Files.writeString(file, common + "withCompaction: [Yes]\n");
+            config = MultiConfig.getConfig(file.toString());
+            assertTrue(config.useDatasetPrefetching);
+            assertTrue(config.isCompactionEnabled());
+            Files.writeString(file, common + "withCompaction: [No]\n");
+            config = MultiConfig.getConfig(file.toString());
+            assertTrue(config.useDatasetPrefetching);
+            assertFalse(config.isCompactionEnabled());
+        } finally { Files.delete(file); }
+    }
     @Test public void versionedYamlRejectsUnknownSettings() throws Exception {
         var file = Files.createTempFile("prefetch-unknown-setting", ".yml");
         try {
