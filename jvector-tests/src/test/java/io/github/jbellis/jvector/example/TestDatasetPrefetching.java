@@ -113,7 +113,7 @@ public class TestDatasetPrefetching {
             assertTrue(selections.get()>0); assertTrue(ranges.get()>0);
             int seen=0;
             try(var files=Files.list(work.resolve("saved"))) {
-                for(var file:files.toList()) {
+                for(var file:files.collect(java.util.stream.Collectors.toList())) {
                     try(var graph=OnDiskGraphIndex.load(ReaderSupplierFactory.open(file));var view=graph.getView()) {
                         assertEquals(128,graph.size(0));
                         if(graph.getFeatures().containsKey(FeatureId.INLINE_VECTORS)) {
@@ -129,7 +129,7 @@ public class TestDatasetPrefetching {
             }
             assertEquals(2,seen);
         } finally {
-            try(var paths=Files.walk(work)){for(var path:paths.sorted(Comparator.reverseOrder()).toList())Files.delete(path);}
+            try(var paths=Files.walk(work)){for(var path:paths.sorted(Comparator.reverseOrder()).collect(java.util.stream.Collectors.toList()))Files.delete(path);}
         }
     }
 }

@@ -197,4 +197,52 @@ public class TestVectorAccess {
             assertTrue(cursor.next()); assertSame(value, cursor.vector()); assertFalse(cursor.next());
         }
     }
+    @Test public void mappedScanBoundsSelectionMetadataAndPreservesOutputPositions() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        int count = 1_000_003;
+        var largest = new java.util.concurrent.atomic.AtomicInteger();
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        BatchedVectorValues source = new BatchedVectorValues() {
+            public int size() { return count; }
+            public int dimension() { return 1; }
+            public boolean isValueShared() { return true; }
+            public RandomAccessVectorValues copy() { throw new AssertionError("Point copy used"); }
+            public VectorFloat<?> getVector(int ordinal) { throw new AssertionError("Point read used"); }
+            public VectorCursor openRange(int start, int end) { throw new AssertionError("Mapped scan used range"); }
+            public VectorCursor openSelection(int[] ordinals, int offset, int length) {
+                largest.accumulateAndGet(length, Math::max);
+                assertTrue("Dataset-sized request", length <= 4096);
+                final int[] snapshot = Arrays.copyOfRange(ordinals, offset, offset + length);
+                final VectorFloat<?> value = vts.createFloatVector(1);
+                return new VectorCursor() {
+                    int position = -1;
+                    public boolean next() {
+                        if (++position == length) return false;
+                        assertEquals(snapshot[position], ordinals[offset + position]);
+                        value.set(0, snapshot[position]); reads.incrementAndGet(); return true;
+                    }
+                    public int ordinal() { return snapshot[position]; }
+                    public VectorFloat<?> vector() { return value; }
+                    public boolean isValueShared() { return true; }
+                    public void close() {
+                        // The caller cannot overwrite this request before the cursor closes.
+                        assertArrayEquals(snapshot, Arrays.copyOfRange(ordinals, offset, offset + length));
+                    }
+                };
+            }
+        };
+        var visits = new java.util.concurrent.atomic.AtomicIntegerArray(count);
+        var pool = new ForkJoinPool(2);
+        try {
+            // A permutation followed by duplicates exercises both mapping and output positions.
+            VectorAccess.forEach(source, count, i -> (count - 1 - i) / 2, pool, (position, vector) -> {
+                assertEquals((count - 1 - position) / 2, vector.get(0), 0f);
+                visits.incrementAndGet(position);
+            });
+            assertEquals(count, reads.get());
+            assertEquals(4096, largest.get());
+            for (int i = 0; i < count; i++) assertEquals(1, visits.get(i));
+        } finally { pool.shutdown(); }
+    }
+
 }

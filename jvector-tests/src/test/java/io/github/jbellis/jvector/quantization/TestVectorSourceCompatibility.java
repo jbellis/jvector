@@ -178,6 +178,8 @@ public class TestVectorSourceCompatibility {
 
     @Test(timeout = 60000)
     public void mappedPqEncodingPreservesOutputPositionsAndDuplicates() throws Exception {
+        String previousDebug = System.getProperty("VECTOR_DEBUG");
+        System.setProperty("VECTOR_DEBUG", "true");
         var pool = new ForkJoinPool(3);
         try (var input = new Input(17)) {
             var pq = ProductQuantization.compute(input.resident, 3, 16, false,
@@ -192,7 +194,11 @@ public class TestVectorSourceCompatibility {
             assertThrows(IllegalArgumentException.class, () -> pq.encodeAll(empty, pool));
             assertEquals(0, new BinaryQuantization(17).encodeAll(empty, pool).count());
             assertEquals(0, NVQuantization.compute(input.resident, 1).encodeAll(empty, pool).count());
-        } finally { pool.shutdown(); }
+        } finally {
+            pool.shutdown();
+            if (previousDebug == null) System.clearProperty("VECTOR_DEBUG");
+            else System.setProperty("VECTOR_DEBUG", previousDebug);
+        }
     }
 
     @Test public void nvqMissingOrdinalsEncodeAsZeroVectors() {
@@ -228,4 +234,36 @@ public class TestVectorSourceCompatibility {
             }
         } finally { pool.shutdown(); }
     }
+    @Test public void pqIdentityEncodingUsesRangesAndHonorsPrefixCount() {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var vectors = new ArrayList<VectorFloat<?>>();
+        for (int i = 0; i < 5003; i++)
+            vectors.add(vts.createFloatVector(new float[] {i % 2, i % 2}));
+        var resident = new ListRandomAccessVectorValues(vectors, 2);
+        var ranges = new java.util.concurrent.atomic.AtomicInteger();
+        BatchedVectorValues source = new BatchedVectorValues() {
+            public int size() { return resident.size(); }
+            public int dimension() { return 2; }
+            public boolean isValueShared() { return false; }
+            public RandomAccessVectorValues copy() { throw new AssertionError("Point copy used"); }
+            public VectorFloat<?> getVector(int ordinal) { throw new AssertionError("Point read used"); }
+            public VectorCursor openSelection(int[] ordinals, int offset, int count) {
+                throw new AssertionError("Identity encoding materialized a selection");
+            }
+            public VectorCursor openRange(int start, int end) {
+                ranges.incrementAndGet(); return VectorAccess.openRange(resident, start, end);
+            }
+        };
+        var pq = new ProductQuantization(new VectorFloat<?>[] {
+                vts.createFloatVector(new float[] {0, 0, 1, 1})}, 2, new int[][] {{2, 0}}, null, -1f);
+        var pool = new ForkJoinPool(3);
+        try {
+            for (int count : new int[] {5000, 5003}) {
+                assertEquals(PQVectors.encodeAndBuild(pq, count, resident, pool),
+                        PQVectors.encodeAndBuild(pq, count, source, pool));
+            }
+            assertEquals(6, ranges.get());
+        } finally { pool.shutdown(); }
+    }
+
 }

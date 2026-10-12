@@ -91,7 +91,9 @@ public class VectorPrefetchBenchmarkTest {
     }
 
     @Test public void coldCacheEvictsAndVerifiesOnlyInputFile() throws Exception {
+        assumeTrue(Runtime.version().feature() >= 23);
         assumeTrue(System.getProperty("os.name").equals("Linux"));
+        assumeTrue(System.getProperty("os.arch").matches("amd64|aarch64"));
         ColdFileCache.evictAndVerify(input());
     }
 
