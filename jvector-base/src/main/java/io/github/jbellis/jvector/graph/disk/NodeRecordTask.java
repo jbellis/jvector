@@ -38,8 +38,8 @@ import java.util.function.IntFunction;
  * Each task processes a contiguous range of ordinals to reduce task creation overhead.
  * <p>
  * This writes directly to the AsynchronousFileChannel using position-based writes with writeFully
- * to ensure all bytes are written before returning. This eliminates race conditions where the OS
- * buffer cache hasn't flushed data before subsequent reads occur.
+ * to ensure each write completes before its buffer is reused. Durability is handled by
+ * the caller's final channel.force(true).
  */
 class NodeRecordTask implements Callable<Void> {
     private final int startOrdinal;  // Inclusive
@@ -107,10 +107,53 @@ class NodeRecordTask implements Callable<Void> {
         // Reuse writer and buffer across all ordinals in this range
         var writer = new ByteBufferIndexWriter(buffer);
 
+        int payloadBytes = Integer.BYTES * (2 + graph.getDegree(0))
+                + inlineFeatures.stream().mapToInt(Feature::featureSize).sum();
+        int padding = recordSize - payloadBytes;
+        final boolean completeRecord = inlineFeatures.stream().allMatch(f -> featureStateSuppliers.get(f.id()) != null);
+        final int batch = buffer.capacity() / recordSize;
         for (int newOrdinal = startOrdinal; newOrdinal < endOrdinal; newOrdinal++) {
             var originalOrdinal = ordinalMapper.newToOld(newOrdinal);
             long recordOffset = baseOffset + (long) newOrdinal * recordSize;
             long currentPosition = recordOffset;
+
+            // A complete record can share one bounded buffer and one positioned write.
+            if (completeRecord) {
+                if (buffer.position() == buffer.limit()) writer.reset();
+                int recordBegin = buffer.position();
+                writer.writeInt(newOrdinal);
+                if (originalOrdinal == OrdinalMapper.OMITTED) {
+                    for (var feature : inlineFeatures)
+                        for (int i = 0; i < feature.featureSize(); i++) writer.writeByte(0);
+                    writer.writeInt(0);
+                    for (int n = 0; n < graph.getDegree(0); n++) writer.writeInt(-1);
+                } else {
+                    if (!graph.containsNode(originalOrdinal)) {
+                        throw new IllegalStateException("Missing graph node " + originalOrdinal);
+                    }
+                    for (var feature : inlineFeatures)
+                        feature.writeInline(writer, featureStateSuppliers.get(feature.id()).apply(originalOrdinal));
+                    var neighbors = view.getNeighborsIterator(0, originalOrdinal);
+                    if (neighbors.size() > graph.getDegree(0)) throw new IllegalStateException("Too many neighbors for " + originalOrdinal);
+                    writer.writeInt(neighbors.size());
+                    int n = 0;
+                    while (neighbors.hasNext()) {
+                        int mapped = ordinalMapper.oldToNew(neighbors.nextInt());
+                        if (mapped < 0 || mapped > ordinalMapper.maxOrdinal()) throw new IllegalStateException("Invalid mapped neighbor " + mapped);
+                        writer.writeInt(mapped); n++;
+                    }
+                    for (; n < graph.getDegree(0); n++) writer.writeInt(-1);
+                }
+                for (int i = 0; i < padding; i++) writer.writeByte(0);
+                if (writer.position() != recordBegin + recordSize) throw new IllegalStateException("Wrong serialized record length");
+                if (buffer.position() < recordSize * batch && newOrdinal != endOrdinal - 1) continue;
+                long batchOffset = recordOffset - recordBegin;
+                buffer.flip();
+                // writeFully waits for completion before this worker reuses its buffer.
+                writeFully(channel, buffer, batchOffset);
+                buffer.clear();
+                continue;
+            }
 
             // Reset buffer for this ordinal
             writer.reset();
@@ -193,6 +236,11 @@ class NodeRecordTask implements Callable<Void> {
 
                 ByteBuffer neighborData = writer.cloneBuffer();
                 writeFully(channel, neighborData, currentPosition);
+            }
+            if (padding > 0) {
+                writer.reset();
+                for (int i = 0; i < padding; i++) writer.writeByte(0);
+                writeFully(channel, writer.cloneBuffer(), recordOffset + payloadBytes);
             }
         }
 
