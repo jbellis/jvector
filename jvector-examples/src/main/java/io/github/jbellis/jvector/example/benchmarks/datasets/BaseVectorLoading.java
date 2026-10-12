@@ -37,9 +37,15 @@ public enum BaseVectorLoading {
 
     public static BaseVectorLoading forBenchmark() { return forBenchmark(false); }
 
-    /** Bulk input mode applies only where the harness consumes quantized or stored vectors. */
+    /// Choose base-vector loading for one benchmark configuration.
+    ///
+    /// An explicitly set `jvector.dataset_loader` VM option is returned as-is: it overrides both
+    /// the YAML `useDatasetPrefetching` flag and the routing below. Otherwise, opting in with the
+    /// flag selects buffered input only where the harness consumes quantized or stored vectors;
+    /// uncompressed construction and raw-input exact search stay on resident input.
     public static BaseVectorLoading forBenchmark(MultiConfig config) {
         var loading = forBenchmark(config.useDatasetPrefetching);
+        if (System.getProperty("jvector.dataset_loader") != null) return loading;
         if (loading == PRELOAD) return loading;
         // Uncompressed construction still uses main's resident raw-vector source.
         if (config.construction.compression.stream().anyMatch(c -> "None".equals(c.type)))
