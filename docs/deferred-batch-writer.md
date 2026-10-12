@@ -21,34 +21,68 @@ benefits come from deferring per-insertion feature writes and grouping final wri
 independently of how input vectors are loaded. Buffered range access is an optional
 Grid integration, not a prerequisite for the core writer.
 
-## Supplying features at final write
+## Caller migration: early writes versus deferred batches
 
-Provide the final feature suppliers to `write` after graph construction and cleanup.
-Feature encoding then happens during serialization, rather than through a
-synchronized `writeFeaturesInline` call on each insertion. This applies to NVQ,
-full-precision inline vectors, fused PQ, and other features implementing the existing
-`Feature` interface. The core writer does not choose a quantizer or retain input
-vectors on the application's behalf.
+Both examples assume the same trained `nvq`, graph `builder`, node `count`,
+`writerWorkers`, and output path. The builder's construction scoring is unchanged;
+its peer vectors are supplied separately. `vectorForOrdinal` is the application's
+lookup of an original input vector, not a harness loader.
+
+### Old: write each inline feature during insertion
 
 ```java
-try (var writer = new OnDiskParallelGraphIndexWriter.Builder(graph, outputPath)
-        .withParallelWorkerThreads(workerCount)
-        .with(new InlineVectors(vectors.dimension()))
+try (var writer = new OnDiskParallelGraphIndexWriter.Builder(builder.getGraph(), outputPath)
+        .withParallelWorkerThreads(writerWorkers)
+        .withMapper(new OrdinalMapper.IdentityMapper(count - 1))
+        .with(new NVQ(nvq))
         .build()) {
-    var localVectors = vectors.threadLocalSupplier();
-    writer.write(Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
-            ordinal -> new InlineVectors.State(localVectors.get().getVector(ordinal))));
+    for (int ordinal = 0; ordinal < count; ordinal++) {
+        var vector = vectorForOrdinal.apply(ordinal);
+        builder.addGraphNode(ordinal, vector);
+        writer.writeFeaturesInline(ordinal, Feature.singleState(
+                FeatureId.NVQ_VECTORS, new NVQ.State(nvq.encode(vector))));
+    }
+    builder.cleanup();
+    writer.write(Map.of()); // Preserve the earlier feature writes; add adjacency.
 }
 ```
 
-The source must remain available until `write` finishes. Suppliers must support
-concurrent calls; a source that reuses a scratch vector needs an independent view
-per worker. Feature state is consumed while serializing its record.
+### New: supply the features when writing the completed graph
 
-Applications can continue using `writeFeaturesInline` before the final write.
-If a feature supplier is absent, its existing bytes are preserved and that write
-uses the component-write path. Complete-record batching requires all inline feature
-suppliers; it does not overwrite prewritten features to enable batching.
+```java
+for (int ordinal = 0; ordinal < count; ordinal++) {
+    builder.addGraphNode(ordinal, vectorForOrdinal.apply(ordinal));
+}
+builder.cleanup();
+
+try (var writer = new OnDiskParallelGraphIndexWriter.Builder(builder.getGraph(), outputPath)
+        .withParallelWorkerThreads(writerWorkers)
+        .withMapper(new OrdinalMapper.IdentityMapper(count - 1))
+        .with(new NVQ(nvq))
+        .build()) {
+    writer.write(Feature.singleStateFactory(FeatureId.NVQ_VECTORS,
+            ordinal -> new NVQ.State(nvq.encode(vectorForOrdinal.apply(ordinal)))));
+}
+```
+
+The second call supplies NVQ payloads during final serialization, together with
+adjacency, in batches of up to 64 complete records. No `writeFeaturesInline` pass
+is needed. The same pattern works for FP using `InlineVectors` and
+`InlineVectors.State`, or another supported inline feature. Supply every configured
+inline feature to obtain complete-record batching, including fused PQ if configured.
+
+Final suppliers run concurrently. `vectorForOrdinal` must remain available through
+`write` and provide independent borrowed vectors per worker, or stable vectors.
+For an existing `RandomAccessVectorValues`, `threadLocalSupplier()` supplies those
+independent views; it does not require buffered hooks. A caller can instead return
+already encoded feature states from its own storage, without retaining original FP
+vectors for this write.
+
+Integrations that already call `write` with every inline feature supplier receive
+batching when using the parallel writer. Integrations that write features early
+must move those calls to final suppliers to use the deferred path. The incremental
+API remains compatible: a one-pass source whose values cannot be obtained again
+must retain encoded states for final writing or continue using incremental writes.
 
 ## Batch size and memory
 
