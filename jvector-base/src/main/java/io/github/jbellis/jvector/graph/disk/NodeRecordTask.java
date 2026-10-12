@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BooleanSupplier;
 import java.util.function.IntFunction;
 
 /**
@@ -53,6 +54,7 @@ class NodeRecordTask implements Callable<Void> {
     private final long baseOffset;   // Base file offset for L0 (offsets calculated per-ordinal)
     private final AsynchronousFileChannel channel;
     private final ByteBuffer buffer; // Thread-local buffer for building record components
+    private final BooleanSupplier stopRequested;
 
     NodeRecordTask(int startOrdinal,
                    int endOrdinal,
@@ -65,6 +67,25 @@ class NodeRecordTask implements Callable<Void> {
                    long baseOffset,
                    AsynchronousFileChannel channel,
                    ByteBuffer buffer) {
+        this(startOrdinal, endOrdinal, ordinalMapper, graph, view, inlineFeatures, featureStateSuppliers,
+                recordSize, baseOffset, channel, buffer, () -> false);
+    }
+
+    /// Create a task that stops before its next record once `stopRequested` returns true, for
+    /// example after another task failed or the writing thread was interrupted. A stopped task
+    /// returns normally; the writer reports the failure that requested the stop.
+    NodeRecordTask(int startOrdinal,
+                   int endOrdinal,
+                   OrdinalMapper ordinalMapper,
+                   ImmutableGraphIndex graph,
+                   ImmutableGraphIndex.View view,
+                   List<Feature> inlineFeatures,
+                   Map<FeatureId, IntFunction<Feature.State>> featureStateSuppliers,
+                   int recordSize,
+                   long baseOffset,
+                   AsynchronousFileChannel channel,
+                   ByteBuffer buffer,
+                   BooleanSupplier stopRequested) {
         this.startOrdinal = startOrdinal;
         this.endOrdinal = endOrdinal;
         this.ordinalMapper = ordinalMapper;
@@ -76,6 +97,7 @@ class NodeRecordTask implements Callable<Void> {
         this.baseOffset = baseOffset;
         this.channel = channel;
         this.buffer = buffer;
+        this.stopRequested = stopRequested;
     }
 
     /**
@@ -113,6 +135,7 @@ class NodeRecordTask implements Callable<Void> {
         final boolean completeRecord = inlineFeatures.stream().allMatch(f -> featureStateSuppliers.get(f.id()) != null);
         final int batch = buffer.capacity() / recordSize;
         for (int newOrdinal = startOrdinal; newOrdinal < endOrdinal; newOrdinal++) {
+            if (stopRequested.getAsBoolean()) return null;
             var originalOrdinal = ordinalMapper.newToOld(newOrdinal);
             long recordOffset = baseOffset + (long) newOrdinal * recordSize;
             long currentPosition = recordOffset;
