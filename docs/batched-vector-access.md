@@ -269,6 +269,8 @@ reads and payload allocation, not physical device I/O.
 - Close cursors with try-with-resources, stop consumers, then close the root source.
 - Copies share the root's storage and I/O executor. Closing a copy affects that view
   only; closing the root invalidates all copies and releases the shared resources.
+- If point reads are still running when the root closes, close waits for each read
+  in progress to finish; later point reads fail with `IllegalStateException`.
 - Direct payload buffers become eligible for JVM reclamation after references are
   released; closure does not promise immediate native-memory reclamation.
 
