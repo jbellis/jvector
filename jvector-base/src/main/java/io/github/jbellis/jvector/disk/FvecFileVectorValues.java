@@ -55,7 +55,9 @@ import java.util.function.Supplier;
  * has its own borrowed vector.
  *
  * <p>Close all cursors and stop consumers before closing the source. Closing the root
- * releases all resources, including resources used by copies. No memory mapping or
+ * releases all resources, including resources used by copies. A point read already in
+ * progress finishes before its channel is closed; later point reads, including ones
+ * waiting for a reader, fail with {@link IllegalStateException}. No memory mapping or
  * OS cache eviction is performed. Retained training vectors are caller-owned memory.
  */
 public final class FvecFileVectorValues implements BatchedVectorValues, AutoCloseable {
@@ -463,6 +465,8 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
             PointReader reader = null;
             try {
                 reader = borrowPointReader();
+                // Close waits for each lease, so a closed source can't reopen this reader's channel.
+                if (closed) throw new IllegalStateException("Vector source is closed");
                 pointHint.set(reader);
                 var input = pointChannel(reader);
                 var buffer = reader.buffer;
@@ -626,10 +630,12 @@ public final class FvecFileVectorValues implements BatchedVectorValues, AutoClos
             }
             IOException failure = null;
             for (PointReader reader : pointReaders) {
+                // Wait for an in-flight point read to finish; readers that lease afterwards see closed.
+                reader.permit.acquireUninterruptibly();
                 try { if (reader.channel != null) reader.channel.close(); }
                 catch (IOException error) {
                     if (failure == null) failure = error; else failure.addSuppressed(error);
-                } finally { reader.channel = null; reader.buffer = null; }
+                } finally { reader.channel = null; reader.buffer = null; reader.permit.release(); }
             }
             if (pointHint != null) pointHint.remove();
             try { channel.close(); }
