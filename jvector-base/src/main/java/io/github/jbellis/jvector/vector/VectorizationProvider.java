@@ -120,9 +120,10 @@ public abstract class VectorizationProvider {
         return new DefaultVectorizationProvider();
       }
 
-      // Native uses the Java 22 FFM API. An explicit false keeps the Panama path.
-      if (runtimeVersion >= 22 && Boolean.parseBoolean(
-          System.getProperty("jvector.experimental.enable_native_vectorization", "true"))) {
+      // Native uses Java 22 FFM. The new setting takes precedence over its deprecated alias.
+      if (runtimeVersion >= 22 && Boolean.parseBoolean(System.getProperty(
+          "jvector.enable_native_vectorization",
+          System.getProperty("jvector.experimental.enable_native_vectorization", "true")))) {
         try {
           Class<?> clazz = Class.forName("io.github.jbellis.jvector.vector.NativeVectorizationProvider");
           Constructor<?> ctor = clazz.getConstructor();

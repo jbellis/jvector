@@ -34,7 +34,8 @@ import static org.junit.Assert.assertTrue;
 
 /** Fresh JVMs exercise the real singleton without leaking provider properties between tests. */
 public class TestVectorizationProviderSelection {
-    private static final String ENABLE_NATIVE = "-Djvector.experimental.enable_native_vectorization=";
+    private static final String ENABLE_NATIVE = "-Djvector.enable_native_vectorization=";
+    private static final String LEGACY_ENABLE_NATIVE = "-Djvector.experimental.enable_native_vectorization=";
     private static final boolean HAS_VECTOR_MODULE = VectorizationProvider.vectorModulePresentAndReadable();
 
     private static String classpath() {
@@ -112,20 +113,38 @@ public class TestVectorizationProviderSelection {
         assertProvider(nativeAvailable() ? "NativeVectorizationProvider" : javaProvider(), classpath(), ENABLE_NATIVE + "true");
     }
 
+    @Test public void deprecatedFalseAliasStillDisablesNative() throws Exception {
+        assertProvider(javaProvider(), classpath(), LEGACY_ENABLE_NATIVE + "false");
+    }
+
+    @Test public void deprecatedTrueAliasStillEnablesNative() throws Exception {
+        assertProvider(nativeAvailable() ? "NativeVectorizationProvider" : javaProvider(), classpath(),
+                LEGACY_ENABLE_NATIVE + "true");
+    }
+
+    @Test public void newFalseOverridesDeprecatedTrue() throws Exception {
+        assertProvider(javaProvider(), classpath(), ENABLE_NATIVE + "false", LEGACY_ENABLE_NATIVE + "true");
+    }
+
+    @Test public void newTrueOverridesDeprecatedFalse() throws Exception {
+        assertProvider(nativeAvailable() ? "NativeVectorizationProvider" : javaProvider(), classpath(),
+                LEGACY_ENABLE_NATIVE + "false", ENABLE_NATIVE + "true");
+    }
+
     @Test public void explicitScalarProviderTakesPrecedence() throws Exception {
-        assertProvider("DefaultVectorizationProvider", classpath(), ENABLE_NATIVE + "true",
+        assertProvider("DefaultVectorizationProvider", classpath(), ENABLE_NATIVE + "true", LEGACY_ENABLE_NATIVE + "false",
                 "-Djvector.vectorization_provider=default");
     }
 
     @Test public void explicitPanamaProviderTakesPrecedence() throws Exception {
         Assume.assumeTrue(HAS_VECTOR_MODULE);
-        assertProvider("PanamaVectorizationProvider", classpath(), ENABLE_NATIVE + "true",
+        assertProvider("PanamaVectorizationProvider", classpath(), ENABLE_NATIVE + "true", LEGACY_ENABLE_NATIVE + "false",
                 "-Djvector.vectorization_provider=panama");
     }
 
     @Test public void explicitNativeProviderTakesPrecedenceOverFalse() throws Exception {
         Assume.assumeTrue(nativeAvailable());
-        assertProvider("NativeVectorizationProvider", classpath(), ENABLE_NATIVE + "false",
+        assertProvider("NativeVectorizationProvider", classpath(), ENABLE_NATIVE + "false", LEGACY_ENABLE_NATIVE + "true",
                 "-Djvector.vectorization_provider=native");
     }
 

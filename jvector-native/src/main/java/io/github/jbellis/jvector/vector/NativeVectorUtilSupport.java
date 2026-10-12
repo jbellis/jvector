@@ -19,7 +19,6 @@ package io.github.jbellis.jvector.vector;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteOrder;
 
-import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -29,10 +28,8 @@ import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
- * Experimental!
- * VectorUtilSupport implementation that prefers native/Panama SIMD.
+ * VectorUtilSupport using Highway kernels and inherited Panama operations.
  */
-@Experimental
 final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 {
     public NativeVectorUtilSupport() {}

@@ -16,15 +16,13 @@
 
 package io.github.jbellis.jvector.vector;
 
-import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.vector.cnative.LibraryLoader;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 
 /**
- * Experimental!
- * VectorizationProvider implementation that uses MemorySegment vectors and prefers native/Panama SIMD.
+ * VectorizationProvider using MemorySegment vectors, Highway kernels, and Panama
+ * for operations without native implementations.
  */
-@Experimental
 public class NativeVectorizationProvider extends VectorizationProvider {
     private final VectorUtilSupport vectorUtilSupport;
     private final VectorTypeSupport vectorTypeSupport;

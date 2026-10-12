@@ -64,13 +64,17 @@ ISA selection remains automatic and respects the existing `JVECTOR_MAX_ISA` cap.
 | JVM property | Effect |
 | --- | --- |
 | No provider property | Prefer native on Java 22+; use Panama when native is unavailable |
-| `-Djvector.experimental.enable_native_vectorization=false` | Disable automatic native selection |
+| `-Djvector.enable_native_vectorization=false` | Disable automatic native selection |
 | `-Djvector.vectorization_provider=panama` | Explicitly select Panama |
 | `-Djvector.vectorization_provider=native` | Explicitly require native; fail if it cannot load |
 | `-Djvector.vectorization_provider=default` | Explicitly select the scalar provider |
 
 The explicit `jvector.vectorization_provider` property takes precedence over the
-native-enable property. Provider selection happens once per JVM. Java 20/21 uses
+native-enable property. The former
+`jvector.experimental.enable_native_vectorization` name is a deprecated compatibility
+alias; the new `jvector.enable_native_vectorization` name takes precedence when both
+are supplied. Both names default to `true` when neither is supplied. Provider
+selection happens once per JVM. Java 20/21 uses
 Panama when available. Older runtimes, or runtimes without the Vector API module,
 retain the scalar fallback. Neither Panama nor native is enabled by these defaults
 when the existing runtime compatibility checks reject SIMD support.
