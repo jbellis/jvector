@@ -74,6 +74,26 @@ public class TestBufferedGraphCompatibility {
                                     assertEquals(count, graph.size(0));
                                     // A file-backed shared source must not overwrite insertion/diversity queries.
                                     var result = GraphSearcher.search(vectors.get(5), 10, resident, metric, graph, Bits.ALL);
+                                    if (!Arrays.stream(result.getNodes()).anyMatch(n -> n.node == 5)) {
+                                        // Diagnostic branch only: preserve the failing graph before the original assertion.
+                                        var output = Path.of(System.getProperty("diagnostic.output", "ci-failure-evidence"),
+                                                dimension + "-" + mode + "-" + metric + "-" + refine);
+                                        try {
+                                            Files.createDirectories(output);
+                                            Files.copy(path, output.resolve("input.fvecs"));
+                                            OnDiskGraphIndex.write(graph, resident, output.resolve("graph.jvector"));
+                                            try (var book = new BufferedRandomAccessWriter(output.resolve("book.pq"))) {
+                                                pq.write(book, OnDiskGraphIndex.CURRENT_VERSION);
+                                            }
+                                            var all = GraphSearcher.search(vectors.get(5), count, resident, metric, graph, Bits.ALL);
+                                            Files.writeString(output.resolve("context.txt"), "dimension=" + dimension
+                                                    + ", mode=" + mode + ", metric=" + metric + ", refine=" + refine
+                                                    + ", top10=" + Arrays.toString(Arrays.stream(result.getNodes()).mapToInt(n -> n.node).toArray())
+                                                    + ", fullWidth=" + Arrays.toString(Arrays.stream(all.getNodes()).mapToInt(n -> n.node).toArray()));
+                                        } catch (Exception diagnosticFailure) {
+                                            diagnosticFailure.printStackTrace();
+                                        }
+                                    }
                                     assertTrue("dimension=" + dimension + ", build=" + (mode == 0 ? "exact" : mode == 1 ? "PQ" : "BQ")
                                                     + ", metric=" + metric + ", refine=" + refine + ", provider="
                                                     + VectorizationProvider.getInstance().getClass().getSimpleName()

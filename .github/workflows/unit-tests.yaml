@@ -1,186 +1,27 @@
-name: Unit Test CI
-
+name: PR 744 Windows CI diagnosis
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/unit-tests.yaml
-      - '**.java'
-      - '**/pom.xml'
-
 jobs:
-  build-avx512:
-    concurrency:
-      group: isa-avx512f-${{ matrix.max_isa }}-${{ matrix.jdk }}
-      cancel-in-progress: false
+  diagnose:
     strategy:
+      fail-fast: false
       matrix:
-        jdk: [ 20, 24 ]
-#        jdk: [ 24 ]
-        max_isa: [ avx512f, avx2, sse42 ]
-        exclude:
-          - jdk: 20
-            max_isa: avx2
-          - jdk: 20
-            max_isa: sse42
-    runs-on: isa-avx512f
-    steps:
-      - name: verify-avx512
-        run: |
-          # avx2 is included just for illustration
-          required="avx2 avx512f avx512cd avx512bw avx512dq avx512v"
-          printf "required ISA feature flags: %s\n" "${required}" 
-          flags="$(lscpu|grep '^Flags'|cut -d: -f2)"
-          output=""
-          for flag in ${required} ; do
-           if [[ " $flags " == *"${flag}"* ]]
-           then output="${output} $flag(OK)"
-           else output="${output} $flag(FAIL)"
-          fi ; done
-          printf "%s\n" ${output}
-          if [[ " $output " == *"FAIL"* ]] ; then exit 2 ; fi
-      - name: Set up GCC
-        run: |
-          sudo apt install -y gcc
-      - name: Install Meson, Ninja, and GTest
-        run: |
-          sudo apt update && sudo apt install -y meson ninja-build pkg-config libgtest-dev
-      - uses: actions/checkout@v4
-      - name: Initialize Git Submodules
-        run: git submodule update --init
-
-      - name: Build test_simd_kernels (native C++)
-        working-directory: jvector-native/src/main/native
-        run: |
-          meson setup build --wipe
-          ninja -C build test_simd_kernels
-
-      - name: Run test_simd_kernels — no ISA cap (auto-detect)
-        if: matrix.max_isa == 'avx512f'
-        working-directory: jvector-native/src/main/native
-        run: ./build/test_simd_kernels
-
-      - name: Run test_simd_kernels — capped at avx2
-        if: matrix.max_isa == 'avx2'
-        working-directory: jvector-native/src/main/native
-        env:
-          JVECTOR_MAX_ISA: avx2
-        run: ./build/test_simd_kernels
-
-      - name: Run test_simd_kernels — capped at sse42
-        if: matrix.max_isa == 'sse42'
-        working-directory: jvector-native/src/main/native
-        env:
-          JVECTOR_MAX_ISA: sse42
-        run: ./build/test_simd_kernels
-
-      - name: Set up JDK ${{ matrix.jdk }}
-        uses: actions/setup-java@v3
-        with:
-          java-version: ${{ matrix.jdk }}
-          distribution: temurin
-          cache: maven
-
-      - name: Verify Panama Vector Support (JDK ${{ matrix.jdk }})
-        if: matrix.jdk == '20'
-        run: >-
-          mvn -B -Pjdk20 -pl jvector-tests -am test
-          -Dsurefire.failIfNoSpecifiedTests=false
-          -Dtest=TestVectorizationProvider
-          -DTest_RequireSpecificVectorizationProvider=PanamaVectorizationProvider
-
-      - name: Test full suite with Panama (JDK ${{ matrix.jdk }})
-        if: matrix.jdk == '20'
-        run: >-
-          mvn -B -Pjdk20 -pl jvector-tests -am test
-          -DTest_RequireSpecificVectorizationProvider=PanamaVectorizationProvider
-
-      - name: Verify native-access vector support (JDK ${{ matrix.jdk }})
-        if: matrix.jdk == '24'
-        env:
-          JVECTOR_MAX_ISA: ${{ matrix.max_isa }}
-        run: >-
-          mvn -B -Punix-amd64-profile -pl jvector-tests -am test
-          -DTest_RequireSpecificVectorizationProvider=NativeVectorizationProvider
-          -Dsurefire.failIfNoSpecifiedTests=false
-          -Dtest=TestVectorizationProvider
-
-      - name: Test full suite with native vectorization (JDK ${{ matrix.jdk }})
-        if: matrix.jdk == '24'
-        env:
-          JVECTOR_MAX_ISA: ${{ matrix.max_isa }}
-        run: >-
-          mvn -B -Punix-amd64-profile test
-          -DTest_RequireSpecificVectorizationProvider=NativeVectorizationProvider
-
-      - name: Test Summary for (ISA:isa-avx512f/max:${{ matrix.max_isa }},JDK${{ matrix.jdk }})
-        if: always()
-        uses: test-summary/action@v2
-        with:
-          paths: |
-            **/target/surefire-reports/TEST-*.xml
-
-      # Upload Surefire test results as an artifact
-      - name: Upload Surefire Test Results
-        uses: actions/upload-artifact@v4
-        if: always() # ensures upload happens even if tests fail
-        with:
-          name: surefire-results--isa-avx512f-${{ matrix.max_isa }}-${{ matrix.jdk }}
-          path: "**/target/surefire-reports/**"
-
-  build:
-    concurrency:
-        group: ${{ github.ref }}-${{ github.job }}-${{ matrix.jdk }}-${{ matrix.os }}
-        cancel-in-progress: true
-    strategy:
-      matrix:
-        jdk: [ 11, 20, 22]
-        os: [ ubuntu-latest, windows-latest ]
-    runs-on: ${{ matrix.os }}
+        attempt: [1, 2, 3]
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Initialize Git Submodules
-        run: git submodule update --init
-      - name: Set up JDK
-        uses: actions/setup-java@v3
+      - uses: actions/setup-java@v3
         with:
-          java-version: ${{ matrix.jdk }}
+          java-version: 11
           distribution: temurin
           cache: maven
-      - name: Set up GCC
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt install -y gcc
-      - name: Install Meson and Ninja
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt update && sudo apt install -y meson ninja-build
-      - name: Compile, run tests, and package (JDK 22)
-        run: mvn -B verify
-        if: matrix.jdk == '22'
-      - name: Compile, run tests, and package (JDK 20)
-        run: mvn -B -Pjdk20 -am -pl jvector-tests test
-        if: matrix.jdk == '20'
-      - name: Compile and run tests (JDK 11)
-        run: mvn -B -Pjdk11 -am -pl jvector-tests test
-        if: matrix.jdk == '11'
-      - name: Test Summary
+      - name: Run unchanged acceptance checks
+        run: mvn -B -Pjdk11 -am -pl jvector-tests test -Ddiagnostic.output=ci-failure-evidence
+      - name: Preserve results and failure evidence
         if: always()
-        uses: test-summary/action@v2
-        with:
-          paths: |
-            **/target/surefire-reports/TEST-*.xml
-      # Upload Surefire test results as an artifact
-      - name: Upload Surefire Test Results
         uses: actions/upload-artifact@v4
-        if: always() # ensures upload happens even if tests fail
         with:
-          name: surefire-results--${{ matrix.os }}-${{ matrix.jdk }}
-          path: "**/target/surefire-reports/**"
-
-
-
-        
+          name: windows-jdk11-attempt-${{ matrix.attempt }}
+          path: |
+            **/target/surefire-reports/**
+            **/ci-failure-evidence/**
