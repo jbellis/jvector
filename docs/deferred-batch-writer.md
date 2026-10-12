@@ -6,6 +6,21 @@ and adjacency list. By default, a worker writes up to 64 complete records togeth
 The final partial batch is written without adding records or padding to the format.
 This preserves the V6 layout and existing readers.
 
+## Production sources
+
+The library writer does not depend on Grid, BenchYAML, dataset preloading, or
+#744's buffered-access API. It accepts the existing
+`Map<FeatureId, IntFunction<Feature.State>>`: callers supply feature states for the
+requested original ordinals from their own source. That source can be resident
+vectors, a database's flush/compaction source, or another source; it must support
+concurrent supplier calls and remain available through final serialization.
+The writer does not require the original dataset to be fully resident.
+
+Complete-record batching also applies when all input vectors are preloaded. Its
+benefits come from deferring per-insertion feature writes and grouping final writes,
+independently of how input vectors are loaded. Buffered range access is an optional
+Grid integration, not a prerequisite for the core writer.
+
 ## Supplying features at final write
 
 Provide the final feature suppliers to `write` after graph construction and cleanup.
