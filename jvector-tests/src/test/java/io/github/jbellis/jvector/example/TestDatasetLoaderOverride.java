@@ -25,21 +25,34 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-/// The docs, release note and PR description all describe `-Djvector.dataset_loader` as an
-/// explicit override of the YAML `useDatasetPrefetching` flag. These cases set the property to
-/// `buffered` on configs that the harness routing sends to resident input, and expect the
-/// documented override to win.
+/** The VM override selects loading without changing resident construction/query routing. */
 public class TestDatasetLoaderOverride {
     private static final String PROPERTY = "jvector.dataset_loader";
     private String previous;
+    private final List<String> warnings = new ArrayList<>();
+    private final Logger logger = Logger.getLogger(BaseVectorLoading.class.getName());
+    private final Handler handler = new Handler() {
+        @Override public void publish(LogRecord record) { warnings.add(record.getMessage()); }
+        @Override public void flush() { }
+        @Override public void close() { }
+    };
 
-    @Before public void saveProperty() { previous = System.getProperty(PROPERTY); }
+    @Before public void saveProperty() {
+        previous = System.getProperty(PROPERTY);
+        logger.addHandler(handler);
+    }
 
     @After public void restoreProperty() {
+        logger.removeHandler(handler);
         if (previous == null) System.clearProperty(PROPERTY);
         else System.setProperty(PROPERTY, previous);
     }
@@ -57,15 +70,29 @@ public class TestDatasetLoaderOverride {
         return config;
     }
 
-    @Test public void explicitBufferedPropertyOverridesExactSearchRouting() {
+    @Test public void explicitBufferedPropertyRetainsExactSearchRoutingAndWarns() {
         System.setProperty(PROPERTY, "buffered");
-        assertEquals("explicit -Djvector.dataset_loader=buffered was not honored for search compression None",
-                BaseVectorLoading.BUFFERED, BaseVectorLoading.forBenchmark(config("PQ", "None")));
+        assertEquals(BaseVectorLoading.PRELOAD, BaseVectorLoading.forBenchmark(config("PQ", "None")));
+        assertTrue(warnings.stream().anyMatch(message -> message.contains("raw-input exact search")));
     }
 
-    @Test public void explicitBufferedPropertyOverridesUncompressedConstructionRouting() {
+    @Test public void explicitBufferedPropertyRetainsUncompressedConstructionAndWarns() {
         System.setProperty(PROPERTY, "buffered");
-        assertEquals("explicit -Djvector.dataset_loader=buffered was not honored for construction compression None",
-                BaseVectorLoading.BUFFERED, BaseVectorLoading.forBenchmark(config("None", "PQ")));
+        assertEquals(BaseVectorLoading.PRELOAD, BaseVectorLoading.forBenchmark(config("None", "PQ")));
+        assertTrue(warnings.stream().anyMatch(message -> message.contains("uncompressed construction")));
+    }
+
+    @Test public void explicitBufferedPropertyOverridesDisabledFlagForQuantizedWorkloads() {
+        System.setProperty(PROPERTY, "buffered");
+        assertEquals(BaseVectorLoading.BUFFERED, BaseVectorLoading.forBenchmark(config("PQ", "PQ")));
+        assertTrue(warnings.isEmpty());
+    }
+
+    @Test public void explicitPreloadPropertyOverridesEnabledFlag() {
+        System.setProperty(PROPERTY, "preload");
+        var config = config("PQ", "PQ");
+        config.useDatasetPrefetching = true;
+        assertEquals(BaseVectorLoading.PRELOAD, BaseVectorLoading.forBenchmark(config));
+        assertTrue(warnings.isEmpty());
     }
 }

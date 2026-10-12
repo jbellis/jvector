@@ -105,16 +105,19 @@ public class TestDatasetPrefetching {
             public VectorCursor openRange(int a,int b){ranges.incrementAndGet();return VectorAccess.openRange(resident,a,b);}
             public VectorCursor openSelection(int[] ordinals,int a,int n){selections.incrementAndGet();return VectorAccess.openSelection(resident,ordinals,a,n);}
         };
+        // A previous test run must not supply this run's training codebook.
+        var datasetName = "bulk-wiring-" + UUID.randomUUID();
         DataSet ds = new DataSet() {
             public boolean useDatasetPrefetching(){return true;}
             public int getDimension(){return 17;}
-            public String getName(){return "bulk-wiring-"+System.identityHashCode(this);}
+            public String getName(){return datasetName;}
             public VectorSimilarityFunction getSimilarityFunction(){return VectorSimilarityFunction.DOT_PRODUCT;}
             public RandomAccessVectorValues getBaseRavv(){return input;}
             public List<VectorFloat<?>> getBaseVectors(){return vectors;}
             public List<VectorFloat<?>> getQueryVectors(){return List.of(vectors.get(0));}
             public List<List<Integer>> getGroundTruth(){return List.of(List.of(0));}
         };
+        var cacheFile = Path.of("pq_cache").resolve(new CompressorParameters.PQParameters(4,16,false,-1f).idStringFor(ds));
         var work = Files.createTempDirectory("bulk-grid-wiring");
         try {
             Grid.runOneGraph(OnDiskGraphIndexCache.initialize(work.resolve("saved")), List.of(EnumSet.of(FeatureId.INLINE_VECTORS),EnumSet.of(FeatureId.NVQ_VECTORS)),
@@ -139,7 +142,10 @@ public class TestDatasetPrefetching {
             }
             assertEquals(2,seen);
         } finally {
-            try(var paths=Files.walk(work)){for(var path:paths.sorted(Comparator.reverseOrder()).collect(java.util.stream.Collectors.toList()))Files.delete(path);}
+            try { Files.deleteIfExists(cacheFile); }
+            finally {
+                try(var paths=Files.walk(work)){for(var path:paths.sorted(Comparator.reverseOrder()).collect(java.util.stream.Collectors.toList()))Files.delete(path);}
+            }
         }
     }
 }

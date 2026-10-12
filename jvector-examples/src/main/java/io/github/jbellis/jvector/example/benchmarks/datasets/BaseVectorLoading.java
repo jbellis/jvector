@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.example.benchmarks.datasets;
 
 import java.util.Locale;
+import java.util.logging.Logger;
 import io.github.jbellis.jvector.example.yaml.MultiConfig;
 import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
 
@@ -24,6 +25,8 @@ import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
 public enum BaseVectorLoading {
     BUFFERED,
     PRELOAD;
+
+    private static final Logger LOG = Logger.getLogger(BaseVectorLoading.class.getName());
 
     /** Existing VM option is an explicit override of the YAML flag. */
     public static BaseVectorLoading forBenchmark(boolean useDatasetPrefetching) {
@@ -37,22 +40,25 @@ public enum BaseVectorLoading {
 
     public static BaseVectorLoading forBenchmark() { return forBenchmark(false); }
 
-    /// Choose base-vector loading for one benchmark configuration.
-    ///
-    /// An explicitly set `jvector.dataset_loader` VM option is returned as-is: it overrides both
-    /// the YAML `useDatasetPrefetching` flag and the routing below. Otherwise, opting in with the
-    /// flag selects buffered input only where the harness consumes quantized or stored vectors;
-    /// uncompressed construction and raw-input exact search stay on resident input.
+    /**
+     * The VM option overrides the YAML flag. Configurations requiring resident raw
+     * vectors retain preload so construction and query scoring stay unchanged.
+     */
     public static BaseVectorLoading forBenchmark(MultiConfig config) {
         var loading = forBenchmark(config.useDatasetPrefetching);
-        if (System.getProperty("jvector.dataset_loader") != null) return loading;
         if (loading == PRELOAD) return loading;
-        // Uncompressed construction still uses main's resident raw-vector source.
         if (config.construction.compression.stream().anyMatch(c -> "None".equals(c.type)))
-            return PRELOAD;
+            return residentInput("uncompressed construction");
         boolean exactSearch = config.search.compression.stream().anyMatch(c -> "None".equals(c.type));
         boolean needsRawInput = exactSearch && config.construction.getFeatureSets().stream().anyMatch(features ->
                 !features.contains(FeatureId.FUSED_PQ));
-        return needsRawInput ? PRELOAD : BUFFERED;
+        return needsRawInput ? residentInput("raw-input exact search") : BUFFERED;
+    }
+
+    private static BaseVectorLoading residentInput(String reason) {
+        if ("buffered".equalsIgnoreCase(System.getProperty("jvector.dataset_loader")))
+            LOG.warning("Using preload instead of jvector.dataset_loader=buffered for " + reason
+                    + "; retaining resident input to preserve scoring behavior.");
+        return PRELOAD;
     }
 }
