@@ -90,9 +90,11 @@ Omitted or `false` preserves the resident path. The existing VM option
 `-Djvector.dataset_loader=buffered` is an explicit override; `preload` overrides the
 flag in the other direction. Neither runner changes a user's YAML files.
 
-The harness uses file input for bulk consumption in quantized construction and
+With the YAML flag, the harness uses file input for bulk consumption in quantized construction and
 existing disk storage. Uncompressed construction, or a search configuration that
 requires raw input rather than stored vectors/codes, still uses resident input.
+An explicit `-Djvector.dataset_loader` bypasses this routing as well, so
+`buffered` applies even to those configurations.
 A mixed configuration requiring resident input remains resident; split those cases
 into separate configurations to measure dataset prefetching independently. This is
 source routing, not a restriction on the vector-access API.
