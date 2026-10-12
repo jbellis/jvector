@@ -437,20 +437,30 @@ public class Grid {
             throw new IllegalStateException("Bench looks for either NVQ_VECTORS or INLINE_VECTORS feature set for scoring compressed builds.");
         }
 
-        // Quantized peers are resident; serialize original-vector features after cleanup.
+        // The parallel writer calls final suppliers from its workers, so original-vector features
+        // can be encoded after cleanup. The sequential writer calls them on one thread, so it keeps
+        // encoding on the insertion threads and writing each node's features inline.
+        boolean deferFeatures = writers.values().stream()
+                .allMatch(writer -> writer instanceof OnDiskParallelGraphIndexWriter);
         long startTime = System.nanoTime();
         if (ds.useDatasetPrefetching()) {
-            VectorAccess.forEach(floatVectors, PhysicalCoreExecutor.pool(), builder::addGraphNode);
+            VectorAccess.forEach(floatVectors, PhysicalCoreExecutor.pool(), (node, vector) -> {
+                if (!deferFeatures) writeInlineStates(writers, inputSuppliers, node, vector);
+                builder.addGraphNode(node, vector);
+            });
         } else {
             var vv = floatVectors.threadLocalSupplier();
             PhysicalCoreExecutor.pool().submit(() -> {
-                IntStream.range(0, floatVectors.size()).parallel().forEach(node ->
-                        builder.addGraphNode(node, vv.get().getVector(node)));
+                IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
+                    var vector = vv.get().getVector(node);
+                    if (!deferFeatures) writeInlineStates(writers, inputSuppliers, node, vector);
+                    builder.addGraphNode(node, vector);
+                });
             }).join();
         }
         builder.cleanup();
 
-        // Supply every feature so the parallel writer can emit complete records.
+        // With deferred features, supply every feature so the parallel writer emits complete records.
         writers.entrySet().stream().parallel().forEach(entry -> {
             var writer = entry.getValue();
             var features = entry.getKey();
@@ -458,8 +468,10 @@ public class Grid {
                  var view = builder.getGraph().getView();
                  var closeWriter = writer) {
                 Map<FeatureId, IntFunction<Feature.State>> writeSuppliers = new EnumMap<>(FeatureId.class);
-                inputSuppliers.get(features).forEach((id, supplier) ->
-                        writeSuppliers.put(id, ordinal -> supplier.apply(vectors.get(ordinal))));
+                if (deferFeatures) {
+                    inputSuppliers.get(features).forEach((id, supplier) ->
+                            writeSuppliers.put(id, ordinal -> supplier.apply(vectors.get(ordinal))));
+                }
                 if (features.contains(FeatureId.FUSED_PQ)) {
                     writeSuppliers.put(FeatureId.FUSED_PQ, ordinal -> new FusedPQ.State(view, pq, ordinal));
                 }
@@ -493,6 +505,20 @@ public class Grid {
         }
 
         return new BuildOnDiskResult(indexes, fileSizes);
+    }
+
+    /// Write one node's original-vector features to every writer during insertion. The borrowed
+    /// vector is encoded and written before the caller advances to another vector.
+    private static void writeInlineStates(
+            Map<Set<FeatureId>, RandomAccessOnDiskGraphIndexWriter> writers,
+            Map<Set<FeatureId>, Map<FeatureId, Function<VectorFloat<?>, Feature.State>>> inputSuppliers,
+            int node, VectorFloat<?> vector) {
+        writers.forEach((features, writer) -> {
+            var states = new EnumMap<FeatureId, Feature.State>(FeatureId.class);
+            inputSuppliers.get(features).forEach((id, supplier) -> states.put(id, supplier.apply(vector)));
+            try { writer.writeFeaturesInline(node, states); }
+            catch (IOException e) { throw new UncheckedIOException(e); }
+        });
     }
 
     /** Worker-local bounded input ranges; a borrowed vector is consumed before advancing. */
