@@ -1,9 +1,9 @@
 # This is here for loader testing purposes only, use other datasets for realistic test data
 yamlSchemaVersion: 1
-useDatasetPrefetching: false
 onDiskIndexVersion: 6
 
 dataset: nytimes-256-angular
+useDatasetPrefetching: false
 
 construction:
   outDegree: [32]

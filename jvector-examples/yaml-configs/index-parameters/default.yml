@@ -1,9 +1,9 @@
 yamlSchemaVersion: 1
-# Prefetch bounded batches instead of preloading the entire dataset into memory.
-useDatasetPrefetching: false
 onDiskIndexVersion: 6
 
 dataset: default
+# Prefetch bounded batches instead of preloading the entire dataset into memory.
+useDatasetPrefetching: false
 
 construction:
   outDegree: [32]
