@@ -99,8 +99,10 @@ remains caller-owned and must outlive the write.
 
 ## Dataset prefetching in Grid
 
-Grid defers its inline NVQ or FP feature serialization until after cleanup. Its final
-serialization suppliers consume worker-local ranges through `VectorAccess.openRange`.
+When the parallel writer is selected, Grid defers its inline NVQ or FP feature serialization
+until after cleanup. Its final serialization suppliers consume worker-local ranges through
+`VectorAccess.openRange`. With the default sequential writer, which calls suppliers on one
+thread, Grid keeps encoding these features on the insertion threads and writing them inline.
 Sources implementing the buffered-access capability use that implementation;
 ordinary sources retain the ordinary-access fallback. Borrowed vectors are consumed
 before advancing a cursor, and ranges are released after the workers finish.
