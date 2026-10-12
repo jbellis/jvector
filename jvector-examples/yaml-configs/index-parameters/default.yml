@@ -1,5 +1,5 @@
 yamlSchemaVersion: 1
-# Opt in to bounded dataset input prefetching.
+# Prefetch bounded batches instead of preloading the entire dataset into memory.
 useDatasetPrefetching: false
 onDiskIndexVersion: 6
 
