@@ -62,6 +62,8 @@ import java.util.function.IntFunction;
  * </pre>
  */
 class ParallelGraphWriter implements AutoCloseable {
+    // Amortize positioned writes with bounded worker-local buffers.
+    private static final int RECORDS_PER_BATCH = 64;
     private final RandomAccessWriter writer;
     private final ImmutableGraphIndex graph;
     private final ExecutorService executor;
@@ -173,7 +175,7 @@ class ParallelGraphWriter implements AutoCloseable {
 
         // Thread-local buffers to avoid allocation overhead
         // Use BIG_ENDIAN to match Java DataOutput specification
-        final int bufferSize = recordSize;
+        final int bufferSize = Math.multiplyExact(recordSize, RECORDS_PER_BATCH);
         final boolean useDirect = config.useDirectBuffers;
         this.bufferPerThread = ThreadLocal.withInitial(() -> {
             ByteBuffer buffer = useDirect ? ByteBuffer.allocateDirect(bufferSize) : ByteBuffer.allocate(bufferSize);
