@@ -74,7 +74,11 @@ public class TestBufferedGraphCompatibility {
                                     assertEquals(count, graph.size(0));
                                     // A file-backed shared source must not overwrite insertion/diversity queries.
                                     var result = GraphSearcher.search(vectors.get(5), 10, resident, metric, graph, Bits.ALL);
-                                    assertTrue(Arrays.stream(result.getNodes()).anyMatch(n -> n.node == 5));
+                                    assertTrue("dimension=" + dimension + ", build=" + (mode == 0 ? "exact" : mode == 1 ? "PQ" : "BQ")
+                                                    + ", metric=" + metric + ", refine=" + refine + ", provider="
+                                                    + VectorizationProvider.getInstance().getClass().getSimpleName()
+                                                    + ", returned=" + Arrays.toString(Arrays.stream(result.getNodes()).mapToInt(n -> n.node).toArray()),
+                                            Arrays.stream(result.getNodes()).anyMatch(n -> n.node == 5));
                                     // Reuse the SAME graph/books to isolate source and serialization behavior.
                                     for (boolean fused : new boolean[] {false, true}) {
                                         for (boolean quantized : new boolean[] {false, true}) {
