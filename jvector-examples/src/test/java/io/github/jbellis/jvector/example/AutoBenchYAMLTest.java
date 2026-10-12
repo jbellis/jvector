@@ -32,10 +32,16 @@ public class AutoBenchYAMLTest {
                 .map(p -> Path.of(p).toAbsolutePath().toString())
                 .collect(Collectors.joining(java.io.File.pathSeparator));
         Path log = work.resolve("console.log");
-        Process process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED",
-                "-cp", classpath, AutoBenchYAML.class.getName(), "--output", work.resolve("results.json").toString(),
-                "--config", config.toString()).directory(work.toFile()).redirectErrorStream(true)
+        var command = new java.util.ArrayList<String>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        // Keep the Java 11 test runnable without optional vector or FFM modules.
+        if (ModuleLayer.boot().findModule("jdk.incubator.vector").isPresent())
+            command.add("--add-modules=jdk.incubator.vector");
+        if (Runtime.version().feature() >= 22)
+            command.add("--enable-native-access=ALL-UNNAMED");
+        command.addAll(Arrays.asList("-cp", classpath, AutoBenchYAML.class.getName(),
+                "--output", work.resolve("results.json").toString(), "--config", config.toString()));
+        Process process = new ProcessBuilder(command).directory(work.toFile()).redirectErrorStream(true)
                 .redirectOutput(log.toFile()).start();
         try {
             assertTrue("AutoBenchYAML did not exit", process.waitFor(30, TimeUnit.SECONDS));

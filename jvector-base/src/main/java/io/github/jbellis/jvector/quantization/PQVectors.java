@@ -93,7 +93,7 @@ public abstract class PQVectors implements CompressedVectors {
      * @return the PQVectors instance
      */
     public static ImmutablePQVectors encodeAndBuild(ProductQuantization pq, int vectorCount, RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        return encodeAndBuild(pq, vectorCount, IntUnaryOperator.identity(), ravv, simdExecutor);
+        return encodeAndBuild(pq, vectorCount, IntUnaryOperator.identity(), ravv, simdExecutor, true);
     }
 
     /**
@@ -108,16 +108,16 @@ public abstract class PQVectors implements CompressedVectors {
      * @return the PQVectors instance
      */
     public static ImmutablePQVectors encodeAndBuild(ProductQuantization pq, int vectorCount, IntUnaryOperator ordinalsMapping, RandomAccessVectorValues ravv, ForkJoinPool simdExecutor) {
-        // Verify that the mapped ordinals are packed, ie. the total range of ordinals does not exceed
-        // the total vector count as they are mapped from 0 --> vector count - 1.
-        // This assumes no duplicates are included.
-        // Note that the total vector count cannot exceed 2B as that is Integer.MAX_VALUE
+        return encodeAndBuild(pq, vectorCount, ordinalsMapping, ravv, simdExecutor, false);
+    }
+
+    private static ImmutablePQVectors encodeAndBuild(ProductQuantization pq, int vectorCount,
+            IntUnaryOperator ordinalsMapping, RandomAccessVectorValues ravv, ForkJoinPool simdExecutor,
+            boolean identityMapping) {
+        // Validate input ordinals, not output positions; mappings may select or repeat vectors.
         if (log.isDebugEnabled() || System.getProperties().containsKey("VECTOR_DEBUG")) {
-            IntStream.range(0, vectorCount).forEach(i -> {
-                int mappedOrdinal = ordinalsMapping.applyAsInt(i);
-                if (mappedOrdinal > vectorCount)
-                    throw new IllegalArgumentException("vectorCount=" + mappedOrdinal + " exceeds maximum " + vectorCount);
-            });
+            IntStream.range(0, vectorCount).forEach(i ->
+                    Objects.checkIndex(ordinalsMapping.applyAsInt(i), ravv.size()));
             log.info("Range check completed for encodeAndBuild with vectorCount={}", vectorCount);
         }
 
@@ -134,13 +134,17 @@ public abstract class PQVectors implements CompressedVectors {
         // Encode the vectors in parallel into the compressed data chunks
         // The changes are concurrent, but because they are coordinated and do not overlap, we can use parallel streams
         // and then we are guaranteed safe publication because we join the thread after completion.
-        VectorAccess.forEach(ravv, vectorCount, ordinalsMapping, simdExecutor, (ordinal, vector) -> {
+        VectorAccess.VectorConsumer encode = (ordinal, vector) -> {
             var slice = PQVectors.get(chunks, ordinal, layout.fullChunkVectors, pq.getSubspaceCount());
             if (vector != null)
                 pq.encodeTo(vector, slice);
             else
                 slice.zero();
-        });
+        };
+        if (identityMapping)
+            VectorAccess.forEach(ravv, vectorCount, simdExecutor, encode);
+        else
+            VectorAccess.forEach(ravv, vectorCount, ordinalsMapping, simdExecutor, encode);
 
         return new ImmutablePQVectors(pq, chunks, vectorCount, layout.fullChunkVectors);
     }

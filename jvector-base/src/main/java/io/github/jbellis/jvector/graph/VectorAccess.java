@@ -30,6 +30,9 @@ import java.util.stream.IntStream;
 public final class VectorAccess {
     private VectorAccess() {}
 
+    // Bound mapped-request metadata independently of the dataset size.
+    private static final int MAX_SELECTION_ORDINALS = 4096;
+
     @FunctionalInterface
     public interface VectorConsumer {
         /** The vector is borrowed for this call; copy it before retaining it. */
@@ -133,11 +136,17 @@ public final class VectorAccess {
      */
     public static void forEach(RandomAccessVectorValues source, ForkJoinPool executor,
                                VectorConsumer consumer) {
+        forEach(source, source.size(), executor, consumer);
+    }
+
+    /** Consume the first count vectors without materializing their ordinals. */
+    public static void forEach(RandomAccessVectorValues source, int count, ForkJoinPool executor,
+                               VectorConsumer consumer) {
+        Objects.checkFromToIndex(0, count, source.size());
         if (!(source instanceof BatchedVectorValues)) {
-            forEach(source, source.size(), IntUnaryOperator.identity(), executor, consumer);
+            forEach(source, count, IntUnaryOperator.identity(), executor, consumer);
             return;
         }
-        int count = source.size();
         int partitions = Math.min(count, executor.getParallelism());
         executor.submit(() -> IntStream.range(0, partitions).parallel().forEach(part -> {
             int start = (int) ((long) part * count / partitions);
@@ -167,11 +176,17 @@ public final class VectorAccess {
         executor.submit(() -> IntStream.range(0, partitions).parallel().forEach(part -> {
             int start = (int) ((long) part * count / partitions);
             int end = (int) ((long) (part + 1) * count / partitions);
-            int[] ordinals = IntStream.range(start, end).map(mapping).toArray();
-            try (var cursor = openSelection(source, ordinals, 0, ordinals.length)) {
-                int i = start;
-                while (cursor.next()) consumer.accept(i++, cursor.vector());
-                if (i != end) throw new IllegalStateException("Incomplete vector range");
+            int[] ordinals = new int[Math.min(MAX_SELECTION_ORDINALS, end - start)];
+            for (int first = start; first < end; ) {
+                int length = Math.min(ordinals.length, end - first);
+                for (int i = 0; i < length; i++) ordinals[i] = mapping.applyAsInt(first + i);
+                try (var cursor = openSelection(source, ordinals, 0, length)) {
+                    int i = first;
+                    while (cursor.next()) consumer.accept(i++, cursor.vector());
+                    if (i != first + length) throw new IllegalStateException("Incomplete vector selection");
+                }
+                // Closing drains reads before reusing the selection array.
+                first += length;
             }
         })).join();
     }

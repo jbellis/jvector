@@ -99,11 +99,19 @@ final class DemandFvecVectorValues implements RandomAccessVectorValues, AutoClos
     long bytes() { return bytes.sum(); }
     @Override public void close() throws IOException { if (owner) channel.close(); }
 
-    private static void readFully(FileChannel channel, ByteBuffer buffer, long offset) throws IOException {
+    static void readFully(FileChannel channel, ByteBuffer buffer, long offset) throws IOException {
+        int zeroReads = 0;
         while (buffer.hasRemaining()) {
             int n = channel.read(buffer, offset);
             if (n < 0) throw new EOFException("Incomplete fvecs record");
-            offset += n;
+            if (n == 0) {
+                // Match the buffered source: a broken channel must not spin forever.
+                if (++zeroReads >= 16) throw new IOException("No progress reading fvec data at " + offset);
+                Thread.onSpinWait();
+            } else {
+                zeroReads = 0;
+                offset += n;
+            }
         }
     }
 
