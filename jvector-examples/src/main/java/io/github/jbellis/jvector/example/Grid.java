@@ -454,16 +454,16 @@ public class Grid {
         writers.entrySet().stream().parallel().forEach(entry -> {
             var writer = entry.getValue();
             var features = entry.getKey();
-            try (var vectors = new FinalWriteVectors(floatVectors)) {
+            try (var vectors = new FinalWriteVectors(floatVectors);
+                 var view = builder.getGraph().getView();
+                 var closeWriter = writer) {
                 Map<FeatureId, IntFunction<Feature.State>> writeSuppliers = new EnumMap<>(FeatureId.class);
                 inputSuppliers.get(features).forEach((id, supplier) ->
                         writeSuppliers.put(id, ordinal -> supplier.apply(vectors.get(ordinal))));
                 if (features.contains(FeatureId.FUSED_PQ)) {
-                    var view = builder.getGraph().getView();
                     writeSuppliers.put(FeatureId.FUSED_PQ, ordinal -> new FusedPQ.State(view, pq, ordinal));
                 }
                 writer.write(writeSuppliers);
-                writer.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -526,8 +526,17 @@ public class Grid {
 
         @Override public void close() {
             // writer.write joins its workers before cursors and their read-ahead are released.
-            try { ranges.forEach(Range::close); }
-            finally { ranges.clear(); local.remove(); }
+            RuntimeException failure = null;
+            try {
+                for (var range : ranges) {
+                    try { range.close(); }
+                    catch (RuntimeException e) {
+                        if (failure == null) failure = e;
+                        else if (failure != e) failure.addSuppressed(e);
+                    }
+                }
+            } finally { ranges.clear(); local.remove(); }
+            if (failure != null) throw failure;
         }
 
         private static final class Range {

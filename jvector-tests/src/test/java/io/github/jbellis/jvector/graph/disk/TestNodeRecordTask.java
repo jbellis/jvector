@@ -93,7 +93,7 @@ public class TestNodeRecordTask extends LuceneTestCase {
                         try (var view = graph.getView()) {
                             for (int n = 0; n < count; n++) {
                                 var expected = ByteBuffer.allocate(stride).order(ByteOrder.BIG_ENDIAN);
-                                expected.putInt(n);
+                                expected.putInt(mapper.newToOld(n) == OrdinalMapper.OMITTED ? -1 : n);
                                 int old = mapper.newToOld(n);
                                 if (old == OrdinalMapper.OMITTED) {
                                     expected.position(expected.position() + feature.featureSize());

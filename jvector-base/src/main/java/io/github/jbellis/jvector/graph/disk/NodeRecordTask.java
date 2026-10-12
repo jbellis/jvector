@@ -95,8 +95,8 @@ class NodeRecordTask implements Callable<Void> {
         long currentPosition = position;
         while (buffer.hasRemaining()) {
             int written = channel.write(buffer, currentPosition).get();
-            if (written < 0) {
-                throw new IOException("Channel closed while writing");
+            if (written <= 0) {
+                throw new IOException("Channel made no progress while writing");
             }
             currentPosition += written;
         }
@@ -121,7 +121,7 @@ class NodeRecordTask implements Callable<Void> {
             if (completeRecord) {
                 if (buffer.position() == buffer.limit()) writer.reset();
                 int recordBegin = buffer.position();
-                writer.writeInt(newOrdinal);
+                writer.writeInt(originalOrdinal == OrdinalMapper.OMITTED ? -1 : newOrdinal);
                 if (originalOrdinal == OrdinalMapper.OMITTED) {
                     for (var feature : inlineFeatures)
                         for (int i = 0; i < feature.featureSize(); i++) writer.writeByte(0);
@@ -159,7 +159,7 @@ class NodeRecordTask implements Callable<Void> {
             writer.reset();
 
             // Write node ordinal
-            writer.writeInt(newOrdinal);
+            writer.writeInt(originalOrdinal == OrdinalMapper.OMITTED ? -1 : newOrdinal);
             ByteBuffer ordinalData = writer.cloneBuffer();
             writeFully(channel, ordinalData, currentPosition);
             currentPosition += Integer.BYTES;
@@ -175,8 +175,10 @@ class NodeRecordTask implements Callable<Void> {
                     }
                 }
                 ByteBuffer featureData = writer.cloneBuffer();
+                // writeFully consumes the buffer; retain its length before writing.
+                int featureBytes = featureData.remaining();
                 writeFully(channel, featureData, currentPosition);
-                currentPosition += featureData.remaining();
+                currentPosition += featureBytes;
 
                 // Write empty neighbor list
                 writer.reset();
