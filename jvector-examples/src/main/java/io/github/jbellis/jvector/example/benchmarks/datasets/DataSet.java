@@ -38,6 +38,9 @@ public interface DataSet extends AutoCloseable {
      */
     int getDimension();
 
+    /** True only for the harness's explicit bounded-input mode. */
+    default boolean useDatasetPrefetching() { return false; }
+
     /**
      * Get a random-access view of base vectors.
      * @return base vectors

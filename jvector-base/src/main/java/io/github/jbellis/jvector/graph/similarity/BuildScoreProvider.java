@@ -17,7 +17,6 @@
 package io.github.jbellis.jvector.graph.similarity;
 
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import io.github.jbellis.jvector.graph.VectorAccess;
 import io.github.jbellis.jvector.graph.RemappedRandomAccessVectorValues;
 import io.github.jbellis.jvector.quantization.BQVectors;
 import io.github.jbellis.jvector.quantization.PQVectors;
@@ -92,15 +91,6 @@ public interface BuildScoreProvider {
     }
 
     /**
-     * A thread-confined diversity scorer, valid until the next call to this method on
-     * the same provider and thread. Finish scoring before requesting another scorer.
-     * Providers that do not reuse state retain the ordinary scorer behavior.
-     */
-    default ScoreFunction borrowedDiversityScoreFunctionFor(int node1) {
-        return diversityScoreFunctionFor(node1);
-    }
-
-    /**
      * Returns a BSP that performs exact score comparisons using the given RandomAccessVectorValues and VectorSimilarityFunction.
      *
      * Helper method for the special case that mapping between graph node IDs and ravv ordinals is the identity function.
@@ -120,23 +110,6 @@ public interface BuildScoreProvider {
         var vectorsCopy = ravv.threadLocalSupplier();
 
         return new BuildScoreProvider() {
-            private final ThreadLocal<VectorFloat<?>> diversityAnchors =
-                    ThreadLocal.withInitial(() -> vts.createFloatVector(ravv.dimension()));
-            private final ThreadLocal<ScoreFunction> diversityScorers = ThreadLocal.withInitial(() -> {
-                var anchor = diversityAnchors.get();
-                var peers = vectorsCopy.get();
-                // Retained thread-local values must not capture this provider.
-                var vsf = similarityFunction;
-                return (ScoreFunction.ExactScoreFunction) node2 -> vsf.compare(anchor, peers.getVector(node2));
-            });
-
-            @Override
-            public ScoreFunction borrowedDiversityScoreFunctionFor(int node1) {
-                if (!ravv.isValueShared()) return diversityScoreFunctionFor(node1);
-                vectors.get().getVectorInto(node1, diversityAnchors.get(), 0);
-                return diversityScorers.get();
-            }
-
             private ScoreFunction.ExactScoreFunction scoreFunctionFor(int node1) {
                 if (ravv.isValueShared()) {
                     // Resolve both ordinals using separate borrowed views; no anchor escapes a read.
@@ -158,13 +131,9 @@ public interface BuildScoreProvider {
                 var vv = vectors.get();
                 var centroid = vts.createFloatVector(vv.dimension());
                 int size = vv.size();
-                try (var cursor = VectorAccess.openRange(vv, 0, size)) {
-                    while (cursor.next()) {
-                        var v = cursor.vector();
-                        if (v != null) { // MapRandomAccessVectorValues is not necessarily dense
-                            VectorUtil.addInPlace(centroid, v);
-                        }
-                    }
+                for (int i = 0; i < size; i++) {
+                    var v = vv.getVector(i);
+                    if (v != null) VectorUtil.addInPlace(centroid, v);
                 }
                 VectorUtil.scale(centroid, 1.0f / size);
                 return centroid;

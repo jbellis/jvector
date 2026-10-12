@@ -64,32 +64,7 @@ public class TestBuildScoreProviderBorrowedVectors {
         assertEquals(6, reads.get());
     }
 
-    @Test public void borrowedDiversityScorersReuseStorageAndRefreshTheirAnchor() {
-        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
-        var resident = new ListRandomAccessVectorValues(List.of(
-                vts.createFloatVector(new float[] {1f, 0f, 0f}),
-                vts.createFloatVector(new float[] {0f, 1f, 0f}),
-                vts.createFloatVector(new float[] {1f, 1f, 0f})), 3);
-        for (var metric : VectorSimilarityFunction.values()) {
-            var bsp = BuildScoreProvider.randomAccessScoreProvider(new Borrowed(resident), metric);
-            ScoreFunction previous = null;
-            for (int node = 0; node < 3; node++) {
-                var scorer = bsp.borrowedDiversityScoreFunctionFor(node);
-                if (previous != null) assertSame(previous, scorer);
-                for (int peer = 0; peer < 3; peer++) {
-                    assertEquals(metric.compare(resident.getVector(node), resident.getVector(peer)),
-                            scorer.similarityTo(peer), 0f);
-                }
-                previous = scorer;
-            }
-            // Ordinary scorers remain independent of the reusable factory.
-            var ordinary = bsp.diversityScoreFunctionFor(0);
-            bsp.borrowedDiversityScoreFunctionFor(1);
-            assertEquals(metric.compare(resident.getVector(0), resident.getVector(2)), ordinary.similarityTo(2), 0f);
-        }
-    }
-
-    @Test public void centroidUsesRangeAndNormalizesItsSnapshot() {
+    @Test public void centroidNormalizesItsSizeSnapshot() {
         var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
         var resident = new ListRandomAccessVectorValues(Arrays.asList(
                 vts.createFloatVector(new float[] {1f, 0f}), null,
@@ -101,10 +76,10 @@ public class TestBuildScoreProviderBorrowedVectors {
             public int dimension() { return 2; }
             public boolean isValueShared() { return false; }
             public RandomAccessVectorValues copy() { throw new UnsupportedOperationException(); }
-            public VectorFloat<?> getVector(int ordinal) { throw new AssertionError("Point read"); }
+            public VectorFloat<?> getVector(int ordinal) { return resident.getVector(ordinal); }
             public VectorCursor openRange(int start, int end) {
                 ranges.incrementAndGet();
-                return VectorAccess.openRange(resident, start, end);
+                throw new AssertionError("Unexpected bulk centroid optimization");
             }
             public VectorCursor openSelection(int[] ordinals, int offset, int count) {
                 throw new AssertionError("Selection");
@@ -112,7 +87,7 @@ public class TestBuildScoreProviderBorrowedVectors {
         };
         var centroid = BuildScoreProvider.randomAccessScoreProvider(source,
                 VectorSimilarityFunction.DOT_PRODUCT).approximateCentroid();
-        assertEquals(1, ranges.get());
+        assertEquals(0, ranges.get());
         assertEquals(1f / 3, centroid.get(0), 0f);
         assertEquals(1f / 3, centroid.get(1), 0f);
     }

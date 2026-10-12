@@ -177,11 +177,12 @@ public class DataSetLoaderSimpleMFDTest {
     }
 
     @Test
-    public void benchmarkDefaultsToBufferedWithExplicitPreloadOverride() {
+    public void benchmarkDefaultsToPreloadWithExplicitBufferedOptIn() {
         String previous = System.getProperty("jvector.dataset_loader");
         try {
             System.clearProperty("jvector.dataset_loader");
-            assertEquals(BaseVectorLoading.BUFFERED, BaseVectorLoading.forBenchmark());
+            assertEquals(BaseVectorLoading.PRELOAD, BaseVectorLoading.forBenchmark());
+            assertEquals(BaseVectorLoading.BUFFERED, BaseVectorLoading.forBenchmark(true));
             System.setProperty("jvector.dataset_loader", "preload");
             assertEquals(BaseVectorLoading.PRELOAD, BaseVectorLoading.forBenchmark());
             System.setProperty("jvector.dataset_loader", "typo");

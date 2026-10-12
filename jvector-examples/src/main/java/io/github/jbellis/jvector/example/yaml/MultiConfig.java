@@ -36,6 +36,8 @@ public class MultiConfig {
     public ConstructionParameters construction;
     public SearchParameters search;
     public String dataset;
+    /** Opt into bounded bulk input loading; omitted settings preserve resident loading. */
+    public boolean useDatasetPrefetching = false;
 
     private static final String defaultDirectory = "jvector-examples/yaml-configs/index-parameters/";
     private static final java.util.regex.Pattern YAML_SCHEMA_VERSION_KEY =
