@@ -39,6 +39,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 
@@ -233,6 +234,9 @@ class ParallelGraphWriter implements AutoCloseable {
         
         try (var channel = AsynchronousFileChannel.open(filePath, opts, null)) {
             List<Future<Void>> taskFutures = new ArrayList<>(numTasks);
+            // Set on interruption or the first failure, so remaining ranges stop instead of running to completion.
+            var stop = new AtomicBoolean();
+            boolean submitted = false;
 
             // Always join submitted tasks before closing the channel or supplier resources.
             try {
@@ -250,6 +254,7 @@ class ParallelGraphWriter implements AutoCloseable {
                     final int end = endOrdinal;
 
                     Future<Void> future = executor.submit(() -> {
+                        if (stop.get()) return null;
                         var view = viewPerThread.get();
                         var buffer = bufferPerThread.get();
 
@@ -264,7 +269,8 @@ class ParallelGraphWriter implements AutoCloseable {
                                 recordSize,
                                 baseOffset,               // Base offset (task calculates per-ordinal offsets)
                                 channel,                  // Async file channel for position-based writes
-                                buffer                    // Thread-local buffer
+                                buffer,                   // Thread-local buffer
+                                stop::get
                         );
 
                         try {
@@ -277,9 +283,10 @@ class ParallelGraphWriter implements AutoCloseable {
 
                     taskFutures.add(future);
                 }
-
+                submitted = true;
             } finally {
-                awaitTasks(taskFutures);
+                if (!submitted) stop.set(true);
+                awaitTasks(taskFutures, stop);
             }
 
             // Force all writes to disk before closing the channel.
@@ -291,7 +298,10 @@ class ParallelGraphWriter implements AutoCloseable {
         }
     }
 
-    private void awaitTasks(List<Future<Void>> futures) throws IOException {
+    /// Join every task, so no worker still uses the channel or suppliers when this returns. On
+    /// interruption or the first task failure, set `stop` so the remaining tasks skip or abandon
+    /// their ranges rather than writing them, then rethrow the first failure.
+    private void awaitTasks(List<Future<Void>> futures, AtomicBoolean stop) throws IOException {
         Throwable failure = null;
         boolean interrupted = false;
         for (var future : futures) {
@@ -302,8 +312,10 @@ class ParallelGraphWriter implements AutoCloseable {
                     done = true;
                 } catch (InterruptedException e) {
                     interrupted = true;
+                    stop.set(true);
                     if (failure == null) failure = new IOException("Interrupted while writing records", e);
                 } catch (ExecutionException e) {
+                    stop.set(true);
                     if (failure == null) failure = e.getCause();
                     else if (failure != e.getCause()) failure.addSuppressed(e.getCause());
                     done = true;
