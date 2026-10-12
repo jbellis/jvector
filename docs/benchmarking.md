@@ -115,3 +115,10 @@ To add a custom fvecs/ivecs dataset:
     ```
 
 For remote datasets, use `base_url` to specify where files should be downloaded from. The `${VAR}` and `${VAR:-default}` syntax is supported for environment variable expansion. See the example config for details.
+
+## Final index serialization
+
+Grid defers inline FP/NVQ serialization until after graph cleanup. The existing
+parallel-writer selection enables complete-record batches (default 64); dataset
+prefetching is a separate option and is not required. See
+[Deferred batch serialization](deferred-batch-writer.md) for activation and caller examples.
