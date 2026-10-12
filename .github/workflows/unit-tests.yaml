@@ -16,7 +16,7 @@ jobs:
           distribution: temurin
           cache: maven
       - name: Run unchanged acceptance checks
-        run: mvn -B -Pjdk11 -am -pl jvector-tests test -Ddiagnostic.output=ci-failure-evidence
+        run: mvn -B -Pjdk11 -am -pl jvector-tests test "-Ddiagnostic.output=ci-failure-evidence"
       - name: Preserve results and failure evidence
         if: always()
         uses: actions/upload-artifact@v4
