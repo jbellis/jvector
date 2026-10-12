@@ -120,9 +120,9 @@ public abstract class VectorizationProvider {
         return new DefaultVectorizationProvider();
       }
 
-      // check for jvector.experimental.enable_native_vectorization
-      // this is an experimental feature subject to change
-      if (Boolean.getBoolean("jvector.experimental.enable_native_vectorization")) {
+      // Native uses the Java 22 FFM API. An explicit false keeps the Panama path.
+      if (runtimeVersion >= 22 && Boolean.parseBoolean(
+          System.getProperty("jvector.experimental.enable_native_vectorization", "true"))) {
         try {
           Class<?> clazz = Class.forName("io.github.jbellis.jvector.vector.NativeVectorizationProvider");
           Constructor<?> ctor = clazz.getConstructor();
@@ -141,7 +141,7 @@ public abstract class VectorizationProvider {
         } catch (UnsupportedOperationException uoe) {
           LOG.warning("Native vector API was not enabled. " + uoe.getMessage());
         } catch (ClassNotFoundException e) {
-          LOG.warning("Java version does not support native vector API");
+          LOG.fine("Native vector provider is not on the classpath; trying the Java Vector API.");
         } catch (InvocationTargetException e) {
           // unwrap, check for UnsupportedOperationException
           if (e.getCause() instanceof UnsupportedOperationException) {

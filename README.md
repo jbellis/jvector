@@ -46,6 +46,35 @@ Introductory tutorials for JVector are available in [docs/tutorials](./docs/tuto
 The older step-by-step guide for JV can be found [here](./docs/legacy/jvector-step-by-step.md). New users should start with the tutorials mentioned earler, but the step-by-step guide contains useful commentary for advanced users.
 
 
+## SIMD provider selection
+
+On Java 22+ with the Vector API enabled, JVector automatically prefers its Google
+Highway native provider when the native library is available. Native libraries are
+bundled for Linux x86-64 (SSE4.2 or newer) and Linux AArch64. Use these JVM options:
+
+```text
+--add-modules jdk.incubator.vector
+--enable-native-access=ALL-UNNAMED
+```
+
+Operations implemented by Highway use native kernels; remaining operations use the
+inherited Panama/Java Vector API implementation with native vector storage. Native
+ISA selection remains automatic and respects the existing `JVECTOR_MAX_ISA` cap.
+
+| JVM property | Effect |
+| --- | --- |
+| No provider property | Prefer native on Java 22+; use Panama when native is unavailable |
+| `-Djvector.experimental.enable_native_vectorization=false` | Disable automatic native selection |
+| `-Djvector.vectorization_provider=panama` | Explicitly select Panama |
+| `-Djvector.vectorization_provider=native` | Explicitly require native; fail if it cannot load |
+| `-Djvector.vectorization_provider=default` | Explicitly select the scalar provider |
+
+The explicit `jvector.vectorization_provider` property takes precedence over the
+native-enable property. Provider selection happens once per JVM. Java 20/21 uses
+Panama when available. Older runtimes, or runtimes without the Vector API module,
+retain the scalar fallback. Neither Panama nor native is enabled by these defaults
+when the existing runtime compatibility checks reject SIMD support.
+
 ## The research behind the algorithms
 
 * Foundational work: [HNSW](https://ieeexplore.ieee.org/abstract/document/8594636) and [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf) papers, and [a higher level explainer](https://www.datastax.com/guides/hierarchical-navigable-small-worlds)
