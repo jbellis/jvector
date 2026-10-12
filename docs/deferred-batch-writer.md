@@ -60,3 +60,17 @@ This integrates with #744's optional `useDatasetPrefetching` setting. It does no
 change construction scoring, quantization parameters, or the query path. Production
 integrations can opt into deferred serialization by supplying their features at the
 final write; their existing vector-source and incremental-write APIs remain valid.
+
+## Running the Grid parallel-write path
+
+Grid keeps the existing writer-selection setting. To exercise complete-record
+parallel batches through BenchYAML, enable it before invoking the benchmark:
+
+```java
+GraphIndexBuilderConfig.getInstance().setParallelBuild(true);
+BenchYAML.main(new String[]{"your-index-parameters.yml"});
+```
+
+Grid sizes its writer pool from `PhysicalCoreExecutor`; no machine-specific worker
+count is embedded in this change. Dataset prefetching is a separate optional setting
+in the index YAML. An ordinary preloaded dataset can use the same deferred writer.
