@@ -592,6 +592,10 @@ public class Grid {
 
         public final Map<FeatureId, Function<VectorFloat<?>, Feature.State>> inputSuppliers;
 
+        public BuilderWithSuppliers(RandomAccessOnDiskGraphIndexWriter.Builder builder, Map<FeatureId, IntFunction<Feature.State>> suppliers) {
+            this(builder, suppliers, Map.of());
+        }
+
         public BuilderWithSuppliers(RandomAccessOnDiskGraphIndexWriter.Builder builder, Map<FeatureId, IntFunction<Feature.State>> suppliers,
                                     Map<FeatureId, Function<VectorFloat<?>, Feature.State>> inputSuppliers) {
             this.builder = builder;

@@ -43,7 +43,7 @@ import java.util.LinkedHashMap;
  * Automated benchmark runner for GitHub Actions workflow.
  * This class is specifically designed to handle the --output argument
  * for regression testing in the run-bench.yml workflow.
- * 
+ *
  * The benchmark runner supports checkpointing to allow resuming from failures.
  * It creates a checkpoint file (outputPath + ".checkpoint.json") that records
  * which datasets have been fully processed. If the benchmark is restarted,
@@ -85,7 +85,7 @@ public class AutoBenchYAML {
         }
         String finalConfigPath = configPath;
         String[] filteredArgs = Arrays.stream(args)
-                .filter(arg -> !arg.equals("--output") && !arg.equals(finalOutputPath) && 
+                .filter(arg -> !arg.equals("--output") && !arg.equals(finalOutputPath) &&
                                !arg.equals("--config") && !arg.equals(finalConfigPath))
                 .toArray(String[]::new);
 
@@ -112,7 +112,6 @@ public class AutoBenchYAML {
         // Add results from checkpoint if present
         results.addAll(checkpointManager.getCompletedResults());
 
-
         // Process datasets from regex patterns
         if (!datasetNames.isEmpty()) {
             for (var datasetName : datasetNames) {
@@ -122,70 +121,70 @@ public class AutoBenchYAML {
                     continue;
                 }
 
-                String normalizedDatasetName = datasetName;
-                if (normalizedDatasetName.endsWith(".hdf5")) {
-                    normalizedDatasetName = normalizedDatasetName.substring(0, normalizedDatasetName.length() - ".hdf5".length());
-                }
+                try {
+                    String normalizedDatasetName = datasetName;
+                    if (normalizedDatasetName.endsWith(".hdf5")) {
+                        normalizedDatasetName = normalizedDatasetName.substring(0, normalizedDatasetName.length() - ".hdf5".length());
+                    }
 
-                MultiConfig config;
-                if (finalConfigPath != null) {
-                    config = MultiConfig.getConfig(finalConfigPath);
-                    // Override dataset name if not specified in custom config
-                    if (config.dataset == null || config.dataset.isEmpty()) {
+                    MultiConfig config;
+                    if (finalConfigPath != null) {
+                        config = MultiConfig.getConfig(finalConfigPath);
+                        // Override dataset name if not specified in custom config
+                        if (config.dataset == null || config.dataset.isEmpty()) {
+                            config.dataset = normalizedDatasetName;
+                        }
+                    } else {
+                        config = MultiConfig.getDefaultConfig(normalizedDatasetName);
                         config.dataset = normalizedDatasetName;
                     }
-                } else {
-                    config = MultiConfig.getDefaultConfig(normalizedDatasetName);
-                    config.dataset = normalizedDatasetName;
-                }
-                logger.info("Using configuration: {}", config);
-                var loading = BaseVectorLoading.forBenchmark(config);
+                    logger.info("Using configuration: {}", config);
+                    var loading = BaseVectorLoading.forBenchmark(config);
 
-                logger.info("Loading dataset: {}", datasetName);
-                try (var ds = DataSets.loadDataSet(datasetName, loading).orElseThrow(
-                        () -> new RuntimeException("Dataset " + datasetName + " not found")
-                ).getDataSet()) {
-                    logger.info("Dataset loaded: {} with {} vectors", datasetName, ds.getBaseVectors().size());
+                    logger.info("Loading dataset: {}", datasetName);
+                    try (var ds = DataSets.loadDataSet(datasetName, loading).orElseThrow(
+                            () -> new RuntimeException("Dataset " + datasetName + " not found")
+                    ).getDataSet()) {
+                        logger.info("Dataset loaded: {} with {} vectors", datasetName, ds.getBaseVectors().size());
 
+                        List<BenchResult> datasetResults = Grid.runAllAndCollectResults(ds,
+                                config.construction.useSavedIndexIfExists,
+                                config.construction.outDegree,
+                                config.construction.efConstruction,
+                                config.construction.neighborOverflow,
+                                config.construction.addHierarchy,
+                                config.construction.refineFinalGraph,
+                                config.construction.getFeatureSets(),
+                                config.construction.getCompressorParameters(),
+                                config.search.getCompressorParameters(),
+                                config.search.topKOverquery,
+                                config.search.useSearchPruning);
+                        results.addAll(datasetResults);
 
+                        logger.info("Benchmark completed for dataset: {}", datasetName);
+                        // Mark dataset as completed and update checkpoint, passing results
+                        checkpointManager.markDatasetCompleted(datasetName, datasetResults);
 
-                    List<BenchResult> datasetResults = Grid.runAllAndCollectResults(ds,
-                            config.construction.useSavedIndexIfExists,
-                            config.construction.outDegree, 
-                            config.construction.efConstruction,
-                            config.construction.neighborOverflow, 
-                            config.construction.addHierarchy,
-                            config.construction.refineFinalGraph,
-                            config.construction.getFeatureSets(), 
-                            config.construction.getCompressorParameters(),
-                            config.search.getCompressorParameters(), 
-                            config.search.topKOverquery, 
-                            config.search.useSearchPruning);
-                    results.addAll(datasetResults);
-
-                    logger.info("Benchmark completed for dataset: {}", datasetName);
-                    // Mark dataset as completed and update checkpoint, passing results
-                    checkpointManager.markDatasetCompleted(datasetName, datasetResults);
-
-                    // Compaction regression — failures are non-fatal and don't block checkpointing
-                    try {
-                        logger.info("Running compaction benchmark for dataset: {}", datasetName);
-                        List<BenchResult> datasetCompactionResults;
-                        if (loading == BaseVectorLoading.BUFFERED) {
-                            // This legacy validation queries raw originals; keep its resident source.
-                            try (var resident = DataSets.loadDataSet(datasetName, BaseVectorLoading.PRELOAD)
-                                    .orElseThrow(() -> new RuntimeException("Dataset " + datasetName + " not found"))
-                                    .getDataSet()) {
-                                datasetCompactionResults = CompactionBench.run(resident);
+                        // Compaction regression — failures are non-fatal and don't block checkpointing
+                        try {
+                            logger.info("Running compaction benchmark for dataset: {}", datasetName);
+                            List<BenchResult> datasetCompactionResults;
+                            if (loading == BaseVectorLoading.BUFFERED) {
+                                // This legacy validation queries raw originals; keep its resident source.
+                                try (var resident = DataSets.loadDataSet(datasetName, BaseVectorLoading.PRELOAD)
+                                        .orElseThrow(() -> new RuntimeException("Dataset " + datasetName + " not found"))
+                                        .getDataSet()) {
+                                    datasetCompactionResults = CompactionBench.run(resident);
+                                }
+                            } else {
+                                datasetCompactionResults = CompactionBench.run(ds);
                             }
-                        } else {
-                            datasetCompactionResults = CompactionBench.run(ds);
+                            compactionResults.addAll(datasetCompactionResults);
+                            logger.info("Compaction benchmark completed for dataset: {} ({} configs)",
+                                    datasetName, datasetCompactionResults.size());
+                        } catch (Exception e) {
+                            logger.error("Compaction benchmark failed for dataset {}", datasetName, e);
                         }
-                        compactionResults.addAll(datasetCompactionResults);
-                        logger.info("Compaction benchmark completed for dataset: {} ({} configs)",
-                                datasetName, datasetCompactionResults.size());
-                    } catch (Exception e) {
-                        logger.error("Compaction benchmark failed for dataset {}", datasetName, e);
                     }
                 } catch (Exception e) {
                     logger.error("Exception while processing dataset {}", datasetName, e);
