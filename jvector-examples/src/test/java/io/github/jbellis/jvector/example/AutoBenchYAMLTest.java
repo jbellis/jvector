@@ -34,6 +34,8 @@ public class AutoBenchYAMLTest {
         Path log = work.resolve("console.log");
         var command = new java.util.ArrayList<String>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        // The log is decoded as UTF-8, including on Windows with a different default charset.
+        command.add("-Dfile.encoding=UTF-8");
         // Keep the Java 11 test runnable without optional vector or FFM modules.
         if (ModuleLayer.boot().findModule("jdk.incubator.vector").isPresent())
             command.add("--add-modules=jdk.incubator.vector");
