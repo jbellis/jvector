@@ -106,4 +106,47 @@ public class TestFinalWriteVectors {
             for (var future : pool.invokeAll(tasks)) future.get();
         } finally { pool.shutdownNow(); }
     }
+
+    @Test(timeout = 60000)
+    public void closeReleasesOtherWorkersWhenOneCursorFails() throws Exception {
+        var resident = values();
+        var closes = new AtomicInteger();
+        BatchedVectorValues source = new BatchedVectorValues() {
+            public int size() { return resident.size(); }
+            public int dimension() { return resident.dimension(); }
+            public boolean isValueShared() { return false; }
+            public RandomAccessVectorValues copy() { return this; }
+            public VectorFloat<?> getVector(int ordinal) { throw new AssertionError("Point access"); }
+            public VectorCursor openSelection(int[] ordinals, int offset, int count) { throw new AssertionError("Selection access"); }
+            public VectorCursor openRange(int start, int end) {
+                var cursor = VectorAccess.openRange(resident, start, end);
+                return new VectorCursor() {
+                    public boolean next() { return cursor.next(); }
+                    public int ordinal() { return cursor.ordinal(); }
+                    public VectorFloat<?> vector() { return cursor.vector(); }
+                    public boolean isValueShared() { return false; }
+                    public void close() {
+                        closes.incrementAndGet(); cursor.close();
+                        if (start == 0) throw new IllegalStateException("cursor close failure");
+                    }
+                };
+            }
+        };
+        var pool = Executors.newFixedThreadPool(2);
+        var input = new Grid.FinalWriteVectors(source);
+        try {
+            var barrier = new CyclicBarrier(2);
+            for (var future : pool.invokeAll(List.<Callable<Void>>of(
+                    () -> { input.get(0); barrier.await(10, TimeUnit.SECONDS); return null; },
+                    () -> { input.get(64); barrier.await(10, TimeUnit.SECONDS); return null; }))) future.get();
+            var failure = assertThrows(IllegalStateException.class, input::close);
+            assertEquals("cursor close failure", failure.getMessage());
+            assertEquals(2, closes.get());
+            input.close();
+            assertEquals(2, closes.get());
+        } finally {
+            pool.shutdownNow(); pool.awaitTermination(10, TimeUnit.SECONDS);
+            input.close();
+        }
+    }
 }
