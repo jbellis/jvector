@@ -1,4 +1,6 @@
 yamlSchemaVersion: 1
+# Opt in to bounded dataset input prefetching.
+useDatasetPrefetching: false
 onDiskIndexVersion: 6
 
 dataset: default

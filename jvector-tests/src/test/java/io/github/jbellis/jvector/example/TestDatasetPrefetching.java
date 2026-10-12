@@ -51,8 +51,18 @@ public class TestDatasetPrefetching {
         try {
             Files.writeString(file, "yamlSchemaVersion: 1\nonDiskIndexVersion: 6\n");
             assertFalse(MultiConfig.getConfig(file.toString()).useDatasetPrefetching);
+            Files.writeString(file, "yamlSchemaVersion: 1\nonDiskIndexVersion: 6\nuseDatasetPrefetching: false\n");
+            assertFalse(MultiConfig.getConfig(file.toString()).useDatasetPrefetching);
             Files.writeString(file, "yamlSchemaVersion: 1\nonDiskIndexVersion: 6\nuseDatasetPrefetching: true\n");
             assertTrue(MultiConfig.getConfig(file.toString()).useDatasetPrefetching);
+        } finally { Files.delete(file); }
+    }
+    @Test public void versionedYamlRejectsUnknownSettings() throws Exception {
+        var file = Files.createTempFile("prefetch-unknown-setting", ".yml");
+        try {
+            Files.writeString(file, "yamlSchemaVersion: 1\nonDiskIndexVersion: 6\nuseDatasetPrefetching: false\nunknownSetting: true\n");
+            assertThrows(org.yaml.snakeyaml.error.YAMLException.class,
+                    () -> MultiConfig.getConfig(file.toString()));
         } finally { Files.delete(file); }
     }
     @Test public void sourceRoutingPreservesRawComparisonWorkloadsWithoutRejectingThem() {
