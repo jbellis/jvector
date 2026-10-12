@@ -115,8 +115,8 @@ public class BenchYAML {
         }
 
 
-        var loading = BaseVectorLoading.forBenchmark();
         for (var config : allConfigs) {
+            var loading = BaseVectorLoading.forBenchmark(config);
 
             String datasetName = config.dataset;
             try (var ds = DataSets.loadDataSet(datasetName, loading).orElseThrow(

@@ -62,6 +62,7 @@ final class BufferedDataSet implements DataSet {
                 name, base.size(), queries.size(), base.dimension());
     }
 
+    @Override public boolean useDatasetPrefetching() { return true; }
     @Override public int getDimension() { return base.dimension(); }
     @Override public RandomAccessVectorValues getBaseRavv() { return base; }
     @Override public String getName() { return name; }

@@ -112,7 +112,6 @@ public class AutoBenchYAML {
         // Add results from checkpoint if present
         results.addAll(checkpointManager.getCompletedResults());
 
-        var loading = BaseVectorLoading.forBenchmark();
 
         // Process datasets from regex patterns
         if (!datasetNames.isEmpty()) {
@@ -123,29 +122,32 @@ public class AutoBenchYAML {
                     continue;
                 }
 
+                String normalizedDatasetName = datasetName;
+                if (normalizedDatasetName.endsWith(".hdf5")) {
+                    normalizedDatasetName = normalizedDatasetName.substring(0, normalizedDatasetName.length() - ".hdf5".length());
+                }
+
+                MultiConfig config;
+                if (finalConfigPath != null) {
+                    config = MultiConfig.getConfig(finalConfigPath);
+                    // Override dataset name if not specified in custom config
+                    if (config.dataset == null || config.dataset.isEmpty()) {
+                        config.dataset = normalizedDatasetName;
+                    }
+                } else {
+                    config = MultiConfig.getDefaultConfig(normalizedDatasetName);
+                    config.dataset = normalizedDatasetName;
+                }
+                logger.info("Using configuration: {}", config);
+                var loading = BaseVectorLoading.forBenchmark(config);
+
                 logger.info("Loading dataset: {}", datasetName);
                 try (var ds = DataSets.loadDataSet(datasetName, loading).orElseThrow(
                         () -> new RuntimeException("Dataset " + datasetName + " not found")
                 ).getDataSet()) {
                     logger.info("Dataset loaded: {} with {} vectors", datasetName, ds.getBaseVectors().size());
 
-                    String normalizedDatasetName = datasetName;
-                    if (normalizedDatasetName.endsWith(".hdf5")) {
-                        normalizedDatasetName = normalizedDatasetName.substring(0, normalizedDatasetName.length() - ".hdf5".length());
-                    }
 
-                    MultiConfig config;
-                    if (finalConfigPath != null) {
-                        config = MultiConfig.getConfig(finalConfigPath);
-                        // Override dataset name if not specified in custom config
-                        if (config.dataset == null || config.dataset.isEmpty()) {
-                            config.dataset = normalizedDatasetName;
-                        }
-                    } else {
-                        config = MultiConfig.getDefaultConfig(normalizedDatasetName);
-                        config.dataset = normalizedDatasetName;
-                    }
-                    logger.info("Using configuration: {}", config);
 
                     List<BenchResult> datasetResults = Grid.runAllAndCollectResults(ds,
                             config.construction.useSavedIndexIfExists,
@@ -168,7 +170,17 @@ public class AutoBenchYAML {
                     // Compaction regression — failures are non-fatal and don't block checkpointing
                     try {
                         logger.info("Running compaction benchmark for dataset: {}", datasetName);
-                        List<BenchResult> datasetCompactionResults = CompactionBench.run(ds);
+                        List<BenchResult> datasetCompactionResults;
+                        if (loading == BaseVectorLoading.BUFFERED) {
+                            // This legacy validation queries raw originals; keep its resident source.
+                            try (var resident = DataSets.loadDataSet(datasetName, BaseVectorLoading.PRELOAD)
+                                    .orElseThrow(() -> new RuntimeException("Dataset " + datasetName + " not found"))
+                                    .getDataSet()) {
+                                datasetCompactionResults = CompactionBench.run(resident);
+                            }
+                        } else {
+                            datasetCompactionResults = CompactionBench.run(ds);
+                        }
                         compactionResults.addAll(datasetCompactionResults);
                         logger.info("Compaction benchmark completed for dataset: {} ({} configs)",
                                 datasetName, datasetCompactionResults.size());

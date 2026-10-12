@@ -31,6 +31,7 @@ import java.util.concurrent.*;
 import static org.junit.Assert.*;
 
 public class TestBufferedExactQueries {
+    private static final java.util.concurrent.atomic.AtomicInteger pointReads = new java.util.concurrent.atomic.AtomicInteger();
     private static class Borrowed implements RandomAccessVectorValues {
         private final RandomAccessVectorValues source;
         private final VectorFloat<?> scratch;
@@ -43,6 +44,7 @@ public class TestBufferedExactQueries {
         public boolean isValueShared() { return true; }
         public RandomAccessVectorValues copy() { return new Borrowed(source); }
         public VectorFloat<?> getVector(int ordinal) {
+            pointReads.incrementAndGet();
             source.getVectorInto(ordinal, scratch, 0);
             return scratch;
         }
@@ -75,26 +77,18 @@ public class TestBufferedExactQueries {
             try (var index = OnDiskGraphIndex.load(ReaderSupplierFactory.open(path))) {
                 for (boolean stored : new boolean[] {false, true}) {
                     for (var metric : VectorSimilarityFunction.values()) {
+                        pointReads.set(0);
                         DataSet dataset = new DataSet() {
+                            public boolean useDatasetPrefetching() { return stored; }
                             public String getName() { return "point-only"; }
                             public int getDimension() { return 17; }
                             public VectorSimilarityFunction getSimilarityFunction() { return metric; }
                             public List<VectorFloat<?>> getBaseVectors() { return vectors; }
                             public List<VectorFloat<?>> getQueryVectors() { return List.of(vectors.get(0)); }
                             public List<List<Integer>> getGroundTruth() { return List.of(List.of(0)); }
-                            public RandomAccessVectorValues getBaseRavv() {
-                                if (!stored) return root;
-                                return new Borrowed(resident) {
-                                    @Override public VectorFloat<?> getVector(int ordinal) {
-                                        throw new AssertionError("Stored scorer reread input dataset");
-                                    }
-                                    @Override public RandomAccessVectorValues copy() {
-                                        throw new AssertionError("Stored scorer copied input source");
-                                    }
-                                };
-                            }
+                            public RandomAccessVectorValues getBaseRavv() { return root; }
                         };
-                        try (var system = new Grid.ConfiguredSystem(dataset, index, null, stored ? Set.of(FeatureId.INLINE_VECTORS) : Set.of())) {
+                        try (var system = new Grid.ConfiguredSystem(dataset, index, null, Set.of(FeatureId.INLINE_VECTORS))) {
                             var tasks = new ArrayList<Callable<Void>>();
                             for (int worker = 0; worker < 8; worker++) {
                                 final int id = worker;
@@ -111,6 +105,7 @@ public class TestBufferedExactQueries {
                                 });
                             }
                             for (var task : workers.invokeAll(tasks)) task.get();
+                            assertTrue("Exact scorer bypassed original input", pointReads.get() > 0);
                         }
                     }
                 }

@@ -72,17 +72,52 @@ its local `.fvecs` path with `FvecFileVectorValues`. The examples use
 without materializing the base vectors. Downloads must finish before the source
 is opened; cursors stream a stable local file, not an in-progress remote download.
 
+## Purpose and benchmark opt-in
+
+The input file need not be fully preloaded for quantizer training (samples or full
+scans for statistics), batch encoding, or streaming FP/NVQ serialization. Training
+samples are temporary working memory; returned models do not retain those samples.
+Encoded vectors and graph structures keep their existing memory requirements.
+
+BenchYAML and AutoBenchYAML preserve resident loading by default. To opt in, set this
+root field in the index-parameter YAML used by either runner:
+
+```yaml
+useDatasetPrefetching: true
+```
+
+Omitted or `false` preserves the resident path. The existing VM option
+`-Djvector.dataset_loader=buffered` is an explicit override; `preload` overrides the
+flag in the other direction. Neither runner changes a user's YAML files.
+
+The harness uses file input for bulk consumption in quantized construction and
+existing disk storage. Uncompressed construction, or a search configuration that
+requires raw input rather than stored vectors/codes, still uses resident input.
+A mixed configuration requiring resident input remains resident; split those cases
+into separate configurations to measure dataset prefetching independently. This is
+source routing, not a restriction on the vector-access API.
+
+Grid consumes each input batch through training/encoding and inline serialization;
+the original insertion vector is supplied from that batch, while peer scoring uses
+resident quantized codes. Query scoring is unchanged from main. Raw-input exact-query configurations retain
+resident input; quantized query paths continue to use their existing codes and
+stored reranking vectors. Compaction algorithms and query scoring are unchanged. AutoBenchYAML's separate
+legacy compaction-query validation still uses resident original vectors; that pass
+retains its existing memory requirement. The current compactor processes saved
+partition indexes, not the original input file. Any future original-input training,
+encoding or serialization step can use the same bulk hooks.
+
 The source retains bounded reusable read buffers during consumption. It does not
-change persistent dataset, index, or quantizer caches. File preparation stays
-outside construction timing; demand reads during training and encoding remain
-part of those library calls. Grid runs launched through BenchYAML or AutoBenchYAML use buffered base vectors by default. Use
-`-Djvector.dataset_loader=preload` for a full resident baseline; `buffered` selects
-the default explicitly. Queries and ground truth remain resident. Buffered loading
-requires `NO_SCRUB` metadata and preserves ordinals and stored values. The harness
-closes its source after each configuration. Direct calls to the existing
-`DataSets.loadDataSet(name)` retain their previous preload behavior; harness callers
-can select `BaseVectorLoading.BUFFERED` explicitly. Application-supplied JVector
-vector sources and the core indexing API are unchanged.
+change persistent dataset, index or quantizer caches. File preparation remains
+outside construction timing; input consumption is included in the corresponding
+library calls. Queries and ground truth remain resident. Files must be complete and
+immutable, and buffered loading requires `NO_SCRUB` metadata. Existing direct calls
+to `DataSets.loadDataSet(name)` still preload. Application-provided RAVVs need no
+changes; future quantizers opt into `VectorAccess` for their bulk input needs.
+
+Use a distinct AutoBenchYAML output/checkpoint file for each loading mode so earlier
+completed results are not reused as a different mode. The harness closes its input
+source after the configuration finishes.
 
 ## Random ordinals: fetch an arbitrary selection
 
@@ -172,11 +207,10 @@ VectorAccess.forEach(source, executor, (ordinal, vector) -> {
 Use `copySelected` for retained training samples, `openRange` for an ordered
 sequential reduction, and the mapped `forEach` overload when output positions
 refer to different input ordinals. These utilities work with existing sources
-without buffered hooks. Full-precision graph construction uses thread-local
-random-access views and an ordered range for centroid scans when available.
-It does not require quantization or batching. Repeated unpredictable raw-vector
-reads can still make file-backed exact construction slower than resident input;
-range and sample prefetching cannot eliminate those dependent point reads.
+without buffered hooks. Full-precision graph construction retains its existing
+resident source in the harness. The optional bulk hooks are not a substitute for
+resident raw vectors in comparison-heavy construction. A caller can still use the
+ordinary point-access API; no library-wide policy is imposed.
 The source does not change distance metrics, quantizer parameters, graph pruning,
 or hierarchy. Algorithm restrictions still apply, such as FusedPQ requiring
 256 clusters and anisotropic PQ requiring normalized training vectors.
@@ -205,16 +239,14 @@ used by Grid and BenchYAML. It adapts to the machine and honors
 `-Djvector.physical_core_count`; there is no fixed core count. Blocking file reads
 for range and selection cursors run on a separate source-owned pool. Unpredictable
 point reads execute on the requesting thread using exclusively leased channels;
-point and asynchronous reads share the I/O concurrency limit. A bounded cache of
-point vectors shares the payload budget and reduces repeated record reads.
-`withIoThreads(count)` remains available for explicit benchmark tuning. The
+point and asynchronous reads share the I/O concurrency limit. `withIoThreads(count)` remains available for explicit benchmark tuning. The
 quantization example uses the shared compute pool and does not shut it down.
 
 Other defaults are at most 64 vectors per batch and three batches of
 read-ahead. Payload capacity is capped at `min(1% of file bytes, 64 MiB)`, with one
 record as the minimum. A configured maximum is also capped at 1% of the file.
 Copies and cursors share the budget, including queued, in-flight and ready payloads,
-point-read buffers and cached point vectors. Point-cache metadata is also bounded.
+point-read buffers.
 Read-ahead zero disables speculative batches. Selected reads fetch requested records
 without reading the gaps between sparse samples.
 
