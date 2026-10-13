@@ -1584,6 +1584,100 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
         for (var r : rss) r.close();
     }
 
+    /// Repro for #740: level-0 candidates from a node's own source are ranked on approximate
+    /// scores, although the PR, release note and docs say candidate ordering is exact.
+    ///
+    /// ## The bug
+    ///
+    /// At level 0 with cells, `gatherFromSameSource` scores each retained same-source edge as
+    /// `similarityFunction.compare(baseVec, v)`, where `v` is decoded through `scratch.div`. When
+    /// the wide code trained (`pqWide != null`), that decoder reads the wide PQ cache, so these
+    /// scores are approximate. Cross-source candidates from the cell walk and reverse offers carry
+    /// exact scores. `processBaseNode` sorts both kinds together with `sortOrderByScoreDesc`, and
+    /// diversity selection takes candidates in that order, so a cross-source candidate can
+    /// overtake a closer same-source neighbor because the latter's score was read low. This
+    /// contradicts "Candidate ordering is exact throughout" (PR #740), "Every score that orders a
+    /// candidate is computed on the vectors themselves" (`740.performance.md`), and
+    /// `docs/compaction.md`.
+    ///
+    /// ## The test
+    ///
+    /// With exact ordering, a node's first output neighbor is its best-scoring candidate, because
+    /// selection always keeps the first candidate it considers, and the writer keeps selection
+    /// order. A node's live same-source neighbors are always among its candidates. So the first
+    /// output neighbor must score at least as high, exactly, as the node's best same-source
+    /// neighbor in its source graph. The test merges three hierarchical full-precision sources of
+    /// 3,000 32-dimensional vectors (enough to train the wide code) and checks that for every node.
+    /// At `d5af1d7b` many nodes violate it.
+    @Test
+    public void testLevel0CandidateOrderingIsExact() throws Exception {
+        int perSource = 3000, nSrc = 3;
+        var vsf = VectorSimilarityFunction.DOT_PRODUCT;
+        var rnd = new java.util.Random(20261014);
+        List<ReaderSupplier> rss = new ArrayList<>();
+        try {
+            List<OnDiskGraphIndex> graphs = new ArrayList<>();
+            List<FixedBitSet> live = new ArrayList<>();
+            List<List<VectorFloat<?>>> vecsBySource = new ArrayList<>();
+            for (int s = 0; s < nSrc; s++) {
+                var vecs = seededVectors(rnd, perSource, dimension);
+                normalizeAll(vecs);
+                vecsBySource.add(vecs);
+                Path path = buildPlainSourceGraph(vecs, vsf, true, "exact_order_src_" + s);
+                rss.add(ReaderSupplierFactory.open(path));
+                graphs.add(OnDiskGraphIndex.load(rss.get(s)));
+                var lv = new FixedBitSet(perSource);
+                lv.set(0, perSource);
+                live.add(lv);
+            }
+            assertTrue("sources must have a hierarchy for cells", graphs.get(0).getMaxLevel() >= 1);
+            var compactor = new OnDiskGraphIndexCompactor(graphs, live, vsf, null);
+            var outputPath = testDirectory.resolve("exact_order_out");
+            compactor.compact(outputPath);
+            assertTrue("level-0 candidates should come from cell scans", compactor.cellScanCount() > 0);
+            var mappers = compactor.ordinalMappers();
+
+            VectorFloat<?>[] byNew = new VectorFloat<?>[nSrc * perSource];
+            for (int s = 0; s < nSrc; s++) {
+                for (int n = 0; n < perSource; n++) byNew[mappers.get(s).oldToNew(n)] = vecsBySource.get(s).get(n);
+            }
+            int checked = 0, violations = 0;
+            String example = null;
+            try (ReaderSupplier rs = ReaderSupplierFactory.open(outputPath)) {
+                var merged = OnDiskGraphIndex.load(rs);
+                try (var mergedView = merged.getView()) {
+                    for (int s = 0; s < nSrc; s++) {
+                        try (var sourceView = graphs.get(s).getView()) {
+                            for (int n = 0; n < perSource; n++) {
+                                var vec = vecsBySource.get(s).get(n);
+                                float bestSame = Float.NEGATIVE_INFINITY;
+                                for (var it = sourceView.getNeighborsIterator(0, n); it.hasNext(); ) {
+                                    bestSame = Math.max(bestSame, vsf.compare(vec, vecsBySource.get(s).get(it.nextInt())));
+                                }
+                                var out = mergedView.getNeighborsIterator(0, mappers.get(s).oldToNew(n));
+                                if (bestSame == Float.NEGATIVE_INFINITY || !out.hasNext()) continue;
+                                float first = vsf.compare(vec, byNew[out.nextInt()]);
+                                checked++;
+                                if (first < bestSame - 1e-6f) {
+                                    violations++;
+                                    if (example == null) {
+                                        example = "source " + s + " node " + n + ": first neighbor scores " + first
+                                                + ", best same-source neighbor " + bestSame;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            assertTrue("no nodes were checked", checked > 0);
+            assertEquals(violations + " of " + checked + " nodes have a first neighbor that scores below their best"
+                    + " same-source neighbor, e.g. " + example, 0, violations);
+        } finally {
+            for (var r : rss) r.close();
+        }
+    }
+
     /// Repro for #740: merging hierarchical sources whose dimension is below 8 throws.
     ///
     /// ## The bug
