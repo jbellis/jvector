@@ -503,6 +503,73 @@ HWY_FLATTEN void sub_scalar_in_place_f32(float *HWY_RESTRICT v1,
 }
 
 JV_RENAME_REGS
+HWY_FLATTEN void sub_f32(const float *HWY_RESTRICT a, size_t aoffset,
+                         const float *HWY_RESTRICT b, size_t boffset,
+                         float *HWY_RESTRICT res, size_t length)
+{
+    a += aoffset;
+    b += boffset;
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto va = hn::LoadU(d, a + i);
+        auto vb = hn::LoadU(d, b + i);
+        hn::StoreU(hn::Sub(va, vb), d, res + i);
+    }
+    if (i < length) {
+        const size_t rem = length - i;
+        auto va = hn::LoadN(d, a + i, rem);
+        auto vb = hn::LoadN(d, b + i, rem);
+        hn::StoreN(hn::Sub(va, vb), d, res + i, rem);
+    }
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN void sub_scalar_f32(const float *HWY_RESTRICT a, size_t aoffset,
+                                float value,
+                                float *HWY_RESTRICT res, size_t length)
+{
+    a += aoffset;
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    const auto vval = hn::Set(d, value);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto va = hn::LoadU(d, a + i);
+        hn::StoreU(hn::Sub(va, vval), d, res + i);
+    }
+    if (i < length) {
+        const size_t rem = length - i;
+        auto va = hn::LoadN(d, a + i, rem);
+        hn::StoreN(hn::Sub(va, vval), d, res + i, rem);
+    }
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN void scale_f32(float *HWY_RESTRICT v,
+                           float multiplier,
+                           size_t length)
+{
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    const auto vmult = hn::Set(d, multiplier);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto a = hn::LoadU(d, v + i);
+        hn::StoreU(hn::Mul(a, vmult), d, v + i);
+    }
+    if (i < length) {
+        const size_t rem = length - i;
+        auto a = hn::LoadN(d, v + i, rem);
+        hn::StoreN(hn::Mul(a, vmult), d, v + i, rem);
+    }
+}
+
+JV_RENAME_REGS
 HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
 {
     hn::ScalableTag<float> d;
@@ -516,6 +583,24 @@ HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
     float result = hn::ReduceMax(d, accum);
     for (; i < length; i++) {
         if (v[i] > result) result = v[i];
+    }
+    return result;
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN float min_f32(const float *HWY_RESTRICT v, size_t length)
+{
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    auto accum = hn::Set(d, FLT_MAX);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        accum = hn::Min(accum, hn::LoadU(d, v + i));
+    }
+    float result = hn::ReduceMin(d, accum);
+    for (; i < length; i++) {
+        if (v[i] < result) result = v[i];
     }
     return result;
 }
@@ -540,6 +625,24 @@ HWY_FLATTEN void min_in_place_f32(float *HWY_RESTRICT v1,
         auto b = hn::LoadN(d, v2 + i, rem);
         hn::StoreN(hn::Min(a, b), d, v1 + i, rem);
     }
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN float sum_f32(const float *HWY_RESTRICT v, size_t length)
+{
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    auto accum = hn::Zero(d);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        accum = hn::Add(accum, hn::LoadU(d, v + i));
+    }
+    float result = hn::ReduceSum(d, accum);
+    for (; i < length; i++) {
+        result += v[i];
+    }
+    return result;
 }
 
 // =============================================================================
@@ -1695,6 +1798,33 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
     memcpy(&sum_bits,  &sum,  sizeof(float));
     memcpy(&bmag_bits, &bMag, sizeof(float));
     return ((int64_t)bmag_bits << 32) | (int64_t)(uint32_t)sum_bits;
+}
+
+// =============================================================================
+// Hamming distance kernel
+// =============================================================================
+
+JV_RENAME_REGS
+HWY_FLATTEN int32_t hamming_distance(const uint64_t *HWY_RESTRICT a,
+                                     const uint64_t *HWY_RESTRICT b,
+                                     size_t length)
+{
+    hn::ScalableTag<uint64_t> d;
+    const size_t lanes = hn::Lanes(d);
+    auto acc = hn::Zero(d);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto va = hn::LoadU(d, a + i);
+        auto vb = hn::LoadU(d, b + i);
+        auto xord = hn::Xor(va, vb);
+        acc = hn::Add(acc, hn::PopulationCount(xord));
+    }
+    uint64_t result = hn::ReduceSum(d, acc);
+    for (; i < length; i++) {
+        result += hwy::PopCount(a[i] ^ b[i]);
+    }
+    return static_cast<int32_t>(result);
 }
 
 }  // namespace JV_ISA
