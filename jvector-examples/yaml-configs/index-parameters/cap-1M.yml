@@ -2,6 +2,7 @@ yamlSchemaVersion: 1
 onDiskIndexVersion: 6
 
 dataset: cap-1M
+useDatasetPrefetching: false
 
 construction:
   outDegree: [32]

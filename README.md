@@ -43,6 +43,9 @@ This is important because it allows you to take advantage of logarithmic search 
 
 Introductory tutorials for JVector are available in [docs/tutorials](./docs/tutorials/). Start with the [basic tutorial](./docs/tutorials/1-intro-tutorial.md) or review [VectorIntro.java](./jvector-examples/src/main/java/io/github/jbellis/jvector/example/tutorial/VectorIntro.java) for a simple example using JVector.
 
+For file-backed input datasets, see [Batched input vector access](./docs/batched-vector-access.md),
+including runnable 100k-vector examples and optional integration with PQ and NVQ.
+
 The older step-by-step guide for JV can be found [here](./docs/legacy/jvector-step-by-step.md). New users should start with the tutorials mentioned earler, but the step-by-step guide contains useful commentary for advanced users.
 
 
@@ -77,8 +80,8 @@ git clone --recurse-submodules <repo-url>
 ### Building native libraries
 
 The native SIMD library (`libjvector.so`) is built with [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/)
-and requires **g++ 11+**. The entry-point script is
-`jvector-native/src/main/native/build_native_lib.sh`. Run it from that directory:
+and requires **g++ 11+**. Supported platforms: **Linux x86-64** (SSE4.2, AVX2, AVX-512) and **Linux AArch64** (NEON, SVE, SVE2).
+The entry-point script is `jvector-native/src/main/native/build_native_lib.sh`. Run it from that directory.
 
 ```bash
 cd jvector-native/src/main/native
