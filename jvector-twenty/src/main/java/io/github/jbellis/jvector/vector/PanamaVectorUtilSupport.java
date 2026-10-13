@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.util.MathUtil;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import io.github.jbellis.jvector.vector.types.FloatArray;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
@@ -69,22 +70,19 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float sum(VectorFloat<?> vector) {
-        var sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the remainder
+        // Resolve array storage once; native vectors expose the same heap-backed array.
+        float[] values = vectorizedLength == 0 ? null : ((FloatArray) vector).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
-            sum = sum.add(a);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, values, i));
+            sum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(sum.add(a));
         }
-
         float res = sum.reduceLanes(VectorOperators.ADD);
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            res += vector.get(i);
-        }
-
+        for (int i = vectorizedLength; i < vector.length(); i++) res += vector.get(i);
         return res;
     }
 
@@ -107,19 +105,17 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void scale(VectorFloat<?> vector, float multiplier) {
+
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
+        float[] values = vectorizedLength == 0 ? null : ((FloatArray) vector).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
-            var divResult = a.mul(multiplier);
-            intoVectorFloat(divResult, vector, i);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, values, i));
+            FloatVector scaled = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.mul(multiplier));
+            scaled.intoArray(values, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
+        for (int i = vectorizedLength; i < vector.length(); i++)
             vector.set(i, vector.get(i) * multiplier);
-        }
     }
 
     float dot64(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
@@ -529,98 +525,101 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     void addInPlace64(VectorFloat<?> v1, VectorFloat<?> v2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_64, v1, 0);
-        var b = fromVectorFloat(FloatVector.SPECIES_64, v2, 0);
-        intoVectorFloat(a.add(b), v1, 0);
+
+        FloatVector a = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, ((FloatArray) v1).array(), 0));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, ((FloatArray) v2).array(), 0));
+        FloatVector added = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(a.add(b));
+        added.intoArray(((FloatArray) v1).array(), 0);
     }
 
     void addInPlace64(VectorFloat<?> v1, float value) {
-        var a = fromVectorFloat(FloatVector.SPECIES_64, v1, 0);
-        intoVectorFloat(a.add(value), v1, 0);
+
+        FloatVector a = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, ((FloatArray) v1).array(), 0));
+        FloatVector added = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(a.add(value));
+        added.intoArray(((FloatArray) v1).array(), 0);
     }
 
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-
         if (v1.length() == 2) {
             addInPlace64(v1, v2);
             return;
         }
-
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
-
-        // Process the vectorized part
+        float[] aValues = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] bValues = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, i);
-            var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, i);
-            intoVectorFloat(a.add(b), v1, i);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, aValues, i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, bValues, i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.add(b));
+            result.intoArray(aValues, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < v1.length(); i++) {
-            v1.set(i,  v1.get(i) + v2.get(i));
-        }
+        for (int i = vectorizedLength; i < v1.length(); i++)
+            v1.set(i, v1.get(i) + v2.get(i));
     }
 
     @Override
     public void addInPlace(VectorFloat<?> v1, float value) {
+
         if (v1.length() == 2) {
             addInPlace64(v1, value);
             return;
         }
-
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
-
-        // Process the vectorized part
+        float[] values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, i);
-            intoVectorFloat(a.add(value), v1, i);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, values, i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.add(value));
+            result.intoArray(values, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < v1.length(); i++) {
-            v1.set(i,  v1.get(i) + value);
-        }
+        for (int i = vectorizedLength; i < v1.length(); i++)
+            v1.set(i, v1.get(i) + value);
     }
 
     @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
-
-        // Process the vectorized part
+        float[] aValues = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] bValues = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, i);
-            var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, i);
-            intoVectorFloat(a.sub(b), v1, i);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, aValues, i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, bValues, i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.sub(b));
+            result.intoArray(aValues, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < v1.length(); i++) {
-            v1.set(i,  v1.get(i) - v2.get(i));
-        }
+        for (int i = vectorizedLength; i < v1.length(); i++)
+            v1.set(i, v1.get(i) - v2.get(i));
     }
 
     @Override
     public void subInPlace(VectorFloat<?> vector, float value) {
+
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
-
-        // Process the vectorized part
+        float[] values = vectorizedLength == 0 ? null : ((FloatArray) vector).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, vector, i);
-            intoVectorFloat(a.sub(value), vector, i);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, values, i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.sub(value));
+            result.intoArray(values, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < vector.length(); i++) {
-            vector.set(i,  vector.get(i) - value);
-        }
+        for (int i = vectorizedLength; i < vector.length(); i++)
+            vector.set(i, vector.get(i) - value);
     }
 
     @Override
@@ -635,63 +634,61 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
-
-        // Process the vectorized part
+        float[] aValues = vectorizedLength == 0 ? null : ((FloatArray) a).array();
+        float[] resultValues = vectorizedLength == 0 ? null : ((FloatArray) res).array();
+        float[] bValues = vectorizedLength == 0 ? null : ((FloatArray) b).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var lhs = fromVectorFloat(FloatVector.SPECIES_PREFERRED, a, aOffset + i);
-            var rhs = fromVectorFloat(FloatVector.SPECIES_PREFERRED, b, bOffset + i);
-            var subResult = lhs.sub(rhs);
-            intoVectorFloat(subResult, res, i);
+            FloatVector lhs = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, aValues, aOffset + i));
+            FloatVector rhs = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, bValues, bOffset + i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(lhs.sub(rhs));
+            result.intoArray(resultValues, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < length; i++) {
+        for (int i = vectorizedLength; i < length; i++)
             res.set(i, a.get(aOffset + i) - b.get(bOffset + i));
-        }
-
         return res;
     }
 
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, float value, int length) {
+
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
         VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
-
-        // Process the vectorized part
+        float[] aValues = vectorizedLength == 0 ? null : ((FloatArray) a).array();
+        float[] resultValues = vectorizedLength == 0 ? null : ((FloatArray) res).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var lhs = fromVectorFloat(FloatVector.SPECIES_PREFERRED, a, aOffset + i);
-            var subResult = lhs.sub(value);
-            intoVectorFloat(subResult, res, i);
+            FloatVector lhs = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, aValues, aOffset + i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(lhs.sub(value));
+            result.intoArray(resultValues, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < length; i++) {
+        for (int i = vectorizedLength; i < length; i++)
             res.set(i, a.get(aOffset + i) - value);
-        }
-
         return res;
     }
 
     @Override
     public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+
         if (v1.length() != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
-
-        // Process the vectorized part
+        float[] aValues = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] bValues = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, i);
-            var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, i);
-            intoVectorFloat(a.min(b), v1, i);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, aValues, i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, bValues, i));
+            FloatVector result = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(a.min(b));
+            result.intoArray(aValues, i);
         }
-
-        // Process the tail
-        for (int i = vectorizedLength; i < v1.length(); i++) {
-            v1.set(i,  Math.min(v1.get(i), v2.get(i)));
-        }
+        for (int i = vectorizedLength; i < v1.length(); i++)
+            v1.set(i, Math.min(v1.get(i), v2.get(i)));
     }
 
     @Override
