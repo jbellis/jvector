@@ -3,6 +3,7 @@ yamlSchemaVersion: 2
 onDiskIndexVersion: 7
 
 dataset: cohere-english-v3-1M
+useDatasetPrefetching: false
 
 construction:
   outDegree: [64]

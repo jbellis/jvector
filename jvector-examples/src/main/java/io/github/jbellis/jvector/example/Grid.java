@@ -36,6 +36,7 @@ import io.github.jbellis.jvector.example.util.FilteredForkJoinPool;
 import io.github.jbellis.jvector.example.util.OnDiskGraphIndexCache;
 import io.github.jbellis.jvector.example.yaml.MetricSelection;
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.graph.VectorAccess;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.*;
@@ -62,6 +63,8 @@ import io.github.jbellis.jvector.quantization.ASHVectors;
 import io.github.jbellis.jvector.example.diagnostics.ASHScoreDebug;
 
 import io.github.jbellis.jvector.quantization.CompressedVectors;
+import io.github.jbellis.jvector.quantization.BinaryQuantization;
+import io.github.jbellis.jvector.quantization.BQVectors;
 import io.github.jbellis.jvector.quantization.NVQuantization;
 import io.github.jbellis.jvector.quantization.PQVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
@@ -415,6 +418,8 @@ public class Grid {
             buildQuantType = "PQ";
         } else if (buildCompressor instanceof AsymmetricHashing) {
             buildQuantType = "ASH";
+        } else if (buildCompressor instanceof BinaryQuantization) {
+            buildQuantType = "BQ";
         } else if (buildCompressor instanceof NVQuantization) {
             buildQuantType = "NVQ";
         } else {
@@ -423,8 +428,8 @@ public class Grid {
 
         // Validation for encoding time support (NVQ not supported)
         if (constructionMetrics != null && buildQuantType != null) {
-            if (!"PQ".equals(buildQuantType) && !"ASH".equals(buildQuantType)) {
-                throw new IllegalArgumentException("Encode timing only supported for PQ or ASH; got: " + buildQuantType);
+            if (!"PQ".equals(buildQuantType) && !"ASH".equals(buildQuantType) && !"BQ".equals(buildQuantType)) {
+                throw new IllegalArgumentException("Encode timing only supported for PQ, ASH or BQ; got: " + buildQuantType);
             }
         }
 
@@ -458,8 +463,10 @@ public class Grid {
         } else if (buildCv instanceof ASHVectors) {
             ashVectors = (ASHVectors) buildCv;
             bsp = io.github.jbellis.jvector.example.diagnostics.ASHBuildScoreExperiment.create(ds.getSimilarityFunction(), ashVectors, floatVectors);
+        } else if (buildCv instanceof BQVectors) {
+            bsp = BuildScoreProvider.bqBuildScoreProvider((BQVectors) buildCv);
         } else {
-            throw new IllegalArgumentException("Unsupported build compressor output type: " + buildCv.getClass().getName());
+            throw new IllegalArgumentException("Disk construction supports PQ, ASH or BQ build compression; got: " + buildCv.getClass().getName());
         }
 
         System.out.printf("Build score provider setup: %.6f seconds%n", (System.nanoTime()-providerStart)/1e9);
@@ -480,6 +487,7 @@ public class Grid {
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, RandomAccessOnDiskGraphIndexWriter> writers = new HashMap<>();
         Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers = new HashMap<>();
+        Map<Set<FeatureId>, Map<FeatureId, Function<VectorFloat<?>, Feature.State>>> inputSuppliers = new HashMap<>();
         RandomAccessOnDiskGraphIndexWriter scoringWriter = null;
         int n = 0;
         for (var features : featureSets) {
@@ -513,6 +521,7 @@ public class Grid {
             var writer = bws.builder.build();
             writers.put(features, writer);
             suppliers.put(features, bws.suppliers);
+            inputSuppliers.put(features, bws.inputSuppliers);
             if (features.contains(FeatureId.INLINE_VECTORS) || features.contains(FeatureId.NVQ_VECTORS)) {
                 scoringWriter = writer;
             }
@@ -523,24 +532,23 @@ public class Grid {
 
         // build the graph incrementally
         long startTime = System.nanoTime();
-        var vv = floatVectors.threadLocalSupplier();
-        PhysicalCoreExecutor.pool().submit(() -> {
-            IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
-                writers.forEach((features, writer) -> {
-                    try {
-                        var stateMap = new EnumMap<FeatureId, Feature.State>(FeatureId.class);
-                        suppliers.get(features).forEach((featureId, supplier) -> {
-                            stateMap.put(featureId, supplier.apply(node));
-                        });
-                        writer.writeInline(node, stateMap);
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                });
+        if (ds.useDatasetPrefetching()) {
+            VectorAccess.forEach(floatVectors, PhysicalCoreExecutor.pool(), (node, vector) -> {
+                writeInlineStates(writers, suppliers, inputSuppliers, node, vector);
+                // Keep main's original insertion query, not a decoded quantized substitute.
                 if (allSymmetric) builder.addGraphNode(node, bsp.searchProviderFor(node));
-                else builder.addGraphNode(node, vv.get().getVector(node));
+                else builder.addGraphNode(node, vector);
             });
-        }).join();
+        } else {
+            var vv = floatVectors.threadLocalSupplier();
+            PhysicalCoreExecutor.pool().submit(() -> {
+                IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
+                    writeInlineStates(writers, suppliers, null, node, null);
+                    if (allSymmetric) builder.addGraphNode(node, bsp.searchProviderFor(node));
+                    else builder.addGraphNode(node, vv.get().getVector(node));
+                });
+            }).join();
+        }
         long insertionEnd = System.nanoTime();
         builder.cleanup();
         long cleanupEnd = System.nanoTime();
@@ -612,6 +620,22 @@ public class Grid {
         return new BuildOnDiskResult(indexes, fileSizes);
     }
 
+    private static void writeInlineStates(
+            Map<Set<FeatureId>, RandomAccessOnDiskGraphIndexWriter> writers,
+            Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers,
+            Map<Set<FeatureId>, Map<FeatureId, Function<VectorFloat<?>, Feature.State>>> inputSuppliers,
+            int node, VectorFloat<?> vector) {
+        writers.forEach((features, writer) -> {
+            var states = new EnumMap<FeatureId, Feature.State>(FeatureId.class);
+            if (inputSuppliers == null)
+                suppliers.get(features).forEach((id, supplier) -> states.put(id, supplier.apply(node)));
+            else
+                inputSuppliers.get(features).forEach((id, supplier) -> states.put(id, supplier.apply(vector)));
+            try { writer.writeInline(node, states); }
+            catch (IOException e) { throw new UncheckedIOException(e); }
+        });
+    }
+
     private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features,
                                                              GraphIndex onHeapGraph,
                                                              Path outPath,
@@ -626,11 +650,15 @@ public class Grid {
         builder.withMapper(identityMapper);
 
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
+        Map<FeatureId, Function<VectorFloat<?>, Feature.State>> inputSuppliers = new EnumMap<>(FeatureId.class);
+        // File-backed sources reuse scratch vectors; inline writes need a view per worker.
+        var writerVectors = floatVectors.threadLocalSupplier();
         for (var featureId : features) {
             switch (featureId) {
                 case INLINE_VECTORS:
                     builder.with(new InlineVectors(floatVectors.dimension()));
-                    suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(floatVectors.getVector(ordinal)));
+                    inputSuppliers.put(FeatureId.INLINE_VECTORS, InlineVectors.State::new);
+                    suppliers.put(FeatureId.INLINE_VECTORS, ordinal -> new InlineVectors.State(writerVectors.get().getVector(ordinal)));
                     break;
                 case FUSED_PQ:
                     if (pq == null) {
@@ -654,12 +682,13 @@ public class Grid {
                             ? constructionMetrics.index("NVQ").timeCompute(() -> NVQuantization.compute(floatVectors, nSubVectors))
                             : NVQuantization.compute(floatVectors, nSubVectors);
                     builder.with(new NVQ(nvq));
-                    suppliers.put(FeatureId.NVQ_VECTORS, ordinal -> new NVQ.State(nvq.encode(floatVectors.getVector(ordinal))));
+                    inputSuppliers.put(FeatureId.NVQ_VECTORS, vector -> new NVQ.State(nvq.encode(vector)));
+                    suppliers.put(FeatureId.NVQ_VECTORS, ordinal -> new NVQ.State(nvq.encode(writerVectors.get().getVector(ordinal))));
                     break;
 
             }
         }
-        return new BuilderWithSuppliers(builder, suppliers);
+        return new BuilderWithSuppliers(builder, suppliers, inputSuppliers);
     }
 
     public static void setDiagnosticLevel(int diagLevel) {
@@ -685,9 +714,17 @@ public class Grid {
         public final RandomAccessOnDiskGraphIndexWriter.Builder builder;
         public final Map<FeatureId, IntFunction<Feature.State>> suppliers;
 
+        public final Map<FeatureId, Function<VectorFloat<?>, Feature.State>> inputSuppliers;
+
         public BuilderWithSuppliers(RandomAccessOnDiskGraphIndexWriter.Builder builder, Map<FeatureId, IntFunction<Feature.State>> suppliers) {
+            this(builder, suppliers, Map.of());
+        }
+
+        public BuilderWithSuppliers(RandomAccessOnDiskGraphIndexWriter.Builder builder, Map<FeatureId, IntFunction<Feature.State>> suppliers,
+                                    Map<FeatureId, Function<VectorFloat<?>, Feature.State>> inputSuppliers) {
             this.builder = builder;
             this.suppliers = suppliers;
+            this.inputSuppliers = inputSuppliers;
         }
     }
 
@@ -1296,6 +1333,7 @@ public class Grid {
         GraphIndex index;
         CompressedVectors cv;
         Set<FeatureId> features;
+        private final Supplier<RandomAccessVectorValues> exactVectors;
 
         private final ExplicitThreadLocal<GraphSearcher> searchers = ExplicitThreadLocal.withInitial(() -> {
             return new GraphSearcher(index);
@@ -1306,6 +1344,8 @@ public class Grid {
             this.index = index;
             this.cv = cv;
             this.features = features;
+            // File-backed sources borrow scratch storage; concurrent scorers need separate views.
+            this.exactVectors = ds.getBaseRavv().threadLocalSupplier();
         }
 
         public SearchScoreProvider scoreProviderFor(VectorFloat<?> queryVector, GraphIndex.View view) {
@@ -1316,7 +1356,7 @@ public class Grid {
             } else {
                 // if we're not compressing then just use the exact score function
                 if (cv == null) {
-                    return DefaultSearchScoreProvider.exact(queryVector, ds.getSimilarityFunction(), ds.getBaseRavv());
+                    return DefaultSearchScoreProvider.exact(queryVector, ds.getSimilarityFunction(), exactVectors.get());
                 }
 
                 asf = cv.precomputedScoreFunctionFor(queryVector, ds.getSimilarityFunction());

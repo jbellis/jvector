@@ -1,7 +1,8 @@
 yamlSchemaVersion: 2
 onDiskIndexVersion: 7
 
-dataset: dpr-gemma-10m
+dataset: dpr-gemma-10M
+useDatasetPrefetching: false
 
 construction:
   outDegree: [32]
