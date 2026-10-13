@@ -1584,6 +1584,54 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
         for (var r : rss) r.close();
     }
 
+    /// Repro for #740: merging hierarchical sources whose dimension is below 8 throws.
+    ///
+    /// ## The bug
+    ///
+    /// When the sources have a hierarchy, the compactor builds cells and trains a "wide" PQ code
+    /// for diversity comparisons with `wideSubspaces()` subspaces, which is
+    /// `max(8, dimension / 4)`. `PQRetrainer.train` passes that straight to
+    /// `ProductQuantization.compute`, which rejects more subspaces than dimensions
+    /// (`getSubvectorSizesAndOffsets` throws `IllegalArgumentException`). So a hierarchical
+    /// merge of 2- to 7-dimensional vectors, with at least 256 live vectors (the training
+    /// minimum), fails before writing anything, even for a single source. Before #740 the same
+    /// inputs compacted.
+    ///
+    /// ## The test
+    ///
+    /// Builds two hierarchical full-precision sources of 1,000 4-dimensional vectors each, compacts
+    /// them, and expects an output graph holding every node. At `d5af1d7b` `compact()` throws
+    /// `IllegalArgumentException: Number of subspaces must be less than or equal to the vector
+    /// dimension`.
+    @Test
+    public void testCompactLowDimensionHierarchicalSources() throws Exception {
+        dimension = 4;
+        int perSource = 1000, nSrc = 2;
+        var vsf = VectorSimilarityFunction.EUCLIDEAN;
+        var rnd = new java.util.Random(20261013);
+        List<ReaderSupplier> rss = new ArrayList<>();
+        try {
+            List<OnDiskGraphIndex> graphs = new ArrayList<>();
+            List<FixedBitSet> live = new ArrayList<>();
+            for (int s = 0; s < nSrc; s++) {
+                Path path = buildPlainSourceGraph(seededVectors(rnd, perSource, dimension), vsf, true, "lowdim_src_" + s);
+                rss.add(ReaderSupplierFactory.open(path));
+                graphs.add(OnDiskGraphIndex.load(rss.get(s)));
+                var lv = new FixedBitSet(perSource);
+                lv.set(0, perSource);
+                live.add(lv);
+            }
+            assertTrue("sources must have a hierarchy for cells", graphs.get(0).getMaxLevel() >= 1);
+            var outputPath = testDirectory.resolve("lowdim_out");
+            new OnDiskGraphIndexCompactor(graphs, live, vsf, null).compact(outputPath);
+            try (ReaderSupplier rs = ReaderSupplierFactory.open(outputPath)) {
+                assertEquals("merged node count", nSrc * perSource, OnDiskGraphIndex.load(rs).size(0));
+            }
+        } finally {
+            for (var r : rss) r.close();
+        }
+    }
+
     /// Repro for #740: a failed level-0 pass returns while its tasks are still running, and the
     /// compactor then unmaps the memory those tasks read.
     ///
