@@ -17,7 +17,11 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.vector.cnative.LibraryLoader;
+import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
+
+import java.lang.foreign.SymbolLookup;
+import java.lang.reflect.Method;
 
 /**
  * VectorizationProvider using MemorySegment vectors, Highway kernels, and Panama
@@ -29,9 +33,10 @@ public class NativeVectorizationProvider extends VectorizationProvider {
 
     /// Load the native library and create the provider.
     ///
-    /// Throws `UnsupportedOperationException` when the architecture is unsupported or the library
-    /// can't be loaded, including when native access is denied, so that automatic selection falls
-    /// back to the Java Vector API.
+    /// Throws `UnsupportedOperationException` when the architecture is unsupported, the library
+    /// can't be loaded (including when native access is denied), or the loaded library doesn't
+    /// export every function bound in [NativeSimdOps], so that automatic selection falls back to
+    /// the Java Vector API instead of failing at the first kernel call.
     public NativeVectorizationProvider() {
         var arch = System.getProperty("os.arch", "");
         if (!arch.equals("amd64") && !arch.equals("x86_64") && !arch.equals("aarch64")) {
@@ -44,8 +49,30 @@ public class NativeVectorizationProvider extends VectorizationProvider {
                       + " (or the jvector module name).";
             throw new UnsupportedOperationException("Failed to load supporting native library." + reason);
         }
+        String missing = firstMissingSymbol();
+        if (missing != null) {
+            throw new UnsupportedOperationException("The loaded jvector native library does not export " + missing
+                    + "; a different libjvector may be on java.library.path.");
+        }
         this.vectorUtilSupport = new NativeVectorUtilSupport();
         this.vectorTypeSupport = new MemorySegmentVectorProvider();
+    }
+
+    /// Returns the first function bound in [NativeSimdOps] (one per generated `name$address()`
+    /// accessor) that the libraries loaded by this class loader don't export, or `null` when all
+    /// are present. Uses a symbol lookup only, so no binding is initialized.
+    private static String firstMissingSymbol() {
+        var lookup = SymbolLookup.loaderLookup();
+        for (Method method : NativeSimdOps.class.getMethods()) {
+            String name = method.getName();
+            if (method.getParameterCount() == 0 && name.endsWith("$address")) {
+                String symbol = name.substring(0, name.length() - "$address".length());
+                if (lookup.find(symbol).isEmpty()) {
+                    return symbol;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
