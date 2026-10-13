@@ -23,6 +23,11 @@ Grid integration, not a prerequisite for the core writer.
 
 ## Caller migration: early writes versus deferred batches
 
+Use the parallel writer when deferring NVQ/FP encoding to final serialization.
+A sequential final writer performs that encoding on one thread and can regress
+construction time. Sequential callers should retain encoding during insertion
+and `writeFeaturesInline`.
+
 Both examples assume the same trained `nvq`, graph `builder`, node `count`,
 `writerWorkers`, and output path. The builder's construction scoring is unchanged;
 its peer vectors are supplied separately. `vectorForOrdinal` is the application's
