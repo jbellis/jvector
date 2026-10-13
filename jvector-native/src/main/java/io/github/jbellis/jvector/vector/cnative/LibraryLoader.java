@@ -48,12 +48,21 @@ public class LibraryLoader {
         return null;
     }
 
+    /// Load the jvector native library, from `java.library.path` first and then from the bundled
+    /// classpath resource.
+    ///
+    /// Returns `false`, without throwing, when the library can't be loaded, including when native
+    /// access is denied to this module (`IllegalCallerException`, e.g. with
+    /// `--illegal-native-access=deny`). In that case the bundled copy isn't tried, because
+    /// `System.load` is restricted in the same way.
     public static boolean loadJvector() {
         try {
             System.loadLibrary("jvector");
             return true;
         } catch (UnsatisfiedLinkError e) {
             // ignore
+        } catch (IllegalCallerException e) {
+            return false; // native access denied
         }
         try {
             // reinventing the wheel instead of picking up deps, so we'll just use the classloader to load the library
