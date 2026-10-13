@@ -68,13 +68,20 @@ public class TestVectorizationProviderSelection {
     }
 
     private static String probe(String cp, boolean vectorModule, boolean success, String... properties) throws Exception {
+        return probe(cp, vectorModule, true, success, properties);
+    }
+
+    /// Run [Probe] in a fresh JVM. `nativeAccess` controls whether the child gets
+    /// `--enable-native-access=ALL-UNNAMED` (Java 22+ only).
+    private static String probe(String cp, boolean vectorModule, boolean nativeAccess, boolean success,
+                                String... properties) throws Exception {
         var tmp = Files.createTempDirectory("provider-selection-");
         Process child = null;
         try {
             var command = new ArrayList<String>();
             command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
             if (vectorModule) command.add("--add-modules=jdk.incubator.vector");
-            if (Runtime.version().feature() >= 22) command.add("--enable-native-access=ALL-UNNAMED");
+            if (nativeAccess && Runtime.version().feature() >= 22) command.add("--enable-native-access=ALL-UNNAMED");
             command.add("-Djava.io.tmpdir=" + tmp);
             command.addAll(Arrays.asList(properties));
             command.add("-cp"); command.add(cp); command.add(Probe.class.getName());
@@ -165,6 +172,34 @@ public class TestVectorizationProviderSelection {
     @Test public void absentVectorModuleUsesScalar() throws Exception {
         String output = probe(classpath(), false, true);
         assertTrue(output, output.contains("PROVIDER=DefaultVectorizationProvider"));
+    }
+
+    /// Repro for #751: when native access is denied, provider selection fails instead of falling
+    /// back to the Java provider.
+    ///
+    /// ## The bug
+    ///
+    /// Automatic selection now constructs `NativeVectorizationProvider` by default on Java 22+.
+    /// Its constructor calls `LibraryLoader.loadJvector()`, whose first `try` wraps
+    /// `System.loadLibrary("jvector")` and catches only `UnsatisfiedLinkError`. When native
+    /// access is denied (`--illegal-native-access=deny` on Java 24+, and the announced future
+    /// default), `loadLibrary` throws `IllegalCallerException`, which escapes the loader. The
+    /// constructor's `InvocationTargetException` then has a cause other than
+    /// `UnsupportedOperationException`, so `VectorizationProvider.lookup` throws
+    /// `AssertionError`. The provider holder fails to initialize, and no vector operation in the
+    /// JVM can run. Before #751 native was opt-in, so the same JVM used Panama, and still does
+    /// with `-Djvector.enable_native_vectorization=false`.
+    ///
+    /// ## The test
+    ///
+    /// Runs the probe without `--enable-native-access` and with `--illegal-native-access=deny`,
+    /// and expects the Java provider to be selected and to compute correctly. At `599478a1`
+    /// the child exits with `AssertionError` caused by `IllegalCallerException`.
+    @Test public void deniedNativeAccessFallsBackToJavaProvider() throws Exception {
+        Assume.assumeTrue("--illegal-native-access needs Java 24+", Runtime.version().feature() >= 24);
+        String output = probe(classpath(), HAS_VECTOR_MODULE, false, true, "--illegal-native-access=deny");
+        assertTrue(output, output.contains("PROVIDER=" + javaProvider()));
+        assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
     }
 
     public static class Probe {
