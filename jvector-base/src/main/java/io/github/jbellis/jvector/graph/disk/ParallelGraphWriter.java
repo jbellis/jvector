@@ -231,7 +231,7 @@ class ParallelGraphWriter implements AutoCloseable {
         var opts = new java.util.HashSet<java.nio.file.OpenOption>();
         opts.add(StandardOpenOption.WRITE);
         opts.add(StandardOpenOption.READ);
-        
+
         try (var channel = AsynchronousFileChannel.open(filePath, opts, null)) {
             List<Future<Void>> taskFutures = new ArrayList<>(numTasks);
             // Set on interruption or the first failure, so remaining ranges stop instead of running to completion.
@@ -255,26 +255,30 @@ class ParallelGraphWriter implements AutoCloseable {
 
                     Future<Void> future = executor.submit(() -> {
                         if (stop.get()) return null;
-                        var view = viewPerThread.get();
-                        var buffer = bufferPerThread.get();
-
-                        var task = new NodeRecordTask(
-                                start,                    // Start of range (inclusive)
-                                end,                      // End of range (exclusive)
-                                ordinalMapper,
-                                graph,
-                                view,
-                                inlineFeatures,
-                                featureStateSuppliers,
-                                recordSize,
-                                baseOffset,               // Base offset (task calculates per-ordinal offsets)
-                                channel,                  // Async file channel for position-based writes
-                                buffer,                   // Thread-local buffer
-                                stop::get
-                        );
-
                         try {
+                            var view = viewPerThread.get();
+                            var buffer = bufferPerThread.get();
+
+                            var task = new NodeRecordTask(
+                                    start,                    // Start of range (inclusive)
+                                    end,                      // End of range (exclusive)
+                                    ordinalMapper,
+                                    graph,
+                                    view,
+                                    inlineFeatures,
+                                    featureStateSuppliers,
+                                    recordSize,
+                                    baseOffset,               // Base offset (task calculates per-ordinal offsets)
+                                    channel,                  // Async file channel for position-based writes
+                                    buffer,                   // Thread-local buffer
+                                    stop::get
+                            );
+
                             return task.call();
+                        } catch (Exception | Error failure) {
+                            // Signal immediately: awaitTasks may still be joining an earlier range.
+                            stop.set(true);
+                            throw failure;
                         } finally {
                             // External executor threads must not retain this writer's graph views.
                             viewPerThread.remove();

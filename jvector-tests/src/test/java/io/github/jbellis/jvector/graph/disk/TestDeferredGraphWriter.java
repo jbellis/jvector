@@ -135,7 +135,12 @@ public class TestDeferredGraphWriter extends LuceneTestCase {
                 var writing = caller.submit(() -> {
                     writer.writeL0Records(new OrdinalMapper.IdentityMapper(values.size() - 1),
                             List.of(new InlineVectors(17)), Feature.singleStateFactory(FeatureId.INLINE_VECTORS, n -> {
-                                if (n == 0) { failed.countDown(); throw new IllegalStateException("supplier failure"); }
+                                if (n == 0) {
+                                    try { if (!blocked.await(10, TimeUnit.SECONDS)) throw new AssertionError("Worker did not start"); }
+                                    catch (InterruptedException e) { throw new AssertionError(e); }
+                                    failed.countDown();
+                                    throw new IllegalStateException("supplier failure");
+                                }
                                 blocked.countDown();
                                 try { if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("Writer cleanup timeout"); }
                                 catch (InterruptedException e) { throw new AssertionError(e); }

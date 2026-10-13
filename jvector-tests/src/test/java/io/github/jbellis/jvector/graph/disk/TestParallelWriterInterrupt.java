@@ -33,11 +33,18 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /// Repro for PR #747: an interrupted parallel write keeps running until every record is written.
@@ -125,6 +132,76 @@ public class TestParallelWriterInterrupt extends LuceneTestCase {
                     stopMillis <= MAX_STOP_MILLIS && supplied.get() < SIZE);
             assertNotNull("interrupted write reported success", failure.get());
         } finally {
+            Files.deleteIfExists(path);
+        }
+    }
+
+    @Test(timeout = 60_000)
+    public void laterWorkerFailureStopsQueuedRangesBeforeEarlierTaskFinishes() throws Exception {
+        var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var list = new ArrayList<VectorFloat<?>>();
+        for (int n = 0; n < 512; n++) list.add(vts.createFloatVector(new float[] {n + 1f, 1f}));
+        var values = new ListRandomAccessVectorValues(list, 2);
+        int tasks = Math.min(Runtime.getRuntime().availableProcessors(), values.size());
+        // An earlier blocked task and a later failed task require at least two ranges.
+        org.junit.Assume.assumeTrue(tasks > 1);
+        int chunk = (values.size() + tasks - 1) / tasks;
+        int submittedTasks = (values.size() + chunk - 1) / chunk;
+        var submitted = new CountDownLatch(submittedTasks);
+        var workers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>()) {
+            @Override public void execute(Runnable task) {
+                super.execute(task);
+                submitted.countDown();
+            }
+        };
+        var caller = Executors.newSingleThreadExecutor();
+        var release = new CountDownLatch(1);
+        var blocked = new CountDownLatch(1);
+        var failed = new CountDownLatch(1);
+        var laterRecords = new AtomicInteger();
+        var path = Files.createTempFile("parallel-later-failure", ".idx");
+        try (var builder = new GraphIndexBuilder(values, VectorSimilarityFunction.DOT_PRODUCT,
+                4, 16, 1.2f, 1.2f, false)) {
+            var graph = TestUtil.buildSequentially(builder, values);
+            try (var out = new io.github.jbellis.jvector.disk.BufferedRandomAccessWriter(path);
+                 var writer = new ParallelGraphWriter(out, graph, java.util.List.of(new InlineVectors(2)),
+                         new ParallelGraphWriter.Config(2, false, 1, 64), path, workers)) {
+                var writing = caller.submit(() -> {
+                    writer.writeL0Records(new OrdinalMapper.IdentityMapper(values.size() - 1),
+                            java.util.List.of(new InlineVectors(2)),
+                            Feature.singleStateFactory(FeatureId.INLINE_VECTORS, ordinal -> {
+                                if (ordinal == 0) {
+                                    blocked.countDown();
+                                    try { if (!release.await(20, TimeUnit.SECONDS)) throw new AssertionError("release timeout"); }
+                                    catch (InterruptedException e) { throw new AssertionError(e); }
+                                } else if (ordinal == chunk) {
+                                    try { if (!blocked.await(20, TimeUnit.SECONDS)) throw new AssertionError("first task did not block"); }
+                                    catch (InterruptedException e) { throw new AssertionError(e); }
+                                    failed.countDown();
+                                    throw new IllegalStateException("later worker failure");
+                                } else if (failed.getCount() == 0) {
+                                    laterRecords.incrementAndGet();
+                                }
+                                return new InlineVectors.State(values.getVector(ordinal));
+                            }), 0);
+                    return null;
+                });
+                assertTrue(failed.await(20, TimeUnit.SECONDS));
+                assertTrue(submitted.await(20, TimeUnit.SECONDS));
+                // The free worker reaches this sentinel only after draining the queued ranges.
+                assertEquals(42, workers.submit(() -> 42).get(20, TimeUnit.SECONDS).intValue());
+                assertEquals("queued ranges encoded after another worker failed", 0, laterRecords.get());
+                assertFalse("writer released resources while the first supplier was still running", writing.isDone());
+                release.countDown();
+                var error = assertThrows(ExecutionException.class, () -> writing.get(20, TimeUnit.SECONDS));
+                assertTrue(error.getCause() instanceof IllegalStateException);
+                assertEquals("later worker failure", error.getCause().getMessage());
+                assertEquals(42, workers.submit(() -> 42).get().intValue());
+            }
+        } finally {
+            release.countDown();
+            caller.shutdownNow(); workers.shutdownNow();
+            caller.awaitTermination(20, TimeUnit.SECONDS); workers.awaitTermination(20, TimeUnit.SECONDS);
             Files.deleteIfExists(path);
         }
     }
