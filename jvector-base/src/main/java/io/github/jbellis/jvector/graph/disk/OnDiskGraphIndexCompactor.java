@@ -867,7 +867,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                 reverseCandidates.close();
                 reverseCandidates = null; // consumed entirely within L0; scales with node count
                 if (candidateStore != null) {
-                    log.info("Wide code: {} candidate scores from the wide cache", l0WideScores.sum());
+                    log.info("Wide code: {} candidate vectors decoded for diversity", l0WideScores.sum());
                     candidateStore = null;   // the strategy unmaps it with its own cache
                 }
                 writer.offsetAfterInline();
@@ -1418,10 +1418,19 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             if (!indexAlive.get(nb)) continue;
 
             if (wide) {
+                // The diversity representation may come from the wide code, but the score that
+                // orders this candidate against the exact cross-source ones must be exact: read it
+                // from the merge store, which holds the vectors themselves at full precision.
+                int newOrd = mapper.oldToNew(nb);
                 VectorFloat<?> v = scratch.candVec[candSize];
-                scratch.div.decode(mapper.oldToNew(nb), v);
+                scratch.div.decode(newOrd, v);
                 scratch.candHasVec[candSize] = true;
-                scratch.candScore[candSize] = similarityFunction.compare(baseVec, v);
+                if (scratch.div == scratch.wide) {
+                    scratch.candScore[candSize] = similarityFunction.compare(baseVec, v);
+                } else {
+                    scratch.wide.decode(newOrd, scratch.tmpVec);
+                    scratch.candScore[candSize] = similarityFunction.compare(baseVec, scratch.tmpVec);
+                }
                 l0WideScores.increment();
             } else {
                 searchView.getVectorInto(nb, scratch.tmpVec, 0);
