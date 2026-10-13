@@ -36,6 +36,7 @@ import io.github.jbellis.jvector.graph.disk.feature.FusedPQ;
 import io.github.jbellis.jvector.graph.similarity.DefaultSearchScoreProvider;
 import io.github.jbellis.jvector.graph.similarity.SearchScoreProvider;
 import io.github.jbellis.jvector.util.*;
+import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -74,7 +75,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     // quantization inline (FUSED_PQ) or have none. When non-null, compact(Path, Path) retrains the
     // compressor on merged vectors and writes a single merged CompressedVectors to compressedPath.
     private final List<CompressedVectors> sourceCompressed;
-    private List<FixedBitSet> liveNodes;
+    private List<? extends BitSet> liveNodes;
     private final List<Integer> numLiveNodesPerSource;
     private List<OrdinalMapper> remappers;
     private final List<Integer> maxDegrees;
@@ -130,7 +131,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     @Experimental
     public OnDiskGraphIndexCompactor(
             List<OnDiskGraphIndex> sources,
-            List<FixedBitSet> liveNodes,
+            List<? extends BitSet> liveNodes,
             List<OrdinalMapper> remappers,
             VectorSimilarityFunction similarityFunction,
             ForkJoinPool executor) {
@@ -151,7 +152,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     public OnDiskGraphIndexCompactor(
             List<OnDiskGraphIndex> sources,
             List<CompressedVectors> sourceCompressed,
-            List<FixedBitSet> liveNodes,
+            List<? extends BitSet> liveNodes,
             List<OrdinalMapper> remappers,
             VectorSimilarityFunction similarityFunction,
             ForkJoinPool executor) {
@@ -202,7 +203,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     private void checkBeforeCompact(
             List<OnDiskGraphIndex> sources,
             List<CompressedVectors> sourceCompressed,
-            List<FixedBitSet> liveNodes,
+            List<? extends BitSet> liveNodes,
             List<OrdinalMapper> remappers) {
         validateInputSizes(sources, liveNodes, remappers);
         validateLiveNodesBounds(sources, liveNodes);
@@ -254,7 +255,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      * Validates that input lists have consistent sizes and are non-null.
      */
     private void validateInputSizes(List<OnDiskGraphIndex> sources,
-                                    List<FixedBitSet> liveNodes,
+                                    List<? extends BitSet> liveNodes,
                                     List<OrdinalMapper> remappers) {
         if (sources.size() < 2) {
             throw new IllegalArgumentException("Must have at least two sources");
@@ -273,11 +274,12 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     /**
      * Validates that liveNodes bitsets match the size of their corresponding sources.
      */
-    private void validateLiveNodesBounds(List<OnDiskGraphIndex> sources, List<FixedBitSet> liveNodes) {
+    private void validateLiveNodesBounds(List<OnDiskGraphIndex> sources, List<? extends BitSet> liveNodes) {
         for (int s = 0; s < sources.size(); ++s) {
-            if (liveNodes.get(s).length() != sources.get(s).getIdUpperBound()) {
+            int idUpperBound = sources.get(s).getIdUpperBound();
+            if (idUpperBound >= 0 && liveNodes.get(s).length() != idUpperBound) {
                 throw new IllegalArgumentException("source " + s + " out of bounds: liveNodes length "
-                        + liveNodes.get(s).length() + " != idUpperBound " + sources.get(s).getIdUpperBound());
+                        + liveNodes.get(s).length() + " != idUpperBound " + idUpperBound);
             }
         }
     }
@@ -1266,7 +1268,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      * Simply iterates through existing neighbors.
      */
     private int gatherFromSameSource(int node, int level, int sourceIdx,
-                                     OnDiskGraphIndex.View searchView, FixedBitSet indexAlive,
+                                     OnDiskGraphIndex.View searchView, BitSet indexAlive,
                                      VectorFloat<?> baseVec, Scratch scratch, int candSize) {
         var it = searchView.getNeighborsIterator(level, node);
         while (it.hasNext()) {
@@ -1287,7 +1289,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      * Gathers candidates from a different source index via graph search.
      */
     private int gatherFromOtherSource(int node, int level, int sourceIdx,
-                                      OnDiskGraphIndex.View searchView, FixedBitSet indexAlive,
+                                      OnDiskGraphIndex.View searchView, BitSet indexAlive,
                                       VectorFloat<?> baseVec, Scratch scratch, int candSize,
                                       CompactionParams params) {
         SearchScoreProvider ssp = buildCrossSourceScoreProvider(
@@ -1447,7 +1449,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                     count += liveNodes.get(s).cardinality();
                 } else {
                     NodesIterator it = sources.get(s).getNodes(level);
-                    FixedBitSet alive = liveNodes.get(s);
+                    BitSet alive = liveNodes.get(s);
                     while (it.hasNext()) {
                         int node = it.next();
                         if (alive.get(node)) count++;
@@ -1506,7 +1508,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         //                executor, taskWindowSize(int), similarityFunction
         long size = OH + 8L * REF + Integer.BYTES * 4;
 
-        // liveNodes: FixedBitSet per source. May be null after releaseSourcesBeforeRefine().
+        // liveNodes: BitSet per source. May be null after releaseSourcesBeforeRefine().
         if (liveNodes != null) {
             for (var entry : liveNodes) {
                 size += entry.ramBytesUsed();

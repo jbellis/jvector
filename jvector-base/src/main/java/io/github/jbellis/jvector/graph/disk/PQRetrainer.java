@@ -21,7 +21,7 @@ import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
 import io.github.jbellis.jvector.graph.disk.feature.FusedPQ;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
 import io.github.jbellis.jvector.util.DocIdSetIterator;
-import io.github.jbellis.jvector.util.FixedBitSet;
+import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.util.PhysicalCoreExecutor;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -51,12 +51,12 @@ public class PQRetrainer {
     private static final int SAMPLE_CHUNK_SIZE = 32;
 
     private final List<OnDiskGraphIndex> sources;
-    private final List<FixedBitSet> liveNodes;
+    private final List<? extends BitSet> liveNodes;
     private final List<Integer> numLiveNodesPerSource;
     private final int dimension;
     private final int numTotalNodes;
 
-    public PQRetrainer(List<OnDiskGraphIndex> sources, List<FixedBitSet> liveNodes, int dimension) {
+    public PQRetrainer(List<OnDiskGraphIndex> sources, List<? extends BitSet> liveNodes, int dimension) {
         this.sources = sources;
         this.liveNodes = liveNodes;
         this.dimension = dimension;
@@ -130,7 +130,7 @@ public class PQRetrainer {
             List<SampleRef> all = new ArrayList<>(numTotalNodes);
 
             for (int s = 0; s < sources.size(); s++) {
-                FixedBitSet live = liveNodes.get(s);
+                BitSet live = liveNodes.get(s);
 
                 for (int node = live.nextSetBit(0);
                      node != DocIdSetIterator.NO_MORE_DOCS;
@@ -178,7 +178,7 @@ public class PQRetrainer {
         ThreadLocalRandom rand = ThreadLocalRandom.current();
 
         for (int s = 0; s < sources.size(); s++) {
-            FixedBitSet live = liveNodes.get(s);
+            BitSet live = liveNodes.get(s);
             int max = live.length();
             int numChunks = (max + SAMPLE_CHUNK_SIZE - 1) / SAMPLE_CHUNK_SIZE;
 

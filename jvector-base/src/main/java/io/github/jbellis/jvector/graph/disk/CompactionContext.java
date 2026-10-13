@@ -17,7 +17,7 @@
 package io.github.jbellis.jvector.graph.disk;
 
 import io.github.jbellis.jvector.quantization.CompressedVectors;
-import io.github.jbellis.jvector.util.FixedBitSet;
+import io.github.jbellis.jvector.util.BitSet;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,7 +34,7 @@ public final class CompactionContext {
     public final List<OnDiskGraphIndex> sources;
     /** Parallel to {@link #sources}; {@code null} when no non-fused sidecar input is supplied. */
     public final List<CompressedVectors> sourceCompressed;
-    public final List<FixedBitSet> liveNodes;
+    public final List<? extends BitSet> liveNodes;
     public final List<OrdinalMapper> remappers;
     public final int dimension;
     public final int maxOrdinal;
@@ -44,7 +44,7 @@ public final class CompactionContext {
     public CompactionContext(
             List<OnDiskGraphIndex> sources,
             List<CompressedVectors> sourceCompressed,
-            List<FixedBitSet> liveNodes,
+            List<? extends BitSet> liveNodes,
             List<OrdinalMapper> remappers,
             int dimension,
             int maxOrdinal,
