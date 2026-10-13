@@ -47,6 +47,31 @@ REQUIRED_SYMBOLS=(
   dot_product_f32
   cosine_f32
   euclidean_f32
+  add_in_place_f32
+  add_scalar_in_place_f32
+  sub_in_place_f32
+  sub_scalar_in_place_f32
+  sub_f32
+  sub_scalar_f32
+  scale_f32
+  max_f32
+  min_f32
+  min_in_place_f32
+  sum_f32
+  assemble_and_sum_f32
+  assemble_and_sum_pq_f32
+  pq_decoded_cosine_similarity_f32
+  calculate_partial_sums_dot_f32
+  calculate_partial_sums_euclidean_f32
+  calculate_partial_sums_self_magnitude_f32
+  nvq_quantize_8bit
+  nvq_loss
+  nvq_uniform_loss
+  nvq_square_l2_distance_8bit
+  nvq_dot_product_8bit
+  nvq_cosine_8bit_packed
+  nvq_shuffle_query_in_place_8bit
+  hamming_distance
 )
 
 WORKDIR=$(mktemp -d)
