@@ -60,6 +60,11 @@ class TestPQCosine {
         double sum=0,mag=0;
         for(int i=0;i<count;i++){int j=i*stride+Byte.toUnsignedInt(codes[offset+i]);sum+=sums[j];mag+=mags[j];}
         float oracle=(float)(sum/Math.sqrt(mag*3.25f));
+        double tolerance = Float.isFinite(oracle) ? Math.max(1e-6, Math.abs(oracle) * 1e-5) : 0;
+        assertEquals(oracle, c.pqDecodedCosineSimilarity128(b, offset, count, stride, s, m, 3.25f), tolerance);
+        assertEquals(oracle, c.pqDecodedCosineSimilarity(b, offset, count, stride, s, m, 3.25f), tolerance);
+        var compact = new ArrayByteSequence(java.util.Arrays.copyOfRange(codes, offset, offset + count));
+        assertEquals(oracle, c.pqDecodedCosineSimilarity(compact, stride, s, m, 3.25f), tolerance);
         float a=c.pqDecodedCosineSimilarity256(b,offset,count,stride,s,m,3.25f);
         float z=r.pqDecodedCosineSimilarity256(b,offset,count,stride,s,m,3.25f);
         assertEquals(Float.floatToIntBits(z),Float.floatToIntBits(a),"256 count="+count+" offset="+offset);

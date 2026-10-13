@@ -58,6 +58,10 @@ class TestADCAssembly {
         var data = new ArrayVectorFloat(table);
         var offsets = new ArrayByteSequence(codes);
         double tolerance = Math.max(1e-5, count * 1e-6);
+        assertEquals(expected, support.assembleAndSum128(data, stride, offsets, offset, count), tolerance);
+        assertEquals(expected, support.assembleAndSum(data, stride, offsets, offset, count), tolerance);
+        var compact = new ArrayByteSequence(java.util.Arrays.copyOfRange(codes, offset, offset + count));
+        assertEquals(expected, support.assembleAndSum(data, stride, compact), tolerance);
         assertEquals(expected, support.assembleAndSum256(data, stride, offsets, offset, count), tolerance);
         assertEquals(expected, support.assembleAndSum512(data, stride, offsets, offset, count), tolerance);
     }

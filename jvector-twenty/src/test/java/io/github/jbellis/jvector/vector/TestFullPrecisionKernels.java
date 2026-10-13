@@ -16,6 +16,7 @@
 package io.github.jbellis.jvector.vector;
 
 import java.util.Random;
+import jdk.incubator.vector.FloatVector;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,6 +47,34 @@ class TestFullPrecisionKernels {
                 }
                 var av = new ArrayVectorFloat(a);
                 var bv = new ArrayVectorFloat(b);
+                for (int bits : new int[]{64, 128, 256, FloatVector.SPECIES_PREFERRED.vectorBitSize()}) {
+                    float actualDot, actualL2;
+                    switch (bits) {
+                        case 64:
+                            actualDot = support.dotProduct64(av, offset, bv, offset + 1, length);
+                            actualL2 = support.squareDistance64(av, offset, bv, offset + 1, length);
+                            break;
+                        case 128:
+                            actualDot = support.dotProduct128(av, offset, bv, offset + 1, length);
+                            actualL2 = support.squareDistance128(av, offset, bv, offset + 1, length);
+                            break;
+                        case 256:
+                            actualDot = support.dotProduct256(av, offset, bv, offset + 1, length);
+                            actualL2 = support.squareDistance256(av, offset, bv, offset + 1, length);
+                            break;
+                        default:
+                            actualDot = support.dotProductPreferred(av, offset, bv, offset + 1, length);
+                            actualL2 = support.squareDistancePreferred(av, offset, bv, offset + 1, length);
+                    }
+                    assertEquals(dot, actualDot, Math.max(1e-7, absoluteDot * 2e-6));
+                    assertEquals(l2, actualL2, Math.max(1e-7, l2 * 2e-6));
+                }
+                var wholeA = new ArrayVectorFloat(java.util.Arrays.copyOfRange(a, offset, offset + length));
+                var wholeB = new ArrayVectorFloat(java.util.Arrays.copyOfRange(b, offset + 1, offset + 1 + length));
+                assertEquals(dot, support.dotProduct(wholeA, wholeB), Math.max(1e-7, absoluteDot * 2e-6));
+                assertEquals(l2, support.squareDistance(wholeA, wholeB), Math.max(1e-7, l2 * 2e-6));
+                if (length == 0) assertTrue(Float.isNaN(support.cosine(wholeA, wholeB)));
+                else assertEquals(dot / Math.sqrt(aa * bb), support.cosine(wholeA, wholeB), 2e-6);
                 assertEquals(dot, support.dotProduct(av, offset, bv, offset + 1, length),
                         Math.max(1e-7, absoluteDot * 2e-6));
                 assertEquals(l2, support.squareDistance(av, offset, bv, offset + 1, length),
