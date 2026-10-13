@@ -68,7 +68,7 @@ public class TestNodeRecordTask extends LuceneTestCase {
                     public int newToOld(int n) { return n % 2 == 0 ? n / 2 : OMITTED; }
                 } : new OrdinalMapper.IdentityMapper(130);
                 int payload = Integer.BYTES * (2 + graph.getDegree(0)) + feature.featureSize();
-                for (int stride : new int[]{payload, 4096}) {
+                for (int stride : new int[]{payload}) {
                     for (boolean direct : new boolean[]{false, true}) {
                         var target = root.resolve("records-" + holes + "-" + stride + "-" + direct);
                         // Preserve bytes before L0 and force full batches plus a partial tail.
@@ -85,6 +85,11 @@ public class TestNodeRecordTask extends LuceneTestCase {
                                     Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
                                             n -> new InlineVectors.State(values.get(n))),
                                     stride, baseOffset, channel, buffer);
+                            var padded = new NodeRecordTask(0, count, mapper, graph, view, List.of(feature),
+                                    Feature.singleStateFactory(FeatureId.INLINE_VECTORS,
+                                            n -> new InlineVectors.State(values.get(n))),
+                                    4096, baseOffset, channel, buffer);
+                            org.junit.Assert.assertThrows(IllegalArgumentException.class, padded::call);
                             task.call();
                         }
                         byte[] actual = Files.readAllBytes(target);

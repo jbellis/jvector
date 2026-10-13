@@ -131,7 +131,9 @@ class NodeRecordTask implements Callable<Void> {
 
         int payloadBytes = Integer.BYTES * (2 + graph.getDegree(0))
                 + inlineFeatures.stream().mapToInt(Feature::featureSize).sum();
-        int padding = recordSize - payloadBytes;
+        if (recordSize != payloadBytes) {
+            throw new IllegalArgumentException("Record size must match its serialized payload");
+        }
         final boolean completeRecord = inlineFeatures.stream().allMatch(f -> featureStateSuppliers.get(f.id()) != null);
         final int batch = buffer.capacity() / recordSize;
         for (int newOrdinal = startOrdinal; newOrdinal < endOrdinal; newOrdinal++) {
@@ -167,7 +169,6 @@ class NodeRecordTask implements Callable<Void> {
                     }
                     for (; n < graph.getDegree(0); n++) writer.writeInt(-1);
                 }
-                for (int i = 0; i < padding; i++) writer.writeByte(0);
                 if (writer.position() != recordBegin + recordSize) throw new IllegalStateException("Wrong serialized record length");
                 if (buffer.position() < recordSize * batch && newOrdinal != endOrdinal - 1) continue;
                 long batchOffset = recordOffset - recordBegin;
@@ -261,11 +262,6 @@ class NodeRecordTask implements Callable<Void> {
 
                 ByteBuffer neighborData = writer.cloneBuffer();
                 writeFully(channel, neighborData, currentPosition);
-            }
-            if (padding > 0) {
-                writer.reset();
-                for (int i = 0; i < padding; i++) writer.writeByte(0);
-                writeFully(channel, writer.cloneBuffer(), recordOffset + payloadBytes);
             }
         }
 
