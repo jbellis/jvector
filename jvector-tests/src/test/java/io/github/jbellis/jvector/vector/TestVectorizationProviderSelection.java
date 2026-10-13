@@ -202,6 +202,43 @@ public class TestVectorizationProviderSelection {
         assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
     }
 
+    /// Repro for #751: a `libjvector` without jvector's kernels is selected, and fails at first use.
+    ///
+    /// ## The bug
+    ///
+    /// `LibraryLoader.loadJvector()` first tries `System.loadLibrary("jvector")`, so any
+    /// `libjvector.so` on `java.library.path` (an older jvector build, or an unrelated library
+    /// with that name) wins over the bundled one. Nothing then checks that the loaded library
+    /// exports the kernels. The jextract bindings resolve each symbol lazily, in a per-function
+    /// holder class. Selection calls only `jvector_simd_get_active_isa` through reflection, and
+    /// `VectorizationProvider.lookup` swallows that failure as "Unable to determine Highway ISA
+    /// tier" and returns the native provider. The first kernel call, such as `dotProduct` on the
+    /// query path, then throws `UnsatisfiedLinkError: unresolved symbol`, and every later call to
+    /// that kernel fails. With native selected by default, this now reaches every Java 22+ JVM
+    /// whose library path has such a file, not only those that opted in.
+    ///
+    /// ## The test
+    ///
+    /// Copies the JDK's own `libsyslookup.so`, a valid shared library with none of jvector's
+    /// symbols, to a temporary directory as `libjvector.so`, puts that directory on the probe's
+    /// `java.library.path`, and expects automatic selection to fall back to the Java provider and
+    /// compute correctly. At `599478a1` the probe selects `NativeVectorizationProvider` and exits
+    /// with `UnsatisfiedLinkError: unresolved symbol: dot_product_f32`.
+    @Test public void libraryWithoutKernelsFallsBackToJavaProvider() throws Exception {
+        Assume.assumeTrue(nativeAvailable());
+        Path foreign = Path.of(System.getProperty("java.home"), "lib", "libsyslookup.so");
+        Assume.assumeTrue("needs the JDK's libsyslookup.so", Files.isRegularFile(foreign));
+        var libraryPath = Files.createTempDirectory("provider-selection-libpath-");
+        var stale = libraryPath.resolve("libjvector.so");
+        try {
+            Files.copy(foreign, stale);
+            assertProvider(javaProvider(), classpath(), "-Djava.library.path=" + libraryPath);
+        } finally {
+            Files.deleteIfExists(stale);
+            Files.delete(libraryPath);
+        }
+    }
+
     public static class Probe {
         public static void main(String[] args) {
             var provider = VectorizationProvider.getInstance();
