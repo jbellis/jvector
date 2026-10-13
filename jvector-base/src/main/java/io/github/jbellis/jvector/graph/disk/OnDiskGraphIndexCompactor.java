@@ -2134,9 +2134,11 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                 || f == VectorSimilarityFunction.COSINE;
     }
 
-    /** Subspace count of the wide code: {@link #WIDE_DIMS_PER_SUBSPACE} dimensions each, never fewer than 8. */
+    /// Subspace count of the wide code: [#WIDE_DIMS_PER_SUBSPACE] dimensions each, never fewer
+    /// than 8, and never more than the dimension, since product quantization needs at least one
+    /// dimension per subspace. Below 8 dimensions every subspace is one dimension wide.
     private int wideSubspaces() {
-        return Math.max(8, dimension / WIDE_DIMS_PER_SUBSPACE);
+        return Math.min(dimension, Math.max(8, dimension / WIDE_DIMS_PER_SUBSPACE));
     }
 
     private List<OrdinalMapper> buildRegionOrdinalMappers(ProductQuantization pq) {
