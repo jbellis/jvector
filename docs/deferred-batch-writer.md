@@ -101,7 +101,7 @@ remains caller-owned and must outlive the write.
 
 When the parallel writer is selected, Grid defers its inline NVQ or FP feature serialization
 until after cleanup. Its final serialization suppliers consume worker-local ranges through
-`VectorAccess.openRange`. With the default sequential writer, which calls suppliers on one
+`VectorAccess.openRange`. With the sequential writer, which calls suppliers on one
 thread, Grid keeps encoding these features on the insertion threads and writing them inline.
 Sources implementing the buffered-access capability use that implementation;
 ordinary sources retain the ordinary-access fallback. Borrowed vectors are consumed
@@ -112,16 +112,18 @@ change construction scoring, quantization parameters, or the query path. Product
 integrations can opt into deferred serialization by supplying their features at the
 final write; their existing vector-source and incremental-write APIs remain valid.
 
-## Running the Grid parallel-write path
+## Running the benchmark writer paths
 
-Grid keeps the existing writer-selection setting. To exercise complete-record
-parallel batches through BenchYAML, enable it before invoking the benchmark:
-
-```java
-GraphIndexBuilderConfig.getInstance().setParallelBuild(true);
-BenchYAML.main(new String[]{"your-index-parameters.yml"});
-```
+BenchYAML and AutoBenchYAML select the parallel writer by default. To use the
+sequential writer instead, add `-Djvector.parallel_writer=false` to the Java VM
+options. In that mode, Grid encodes FP/NVQ features during insertion and preserves
+the earlier inline-write path. No YAML setting is needed.
 
 Grid sizes its writer pool from `PhysicalCoreExecutor`; no machine-specific worker
 count is embedded in this change. Dataset prefetching is a separate optional setting
 in the index YAML. An ordinary preloaded dataset can use the same deferred writer.
+
+This default applies only to the benchmark entry points. The library's unified
+writer builder retains its existing sequential default, and application callers
+still explicitly choose parallel writing. Code calling Grid directly can select
+its writer through `GraphIndexBuilderConfig.getInstance().setParallelBuild(...)`.

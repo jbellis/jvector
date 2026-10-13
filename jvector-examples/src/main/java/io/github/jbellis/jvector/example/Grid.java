@@ -35,6 +35,7 @@ import io.github.jbellis.jvector.example.util.CompressorParameters;
 import io.github.jbellis.jvector.example.util.FilteredForkJoinPool;
 import io.github.jbellis.jvector.example.util.OnDiskGraphIndexCache;
 import io.github.jbellis.jvector.example.yaml.MetricSelection;
+import io.github.jbellis.jvector.management.GraphIndexBuilderConfig;
 import io.github.jbellis.jvector.graph.ImmutableGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.VectorAccess;
@@ -622,6 +623,14 @@ public class Grid {
             }
         }
         return new BuilderWithSuppliers(builder, suppliers, inputSuppliers);
+    }
+
+    // Entry-point policy only; the library's writer selection remains unchanged.
+    static void configureWriterForBenchmark() {
+        String value = System.getProperty("jvector.parallel_writer", "true").trim();
+        if (!value.equalsIgnoreCase("true") && !value.equalsIgnoreCase("false"))
+            throw new IllegalArgumentException("jvector.parallel_writer must be true or false");
+        GraphIndexBuilderConfig.getInstance().setParallelBuild(Boolean.parseBoolean(value));
     }
 
     public static void setDiagnosticLevel(int diagLevel) {

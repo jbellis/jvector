@@ -175,10 +175,46 @@ public class TestGridDeferredFeatureParallelism {
                 control.writeReads.get() > 0 && control.writeThreads.size() > 1);
 
         var vectors = new RecordingVectors(resident);
-        runGrid(list, vectors, false); // BenchYAML's default writer selection
+        runGrid(list, vectors, false); // Explicit sequential selection; retain efficient insertion-time encoding.
         int reads = vectors.writeReads.get();
         assertTrue("final serialization read " + reads + " base vectors, all on one thread "
-                        + vectors.writeThreads + ", with the default (sequential) writer",
+                        + vectors.writeThreads + ", with the library's default (sequential) writer",
                 reads == 0 || vectors.writeThreads.size() > 1);
+    }
+
+    @Test
+    public void benchmarkWriterDefaultAndOverrideSelectActualWriterTypes() throws Exception {
+        var settings = GraphIndexBuilderConfig.getInstance();
+        boolean previous = settings.isParallelBuild();
+        String property = System.getProperty("jvector.parallel_writer");
+        var path = Files.createTempFile("benchmark-writer-selection", ".idx");
+        var support = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var values = new ListRandomAccessVectorValues(List.of(
+                support.createFloatVector(new float[] {1f, 0f}),
+                support.createFloatVector(new float[] {0f, 1f})), 2);
+        try (var builder = new io.github.jbellis.jvector.graph.GraphIndexBuilder(values,
+                VectorSimilarityFunction.DOT_PRODUCT, 4, 16, 1.2f, 1.2f, true)) {
+            var graph = TestUtil.buildSequentially(builder, values);
+            System.clearProperty("jvector.parallel_writer");
+            Grid.configureWriterForBenchmark();
+            try (var writer = new io.github.jbellis.jvector.graph.disk.RandomAccessOnDiskGraphIndexWriter.Builder(graph, path)
+                    .with(new io.github.jbellis.jvector.graph.disk.feature.InlineVectors(2)).build()) {
+                assertTrue(writer instanceof io.github.jbellis.jvector.graph.disk.OnDiskParallelGraphIndexWriter);
+            }
+            System.setProperty("jvector.parallel_writer", "false");
+            Grid.configureWriterForBenchmark();
+            try (var writer = new io.github.jbellis.jvector.graph.disk.RandomAccessOnDiskGraphIndexWriter.Builder(graph, path)
+                    .with(new io.github.jbellis.jvector.graph.disk.feature.InlineVectors(2)).build()) {
+                assertTrue(writer instanceof io.github.jbellis.jvector.graph.disk.OnDiskGraphIndexWriter);
+            }
+            System.setProperty("jvector.parallel_writer", "invalid");
+            org.junit.Assert.assertThrows(IllegalArgumentException.class, Grid::configureWriterForBenchmark);
+            org.junit.Assert.assertFalse(settings.isParallelBuild());
+        } finally {
+            settings.setParallelBuild(previous);
+            if (property == null) System.clearProperty("jvector.parallel_writer");
+            else System.setProperty("jvector.parallel_writer", property);
+            Files.deleteIfExists(path);
+        }
     }
 }
