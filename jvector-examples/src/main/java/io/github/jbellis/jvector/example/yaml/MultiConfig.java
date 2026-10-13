@@ -36,6 +36,8 @@ public class MultiConfig {
     public ConstructionParameters construction;
     public SearchParameters search;
     public String dataset;
+    /** Opt into bounded bulk input loading; omitted settings preserve resident loading. */
+    public boolean useDatasetPrefetching = false;
     /** Optional; when [Yes], AutoBenchYAML also runs CompactionBench. Absent defaults to [No]. */
     public List<Boolean> withCompaction;
 
