@@ -119,15 +119,29 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float dot64(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_64, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_64, v2, offset2);
-        return a.mul(b).reduceLanes(VectorOperators.ADD);
+        float[] v1Values = ((FloatArray) v1).array();
+        float[] v2Values = ((FloatArray) v2).array();
+        FloatVector a = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, v1Values, offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, v2Values, offset2));
+        FloatVector product = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                a.mul(b));
+        return product.reduceLanes(VectorOperators.ADD);
+
     }
 
     float dot128(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_128, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_128, v2, offset2);
-        return a.mul(b).reduceLanes(VectorOperators.ADD);
+        float[] v1Values = ((FloatArray) v1).array();
+        float[] v2Values = ((FloatArray) v2).array();
+        FloatVector a = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_128, v1Values, offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_128, v2Values, offset2));
+        FloatVector product = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                a.mul(b));
+        return product.reduceLanes(VectorOperators.ADD);
+
     }
 
     float dot256(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
@@ -141,9 +155,16 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float dotPreferred(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, offset2);
-        return a.mul(b).reduceLanes(VectorOperators.ADD);
+        float[] v1Values = ((FloatArray) v1).array();
+        float[] v2Values = ((FloatArray) v2).array();
+        FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, offset2));
+        FloatVector product = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                a.mul(b));
+        return product.reduceLanes(VectorOperators.ADD);
+
     }
 
     @Override
@@ -173,13 +194,19 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return dot64(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_64));
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_64, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_64, v2, v2offset + i);
-            sum = a.fma(b, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_64, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_64, v2Values, v2offset + i));
+            sum = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    a.fma(b, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -189,6 +216,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             res += v1.get(v1offset + i) * v2.get(v2offset + i);
 
         return res;
+
     }
 
     float dotProduct128(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
@@ -197,14 +225,20 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return dot128(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_128.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_128);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_128));
 
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_128, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_128, v2, v2offset + i);
-            sum = a.fma(b, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_128, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_128, v2Values, v2offset + i));
+            sum = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    a.fma(b, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -214,6 +248,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             res += v1.get(v1offset + i) * v2.get(v2offset + i);
 
         return res;
+
     }
 
 
@@ -223,14 +258,20 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return dot256(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_256));
 
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_256, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_256, v2, v2offset + i);
-            sum = a.fma(b, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, v2Values, v2offset + i));
+            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    a.fma(b, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -240,6 +281,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             res += v1.get(v1offset + i) * v2.get(v2offset + i);
 
         return res;
+
     }
 
     float dotProductPreferred(VectorFloat<?> va, int vaoffset, VectorFloat<?> vb, int vboffset, int length) {
@@ -310,18 +352,28 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
 
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
+        FloatVector vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
+        FloatVector vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
         // Process the vectorized part, convert from 8 bytes to 8 ints
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, i);
-            var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, i);
-            vsum = a.fma(b, vsum);
-            vaMagnitude = a.fma(a, vaMagnitude);
-            vbMagnitude = b.fma(b, vbMagnitude);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, i));
+            vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    a.fma(b, vsum));
+            vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    a.fma(a, vaMagnitude));
+            vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    b.fma(b, vbMagnitude));
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
@@ -336,20 +388,31 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
+
     }
 
     @Override
     public float cosine(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
-        var vsum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vaMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
-        var vbMagnitude = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        FloatVector vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
+        FloatVector vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
+        FloatVector vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, v1offset + i);
-            var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, v2offset + i);
-            vsum = a.fma(b, vsum);
-            vaMagnitude = a.fma(a, vaMagnitude);
-            vbMagnitude = b.fma(b, vbMagnitude);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, v2offset + i));
+            vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    a.fma(b, vsum));
+            vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    a.fma(a, vaMagnitude));
+            vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    b.fma(b, vbMagnitude));
         }
 
         float sum = vsum.reduceLanes(VectorOperators.ADD);
@@ -363,20 +426,37 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
+
     }
 
     float squareDistance64(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_64, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_64, v2, offset2);
-        var diff = a.sub(b);
-        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+        float[] v1Values = ((FloatArray) v1).array();
+        float[] v2Values = ((FloatArray) v2).array();
+        FloatVector a = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, v1Values, offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_64, v2Values, offset2));
+        FloatVector diff = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                a.sub(b));
+        FloatVector product = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                diff.mul(diff));
+        return product.reduceLanes(VectorOperators.ADD);
+
     }
 
     float squareDistance128(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_128, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_128, v2, offset2);
-        var diff = a.sub(b);
-        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+        float[] v1Values = ((FloatArray) v1).array();
+        float[] v2Values = ((FloatArray) v2).array();
+        FloatVector a = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_128, v1Values, offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_128, v2Values, offset2));
+        FloatVector diff = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                a.sub(b));
+        FloatVector product = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                diff.mul(diff));
+        return product.reduceLanes(VectorOperators.ADD);
+
     }
 
     float squareDistance256(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
@@ -388,10 +468,18 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float squareDistancePreferred(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
-        var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, offset1);
-        var b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, offset2);
-        var diff = a.sub(b);
-        return diff.mul(diff).reduceLanes(VectorOperators.ADD);
+        float[] v1Values = ((FloatArray) v1).array();
+        float[] v2Values = ((FloatArray) v2).array();
+        FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, offset1));
+        FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, offset2));
+        FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                a.sub(b));
+        FloatVector product = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                diff.mul(diff));
+        return product.reduceLanes(VectorOperators.ADD);
+
     }
 
     @Override
@@ -419,15 +507,22 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return squareDistance64(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_64.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_64);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_64));
 
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_64.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_64, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_64, v2, v2offset + i);
-            var diff = a.sub(b);
-            sum = diff.fma(diff, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_64, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_64, v2Values, v2offset + i));
+            FloatVector diff = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    a.sub(b));
+            sum = (FloatVector) FloatVector.SPECIES_64.vectorType().cast(
+                    diff.fma(diff, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -439,6 +534,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return res;
+
     }
 
     float squareDistance128(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
@@ -446,15 +542,22 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return squareDistance128(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_128.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_128);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_128));
 
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_128.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_128, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_128, v2, v2offset + i);
-            var diff = a.sub(b);
-            sum = diff.fma(diff, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_128, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_128, v2Values, v2offset + i));
+            FloatVector diff = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    a.sub(b));
+            sum = (FloatVector) FloatVector.SPECIES_128.vectorType().cast(
+                    diff.fma(diff, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -466,6 +569,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return res;
+
     }
 
 
@@ -474,15 +578,22 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return squareDistance256(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_256.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_256);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_256));
 
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_256.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_256, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_256, v2, v2offset + i);
-            var diff = a.sub(b);
-            sum = diff.fma(diff, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, v2Values, v2offset + i));
+            FloatVector diff = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    a.sub(b));
+            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
+                    diff.fma(diff, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -494,6 +605,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return res;
+
     }
 
     float squareDistancePreferred(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
@@ -502,15 +614,22 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return squareDistancePreferred(v1, v1offset, v2, v2offset);
 
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
-        FloatVector sum = FloatVector.zero(FloatVector.SPECIES_PREFERRED);
+        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
+        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
+        FloatVector sum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         int i = 0;
         // Process the vectorized part
         for (; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v1, v1offset + i);
-            FloatVector b = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v2, v2offset + i);
-            var diff = a.sub(b);
-            sum = diff.fma(diff, sum);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, v1offset + i));
+            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, v2offset + i));
+            FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    a.sub(b));
+            sum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    diff.fma(diff, sum));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -522,6 +641,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return res;
+
     }
 
     void addInPlace64(VectorFloat<?> v1, VectorFloat<?> v2) {
@@ -962,56 +1082,63 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
      */
     @Override
     public int hammingDistance(long[] a, long[] b) {
-        var sum = LongVector.zero(LongVector.SPECIES_PREFERRED);
+        LongVector sum = (LongVector) LongVector.SPECIES_PREFERRED.vectorType().cast(
+                LongVector.zero(LongVector.SPECIES_PREFERRED));
         int vectorizedLength = LongVector.SPECIES_PREFERRED.loopBound(a.length);
-
-        // Process the vectorized part
         for (int i = 0; i < vectorizedLength; i += LongVector.SPECIES_PREFERRED.length()) {
-            var va = LongVector.fromArray(LongVector.SPECIES_PREFERRED, a, i);
-            var vb = LongVector.fromArray(LongVector.SPECIES_PREFERRED, b, i);
-
-            var xorResult = va.lanewise(VectorOperators.XOR, vb);
-            sum = sum.add(xorResult.lanewise(VectorOperators.BIT_COUNT));
+            LongVector va = (LongVector) LongVector.SPECIES_PREFERRED.vectorType().cast(
+                    LongVector.fromArray(LongVector.SPECIES_PREFERRED, a, i));
+            LongVector vb = (LongVector) LongVector.SPECIES_PREFERRED.vectorType().cast(
+                    LongVector.fromArray(LongVector.SPECIES_PREFERRED, b, i));
+            LongVector xor = (LongVector) LongVector.SPECIES_PREFERRED.vectorType().cast(
+                    va.lanewise(VectorOperators.XOR, vb));
+            LongVector counts = (LongVector) LongVector.SPECIES_PREFERRED.vectorType().cast(
+                    xor.lanewise(VectorOperators.BIT_COUNT));
+            sum = (LongVector) LongVector.SPECIES_PREFERRED.vectorType().cast(sum.add(counts));
         }
-
         int res = (int) sum.reduceLanes(VectorOperators.ADD);
-
-        // Process the tail
-        for (int i = vectorizedLength; i < a.length; i++) {
-            res += Long.bitCount(a[i] ^ b[i]);
-        }
-
+        for (int i = vectorizedLength; i < a.length; i++) res += Long.bitCount(a[i] ^ b[i]);
         return res;
     }
 
     @Override
     public float max(VectorFloat<?> v) {
-        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -Float.MAX_VALUE);
+        FloatVector accum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, -Float.MAX_VALUE));
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
+        float[] vValues = vectorizedLength == 0 ? null : ((FloatArray) v).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v, i);
-            accum = accum.max(a);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vValues, i));
+            accum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    accum.max(a));
         }
         float max = accum.reduceLanes(VectorOperators.MAX);
         for (int i = vectorizedLength; i < v.length(); i++) {
             max = Math.max(max, v.get(i));
         }
         return max;
+
     }
 
     @Override
     public float min(VectorFloat<?> v) {
-        var accum = FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE);
+        FloatVector accum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                FloatVector.broadcast(FloatVector.SPECIES_PREFERRED, Float.MAX_VALUE));
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v.length());
+        float[] vValues = vectorizedLength == 0 ? null : ((FloatArray) v).array();
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            var a = fromVectorFloat(FloatVector.SPECIES_PREFERRED, v, i);
-            accum = accum.min(a);
+            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, vValues, i));
+            accum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+                    accum.min(a));
         }
         float min = accum.reduceLanes(VectorOperators.MIN);
         for (int i = vectorizedLength; i < v.length(); i++) {
             min = Math.min(min, v.get(i));
         }
         return min;
+
     }
 
     private static int combineBytes(int i, int shuffle, ByteSequence<?> quantizedPartials) {
