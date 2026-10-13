@@ -119,6 +119,66 @@ TEST_P(ElementWiseTest, SubScalarInPlace)
 }
 
 // ---------------------------------------------------------------------------
+// sub_f32: res[i] = a[aoffset + i] - b[boffset + i]
+// ---------------------------------------------------------------------------
+
+TEST_P(ElementWiseTest, SubF32)
+{
+    const size_t n = GetParam().length;
+    auto a = make_vec(n + 7, 1.1f);
+    auto b = make_vec(n + 7, 0.7f);
+    std::vector<float> res(n, 0.0f);
+    const size_t aoffset = 3;
+    const size_t boffset = 2;
+
+    sub_f32(a.data(), aoffset, b.data(), boffset, res.data(), n);
+
+    for (size_t i = 0; i < n; ++i) {
+        float want = a[aoffset + i] - b[boffset + i];
+        EXPECT_NEAR(res[i], want, 1e-5f) << "sub_f32[" << i << "]";
+    }
+}
+
+// ---------------------------------------------------------------------------
+// sub_scalar_f32: res[i] = a[aoffset + i] - value
+// ---------------------------------------------------------------------------
+
+TEST_P(ElementWiseTest, SubScalarF32)
+{
+    const size_t n = GetParam().length;
+    auto a = make_vec(n + 5, 1.1f);
+    std::vector<float> res(n, 0.0f);
+    const size_t aoffset = 2;
+    const float  scalar  = 1.618f;
+
+    sub_scalar_f32(a.data(), aoffset, scalar, res.data(), n);
+
+    for (size_t i = 0; i < n; ++i) {
+        float want = a[aoffset + i] - scalar;
+        EXPECT_NEAR(res[i], want, 1e-5f) << "sub_scalar_f32[" << i << "]";
+    }
+}
+
+// ---------------------------------------------------------------------------
+// scale_f32:  v[i] *= multiplier
+// ---------------------------------------------------------------------------
+
+TEST_P(ElementWiseTest, ScaleF32)
+{
+    const size_t n          = GetParam().length;
+    const float  multiplier = 2.5f;
+    auto v    = make_vec(n, 1.1f);
+    auto want = v;
+    for (size_t i = 0; i < n; ++i) want[i] *= multiplier;
+
+    auto got = v;
+    scale_f32(got.data(), multiplier, n);
+
+    for (size_t i = 0; i < n; ++i)
+        EXPECT_NEAR(got[i], want[i], 1e-5f) << "scale_f32[" << i << "]";
+}
+
+// ---------------------------------------------------------------------------
 // max_f32: returns the maximum element
 // ---------------------------------------------------------------------------
 
@@ -144,6 +204,71 @@ TEST_P(ElementWiseTest, MaxF32TailElement)
     float got = max_f32(v.data(), n);
 
     EXPECT_FLOAT_EQ(got, 1e6f);
+}
+
+// ---------------------------------------------------------------------------
+// min_f32: returns the minimum element
+// ---------------------------------------------------------------------------
+
+TEST_P(ElementWiseTest, MinF32)
+{
+    const size_t n = GetParam().length;
+    auto v = make_vec(n, 0.9f);
+
+    float want = *std::min_element(v.begin(), v.end());
+    float got  = min_f32(v.data(), n);
+
+    EXPECT_FLOAT_EQ(got, want);
+}
+
+// min_f32 on a vector with a known minimum at the last position (tail element)
+TEST_P(ElementWiseTest, MinF32TailElement)
+{
+    const size_t n = GetParam().length;
+    auto v = make_vec(n, 0.5f);
+    // Place the global minimum in the very last element — exercises tail path.
+    v.back() = -1e6f;
+
+    float got = min_f32(v.data(), n);
+
+    EXPECT_FLOAT_EQ(got, -1e6f);
+}
+
+// ---------------------------------------------------------------------------
+// sum_f32: returns the sum of elements
+// ---------------------------------------------------------------------------
+
+TEST_P(ElementWiseTest, SumF32)
+{
+    const size_t n = GetParam().length;
+    auto v = make_vec(n, 0.8f);
+
+    float want = 0.0f;
+    for (size_t i = 0; i < n; ++i) want += v[i];
+    float got  = sum_f32(v.data(), n);
+
+    EXPECT_NEAR(got, want, 1e-4f * std::max(1.0f, std::abs(want)));
+}
+
+// ---------------------------------------------------------------------------
+// hamming_distance: returns population count of XOR of uint64_t arrays
+// ---------------------------------------------------------------------------
+
+TEST_P(ElementWiseTest, HammingDistance)
+{
+    const size_t n = GetParam().length;
+    std::vector<uint64_t> a(n), b(n);
+    int32_t want = 0;
+    for (size_t i = 0; i < n; ++i) {
+        a[i] = (static_cast<uint64_t>(i + 1) * 0x9E3779B97F4A7C15ULL) ^ 0x0123456789ABCDEFULL;
+        b[i] = (static_cast<uint64_t>(i + 1) * 0xC6A4A7935BD1E995ULL) ^ 0xFEDCBA9876543210ULL;
+        uint64_t xord = a[i] ^ b[i];
+        want += static_cast<int32_t>(__builtin_popcountll(xord));
+    }
+
+    int32_t got = hamming_distance(a.data(), b.data(), n);
+
+    EXPECT_EQ(got, want) << "HammingDistance failed for length " << n;
 }
 
 // ---------------------------------------------------------------------------
