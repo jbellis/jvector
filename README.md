@@ -46,6 +46,8 @@ Introductory tutorials for JVector are available in [docs/tutorials](./docs/tuto
 For file-backed input datasets, see [Batched input vector access](./docs/batched-vector-access.md),
 including runnable 100k-vector examples and optional integration with PQ and NVQ.
 
+For writing completed graphs with FP or NVQ features, see [Deferred batch serialization](./docs/deferred-batch-writer.md). It works with application vector sources and preloaded data; dataset prefetching is optional.
+
 The older step-by-step guide for JV can be found [here](./docs/legacy/jvector-step-by-step.md). New users should start with the tutorials mentioned earler, but the step-by-step guide contains useful commentary for advanced users.
 
 

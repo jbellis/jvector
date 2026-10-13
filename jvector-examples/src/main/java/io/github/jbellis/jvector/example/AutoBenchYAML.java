@@ -66,6 +66,8 @@ public class AutoBenchYAML {
             System.exit(1);
         }
 
+        Grid.configureWriterForBenchmark();
+
         logger.info("Heap space available is {}", Runtime.getRuntime().maxMemory());
 
         // Initialize checkpoint manager
