@@ -23,6 +23,58 @@ class NativeInheritedArithmeticTest {
     private static final int[] LENGTHS = {0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32, 33, 65, 256, 768, 1536, 3072};
 
     @Test
+    void inheritedPqHelpersRetainNativeStorageAndSlices() {
+        var support = new NativeVectorUtilSupport();
+        int count = 19, clusters = 4, block = clusters * (clusters + 1) / 2;
+        byte[] raw = new byte[count + 6];
+        for (int i = 0; i < count; i++) raw[i + 3] = (byte) (i % clusters);
+        var codes = new MemorySegmentByteSequence(raw).slice(3, count);
+        float[] adc = new float[count * clusters], packed = new float[count * block];
+        for (int i = 0; i < adc.length; i++) adc[i] = i % 7;
+        for (int i = 0; i < packed.length; i++) packed[i] = i % 11;
+        var table = new MemorySegmentVectorFloat(adc);
+        var symmetric = new MemorySegmentVectorFloat(packed);
+        for (int length : new int[] {0, 1, 7, 8, 15, 16, 19}) {
+            float expected = 0, expectedSymmetric = 0;
+            for (int i = 0; i < length; i++) {
+                int code = codes.get(i);
+                expected += adc[i * clusters + code];
+                int row = code * clusters - code * (code - 1) / 2;
+                expectedSymmetric += packed[i * block + row];
+            }
+            assertEquals(expected, support.assembleAndSum256(table, clusters, codes, 0, length));
+            assertEquals(expected, support.assembleAndSum512(table, clusters, codes, 0, length));
+            assertEquals(expectedSymmetric, support.assembleAndSumPQ_256(symmetric, length, codes, 0, codes, 0, clusters));
+            assertEquals(expectedSymmetric, support.assembleAndSumPQ_512(symmetric, length, codes, 0, codes, 0, clusters));
+        }
+    }
+
+    @Test
+    void inheritedDistanceHelpersRetainNativeStorageSupport() {
+        var support = new NativeVectorUtilSupport();
+        float[] values = new float[137];
+        for (int i = 0; i < values.length; i++) values[i] = i % 7 - 3;
+        var vector = new MemorySegmentVectorFloat(values);
+        for (int length : new int[] {0, 1, 2, 4, 8, 16, 31, 64, 128}) {
+            float expected = 0;
+            for (int i = 0; i < length; i++) expected += values[i + 3] * values[i + 5];
+            assertEquals(expected, support.dotProduct64(vector, 3, vector, 5, length));
+            assertEquals(expected, support.dotProduct128(vector, 3, vector, 5, length));
+            assertEquals(expected, support.dotProduct256(vector, 3, vector, 5, length));
+            assertEquals(expected, support.dotProductPreferred(vector, 3, vector, 5, length));
+            expected = 0;
+            for (int i = 0; i < length; i++) {
+                float difference = values[i + 3] - values[i + 5];
+                expected += difference * difference;
+            }
+            assertEquals(expected, support.squareDistance64(vector, 3, vector, 5, length));
+            assertEquals(expected, support.squareDistance128(vector, 3, vector, 5, length));
+            assertEquals(expected, support.squareDistance256(vector, 3, vector, 5, length));
+            assertEquals(expected, support.squareDistancePreferred(vector, 3, vector, 5, length));
+        }
+    }
+
+    @Test
     void inheritedSumAcceptsNativeStorage() {
         var support = new NativeVectorUtilSupport();
         for (int length : LENGTHS) {

@@ -18,10 +18,45 @@ package io.github.jbellis.jvector.vector;
 
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.VectorOperators;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestNVQDecoding {
+    @Test
+    void logisticHelperRetainsEveryInputSpecies() {
+        var support = new PanamaVectorUtilSupport();
+        for (var species : List.of(FloatVector.SPECIES_64, FloatVector.SPECIES_128,
+                FloatVector.SPECIES_256, FloatVector.SPECIES_512, FloatVector.SPECIES_MAX)) {
+            float[] values = new float[species.length()];
+            for (int i = 0; i < values.length; i++) values[i] = (i - 7) / 8f;
+            var vector = FloatVector.fromArray(species, values, 0);
+            var actual = support.logisticNQT(vector, 1.3f, 0.25f);
+            assertEquals(species, actual.species());
+            // Frozen original helper: no reductions, so every lane must retain its exact bits.
+            var temp = vector.fma(1.3f, -1.3f * 0.25f);
+            var positive = temp.test(VectorOperators.IS_NEGATIVE).not();
+            var exponent = temp.add(1, positive).convert(VectorOperators.F2I, 0).reinterpretAsInts();
+            var integral = exponent.convert(VectorOperators.I2F, 0).reinterpretAsFloats();
+            var mantissa = temp.sub(integral).fma(0.5f, 1).reinterpretAsInts();
+            temp = mantissa.add(exponent.lanewise(VectorOperators.LSHL, 23)).reinterpretAsFloats();
+            var expected = temp.div(temp.add(1)).toArray();
+            var lanes = actual.toArray();
+            for (int i = 0; i < lanes.length; i++)
+                assertEquals(Float.floatToIntBits(expected[i]), Float.floatToIntBits(lanes[i]));
+        }
+    }
+
+    @Test
+    void encodedByteShapeFitsFloatLanesIncludingWiderAndMaxShapes() {
+        for (int lanes : new int[] {2, 4, 8, 12, 16, 32, 48, 64, ByteVector.SPECIES_MAX.length()}) {
+            var species = PanamaVectorUtilSupport.nvqByteSpecies(lanes);
+            org.junit.jupiter.api.Assertions.assertTrue(species.length() >= lanes);
+            org.junit.jupiter.api.Assertions.assertTrue(species.length() <= Math.max(8, 2 * lanes));
+        }
+    }
+
     @Test
     void fastLanesDecodeMatchesScalarBitsForEveryByteAndPart() {
         var support = new PanamaVectorUtilSupport();

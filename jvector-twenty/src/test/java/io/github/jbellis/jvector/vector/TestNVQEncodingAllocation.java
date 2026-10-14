@@ -22,6 +22,19 @@ import jdk.incubator.vector.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class TestNVQEncodingAllocation {
+ @Test void scalarEncodingPreservesDestinationSlicesAndEmptyVectors() {
+  var current=new PanamaVectorUtilSupport();var old=new Reference();
+  for(int length=0;length<FloatVector.SPECIES_PREFERRED.length();length++) {
+   var vector=new ArrayVectorFloat(new float[length]);
+   var expected=new ArrayByteSequence(length);
+   old.nvqQuantize8bit(vector,1,0,-1,1,expected);
+   var parent=new ArrayByteSequence(length+6);
+   for(int i=0;i<parent.length();i++)parent.set(i,(byte)91);
+   current.nvqQuantize8bit(vector,1,0,-1,1,parent.slice(3,length));
+   for(int i=0;i<parent.length();i++)
+    assertEquals(i>=3&&i<3+length?expected.get(i-3):(byte)91,parent.get(i));
+  }
+ }
  @Test void preservesFrozenEncodingAndNumericalResults() {
   var current=new PanamaVectorUtilSupport();var old=new Reference();var random=new Random(9117);
   for(int dim:new int[]{0,1,7,8,9,15,16,17,31,32,33,127,128,129,256,768,1536}) {
