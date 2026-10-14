@@ -57,6 +57,11 @@ bundled for Linux x86-64 (SSE4.2 or newer) and Linux AArch64. Use these JVM opti
 --enable-native-access=ALL-UNNAMED
 ```
 
+Omitting native access can produce restricted-method warnings. If native access is
+denied by the runtime or JVM options, automatic selection falls back to Panama;
+an explicitly forced native provider fails during initialization. For named-module
+deployments, enable native access for the module containing JVector's native code.
+
 Operations implemented by Highway use native kernels; remaining operations use the
 inherited Panama/Java Vector API implementation with native vector storage. Native
 ISA selection remains automatic and respects the existing `JVECTOR_MAX_ISA` cap.
@@ -78,6 +83,15 @@ selection happens once per JVM. Java 20/21 uses
 Panama when available. Older runtimes, or runtimes without the Vector API module,
 retain the scalar fallback. Neither Panama nor native is enabled by these defaults
 when the existing runtime compatibility checks reject SIMD support.
+
+Native selection also changes the concrete vector type to `MemorySegmentVectorFloat`.
+Use the `VectorFloat` interface instead of casting to `ArrayVectorFloat` or assuming
+that `VectorFloat.get()` returns a `float[]`. Both built-in float vector types support
+`FloatArray.array()` for array access and `copyFrom` between their storage types.
+Native vector operations still require vectors created by the selected provider;
+copy external vectors into provider-created vectors before passing them to those
+operations. To retain the previous provider and storage choice, disable automatic
+native selection with `-Djvector.enable_native_vectorization=false`.
 
 ## The research behind the algorithms
 
