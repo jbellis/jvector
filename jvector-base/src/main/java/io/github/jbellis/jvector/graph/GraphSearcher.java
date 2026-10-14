@@ -47,6 +47,7 @@ import java.io.IOException;
  */
 public class GraphSearcher implements Closeable {
     private ImmutableGraphIndex.View view;
+    private int[] readAheadNodes, readAheadScratch;
 
     // Scratch data structures that are used in each {@link #searchInternal} call. These can be expensive
     // to allocate, so they're cleared and reused across calls.
@@ -80,6 +81,8 @@ public class GraphSearcher implements Closeable {
      */
     protected GraphSearcher(ImmutableGraphIndex.View view) {
         this.view = view;
+        this.readAheadNodes = new int[view.readAheadLimit()];
+        this.readAheadScratch = new int[2 * readAheadNodes.length + 1];
         this.candidates = new NodeQueue(new GrowableLongHeap(100), NodeQueue.Order.MAX_HEAP);
         this.evictedResults = new NodesUnsorted(100);
         this.approximateResults = new NodeQueue(new BoundedLongHeap(100), NodeQueue.Order.MIN_HEAP);
@@ -175,6 +178,10 @@ public class GraphSearcher implements Closeable {
      */
     public void setView(ImmutableGraphIndex.View view) {
         this.view = view;
+        if (readAheadNodes.length != view.readAheadLimit()) {
+            readAheadNodes = new int[view.readAheadLimit()];
+            readAheadScratch = new int[2 * readAheadNodes.length + 1];
+        }
     }
 
     /**
@@ -437,6 +444,10 @@ public class GraphSearcher implements Closeable {
 
                 // process the top candidate
                 float topCandidateScore = candidates.topScore();
+                if (level == 0 && readAheadNodes.length > 0 && !view.isNodePrepared(candidates.topNode())) {
+                    int count = candidates.copyTopNodes(readAheadNodes, readAheadScratch);
+                    view.prepareNodes(readAheadNodes, 0, count);
+                }
                 int topCandidateNode = candidates.pop();
                 if (acceptOrdsThisLayer.get(topCandidateNode) && topCandidateScore >= threshold) {
                     addTopCandidate(topCandidateNode, topCandidateScore, rerankK);
@@ -461,6 +472,9 @@ public class GraphSearcher implements Closeable {
                 };
                 view.processNeighbors(level, topCandidateNode, scoreFunction, visited::add, neighborProcessor);
             }
+        } catch (IOException e) {
+            approximateResults.clear();
+            throw new java.io.UncheckedIOException(e);
         } catch (Throwable t) {
             // clear scratch structures if terminated via throwable, as they may not have been drained
             approximateResults.clear();
@@ -574,6 +588,14 @@ public class GraphSearcher implements Closeable {
             this.scoreProvider = scoreProvider;
             cachedScores = new Int2ObjectHashMap<>();
             rerankCalls = 0;
+        }
+
+        @Override
+        public int readAheadLimit() { return scoreProvider.reranker().readAheadLimit(); }
+
+        @Override
+        public void prepareSimilarity(int[] nodes, int offset, int count) {
+            scoreProvider.reranker().prepareSimilarity(nodes, offset, count);
         }
 
         @Override

@@ -67,6 +67,12 @@ public interface ScoreFunction {
 
 
     interface ExactScoreFunction extends ScoreFunction {
+        /** Maximum records prepared together; zero leaves ordinary scoring unchanged. */
+        default int readAheadLimit() { return 0; }
+
+        /** Prepare selected reranking records; negative IDs are unselected entries. */
+        default void prepareSimilarity(int[] nodes, int offset, int count) { }
+
         default boolean isExact() {
             return true;
         }

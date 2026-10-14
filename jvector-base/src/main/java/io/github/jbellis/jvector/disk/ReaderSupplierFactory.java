@@ -37,6 +37,32 @@ public class ReaderSupplierFactory {
     }
 
     /**
+     * Opens the optional Linux direct-I/O backend (JDK 22+ native module).
+     * Unsupported configurations fail explicitly; this never falls back to mapping.
+     */
+    public static ReaderSupplier openDirect(Path path) throws IOException {
+        return openDirect(path, 8, 0);
+    }
+
+    /** Open direct reads with a bounded per-view kernel AIO depth (0 selects synchronous reads). */
+    public static ReaderSupplier openDirect(Path path, int ioDepth) throws IOException {
+        return openDirect(path, ioDepth, 0);
+    }
+
+    /** Shared cache budget includes payload and a metadata allowance; zero disables the cache. */
+    public static ReaderSupplier openDirect(Path path, int ioDepth, long cacheBytes) throws IOException {
+        try {
+            var type = Class.forName("io.github.jbellis.jvector.disk.LinuxDirectReader$Supplier");
+            return (ReaderSupplier) type.getConstructor(Path.class, int.class, long.class).newInstance(path, ioDepth, cacheBytes);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            if (e.getCause() instanceof IOException) throw (IOException) e.getCause();
+            throw new IOException("Unable to open direct-I/O reader", e.getCause());
+        } catch (ReflectiveOperationException | LinkageError e) {
+            throw new IOException("Direct-I/O reader requires the JDK 22+ native module", e);
+        }
+    }
+
+    /**
      * Opens a ReaderSupplier for the given path.
      * @param path the path to open
      * @return a ReaderSupplier for the path

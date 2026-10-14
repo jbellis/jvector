@@ -167,6 +167,14 @@ public interface ImmutableGraphIndex extends AutoCloseable, Accountable {
      * but each thread needs its own.
      */
     interface View extends Closeable {
+        /** Bounded read-ahead for disk views; other views leave search unchanged. */
+        default int readAheadLimit() { return 0; }
+        /** Whether the node record is available without another storage read. */
+        default boolean isNodePrepared(int node) { return false; }
+
+        /** Only storage is prepared: this must not score, visit, expand or reorder nodes. */
+        default void prepareNodes(int[] nodes, int offset, int count) throws IOException { }
+
         /**
          * Iterator over the neighbors of a given node.  Only the most recently instantiated iterator
          * is guaranteed to be valid.

@@ -40,6 +40,25 @@ public interface RandomAccessReader extends AutoCloseable {
     void seek(long offset) throws IOException;
 
     /**
+     * Prepare a known byte range for subsequent reads without moving the cursor.
+     * Implementations may retain the range in a bounded view-local buffer. This
+     * is a synchronous hint, not a change to read ordering or file contents.
+     */
+    default void prepareRead(long offset, long length) throws IOException {
+    }
+
+    /** Maximum number of independent ranges that this view can prepare together; zero disables batching. */
+    default int readAheadLimit() { return 0; }
+
+    /** Whether a known range can be read without another storage request. */
+    default boolean isPrepared(long offset, long length) { return false; }
+
+    /** Prepare independent ranges together, without changing the cursor. */
+    default void prepareReads(long[] offsets, long[] lengths, int count) throws IOException {
+        for (int i = 0; i < count; i++) prepareRead(offsets[i], lengths[i]);
+    }
+
+    /**
      * Returns the current position.
      * @return the current position
      * @throws IOException if an I/O error occurs

@@ -262,7 +262,7 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
      * @return the loaded index.
      */
     public static OnDiskGraphIndex load(ReaderSupplier readerSupplier, long offset, boolean useFooter) {
-        try (var reader = readerSupplier.get()) {
+        try (var reader = readerSupplier.getUncached()) {
             return GraphIndexFormat.loadOnDiskIndex(reader, offset, useFooter, readerSupplier);
         } catch (Exception e) {
             throw new RuntimeException("Error initializing OnDiskGraph at offset " + offset, e);
@@ -286,7 +286,7 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
      * @return the loaded index.
      */
     protected static OnDiskGraphIndex loadFromFooter(ReaderSupplier readerSupplier, long neighborsOffset) {
-        try (var in = readerSupplier.get()) {
+        try (var in = readerSupplier.getUncached()) {
             final long magicOffset = in.length() - FOOTER_MAGIC_SIZE;
             logger.debug("Loading OnDiskGraphIndex footer from offset={}", magicOffset);
             in.seek(magicOffset);
@@ -486,9 +486,12 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
         protected final RandomAccessReader reader;
         private final int[] neighbors;
         private int nodeDegree;
+        private final long[] readOffsets, readLengths;
 
         public View(RandomAccessReader reader) {
             this.reader = reader;
+            this.readOffsets = new long[reader.readAheadLimit()];
+            this.readLengths = new long[reader.readAheadLimit()];
             this.neighbors = new int[layerInfo.stream().mapToInt(li -> li.degree).max().orElse(0)];
         }
 
@@ -545,9 +548,54 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
         }
 
 
+        private long nodeRecordSize() {
+            return Integer.BYTES + inlineBlockSize
+                    + (long) Integer.BYTES * (layerInfo.get(0).degree + 1);
+        }
+
+        @Override
+        public int readAheadLimit() { return reader.readAheadLimit(); }
+
+        @Override
+        public boolean isNodePrepared(int node) {
+            return reader.isPrepared(baseNodeOffsetFor(node), nodeRecordSize());
+        }
+
+        @Override
+        public void prepareNodes(int[] nodes, int offset, int count) throws IOException {
+            prepareFeatureNodes(nodes, offset, count, null);
+        }
+
+        private void prepareFeatureNodes(int[] nodes, int offset, int count, Feature feature) throws IOException {
+            java.util.Objects.checkFromIndexSize(offset, count, nodes.length);
+            if (readOffsets.length == 0) return;
+            boolean separated = feature instanceof SeparatedFeature;
+            long bytes = separated ? feature.featureSize() : nodeRecordSize();
+            int n = 0;
+            for (int i = offset; i < offset + count; i++) {
+                if (nodes[i] < 0) continue; // Unselected reranking candidates.
+                readOffsets[n] = separated ? offsetFor(nodes[i], feature.id()) : baseNodeOffsetFor(nodes[i]);
+                readLengths[n++] = bytes;
+                if (n == readOffsets.length) {
+                    reader.prepareReads(readOffsets, readLengths, n);
+                    n = 0;
+                }
+            }
+            if (n > 0) reader.prepareReads(readOffsets, readLengths, n);
+        }
+
+        private void prepareNode(int node) throws IOException {
+            reader.prepareRead(baseNodeOffsetFor(node), nodeRecordSize());
+        }
+
         @Override
         public RandomAccessReader featureReaderForNode(int node, FeatureId featureId) throws IOException {
             long offset = offsetFor(node, featureId);
+            if (features.get(featureId) instanceof SeparatedFeature) {
+                reader.prepareRead(offset, features.get(featureId).featureSize());
+            } else {
+                prepareNode(node);
+            }
             reader.seek(offset);
             return reader;
         }
@@ -571,6 +619,11 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
 
             try {
                 long diskOffset = offsetFor(node, feature.id());
+                if (feature instanceof SeparatedFeature) {
+                    reader.prepareRead(diskOffset, feature.featureSize());
+                } else {
+                    prepareNode(node);
+                }
                 reader.seek(diskOffset);
                 vectorTypeSupport.readFloatVector(reader, dimension, vector, offset);
             } catch (IOException e) {
@@ -584,6 +637,7 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
 
                 if (level == 0) {
                     // For layer 0, read from disk
+                    prepareNode(node);
                     reader.seek(neighborsOffsetFor(level, node));
                     nodeDegree = reader.readInt();
                     assert nodeDegree <= neighbors.length
@@ -611,6 +665,11 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
             }
 
             long offset = offsetFor(node, featureId);
+            if (features.get(featureId) instanceof SeparatedFeature) {
+                reader.prepareRead(offset, features.get(featureId).featureSize());
+            } else {
+                prepareNode(node);
+            }
             reader.seek(offset);
             featureConsumer.accept(reader);
 
@@ -701,6 +760,22 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
 
         @Override
         public ScoreFunction.ExactScoreFunction rerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
+            var delegate = rawRerankerFor(queryVector, vsf);
+            if (readAheadLimit() == 0) return delegate;
+            Feature feature = features.get(FeatureId.INLINE_VECTORS);
+            if (feature == null) feature = features.get(FeatureId.NVQ_VECTORS);
+            final Feature rerankingFeature = feature;
+            return new ScoreFunction.ExactScoreFunction() {
+                @Override public float similarityTo(int node) { return delegate.similarityTo(node); }
+                @Override public int readAheadLimit() { return View.this.readAheadLimit(); }
+                @Override public void prepareSimilarity(int[] nodes, int offset, int count) {
+                    try { prepareFeatureNodes(nodes, offset, count, rerankingFeature); }
+                    catch (IOException e) { throw new UncheckedIOException(e); }
+                }
+            };
+        }
+
+        private ScoreFunction.ExactScoreFunction rawRerankerFor(VectorFloat<?> queryVector, VectorSimilarityFunction vsf) {
             if (features.containsKey(FeatureId.INLINE_VECTORS)) {
                 return RandomAccessVectorValues.super.rerankerFor(queryVector, vsf);
             } else if (features.containsKey(FeatureId.NVQ_VECTORS)) {

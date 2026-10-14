@@ -151,6 +151,25 @@ public class NodeQueue {
         return nodes;
     }
 
+    /** Copy the best nodes without modifying the heap. Scratch needs 2*nodes.length+1 entries. */
+    int copyTopNodes(int[] nodes, int[] scratch) {
+        if (nodes.length == 0 || size() == 0) return 0;
+        java.util.Objects.checkFromIndexSize(0, 2 * nodes.length + 1, scratch.length);
+        int frontier = 1, copied = 0;
+        scratch[0] = 1;
+        while (frontier > 0 && copied < nodes.length) {
+            int best = 0;
+            for (int i = 1; i < frontier; i++)
+                if (heap.get(scratch[i]) < heap.get(scratch[best])) best = i;
+            int index = scratch[best];
+            nodes[copied++] = decodeNodeId(heap.get(index));
+            scratch[best] = scratch[--frontier];
+            if (2 * index <= size()) scratch[frontier++] = 2 * index;
+            if (2 * index + 1 <= size()) scratch[frontier++] = 2 * index + 1;
+        }
+        return copied;
+    }
+
     /**
      * Rerank results and return the worst approximate score that made it into the topK.
      * The topK results will be placed into `reranked`, and the remainder into `unused`.
@@ -158,6 +177,7 @@ public class NodeQueue {
      * Only the best result or results whose approximate score is at least `rerankFloor` will be reranked.
      */
     public float rerank(int topK, ScoreFunction.ExactScoreFunction reranker, float rerankFloor, NodeQueue reranked, NodesUnsorted unused) {
+        int readAhead = reranker.readAheadLimit();
         // Rescore the nodes whose approximate score meets the floor.  Nodes that do not will be marked as -1
         int[] ids = new int[size()];
         float[] exactScores = new float[size()];
@@ -178,7 +198,7 @@ public class NodeQueue {
             if (score >= rerankFloor) {
                 // rerank this one
                 ids[i] = nodeId;
-                exactScores[i] = reranker.similarityTo(ids[i]);
+                if (readAhead == 0) exactScores[i] = reranker.similarityTo(ids[i]);
                 approximateScoresById.put(ids[i], Float.valueOf(score));
                 scoresAboveFloor++;
             } else {
@@ -190,8 +210,15 @@ public class NodeQueue {
         if (scoresAboveFloor == 0 && bestIndex >= 0) {
             // if nothing was above the floor, then rerank the best one found
             ids[bestIndex] = decodeNodeId(heap.get(bestIndex + 1));
-            exactScores[bestIndex] = reranker.similarityTo(ids[bestIndex]);
+            if (readAhead == 0) exactScores[bestIndex] = reranker.similarityTo(ids[bestIndex]);
             approximateScoresById.put(ids[bestIndex], Float.valueOf(bestScore));
+        }
+
+        for (int offset = 0; readAhead > 0 && offset < ids.length; offset += readAhead) {
+            int count = Math.min(readAhead, ids.length - offset);
+            reranker.prepareSimilarity(ids, offset, count);
+            for (int i = offset; i < offset + count; i++)
+                if (ids[i] >= 0) exactScores[i] = reranker.similarityTo(ids[i]);
         }
 
         // go through the entries and add to the appropriate collection

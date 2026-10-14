@@ -33,6 +33,21 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class TestNodeQueue extends RandomizedTest {
   @Test
+  public void testReadAheadDoesNotMutateOrdering() {
+    for (var order : NodeQueue.Order.values()) {
+      NodeQueue queue = new NodeQueue(new GrowableLongHeap(64), order);
+      NodeQueue control = new NodeQueue(new GrowableLongHeap(64), order);
+      for (int i = 0; i < 64; i++) { queue.push(i, (i * 7) % 13); control.push(i, (i * 7) % 13); }
+      int[] nodes = new int[16], scratch = new int[33];
+      assertEquals(16, queue.copyTopNodes(nodes, scratch));
+      for (int i = 0; i < 16; i++) assertEquals(control.pop(), nodes[i]);
+      assertEquals(64, queue.size());
+      control.clear(); control.copyFrom(queue);
+      while (queue.size() > 0) assertEquals(control.pop(), queue.pop());
+    }
+  }
+
+  @Test
   public void testNeighborsProduct() {
     // make sure we have the sign correct
     NodeQueue nn = new NodeQueue(new BoundedLongHeap(2), NodeQueue.Order.MIN_HEAP);

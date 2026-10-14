@@ -31,6 +31,14 @@ public interface ReaderSupplier extends AutoCloseable {
     RandomAccessReader get() throws IOException;
 
     /**
+     * Request a view without shared read caching, for metadata loading or bulk scans.
+     * Existing suppliers behave as before. View-local read buffers are still permitted.
+     */
+    default RandomAccessReader getUncached() throws IOException {
+        return get();
+    }
+
+    /**
      * Streams the byte range {@code [offset, offset + length)} of the underlying storage into
      * the page cache, if the implementation supports it. Synchronous and best-effort; a no-op
      * by default. Sized for repeated windowed calls — a caller that knows which records a bulk
