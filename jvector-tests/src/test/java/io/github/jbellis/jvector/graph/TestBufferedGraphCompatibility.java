@@ -73,7 +73,9 @@ public class TestBufferedGraphCompatibility {
                                     var graph = builder.build(source);
                                     assertEquals(count, graph.size(0));
                                     // A file-backed shared source must not overwrite insertion/diversity queries.
-                                    var result = GraphSearcher.search(vectors.get(5), 10, resident, metric, graph, Bits.ALL);
+                                    // Binary edges use Hamming distance, so exact-metric searches need more candidates.
+                                    int searchBudget = mode == 2 ? 20 : 10;
+                                    var result = GraphSearcher.search(vectors.get(5), 10, searchBudget, resident, metric, graph, Bits.ALL);
                                     assertTrue("dimension=" + dimension + ", build=" + (mode == 0 ? "exact" : mode == 1 ? "PQ" : "BQ")
                                                     + ", metric=" + metric + ", refine=" + refine + ", provider="
                                                     + VectorizationProvider.getInstance().getClass().getSimpleName()
