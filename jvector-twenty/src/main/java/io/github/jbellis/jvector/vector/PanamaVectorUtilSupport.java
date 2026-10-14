@@ -32,6 +32,11 @@ import java.util.List;
 
 class PanamaVectorUtilSupport implements VectorUtilSupport {
 
+    // JDK-8321215 misencodes gather indices in high vector registers before JDK 22 / 21.0.3.
+    private static final boolean BROKEN_GATHER = hasBrokenGather();
+    private static final ThreadLocal<float[]> gatherScratch = ThreadLocal.withInitial(
+            () -> new float[FloatVector.SPECIES_512.length()]);
+
     static final int PREFERRED_BIT_SIZE = FloatVector.SPECIES_PREFERRED.vectorBitSize();
     static {
         // Publish the value to System Properties for other packages (other language levels...)
@@ -43,12 +48,30 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
 
+    private static boolean hasBrokenGather() {
+        Runtime.Version version = Runtime.version();
+        String arch = System.getProperty("os.arch");
+        return (arch.equals("amd64") || arch.equals("x86_64"))
+                && (version.feature() < 21 || (version.feature() == 21 && version.update() < 3));
+    }
+
+    private static FloatVector gather(VectorSpecies<Float> species, float[] values, int offset, int[] indices, int indicesOffset) {
+        if (BROKEN_GATHER) {
+            float[] scratch = gatherScratch.get();
+            for (int lane = 0; lane < species.length(); lane++) {
+                scratch[lane] = values[offset + indices[indicesOffset + lane]];
+            }
+            return FloatVector.fromArray(species, scratch, 0);
+        }
+        return FloatVector.fromArray(species, values, offset, indices, indicesOffset);
+    }
+
     protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset) {
         return FloatVector.fromArray(SPEC, ((ArrayVectorFloat) vector).get(), offset);
     }
 
     protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset, int[] indices, int indicesOffset) {
-        return FloatVector.fromArray(SPEC, ((ArrayVectorFloat)vector).get(), offset, indices, indicesOffset);
+        return gather(SPEC, ((ArrayVectorFloat)vector).get(), offset, indices, indicesOffset);
     }
 
     protected void intoVectorFloat(FloatVector vector, VectorFloat<?> v, int offset) {
@@ -846,7 +869,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             codes.intoArray(convOffsets, 0);
 
             var offset = i * dataBase;
-            FloatVector gathered = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_512, values, offset, convOffsets, 0));
+            FloatVector gathered = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(gather(FloatVector.SPECIES_512, values, offset, convOffsets, 0));
             sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(gathered));
         }
 
@@ -879,7 +902,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             codes.intoArray(convOffsets, 0);
 
             var offset = i * dataBase;
-            FloatVector gathered = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_256, values, offset, convOffsets, 0));
+            FloatVector gathered = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(gather(FloatVector.SPECIES_256, values, offset, convOffsets, 0));
             sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(gathered));
         }
 
@@ -988,7 +1011,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             IntVector triangular = lo.mul(lo.sub(1)).lanewise(VectorOperators.LSHR, 1);
             lo.mul(k).sub(triangular).add(hi.sub(lo)).add(scale).intoArray(convOffsets, 0);
             FloatVector chunk = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_256, partials, i * blockSize, convOffsets, 0));
+                    gather(FloatVector.SPECIES_256, partials, i * blockSize, convOffsets, 0));
             sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(chunk));
         }
 
@@ -1049,7 +1072,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             IntVector triangular = lo.mul(lo.sub(1)).lanewise(VectorOperators.LSHR, 1);
             lo.mul(k).sub(triangular).add(hi.sub(lo)).add(scale).intoArray(convOffsets, 0);
             FloatVector chunk = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_512, partials, i * blockSize, convOffsets, 0));
+                    gather(FloatVector.SPECIES_512, partials, i * blockSize, convOffsets, 0));
             sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(chunk));
         }
 
@@ -1194,9 +1217,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
             int offset = i * clusterCount;
             FloatVector partial = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_512, partials, offset, convOffsets, 0));
+                    gather(FloatVector.SPECIES_512, partials, offset, convOffsets, 0));
             FloatVector magnitude = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_512, magnitudes, offset, convOffsets, 0));
+                    gather(FloatVector.SPECIES_512, magnitudes, offset, convOffsets, 0));
             sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(partial));
             vaMagnitude = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(vaMagnitude.add(magnitude));
         }
@@ -1235,9 +1258,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
             int offset = i * clusterCount;
             FloatVector partial = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_256, partials, offset, convOffsets, 0));
+                    gather(FloatVector.SPECIES_256, partials, offset, convOffsets, 0));
             FloatVector magnitude = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_256, magnitudes, offset, convOffsets, 0));
+                    gather(FloatVector.SPECIES_256, magnitudes, offset, convOffsets, 0));
             sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(partial));
             vaMagnitude = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(vaMagnitude.add(magnitude));
         }

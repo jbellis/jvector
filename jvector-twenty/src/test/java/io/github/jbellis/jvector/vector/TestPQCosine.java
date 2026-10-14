@@ -54,6 +54,42 @@ class TestPQCosine {
         }
     }
 
+    @Test
+    void compilationPreservesUnsignedGatherIndices() {
+        var support = new PanamaVectorUtilSupport();
+        var random = new Random(755);
+        int clusters = 256;
+        for (int count : new int[] {16, 17, 32, 33, 96, 192, 384}) {
+            int offset = 7;
+            byte[] codes = new byte[count + offset];
+            random.nextBytes(codes);
+            float[] sums = new float[count * clusters];
+            float[] magnitudes = new float[sums.length];
+            for (int i = 0; i < sums.length; i++) {
+                sums[i] = i % 13 - 6;
+                magnitudes[i] = 1 + i % 7;
+            }
+            float sum = 0, magnitude = 0;
+            for (int i = 0; i < count; i++) {
+                int index = i * clusters + Byte.toUnsignedInt(codes[offset + i]);
+                sum += sums[index];
+                magnitude += magnitudes[index];
+            }
+            float expected = (float) (sum / Math.sqrt(magnitude * 3.25f));
+            var encoded = new ArrayByteSequence(codes);
+            var partials = new ArrayVectorFloat(sums);
+            var norms = new ArrayVectorFloat(magnitudes);
+            // Warm both gather kernels: JDK-8321215 appeared only after C2 compilation.
+            // Integer lane sums are exact, so reduction ordering cannot obscure this check.
+            for (int iteration = 0; iteration < 50_000; iteration++) {
+                assertEquals(expected, support.pqDecodedCosineSimilarity256(
+                        encoded, offset, count, clusters, partials, norms, 3.25f));
+                assertEquals(expected, support.pqDecodedCosineSimilarity512(
+                        encoded, offset, count, clusters, partials, norms, 3.25f));
+            }
+        }
+    }
+
     private void check(PanamaVectorUtilSupport c, FrozenReference r, float[] sums,float[] mags,
                        byte[] codes,int offset,int count,int stride) {
         var s=new ArrayVectorFloat(sums);var m=new ArrayVectorFloat(mags);var b=new ArrayByteSequence(codes);
@@ -67,15 +103,15 @@ class TestPQCosine {
         assertEquals(oracle, c.pqDecodedCosineSimilarity(compact, stride, s, m, 3.25f), tolerance);
         float a=c.pqDecodedCosineSimilarity256(b,offset,count,stride,s,m,3.25f);
         float z=r.pqDecodedCosineSimilarity256(b,offset,count,stride,s,m,3.25f);
-        assertEquals(Float.floatToIntBits(z),Float.floatToIntBits(a),"256 count="+count+" offset="+offset);
+        assertEquals(z,a,tolerance,"256 count="+count+" offset="+offset);
         assertEquals(oracle,a,Float.isFinite(oracle) ? Math.max(1e-6,Math.abs(oracle)*1e-5) : 0);
         a=c.pqDecodedCosineSimilarity512(b,offset,count,stride,s,m,3.25f);
         z=r.pqDecodedCosineSimilarity512(b,offset,count,stride,s,m,3.25f);
-        assertEquals(Float.floatToIntBits(z),Float.floatToIntBits(a),"512 count="+count+" offset="+offset);
+        assertEquals(z,a,tolerance,"512 count="+count+" offset="+offset);
         assertEquals(oracle,a,Float.isFinite(oracle) ? Math.max(1e-6,Math.abs(oracle)*1e-5) : 0);
     }
 
-    // Frozen 0161 kernels preserve the original lane reduction order for a bitwise regression oracle.
+    // Frozen kernels are a numerical regression oracle; reduceLanes(ADD) may reorder additions.
     private static class FrozenReference extends PanamaVectorUtilSupport {
     float pqDecodedCosineSimilarity512(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         var sum = FloatVector.zero(FloatVector.SPECIES_512);

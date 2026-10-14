@@ -35,7 +35,7 @@ class TestDotProduct256 {
             float expected = FloatVector.fromArray(FloatVector.SPECIES_256, a, offset)
                     .mul(FloatVector.fromArray(FloatVector.SPECIES_256, b, offset + 2))
                     .reduceLanes(VectorOperators.ADD);
-            float actual = support.dotProduct(new ArrayVectorFloat(a), offset,
+            float actual = support.dotProduct256(new ArrayVectorFloat(a), offset,
                     new ArrayVectorFloat(b), offset + 2, 8);
             assertEquals(Float.floatToRawIntBits(expected), Float.floatToRawIntBits(actual));
         }
