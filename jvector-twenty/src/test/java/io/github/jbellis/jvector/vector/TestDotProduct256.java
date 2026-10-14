@@ -21,10 +21,18 @@ import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class TestDotProduct256 {
+    /// A length-8 dot product reduces as one 8-lane `SPECIES_256` product only where the preferred
+    /// species has at least 8 float lanes (routed to `dot256` at 512 bits, or to the 8-lane
+    /// preferred kernel at 256 bits). With a 4-lane (128-bit) preferred species, as on ARM NEON,
+    /// `dotProduct` routes length 8 to `dotProductPreferred`, which associates the additions
+    /// differently, as main does too, so the exact-bits expectation does not apply there.
     @Test
     void exactWidthPreservesOriginalReductionBits() {
+        assumeTrue(FloatVector.SPECIES_PREFERRED.length() >= 8,
+                "length 8 is not a single 8-lane reduction with a " + FloatVector.SPECIES_PREFERRED.vectorBitSize() + "-bit preferred species");
         var support = new PanamaVectorUtilSupport();
         var random = new Random(619);
         for (int iteration = 0; iteration < 512; iteration++) {
