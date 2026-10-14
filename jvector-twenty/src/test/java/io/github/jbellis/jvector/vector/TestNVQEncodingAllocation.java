@@ -22,7 +22,13 @@ import jdk.incubator.vector.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class TestNVQEncodingAllocation {
- @Test void preservesFrozenEncodingAndLossBits() {
+    /// Encoded bytes must match the frozen reference exactly. The four reductions (`nvqLoss`,
+    /// `nvqUniformLoss`, `nvqSquareL2Distance8bit`, `nvqCosine8bit`) are compared within a small
+    /// relative tolerance instead of bit for bit: they end in `FloatVector.reduceLanes(ADD)`, whose
+    /// addition order the Vector API leaves unspecified, so the interpreter/C1 fallback and the C2
+    /// intrinsic can differ by an ULP or two, and which tier runs each side varies with JIT timing
+    /// and the host's vector width (see `TestNVQEncodingBitsAcrossJitStates`).
+ @Test void preservesFrozenEncodingBitsAndLossValues() {
   var current=new PanamaVectorUtilSupport();var old=new Reference();var random=new Random(9117);
   for(int dim:new int[]{0,1,7,8,9,15,16,17,31,32,33,127,128,129,256,768,1536}) {
    float[] data=new float[dim];for(int i=0;i<dim;i++)data[i]=random.nextFloat()*2-1;
@@ -31,14 +37,19 @@ class TestNVQEncodingAllocation {
     var a=new ArrayByteSequence(new byte[dim]);var b=new ArrayByteSequence(new byte[dim]);
     current.nvqQuantize8bit(vector,alpha,midpoint,-1,1,a);old.nvqQuantize8bit(vector,alpha,midpoint,-1,1,b);
     for(int i=0;i<dim;i++)assertEquals(b.get(i),a.get(i),"dim="+dim+" i="+i);
-    assertEquals(Float.floatToIntBits(old.nvqUniformLoss(vector,-1,1,8)),Float.floatToIntBits(current.nvqUniformLoss(vector,-1,1,8)));
-    assertEquals(Float.floatToIntBits(old.nvqSquareL2Distance8bit(vector,b,alpha,midpoint,-1,1)),Float.floatToIntBits(current.nvqSquareL2Distance8bit(vector,b,alpha,midpoint,-1,1)));
+    assertReductionClose(old.nvqUniformLoss(vector,-1,1,8),current.nvqUniformLoss(vector,-1,1,8),"nvqUniformLoss dim="+dim);
+    assertReductionClose(old.nvqSquareL2Distance8bit(vector,b,alpha,midpoint,-1,1),current.nvqSquareL2Distance8bit(vector,b,alpha,midpoint,-1,1),"nvqSquareL2Distance8bit dim="+dim);
     float[] expected=old.nvqCosine8bit(vector,b,alpha,midpoint,-1,1,vector),actual=current.nvqCosine8bit(vector,b,alpha,midpoint,-1,1,vector);
-    for(int n=0;n<2;n++)assertEquals(Float.floatToIntBits(expected[n]),Float.floatToIntBits(actual[n]));
-    for(int bits:new int[]{1,2,4,8})assertEquals(Float.floatToIntBits(old.nvqLoss(vector,alpha,midpoint,-1,1,bits)),Float.floatToIntBits(current.nvqLoss(vector,alpha,midpoint,-1,1,bits)));
+    for(int n=0;n<2;n++)assertReductionClose(expected[n],actual[n],"nvqCosine8bit["+n+"] dim="+dim);
+    for(int bits:new int[]{1,2,4,8})assertReductionClose(old.nvqLoss(vector,alpha,midpoint,-1,1,bits),current.nvqLoss(vector,alpha,midpoint,-1,1,bits),"nvqLoss bits="+bits+" dim="+dim);
    }
   }
  }
+    /// Reductions may differ in the last bits between JIT tiers; a real kernel change is far larger.
+    private static void assertReductionClose(float expected, float actual, String what) {
+        assertEquals(expected, actual, 1e-5f * Math.max(1f, Math.abs(expected)), what);
+    }
+
  static class Reference extends PanamaVectorUtilSupport {
     public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
         int constant = (1 << nBits) - 1;

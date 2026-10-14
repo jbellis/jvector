@@ -27,7 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 ///
 /// ## The bug
 ///
-/// `TestNVQEncodingAllocation.preservesFrozenEncodingAndLossBits` compares the reductions of
+/// `TestNVQEncodingAllocation.preservesFrozenEncodingAndLossBits` (renamed
+/// `preservesFrozenEncodingBitsAndLossValues` by the fix) compares the reductions of
 /// `nvqLoss`, `nvqUniformLoss`, `nvqSquareL2Distance8bit` and `nvqCosine8bit` bit for bit against a
 /// `Reference` subclass. Both sides end in `FloatVector.reduceLanes(ADD)`, whose order of
 /// additions the Vector API leaves unspecified: the Java fallback (interpreter, C1) and the C2

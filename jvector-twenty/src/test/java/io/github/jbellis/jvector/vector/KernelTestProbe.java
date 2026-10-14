@@ -63,7 +63,7 @@ final class KernelTestProbe {
         public static void main(String[] args) {
             try {
                 switch (args[0]) {
-                    case "nvqEncodingBits" -> new TestNVQEncodingAllocation().preservesFrozenEncodingAndLossBits();
+                    case "nvqEncodingBits" -> new TestNVQEncodingAllocation().preservesFrozenEncodingBitsAndLossValues();
                     case "dot256ExactWidth" -> new TestDotProduct256().exactWidthPreservesOriginalReductionBits();
                     default -> throw new IllegalArgumentException("unknown test " + args[0]);
                 }
