@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /** Fresh JVMs exercise the real singleton without leaking provider properties between tests. */
@@ -91,6 +92,10 @@ public class TestVectorizationProviderSelection {
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             if (success) assertEquals(output, 0, process.exitValue());
             else assertTrue(output, process.exitValue() != 0);
+            try (var files = Files.list(tmp)) {
+                assertFalse("Extracted native library was not removed: " + output,
+                        files.anyMatch(file -> file.getFileName().toString().startsWith("libjvector-")));
+            }
             return output;
         } finally {
             if (child != null && child.isAlive()) { child.destroyForcibly(); child.waitFor(); }
@@ -197,9 +202,37 @@ public class TestVectorizationProviderSelection {
     /// the child exits with `AssertionError` caused by `IllegalCallerException`.
     @Test public void deniedNativeAccessFallsBackToJavaProvider() throws Exception {
         Assume.assumeTrue("--illegal-native-access needs Java 24+", Runtime.version().feature() >= 24);
+        Assume.assumeTrue(nativeAvailable());
         String output = probe(classpath(), HAS_VECTOR_MODULE, false, true, "--illegal-native-access=deny");
         assertTrue(output, output.contains("PROVIDER=" + javaProvider()));
         assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
+    }
+
+    @Test public void deniedNativeAccessFailsDuringForcedInitialization() throws Exception {
+        Assume.assumeTrue("--illegal-native-access needs Java 24+", Runtime.version().feature() >= 24);
+        Assume.assumeTrue(nativeAvailable());
+        String output = probe(classpath(), HAS_VECTOR_MODULE, false, false,
+                "--illegal-native-access=deny", "-Djvector.vectorization_provider=native");
+        assertTrue(output, output.contains("Failed to load forced NativeVectorizationProvider"));
+        assertFalse(output, output.contains("PROVIDER="));
+    }
+
+    // Java 22/23 rejects FFM access when native access is enabled only for another module.
+    @Test public void nativeAccessForWrongModuleFallsBack() throws Exception {
+        Assume.assumeTrue(Runtime.version().feature() == 22 || Runtime.version().feature() == 23);
+        Assume.assumeTrue(nativeAvailable());
+        String output = probe(classpath(), HAS_VECTOR_MODULE, false, true, "--enable-native-access=java.base");
+        assertTrue(output, output.contains("PROVIDER=" + javaProvider()));
+        assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
+    }
+
+    @Test public void nativeAccessForWrongModuleFailsDuringForcedInitialization() throws Exception {
+        Assume.assumeTrue(Runtime.version().feature() == 22 || Runtime.version().feature() == 23);
+        Assume.assumeTrue(nativeAvailable());
+        String output = probe(classpath(), HAS_VECTOR_MODULE, false, false,
+                "--enable-native-access=java.base", "-Djvector.vectorization_provider=native");
+        assertTrue(output, output.contains("Failed to load forced NativeVectorizationProvider"));
+        assertFalse(output, output.contains("PROVIDER="));
     }
 
     /// Repro for #751: a `libjvector` without jvector's kernels is selected, and fails at first use.
@@ -233,9 +266,54 @@ public class TestVectorizationProviderSelection {
         try {
             Files.copy(foreign, stale);
             assertProvider(javaProvider(), classpath(), "-Djava.library.path=" + libraryPath);
+            String output = probe(classpath(), HAS_VECTOR_MODULE, false,
+                    "-Djava.library.path=" + libraryPath, "-Djvector.vectorization_provider=native");
+            assertTrue(output, output.contains("Failed to load forced NativeVectorizationProvider"));
+            assertTrue(output, output.contains("does not export"));
+            assertFalse(output, output.contains("PROVIDER="));
         } finally {
             Files.deleteIfExists(stale);
             Files.delete(libraryPath);
+        }
+    }
+
+    @Test public void libraryWithIsaButMissingLaterKernelIsRejected() throws Exception {
+        Assume.assumeTrue(nativeAvailable());
+        var libraryPath = Files.createTempDirectory("provider-selection-partial-");
+        Process compiler = null;
+        try {
+            var source = libraryPath.resolve("missing-kernel.c");
+            try (var in = TestVectorizationProviderSelection.class.getResourceAsStream(
+                    "/provider-selection/missing-kernel.c")) {
+                assertTrue("Missing native selection fixture", in != null);
+                Files.copy(in, source);
+            }
+            var log = libraryPath.resolve("compiler.log");
+            try {
+                compiler = new ProcessBuilder("cc", "-shared", "-fPIC", source.toString(),
+                        "-o", libraryPath.resolve("libjvector.so").toString())
+                        .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+            } catch (java.io.IOException e) {
+                Assume.assumeNoException("Needs a C compiler", e);
+                return;
+            }
+            assertTrue("Fixture compilation timed out", compiler.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(Files.readString(log), 0, compiler.exitValue());
+            String output = probe(classpath(), HAS_VECTOR_MODULE, true, "-Djava.library.path=" + libraryPath);
+            assertTrue(output, output.contains("PROVIDER=" + javaProvider()));
+            assertTrue(output, output.contains("does not export nvq_loss"));
+            assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
+            output = probe(classpath(), HAS_VECTOR_MODULE, false,
+                    "-Djava.library.path=" + libraryPath, "-Djvector.vectorization_provider=native");
+            assertTrue(output, output.contains("Failed to load forced NativeVectorizationProvider"));
+            assertTrue(output, output.contains("does not export nvq_loss"));
+            assertFalse(output, output.contains("PROVIDER="));
+        } finally {
+            if (compiler != null && compiler.isAlive()) { compiler.destroyForcibly(); compiler.waitFor(); }
+            try (var files = Files.walk(libraryPath)) {
+                for (var file : files.sorted(Comparator.reverseOrder()).collect(Collectors.toList()))
+                    Files.delete(file);
+            }
         }
     }
 

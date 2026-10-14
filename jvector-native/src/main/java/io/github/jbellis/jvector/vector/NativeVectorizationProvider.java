@@ -34,9 +34,9 @@ public class NativeVectorizationProvider extends VectorizationProvider {
     /// Load the native library and create the provider.
     ///
     /// Throws `UnsupportedOperationException` when the architecture is unsupported, the library
-    /// can't be loaded (including when native access is denied), or the loaded library doesn't
-    /// export every function bound in [NativeSimdOps], so that automatic selection falls back to
-    /// the Java Vector API instead of failing at the first kernel call.
+    /// can't be loaded, the bindings can't initialize (including when native access is denied),
+    /// or the loaded library doesn't export every function bound in [NativeSimdOps], so automatic
+    /// selection falls back to the Java Vector API instead of failing at the first kernel call.
     public NativeVectorizationProvider() {
         var arch = System.getProperty("os.arch", "");
         if (!arch.equals("amd64") && !arch.equals("x86_64") && !arch.equals("aarch64")) {
@@ -54,7 +54,13 @@ public class NativeVectorizationProvider extends VectorizationProvider {
             throw new UnsupportedOperationException("The loaded jvector native library does not export " + missing
                     + "; a different libjvector may be on java.library.path.");
         }
-        this.vectorUtilSupport = new NativeVectorUtilSupport();
+        var support = new NativeVectorUtilSupport();
+        try {
+            support.getActiveIsa();
+        } catch (IllegalCallerException | LinkageError e) {
+            throw new UnsupportedOperationException("Native bindings could not initialize.", e);
+        }
+        this.vectorUtilSupport = support;
         this.vectorTypeSupport = new MemorySegmentVectorProvider();
     }
 

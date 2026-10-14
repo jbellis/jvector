@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.vector.cnative;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 
 /**
@@ -73,18 +74,25 @@ public class LibraryLoader {
             }
             String baseName = resourceName.substring(1, resourceName.lastIndexOf('.'));   // e.g. "libjvector-aarch64"
             String ext      = resourceName.substring(resourceName.lastIndexOf('.'));      // e.g. ".so"
-            File tmpLibFile = File.createTempFile(baseName, ext);
-            try (var in = LibraryLoader.class.getResourceAsStream(resourceName);
-                 var out = Files.newOutputStream(tmpLibFile.toPath())) {
-                if (in != null) {
-                    in.transferTo(out);
-                    out.flush();
-                } else {
+            try (var in = LibraryLoader.class.getResourceAsStream(resourceName)) {
+                if (in == null) {
                     return false; // couldn't find library
                 }
+                File tmpLibFile = File.createTempFile(baseName, ext);
+                try {
+                    try (var out = Files.newOutputStream(tmpLibFile.toPath())) {
+                        in.transferTo(out);
+                    }
+                    System.load(tmpLibFile.getAbsolutePath());
+                    return true;
+                } finally {
+                    try {
+                        Files.deleteIfExists(tmpLibFile.toPath());
+                    } catch (IOException | SecurityException e) {
+                        // Best effort: cleanup failure must not invalidate a loaded library.
+                    }
+                }
             }
-            System.load(tmpLibFile.getAbsolutePath());
-            return true;
         } catch (Exception | UnsatisfiedLinkError e) {
             // ignore
         }
