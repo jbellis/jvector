@@ -43,6 +43,8 @@ public class BenchYAML {
         if (args == null) {
             throw new InvalidParameterException("argv[] is null, check your maven exec config");
         }
+        Grid.configureWriterForBenchmark();
+
         String regex = Arrays.stream(args)
                 .filter(Objects::nonNull)
                 .flatMap(s -> Arrays.stream(s.split("\\s")))

@@ -35,10 +35,30 @@ import java.util.function.IntFunction;
 import static org.junit.Assert.*;
 
 public class TestBufferedGraphCompatibility {
+    /// Every level's adjacency, one "level node: neighbors" line per node in node order.
+    private static List<String> adjacency(ImmutableGraphIndex graph) throws Exception {
+        var lines = new ArrayList<String>();
+        try (var view = graph.getView()) {
+            for (int level = 0; level <= graph.getMaxLevel(); level++) {
+                var nodes = new ArrayList<Integer>();
+                for (var it = graph.getNodes(level); it.hasNext(); ) nodes.add(it.nextInt());
+                Collections.sort(nodes);
+                for (int node : nodes) {
+                    var neighbors = new StringBuilder();
+                    for (var it = view.getNeighborsIterator(level, node); it.hasNext(); ) neighbors.append(it.nextInt()).append(' ');
+                    lines.add(level + " " + node + ": " + neighbors);
+                }
+            }
+        }
+        return lines;
+    }
+
     @Test(timeout = 180000)
     public void exactPqAndBinaryBuildsWithAllMetricsAndRefinementModes() throws Exception {
         var vts = VectorizationProvider.getInstance().getVectorTypeSupport();
         var pool = new ForkJoinPool(3);
+        // One worker makes insertion order, level draws and cleanup order reproducible.
+        var single = new ForkJoinPool(1);
         try {
             for (int dimension : new int[] {17, 768}) {
                 int count = 257;
@@ -68,10 +88,20 @@ public class TestBufferedGraphCompatibility {
                                 var bsp = mode == 0 ? BuildScoreProvider.randomAccessScoreProvider(source, metric)
                                         : mode == 1 ? BuildScoreProvider.pqBuildScoreProvider(metric, pqv)
                                         : BuildScoreProvider.bqBuildScoreProvider(bqv);
+                                var residentBsp = mode == 0 ? BuildScoreProvider.randomAccessScoreProvider(resident, metric) : bsp;
+                                List<String> residentAdjacency;
+                                try (var reference = new GraphIndexBuilder(residentBsp, dimension, 8, 64, 1.2f, 1.2f,
+                                        true, refine, single, single)) {
+                                    residentAdjacency = adjacency(reference.build(resident));
+                                }
                                 try (var builder = new GraphIndexBuilder(bsp, dimension, 8, 64, 1.2f, 1.2f,
-                                        true, refine, pool, pool)) {
+                                        true, refine, single, single)) {
                                     var graph = builder.build(source);
                                     assertEquals(count, graph.size(0));
+                                    // Deterministic builds: the file-backed source must give the resident graph.
+                                    assertEquals("dimension=" + dimension + ", build=" + (mode == 0 ? "exact" : mode == 1 ? "PQ" : "BQ")
+                                                    + ", metric=" + metric + ", refine=" + refine,
+                                            residentAdjacency, adjacency(graph));
                                     // A file-backed shared source must not overwrite insertion/diversity queries.
                                     // Binary edges use Hamming distance, so exact-metric searches need more candidates.
                                     int searchBudget = mode == 2 ? 20 : 10;
@@ -125,7 +155,7 @@ public class TestBufferedGraphCompatibility {
                     }
                 } finally { Files.delete(path); }
             }
-        } finally { pool.shutdown(); }
+        } finally { pool.shutdown(); single.shutdown(); }
     }
 
     private static void assertSameAnswer(SearchResult expected, SearchResult actual) {
