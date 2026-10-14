@@ -113,7 +113,7 @@ public class TestBufferedGraphCompatibility {
                                                                 : new DefaultSearchScoreProvider(reranker);
                                                         var answer = searcher.search(scores, 10, Bits.ALL);
                                                         if (expectedAnswer == null) expectedAnswer = answer;
-                                                        else assertEquals(expectedAnswer, answer);
+                                                        else assertSameAnswer(expectedAnswer, answer);
                                                     }
                                                 } finally { Files.delete(graphFile); }
                                             }
@@ -126,5 +126,29 @@ public class TestBufferedGraphCompatibility {
                 } finally { Files.delete(path); }
             }
         } finally { pool.shutdown(); }
+    }
+
+    private static void assertSameAnswer(SearchResult expected, SearchResult actual) {
+        assertEquals("visited", expected.getVisitedCount(), actual.getVisitedCount());
+        assertEquals("expanded", expected.getExpandedCount(), actual.getExpandedCount());
+        assertEquals("expanded base layer", expected.getExpandedCountBaseLayer(), actual.getExpandedCountBaseLayer());
+        assertEquals("reranked", expected.getRerankedCount(), actual.getRerankedCount());
+        assertSameScore("worst approximate score", expected.getWorstApproximateScoreInTopK(), actual.getWorstApproximateScoreInTopK());
+        var expectedNodes = expected.getNodes();
+        var actualNodes = actual.getNodes();
+        assertEquals("result count", expectedNodes.length, actualNodes.length);
+        for (int i = 0; i < expectedNodes.length; i++) {
+            assertEquals("node at rank " + i, expectedNodes[i].node, actualNodes[i].node);
+            assertSameScore("score at rank " + i, expectedNodes[i].score, actualNodes[i].score);
+        }
+    }
+
+    private static void assertSameScore(String message, float expected, float actual) {
+        // SIMD ADD reductions can change addition order between JIT tiers.
+        if (Float.isFinite(expected)) {
+            assertEquals(message, expected, actual, Math.max(1e-6f, Math.abs(expected) * 2e-6f));
+        } else {
+            assertEquals(message, Float.floatToIntBits(expected), Float.floatToIntBits(actual));
+        }
     }
 }
