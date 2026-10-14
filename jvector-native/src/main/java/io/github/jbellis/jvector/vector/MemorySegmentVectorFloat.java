@@ -24,6 +24,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.Buffer;
+import java.util.Objects;
 
 /**
  * VectorFloat implementation backed by an on-heap MemorySegment.
@@ -107,9 +108,18 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     @Override
     public void copyFrom(VectorFloat<?> src, int srcOffset, int destOffset, int length)
     {
-        MemorySegmentVectorFloat csrc = (MemorySegmentVectorFloat) src;
-        segment.asSlice((long) destOffset * Float.BYTES, (long) length * Float.BYTES)
-                .copyFrom(csrc.segment.asSlice((long) srcOffset * Float.BYTES, (long) length * Float.BYTES));
+        if (src instanceof MemorySegmentVectorFloat csrc) {
+            segment.asSlice((long) destOffset * Float.BYTES, (long) length * Float.BYTES)
+                    .copyFrom(csrc.segment.asSlice((long) srcOffset * Float.BYTES, (long) length * Float.BYTES));
+        } else if (src instanceof FloatArray csrc) {
+            System.arraycopy(csrc.array(), srcOffset, array(), destOffset, length);
+        } else {
+            Objects.checkFromIndexSize(srcOffset, length, src.length());
+            Objects.checkFromIndexSize(destOffset, length, length());
+            for (int i = 0; i < length; i++) {
+                set(destOffset + i, src.get(srcOffset + i));
+            }
+        }
     }
 
     @Override
