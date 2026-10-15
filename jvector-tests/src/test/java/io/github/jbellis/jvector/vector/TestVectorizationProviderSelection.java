@@ -297,25 +297,8 @@ public class TestVectorizationProviderSelection {
     @Test public void libraryWithIsaButMissingLaterKernelIsRejected() throws Exception {
         Assume.assumeTrue(nativeAvailable());
         var libraryPath = Files.createTempDirectory("provider-selection-partial-");
-        Process compiler = null;
         try {
-            var source = libraryPath.resolve("missing-kernel.c");
-            try (var in = TestVectorizationProviderSelection.class.getResourceAsStream(
-                    "/provider-selection/missing-kernel.c")) {
-                assertTrue("Missing native selection fixture", in != null);
-                Files.copy(in, source);
-            }
-            var log = libraryPath.resolve("compiler.log");
-            try {
-                compiler = new ProcessBuilder("cc", "-shared", "-fPIC", source.toString(),
-                        "-o", libraryPath.resolve("libjvector.so").toString())
-                        .redirectErrorStream(true).redirectOutput(log.toFile()).start();
-            } catch (java.io.IOException e) {
-                Assume.assumeNoException("Needs a C compiler", e);
-                return;
-            }
-            assertTrue("Fixture compilation timed out", compiler.waitFor(30, TimeUnit.SECONDS));
-            assertEquals(Files.readString(log), 0, compiler.exitValue());
+            compileSelectionLibrary(libraryPath, "missing-kernel.c");
             String output = probe(classpath(), HAS_VECTOR_MODULE, true, "-Djava.library.path=" + libraryPath);
             assertTrue(output, output.contains("PROVIDER=" + javaProvider()));
             assertTrue(output, output.contains("does not export nvq_loss"));
@@ -326,17 +309,106 @@ public class TestVectorizationProviderSelection {
             assertTrue(output, output.contains("does not export nvq_loss"));
             assertFalse(output, output.contains("PROVIDER="));
         } finally {
-            if (compiler != null && compiler.isAlive()) { compiler.destroyForcibly(); compiler.waitFor(); }
-            try (var files = Files.walk(libraryPath)) {
-                for (var file : files.sorted(Comparator.reverseOrder()).collect(Collectors.toList()))
-                    Files.delete(file);
+            deleteSelectionLibrary(libraryPath);
+        }
+    }
+
+    @Test public void nativeLibraryReportsInitialAbiSet() throws Exception {
+        Assume.assumeTrue(nativeAvailable());
+        String output = probe(classpath(), HAS_VECTOR_MODULE, true, "-Dprovider.test.query_abis=true");
+        assertTrue(output, output.contains("PROVIDER=NativeVectorizationProvider"));
+        assertAbiQueries(output, 1);
+    }
+
+    @Test public void librarySupportingRequiredAbiAmongOtherAbisIsAccepted() throws Exception {
+        assertAbiLibrary(null, "-DABI_FIRST=1", "-DABI_SECOND=3");
+    }
+
+    @Test public void librarySupportingOnlyNewerAbisIsRejected() throws Exception {
+        assertAbiLibrary("does not support required ABI 1", "-DABI_FIRST=2", "-DABI_SECOND=3");
+    }
+
+    @Test public void librarySupportingNoAbisIsRejected() throws Exception {
+        assertAbiLibrary("does not support required ABI 1", "-DABI_FIRST=0", "-DABI_SECOND=0");
+    }
+
+    @Test public void libraryWithoutAbiQueryIsRejected() throws Exception {
+        assertAbiLibrary("does not export jvector_supports_abi", "-DOMIT_ABI_QUERY");
+    }
+
+    private static void assertAbiLibrary(String rejection, String... definitions) throws Exception {
+        Assume.assumeTrue(nativeAvailable());
+        var libraryPath = Files.createTempDirectory("provider-selection-abi-");
+        try {
+            compileSelectionLibrary(libraryPath, "abi-library.c", definitions);
+            String pathOption = "-Djava.library.path=" + libraryPath;
+            String output = probe(classpath(), HAS_VECTOR_MODULE, true, pathOption,
+                    "-Dprovider.test.query_abis=" + (rejection == null));
+            assertTrue(output, output.contains("PROVIDER="
+                    + (rejection == null ? "NativeVectorizationProvider" : javaProvider())));
+            assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
+            if (rejection == null) assertAbiQueries(output, 1, 3);
+            else assertTrue(output, output.contains(rejection));
+
+            output = probe(classpath(), HAS_VECTOR_MODULE, rejection == null, pathOption,
+                    "-Djvector.vectorization_provider=native");
+            if (rejection == null) {
+                assertTrue(output, output.contains("PROVIDER=NativeVectorizationProvider"));
+                assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
+            } else {
+                assertTrue(output, output.contains("Failed to load forced NativeVectorizationProvider"));
+                assertTrue(output, output.contains(rejection));
+                assertFalse(output, output.contains("PROVIDER="));
             }
+        } finally {
+            deleteSelectionLibrary(libraryPath);
+        }
+    }
+
+    private static void assertAbiQueries(String output, int... supported) {
+        for (int abi : new int[] {Integer.MIN_VALUE, -1, 0, 1, 2, 3, Integer.MAX_VALUE}) {
+            int expected = Arrays.stream(supported).anyMatch(value -> value == abi) ? 1 : 0;
+            assertTrue(output, output.contains("ABI[" + abi + "]=" + expected));
+        }
+    }
+
+    private static void compileSelectionLibrary(Path directory, String fixture, String... definitions) throws Exception {
+        var source = directory.resolve(fixture);
+        try (var in = TestVectorizationProviderSelection.class.getResourceAsStream("/provider-selection/" + fixture)) {
+            assertTrue("Missing native selection fixture: " + fixture, in != null);
+            Files.copy(in, source);
+        }
+        var command = new ArrayList<String>();
+        command.add("cc"); command.add("-shared"); command.add("-fPIC");
+        command.addAll(Arrays.asList(definitions));
+        command.add(source.toString()); command.add("-o");
+        command.add(directory.resolve("libjvector.so").toString());
+        var log = directory.resolve("compiler.log");
+        Process compiler;
+        try {
+            compiler = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        } catch (java.io.IOException e) {
+            Assume.assumeNoException("Needs a C compiler", e);
+            return;
+        }
+        try {
+            assertTrue("Fixture compilation timed out", compiler.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(Files.readString(log), 0, compiler.exitValue());
+        } finally {
+            if (compiler.isAlive()) { compiler.destroyForcibly(); compiler.waitFor(); }
+        }
+    }
+
+    private static void deleteSelectionLibrary(Path directory) throws Exception {
+        try (var files = Files.walk(directory)) {
+            for (var file : files.sorted(Comparator.reverseOrder()).collect(Collectors.toList()))
+                Files.delete(file);
         }
     }
 
     public static class Probe {
         @SuppressWarnings("removal")
-        public static void main(String[] args) {
+        public static void main(String[] args) throws ReflectiveOperationException {
             if (Boolean.getBoolean("provider.test.deny_library_loading")) {
                 System.setSecurityManager(new SecurityManager() {
                     @Override public void checkPermission(Permission permission) {}
@@ -353,6 +425,12 @@ public class TestVectorizationProviderSelection {
             var support = provider.getVectorUtilSupport();
             System.out.println("PROVIDER=" + provider.getClass().getSimpleName());
             System.out.println("DOT=" + support.dotProduct(vector, vector) + " SUM=" + support.sum(vector));
+            if (Boolean.getBoolean("provider.test.query_abis")) {
+                var query = Class.forName("io.github.jbellis.jvector.vector.cnative.NativeSimdOps")
+                        .getMethod("jvector_supports_abi", int.class);
+                for (int abi : new int[] {Integer.MIN_VALUE, -1, 0, 1, 2, 3, Integer.MAX_VALUE})
+                    System.out.println("ABI[" + abi + "]=" + query.invoke(null, abi));
+            }
         }
     }
 }

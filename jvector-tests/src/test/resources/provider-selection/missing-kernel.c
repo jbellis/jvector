@@ -17,6 +17,8 @@
 // Selection must reject this library before any placeholder kernel is called.
 // It exports both ISA accessors and dot product, but deliberately omits nvq_loss.
 #include <stddef.h>
+#include <stdint.h>
+int32_t jvector_supports_abi(int32_t abi) { return abi == 1; }
 const char *jvector_simd_get_active_isa(void) { return "selection-test"; }
 const char *jvector_simd_get_max_isa_env(void) { return NULL; }
 float dot_product_f32(const float *a, size_t ao, const float *b, size_t bo, size_t n) {

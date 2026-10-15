@@ -743,3 +743,24 @@ isa_libs += my_new_tier_lib
 - Update the architecture diagram in the **How it is integrated into JVector**
   section above.
 - Add the new `JVECTOR_MAX_ISA` value to the **ISA cap** section.
+
+## Native ABI compatibility
+
+The Java provider requires ABI 1. Before resolving kernel bindings it calls
+`int32_t jvector_supports_abi(int32_t abi)`. The native library stores an explicit
+set of supported ABI IDs, initially `{1}`. The query returns exactly 1 for a
+supported ID and 0 for any other ID, including nonpositive and unknown IDs.
+Its name, signature, and return convention are permanent bootstrap contracts.
+
+ABI IDs describe calling contracts, not JVector release numbers. Optimizations,
+bug fixes, and compatible additions retain the existing ABI ID. Required-symbol
+checks still reject libraries missing functions that the Java release needs.
+An incompatible change to a signature, data layout, or calling convention requires
+a new ABI ID. To advertise both IDs, retain the old contract and expose changed
+functions under distinct entry points; never reinterpret an old symbol's signature.
+Java bindings for each ABI must resolve the corresponding entry points.
+
+An unsupported ABI or missing query causes automatic selection to fall back to
+Panama; explicitly forcing native fails during initialization. Native libraries
+from before this handshake are therefore rejected, even if their kernels might
+otherwise be compatible. Each release bundles a library supporting its required ABI.

@@ -42,6 +42,7 @@ if [ -z "${JAR}" ] || [ ! -f "${JAR}" ]; then
 fi
 
 REQUIRED_SYMBOLS=(
+  jvector_supports_abi
   jvector_simd_get_active_isa
   jvector_simd_get_max_isa_env
   dot_product_f32

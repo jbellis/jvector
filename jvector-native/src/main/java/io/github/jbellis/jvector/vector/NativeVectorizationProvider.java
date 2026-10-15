@@ -28,6 +28,8 @@ import java.lang.reflect.Method;
  * for operations without native implementations.
  */
 public class NativeVectorizationProvider extends VectorizationProvider {
+    private static final int REQUIRED_ABI = 1;
+
     private final VectorUtilSupport vectorUtilSupport;
     private final VectorTypeSupport vectorTypeSupport;
 
@@ -35,7 +37,7 @@ public class NativeVectorizationProvider extends VectorizationProvider {
     ///
     /// Throws `UnsupportedOperationException` when the architecture is unsupported, the library
     /// can't be loaded, the bindings can't initialize (including when native access is denied),
-    /// or the loaded library doesn't export every function bound in [NativeSimdOps], so automatic
+    /// or the loaded library doesn't support the required ABI or export every bound function, so automatic
     /// selection falls back to the Java Vector API instead of failing at the first kernel call.
     public NativeVectorizationProvider() {
         var arch = System.getProperty("os.arch", "");
@@ -49,13 +51,21 @@ public class NativeVectorizationProvider extends VectorizationProvider {
                       + " (or the jvector module name).";
             throw new UnsupportedOperationException("Failed to load supporting native library." + reason);
         }
-        String missing = firstMissingSymbol();
-        if (missing != null) {
-            throw new UnsupportedOperationException("The loaded jvector native library does not export " + missing
-                    + "; a different libjvector may be on java.library.path.");
-        }
         var support = new NativeVectorUtilSupport();
         try {
+            if (SymbolLookup.loaderLookup().find("jvector_supports_abi").isEmpty()) {
+                throw new UnsupportedOperationException("The loaded jvector native library does not export "
+                        + "jvector_supports_abi; compatibility with required ABI " + REQUIRED_ABI + " is unknown.");
+            }
+            if (NativeSimdOps.jvector_supports_abi(REQUIRED_ABI) != 1) {
+                throw new UnsupportedOperationException("The loaded jvector native library does not support required ABI "
+                        + REQUIRED_ABI + "; a different libjvector may be on java.library.path.");
+            }
+            String missing = firstMissingSymbol();
+            if (missing != null) {
+                throw new UnsupportedOperationException("The loaded jvector native library does not export " + missing
+                        + "; a different libjvector may be on java.library.path.");
+            }
             support.getActiveIsa();
         } catch (IllegalCallerException | LinkageError e) {
             throw new UnsupportedOperationException("Native bindings could not initialize.", e);
