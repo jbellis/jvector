@@ -31,6 +31,11 @@
 extern "C" {
 #endif
 
+// Stable bootstrap contract: return 1 if this library implements the requested
+// ABI, otherwise 0 (including unknown IDs). IDs are positive and never reused.
+// Keep this signature unchanged across all future ABIs.
+JVECTOR_SIMD_API int32_t jvector_supports_abi(int32_t abi);
+
 #define KERNEL_ENTRY(ret_type, name, params, names) \
     JVECTOR_SIMD_API ret_type name params;
 
@@ -56,4 +61,3 @@ JVECTOR_SIMD_API const char *jvector_simd_get_max_isa_env(void);
 }
 #endif // extern "C"
 #endif // VECTOR_SIMD_DOT_H
-

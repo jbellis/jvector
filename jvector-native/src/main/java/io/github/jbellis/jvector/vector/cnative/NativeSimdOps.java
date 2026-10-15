@@ -1149,6 +1149,64 @@ public class NativeSimdOps {
      */
     public static final OfLong uintmax_t = NativeSimdOps.C_LONG;
 
+    private static class jvector_supports_abi {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeSimdOps.C_INT,
+            NativeSimdOps.C_INT
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("jvector_supports_abi");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * int32_t jvector_supports_abi(int32_t abi)
+     * }
+     */
+    public static FunctionDescriptor jvector_supports_abi$descriptor() {
+        return jvector_supports_abi.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * int32_t jvector_supports_abi(int32_t abi)
+     * }
+     */
+    public static MethodHandle jvector_supports_abi$handle() {
+        return jvector_supports_abi.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * int32_t jvector_supports_abi(int32_t abi)
+     * }
+     */
+    public static MemorySegment jvector_supports_abi$address() {
+        return jvector_supports_abi.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * int32_t jvector_supports_abi(int32_t abi)
+     * }
+     */
+    public static int jvector_supports_abi(int abi) {
+        var mh$ = jvector_supports_abi.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("jvector_supports_abi", abi);
+            }
+            return (int)mh$.invokeExact(abi);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class cosine_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
