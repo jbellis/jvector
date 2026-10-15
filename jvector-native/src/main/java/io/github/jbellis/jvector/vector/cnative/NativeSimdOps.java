@@ -2806,66 +2806,6 @@ public class NativeSimdOps {
         }
     }
 
-    private static class hamming_distance {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
-            NativeSimdOps.C_INT,
-            NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_LONG
-        );
-
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("hamming_distance");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * int32_t hamming_distance(const uint64_t *a, const uint64_t *b, size_t length)
-     * }
-     */
-    public static FunctionDescriptor hamming_distance$descriptor() {
-        return hamming_distance.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * int32_t hamming_distance(const uint64_t *a, const uint64_t *b, size_t length)
-     * }
-     */
-    public static MethodHandle hamming_distance$handle() {
-        return hamming_distance.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * int32_t hamming_distance(const uint64_t *a, const uint64_t *b, size_t length)
-     * }
-     */
-    public static MemorySegment hamming_distance$address() {
-        return hamming_distance.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * int32_t hamming_distance(const uint64_t *a, const uint64_t *b, size_t length)
-     * }
-     */
-    public static int hamming_distance(MemorySegment a, MemorySegment b, long length) {
-        var mh$ = hamming_distance.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("hamming_distance", a, b, length);
-            }
-            return (int)mh$.invokeExact(a, b, length);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
     private static class jvector_simd_get_active_isa {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_POINTER    );

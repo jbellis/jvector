@@ -186,7 +186,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     @Override
     public int hammingDistance(long[] a, long[] b) {
         Objects.checkFromIndexSize(0, a.length, b.length);
-        return NativeSimdOps.hamming_distance(MemorySegment.ofArray(a), MemorySegment.ofArray(b), (long) a.length);
+        return super.hammingDistance(a, b);
     }
 
     @Override

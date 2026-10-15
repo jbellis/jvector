@@ -310,27 +310,6 @@ TEST_P(ElementWiseTest, SumF32)
 }
 
 // ---------------------------------------------------------------------------
-// hamming_distance: returns population count of XOR of uint64_t arrays
-// ---------------------------------------------------------------------------
-
-TEST_P(ElementWiseTest, HammingDistance)
-{
-    const size_t n = GetParam().length;
-    std::vector<uint64_t> a(n), b(n);
-    int32_t want = 0;
-    for (size_t i = 0; i < n; ++i) {
-        a[i] = (static_cast<uint64_t>(i + 1) * 0x9E3779B97F4A7C15ULL) ^ 0x0123456789ABCDEFULL;
-        b[i] = (static_cast<uint64_t>(i + 1) * 0xC6A4A7935BD1E995ULL) ^ 0xFEDCBA9876543210ULL;
-        uint64_t xord = a[i] ^ b[i];
-        want += static_cast<int32_t>(__builtin_popcountll(xord));
-    }
-
-    int32_t got = hamming_distance(a.data(), b.data(), n);
-
-    EXPECT_EQ(got, want) << "HammingDistance failed for length " << n;
-}
-
-// ---------------------------------------------------------------------------
 // min_in_place_f32:  v1[i] = min(v1[i], v2[i])
 // ---------------------------------------------------------------------------
 

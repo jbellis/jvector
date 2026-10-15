@@ -82,6 +82,24 @@ class NativeVectorUtilSupportTest {
     }
 
     @Test
+    void hammingMatchesScalarAcrossWordBoundaries() {
+        requireNativeProvider();
+        var random = new java.util.Random(753);
+        for (int length : new int[]{0, 1, 3, 4, 7, 8, 9, 12, 15, 16, 17, 24, 31, 32, 33, 48, 64, 71, 128, 255}) {
+            long[] a = new long[length];
+            long[] b = new long[length + 1];
+            int expected = 0;
+            for (int i = 0; i < length; i++) {
+                a[i] = random.nextLong();
+                b[i] = random.nextLong();
+                expected += Long.bitCount(a[i] ^ b[i]);
+            }
+            b[length] = -1L;
+            assertEquals(expected, support.hammingDistance(a, b), "length=" + length);
+        }
+    }
+
+    @Test
     void minPropagatesNaNInVectorAndTailPositions() {
         requireNativeProvider();
         for (int length : new int[]{1, 2, 3, 4, 7, 8, 15, 16, 17, 32, 37, 64, 71, 128, 255}) {

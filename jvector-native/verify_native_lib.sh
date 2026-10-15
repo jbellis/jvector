@@ -71,7 +71,6 @@ REQUIRED_SYMBOLS=(
   nvq_dot_product_8bit
   nvq_cosine_8bit_packed
   nvq_shuffle_query_in_place_8bit
-  hamming_distance
 )
 
 WORKDIR=$(mktemp -d)

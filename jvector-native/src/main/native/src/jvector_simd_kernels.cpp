@@ -1822,31 +1822,4 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
     return ((int64_t)bmag_bits << 32) | (int64_t)(uint32_t)sum_bits;
 }
 
-// =============================================================================
-// Hamming distance kernel
-// =============================================================================
-
-JV_RENAME_REGS
-HWY_FLATTEN int32_t hamming_distance(const uint64_t *HWY_RESTRICT a,
-                                     const uint64_t *HWY_RESTRICT b,
-                                     size_t length)
-{
-    hn::ScalableTag<uint64_t> d;
-    const size_t lanes = hn::Lanes(d);
-    auto acc = hn::Zero(d);
-    size_t i = 0;
-#pragma GCC unroll 4
-    for (; i + lanes <= length; i += lanes) {
-        auto va = hn::LoadU(d, a + i);
-        auto vb = hn::LoadU(d, b + i);
-        auto xord = hn::Xor(va, vb);
-        acc = hn::Add(acc, hn::PopulationCount(xord));
-    }
-    uint64_t result = hn::ReduceSum(d, acc);
-    for (; i < length; i++) {
-        result += hwy::PopCount(a[i] ^ b[i]);
-    }
-    return static_cast<int32_t>(result);
-}
-
 }  // namespace JV_ISA
