@@ -46,8 +46,26 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     static final IntVector BYTE_TO_INT_MASK_512 = IntVector.broadcast(IntVector.SPECIES_512, 0xff);
     static final IntVector BYTE_TO_INT_MASK_256 = IntVector.broadcast(IntVector.SPECIES_256, 0xff);
 
+    // Keep concrete type checks inline without repeating species lookups.
+    private static final Class<?> BYTE_128_CLASS = ByteVector.SPECIES_128.vectorType();
+    private static final Class<?> BYTE_64_CLASS = ByteVector.SPECIES_64.vectorType();
+    private static final Class<?> FLOAT_256_CLASS = FloatVector.SPECIES_256.vectorType();
+    private static final Class<?> FLOAT_512_CLASS = FloatVector.SPECIES_512.vectorType();
+    private static final Class<?> FLOAT_PREFERRED_CLASS = FloatVector.SPECIES_PREFERRED.vectorType();
+    private static final Class<?> INT_256_CLASS = IntVector.SPECIES_256.vectorType();
+    private static final Class<?> INT_512_CLASS = IntVector.SPECIES_512.vectorType();
+    private static final Class<?> INT_PREFERRED_CLASS = IntVector.SPECIES_PREFERRED.vectorType();
+
+    private static final int FLOAT_PREFERRED_LANES = FloatVector.SPECIES_PREFERRED.length();
+    private static final int BYTE_128_LANES = ByteVector.SPECIES_128.length();
+    private static final int BYTE_64_LANES = ByteVector.SPECIES_64.length();
+
     static final ThreadLocal<int[]> scratchInt512 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_512.length()]);
     static final ThreadLocal<int[]> scratchInt256 = ThreadLocal.withInitial(() -> new int[IntVector.SPECIES_256.length()]);
+
+    private static float[] arrayForBlock(VectorFloat<?> vector, int vectorizedLength) {
+        return vectorizedLength == 0 ? null : array(vector);
+    }
 
     private static boolean hasBrokenGather() {
         Runtime.Version version = Runtime.version();
@@ -381,85 +399,51 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
-        if (v1.length() != v2.length()) {
+        int length = v1.length();
+        if (length != v2.length()) {
             throw new IllegalArgumentException("Vectors must have the same length");
         }
-
-        FloatVector vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
-        FloatVector vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
-        FloatVector vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                FloatVector.zero(FloatVector.SPECIES_PREFERRED));
-
-        int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(v1.length());
-        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
-        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
-        // Process the vectorized part, convert from 8 bytes to 8 ints
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, i));
-            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                    FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, i));
-            vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                    a.fma(b, vsum));
-            vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                    a.fma(a, vaMagnitude));
-            vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
-                    b.fma(b, vbMagnitude));
-        }
-
-        float sum = vsum.reduceLanes(VectorOperators.ADD);
-        float aMagnitude = vaMagnitude.reduceLanes(VectorOperators.ADD);
-        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
-
-        // Process the tail
-        for (int i = vectorizedLength; i < v1.length(); i++) {
-            sum += v1.get(i) * v2.get(i);
-            aMagnitude += v1.get(i) * v1.get(i);
-            bMagnitude += v2.get(i) * v2.get(i);
-        }
-
-        return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
-
+        return cosine(v1, 0, v2, 0, length);
     }
 
     @Override
     public float cosine(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
-        FloatVector vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+        FloatVector vsum = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                 FloatVector.zero(FloatVector.SPECIES_PREFERRED));
-        FloatVector vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+        FloatVector vaMagnitude = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                 FloatVector.zero(FloatVector.SPECIES_PREFERRED));
-        FloatVector vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+        FloatVector vbMagnitude = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                 FloatVector.zero(FloatVector.SPECIES_PREFERRED));
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(length);
-        float[] v1Values = vectorizedLength == 0 ? null : ((FloatArray) v1).array();
-        float[] v2Values = vectorizedLength == 0 ? null : ((FloatArray) v2).array();
-        for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector a = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+        float[] v1Values = arrayForBlock(v1, vectorizedLength);
+        float[] v2Values = arrayForBlock(v2, vectorizedLength);
+        for (int i = 0; i < vectorizedLength; i += FLOAT_PREFERRED_LANES) {
+            FloatVector a = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                     FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v1Values, v1offset + i));
-            FloatVector b = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+            FloatVector b = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                     FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, v2Values, v2offset + i));
-            vsum = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+            vsum = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                     a.fma(b, vsum));
-            vaMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+            vaMagnitude = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                     a.fma(a, vaMagnitude));
-            vbMagnitude = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(
+            vbMagnitude = (FloatVector) FLOAT_PREFERRED_CLASS.cast(
                     b.fma(b, vbMagnitude));
         }
 
-        float sum = vsum.reduceLanes(VectorOperators.ADD);
-        float aMagnitude = vaMagnitude.reduceLanes(VectorOperators.ADD);
-        float bMagnitude = vbMagnitude.reduceLanes(VectorOperators.ADD);
+        return finishCosine(v1, v1offset, v2, v2offset, vectorizedLength, length,
+                vsum.reduceLanes(VectorOperators.ADD), vaMagnitude.reduceLanes(VectorOperators.ADD),
+                vbMagnitude.reduceLanes(VectorOperators.ADD));
+    }
 
-        for (int i = vectorizedLength; i < length; i++) {
+    private static float finishCosine(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2,
+                                      int v2offset, int start, int length,
+                                      float sum, float aMagnitude, float bMagnitude) {
+        for (int i = start; i < length; i++) {
             sum += v1.get(v1offset + i) * v2.get(v2offset + i);
             aMagnitude += v1.get(v1offset + i) * v1.get(v1offset + i);
             bMagnitude += v2.get(v2offset + i) * v2.get(v2offset + i);
         }
-
         return (float) (sum / Math.sqrt(aMagnitude * bMagnitude));
-
     }
 
     float squareDistance64(VectorFloat<?> v1, int offset1, VectorFloat<?> v2, int offset2) {
@@ -863,24 +847,24 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     float assembleAndSum512(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
         // Keep concrete SIMD types visible to C2 to avoid temporary vector/array allocations.
         int[] convOffsets = scratchInt512.get();
-        FloatVector sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_512));
+        FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
         float[] values = baseOffsetsLength < ByteVector.SPECIES_128.length() ? null : array(data);
         int i = 0;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
-        IntVector scale = (IntVector) IntVector.SPECIES_512.vectorType().cast(IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase));
+        IntVector scale = (IntVector) INT_512_CLASS.cast(IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
-            ByteVector bytes = (ByteVector) ByteVector.SPECIES_128.vectorType().cast(
+            ByteVector bytes = (ByteVector) BYTE_128_CLASS.cast(
                 fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
-            IntVector codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(
+            IntVector codes = (IntVector) INT_512_CLASS.cast(
                 bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
-            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.and(BYTE_TO_INT_MASK_512));
-            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.add(scale));
+            codes = (IntVector) INT_512_CLASS.cast(codes.and(BYTE_TO_INT_MASK_512));
+            codes = (IntVector) INT_512_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
 
             var offset = i * dataBase;
-            FloatVector gathered = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(gather(FloatVector.SPECIES_512, values, offset, convOffsets, 0));
-            sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(gathered));
+            FloatVector gathered = (FloatVector) FLOAT_512_CLASS.cast(gather(FloatVector.SPECIES_512, values, offset, convOffsets, 0));
+            sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(gathered));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -895,25 +879,25 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     float assembleAndSum256(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
         // Keep concrete SIMD types visible to C2 to avoid temporary vector/array allocations.
         int[] convOffsets = scratchInt256.get();
-        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_256));
+        FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
         float[] values = baseOffsetsLength < ByteVector.SPECIES_64.length() ? null : array(data);
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
-        IntVector scale = (IntVector) IntVector.SPECIES_256.vectorType().cast(IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase));
+        IntVector scale = (IntVector) INT_256_CLASS.cast(IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
 
-            ByteVector bytes = (ByteVector) ByteVector.SPECIES_64.vectorType().cast(
+            ByteVector bytes = (ByteVector) BYTE_64_CLASS.cast(
                 fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
-            IntVector codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(
+            IntVector codes = (IntVector) INT_256_CLASS.cast(
                 bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
-            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.and(BYTE_TO_INT_MASK_256));
-            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.add(scale));
+            codes = (IntVector) INT_256_CLASS.cast(codes.and(BYTE_TO_INT_MASK_256));
+            codes = (IntVector) INT_256_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
 
             var offset = i * dataBase;
-            FloatVector gathered = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(gather(FloatVector.SPECIES_256, values, offset, convOffsets, 0));
-            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(gathered));
+            FloatVector gathered = (FloatVector) FLOAT_256_CLASS.cast(gather(FloatVector.SPECIES_256, values, offset, convOffsets, 0));
+            sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(gathered));
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -1222,81 +1206,81 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     float pqDecodedCosineSimilarity512(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
         // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
-        FloatVector sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_512));
+        FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
         FloatVector vaMagnitude = sum;
-        float[] partials = baseOffsetsLength < ByteVector.SPECIES_128.length() ? null : array(partialSums);
-        float[] magnitudes = baseOffsetsLength < ByteVector.SPECIES_128.length() ? null : array(aMagnitude);
+        int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
+        float[] partials = arrayForBlock(partialSums, limit);
+        float[] magnitudes = arrayForBlock(aMagnitude, limit);
         int[] convOffsets = scratchInt512.get();
         int i = 0;
-        int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
-        IntVector scale = (IntVector) IntVector.SPECIES_512.vectorType().cast(IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount));
+        IntVector scale = (IntVector) INT_512_CLASS.cast(IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount));
 
-        for (; i < limit; i += ByteVector.SPECIES_128.length()) {
-            ByteVector bytes = (ByteVector) ByteVector.SPECIES_128.vectorType().cast(
+        for (; i < limit; i += BYTE_128_LANES) {
+            ByteVector bytes = (ByteVector) BYTE_128_CLASS.cast(
                     fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
-            IntVector codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(
+            IntVector codes = (IntVector) INT_512_CLASS.cast(
                     bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
-            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.and(BYTE_TO_INT_MASK_512));
-            codes = (IntVector) IntVector.SPECIES_512.vectorType().cast(codes.add(scale));
+            codes = (IntVector) INT_512_CLASS.cast(codes.and(BYTE_TO_INT_MASK_512));
+            codes = (IntVector) INT_512_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
 
-            int offset = i * clusterCount;
-            FloatVector partial = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
-                    gather(FloatVector.SPECIES_512, partials, offset, convOffsets, 0));
-            FloatVector magnitude = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
-                    gather(FloatVector.SPECIES_512, magnitudes, offset, convOffsets, 0));
-            sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(partial));
-            vaMagnitude = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(vaMagnitude.add(magnitude));
+            FloatVector partial = (FloatVector) FLOAT_512_CLASS.cast(
+                    gather(FloatVector.SPECIES_512, partials, i * clusterCount, convOffsets, 0));
+            FloatVector magnitude = (FloatVector) FLOAT_512_CLASS.cast(
+                    gather(FloatVector.SPECIES_512, magnitudes, i * clusterCount, convOffsets, 0));
+            sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(partial));
+            vaMagnitude = (FloatVector) FLOAT_512_CLASS.cast(vaMagnitude.add(magnitude));
         }
 
-        float sumResult = sum.reduceLanes(VectorOperators.ADD);
-        float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
-        for (; i < baseOffsetsLength; i++) {
-            int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset));
-            sumResult += partialSums.get(offset);
-            aMagnitudeResult += aMagnitude.get(offset);
-        }
-        return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
+        return finishPQCosine(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                partialSums, aMagnitude, bMagnitude, i,
+                sum.reduceLanes(VectorOperators.ADD), vaMagnitude.reduceLanes(VectorOperators.ADD));
     }
 
     float pqDecodedCosineSimilarity256(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
         // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
-        FloatVector sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_256));
+        FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
         FloatVector vaMagnitude = sum;
-        float[] partials = baseOffsetsLength < ByteVector.SPECIES_64.length() ? null : array(partialSums);
-        float[] magnitudes = baseOffsetsLength < ByteVector.SPECIES_64.length() ? null : array(aMagnitude);
+        int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
+        float[] partials = arrayForBlock(partialSums, limit);
+        float[] magnitudes = arrayForBlock(aMagnitude, limit);
         int[] convOffsets = scratchInt256.get();
         int i = 0;
-        int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
-        IntVector scale = (IntVector) IntVector.SPECIES_256.vectorType().cast(IntVector.zero(IntVector.SPECIES_256).addIndex(clusterCount));
+        IntVector scale = (IntVector) INT_256_CLASS.cast(IntVector.zero(IntVector.SPECIES_256).addIndex(clusterCount));
 
-        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
-            ByteVector bytes = (ByteVector) ByteVector.SPECIES_64.vectorType().cast(
+        for (; i < limit; i += BYTE_64_LANES) {
+            ByteVector bytes = (ByteVector) BYTE_64_CLASS.cast(
                     fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
-            IntVector codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(
+            IntVector codes = (IntVector) INT_256_CLASS.cast(
                     bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
-            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.and(BYTE_TO_INT_MASK_256));
-            codes = (IntVector) IntVector.SPECIES_256.vectorType().cast(codes.add(scale));
+            codes = (IntVector) INT_256_CLASS.cast(codes.and(BYTE_TO_INT_MASK_256));
+            codes = (IntVector) INT_256_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
 
-            int offset = i * clusterCount;
-            FloatVector partial = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
-                    gather(FloatVector.SPECIES_256, partials, offset, convOffsets, 0));
-            FloatVector magnitude = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
-                    gather(FloatVector.SPECIES_256, magnitudes, offset, convOffsets, 0));
-            sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(partial));
-            vaMagnitude = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(vaMagnitude.add(magnitude));
+            FloatVector partial = (FloatVector) FLOAT_256_CLASS.cast(
+                    gather(FloatVector.SPECIES_256, partials, i * clusterCount, convOffsets, 0));
+            FloatVector magnitude = (FloatVector) FLOAT_256_CLASS.cast(
+                    gather(FloatVector.SPECIES_256, magnitudes, i * clusterCount, convOffsets, 0));
+            sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(partial));
+            vaMagnitude = (FloatVector) FLOAT_256_CLASS.cast(vaMagnitude.add(magnitude));
         }
 
-        float sumResult = sum.reduceLanes(VectorOperators.ADD);
-        float aMagnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
+        return finishPQCosine(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                partialSums, aMagnitude, bMagnitude, i,
+                sum.reduceLanes(VectorOperators.ADD), vaMagnitude.reduceLanes(VectorOperators.ADD));
+    }
+
+    private static float finishPQCosine(ByteSequence<?> baseOffsets, int baseOffsetsOffset,
+                                       int baseOffsetsLength, int clusterCount,
+                                       VectorFloat<?> partialSums, VectorFloat<?> aMagnitude,
+                                       float bMagnitude, int i, float sum, float magnitude) {
         for (; i < baseOffsetsLength; i++) {
             int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset));
-            sumResult += partialSums.get(offset);
-            aMagnitudeResult += aMagnitude.get(offset);
+            sum += partialSums.get(offset);
+            magnitude += aMagnitude.get(offset);
         }
-        return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
+        return (float) (sum / Math.sqrt(magnitude * bMagnitude));
     }
 
     float pqDecodedCosineSimilarity128(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
@@ -1544,35 +1528,35 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
-        FloatVector squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
+        FloatVector squaredSumVec = (FloatVector) FLOAT_PREFERRED_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_PREFERRED));
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
-            FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, array(vector), i));
-            FloatVector recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(minValue));
-            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.mul(constant / delta));
-            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.add(const05f));
-            IntVector rounded = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(recArr.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
-            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
-            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.fma(delta / constant, minValue));
+            FloatVector arr = (FloatVector) FLOAT_PREFERRED_CLASS.cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, array(vector), i));
+            FloatVector recArr = (FloatVector) FLOAT_PREFERRED_CLASS.cast(arr.sub(minValue));
+            recArr = (FloatVector) FLOAT_PREFERRED_CLASS.cast(recArr.mul(constant / delta));
+            recArr = (FloatVector) FLOAT_PREFERRED_CLASS.cast(recArr.add(const05f));
+            IntVector rounded = (IntVector) INT_PREFERRED_CLASS.cast(recArr.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+            recArr = (FloatVector) FLOAT_PREFERRED_CLASS.cast(rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+            recArr = (FloatVector) FLOAT_PREFERRED_CLASS.cast(recArr.fma(delta / constant, minValue));
 
-            FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(recArr));
-            squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(diff.fma(diff, squaredSumVec));
+            FloatVector diff = (FloatVector) FLOAT_PREFERRED_CLASS.cast(arr.sub(recArr));
+            squaredSumVec = (FloatVector) FLOAT_PREFERRED_CLASS.cast(diff.fma(diff, squaredSumVec));
         }
 
-        float squaredSum = squaredSumVec.reduceLanes(VectorOperators.ADD);
+        return nvqUniformLossTail(vector, vectorizedLength, minValue, delta, constant,
+                squaredSumVec.reduceLanes(VectorOperators.ADD));
+    }
 
-        // Process the tail
+    private static float nvqUniformLossTail(VectorFloat<?> vector, int start,
+                                           float minValue, float delta, float constant, float squaredSum) {
         float value, recValue;
-        for (int i = vectorizedLength; i < vector.length(); i++) {
+        for (int i = start; i < vector.length(); i++) {
             value = vector.get(i);
-
             recValue = (value - minValue) / delta;
             recValue = Math.round(constant * recValue) / constant;
             recValue = recValue * delta + minValue;
-
             squaredSum += MathUtil.square(value - recValue);
         }
-
         return squaredSum;
     }
 
