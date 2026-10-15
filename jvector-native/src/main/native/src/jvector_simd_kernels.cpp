@@ -555,6 +555,15 @@ HWY_FLATTEN void scale_f32(float *HWY_RESTRICT v,
 {
     hn::ScalableTag<float> d;
     const size_t lanes = hn::Lanes(d);
+#if JV_ARCH_X86_64
+    if (lanes == 16 && length >= 512 && (reinterpret_cast<uintptr_t>(v) & 63) != 0) {
+        // Align long AVX-512 loops to avoid splitting every access across cache lines.
+        const size_t prefix = (64 - (reinterpret_cast<uintptr_t>(v) & 63)) / sizeof(float);
+        for (size_t p = 0; p < prefix; ++p) v[p] *= multiplier;
+        v += prefix;
+        length -= prefix;
+    }
+#endif
     const auto vmult = hn::Set(d, multiplier);
     size_t i = 0;
 #pragma GCC unroll 4

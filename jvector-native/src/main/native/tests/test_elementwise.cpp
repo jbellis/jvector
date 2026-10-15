@@ -178,6 +178,37 @@ TEST_P(ElementWiseTest, ScaleF32)
         EXPECT_NEAR(got[i], want[i], 1e-5f) << "scale_f32[" << i << "]";
 }
 
+TEST(ScaleF32, AlignmentAndSpecialValues)
+{
+    const float values[] = {0.0f, -0.0f, 1.25f, -2.5f, INFINITY, -INFINITY, NAN};
+    const size_t lengths[] = {0, 1, 15, 16, 17, 63, 64, 65, 127, 128, 129,
+                              511, 512, 513, 767, 768, 769, 1536, 3072};
+    alignas(64) float storage[3072 + 32];
+    for (size_t offset = 0; offset < 16; ++offset) {
+        float* v = storage + 16 + offset;
+        for (size_t n : lengths) {
+            for (float multiplier : values) {
+                SCOPED_TRACE(::testing::Message() << "offset=" << offset << " length=" << n
+                                                 << " multiplier=" << multiplier);
+                std::fill_n(storage, 3072 + 32, 42.0f);
+                for (size_t i = 0; i < n; ++i) v[i] = values[i % 7];
+                scale_f32(v, multiplier, n);
+                for (size_t i = 0; i < n; ++i) {
+                    const float expected = values[i % 7] * multiplier;
+                    if (std::isnan(expected)) {
+                        ASSERT_TRUE(std::isnan(v[i])) << "index=" << i;
+                    } else {
+                        ASSERT_EQ(v[i], expected) << "index=" << i;
+                        ASSERT_EQ(std::signbit(v[i]), std::signbit(expected)) << "index=" << i;
+                    }
+                }
+                EXPECT_EQ(v[-1], 42.0f);
+                EXPECT_EQ(v[n], 42.0f);
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // max_f32: returns the maximum element
 // ---------------------------------------------------------------------------
