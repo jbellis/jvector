@@ -142,6 +142,9 @@ bash build_native_lib.sh --auto-install-deps
 For other distributions the script will print the install commands needed. See
 [`jvector-native/src/main/native/README.md`](./jvector-native/src/main/native/README.md) for full build options,
 Maven integration, ISA dispatch details, and how to add new kernels.
+The [native ABI compatibility guide](./jvector-native/src/main/native/README.md#native-abi-compatibility)
+explains the supported ABI set, startup checks, and how to preserve compatibility
+when changing native entry points.
 
 ---
 
