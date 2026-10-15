@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Complete symbol table for selection probes; only dot product is exercised.
+// Complete symbol table for selection probes; dot product and sum are exercised.
 // Compile with ABI_FIRST/ABI_SECOND to simulate a supported set, or OMIT_ABI_QUERY.
 #include <stddef.h>
 #include <stdint.h>
@@ -42,8 +42,17 @@ void add_in_place_f32(void) {}
 void add_scalar_in_place_f32(void) {}
 void sub_in_place_f32(void) {}
 void sub_scalar_in_place_f32(void) {}
+void sub_f32(void) {}
+void sub_scalar_f32(void) {}
+void scale_f32(void) {}
 void max_f32(void) {}
+void min_f32(void) {}
 void min_in_place_f32(void) {}
+float sum_f32(const float *v, size_t n) {
+    float sum = 0;
+    for (size_t i = 0; i < n; i++) sum += v[i];
+    return sum;
+}
 void assemble_and_sum_f32(void) {}
 void assemble_and_sum_pq_f32(void) {}
 void pq_decoded_cosine_similarity_f32(void) {}
