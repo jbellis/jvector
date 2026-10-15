@@ -51,6 +51,53 @@ For writing completed graphs with FP or NVQ features, see [Deferred batch serial
 The older step-by-step guide for JV can be found [here](./docs/legacy/jvector-step-by-step.md). New users should start with the tutorials mentioned earler, but the step-by-step guide contains useful commentary for advanced users.
 
 
+## SIMD provider selection
+
+On Java 22+ with the Vector API enabled, JVector automatically prefers its Google
+Highway native provider when the native library is available. Native libraries are
+bundled for Linux x86-64 (SSE4.2 or newer) and Linux AArch64. Use these JVM options:
+
+```text
+--add-modules jdk.incubator.vector
+--enable-native-access=ALL-UNNAMED
+```
+
+Omitting native access can produce restricted-method warnings. If native access is
+denied by the runtime or JVM options, automatic selection falls back to Panama;
+an explicitly forced native provider fails during initialization. For named-module
+deployments, enable native access for the module containing JVector's native code.
+
+Operations implemented by Highway use native kernels; remaining operations use the
+inherited Panama/Java Vector API implementation with native vector storage. Native
+ISA selection remains automatic and respects the existing `JVECTOR_MAX_ISA` cap.
+
+| JVM property | Effect |
+| --- | --- |
+| No provider property | Prefer native on Java 22+; use Panama when native is unavailable |
+| `-Djvector.enable_native_vectorization=false` | Disable automatic native selection |
+| `-Djvector.vectorization_provider=panama` | Explicitly select Panama |
+| `-Djvector.vectorization_provider=native` | Explicitly require native; fail if it cannot load |
+| `-Djvector.vectorization_provider=default` | Explicitly select the scalar provider |
+
+The explicit `jvector.vectorization_provider` property takes precedence over the
+native-enable property. The former
+`jvector.experimental.enable_native_vectorization` name is a deprecated compatibility
+alias; the new `jvector.enable_native_vectorization` name takes precedence when both
+are supplied. Both names default to `true` when neither is supplied. Provider
+selection happens once per JVM. Java 20/21 uses
+Panama when available. Older runtimes, or runtimes without the Vector API module,
+retain the scalar fallback. Neither Panama nor native is enabled by these defaults
+when the existing runtime compatibility checks reject SIMD support.
+
+Native selection also changes the concrete vector type to `MemorySegmentVectorFloat`.
+Use the `VectorFloat` interface instead of casting to `ArrayVectorFloat` or assuming
+that `VectorFloat.get()` returns a `float[]`. Both built-in float vector types support
+`FloatArray.array()` for array access and `copyFrom` between their storage types.
+Native vector operations still require vectors created by the selected provider;
+copy external vectors into provider-created vectors before passing them to those
+operations. To retain the previous provider and storage choice, disable automatic
+native selection with `-Djvector.enable_native_vectorization=false`.
+
 ## The research behind the algorithms
 
 * Foundational work: [HNSW](https://ieeexplore.ieee.org/abstract/document/8594636) and [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf) papers, and [a higher level explainer](https://www.datastax.com/guides/hierarchical-navigable-small-worlds)
@@ -100,6 +147,9 @@ bash build_native_lib.sh --auto-install-deps
 For other distributions the script will print the install commands needed. See
 [`jvector-native/src/main/native/README.md`](./jvector-native/src/main/native/README.md) for full build options,
 Maven integration, ISA dispatch details, and how to add new kernels.
+The [native ABI compatibility guide](./jvector-native/src/main/native/README.md#native-abi-compatibility)
+explains the supported ABI set, startup checks, and how to preserve compatibility
+when changing native entry points.
 
 ---
 

@@ -23,6 +23,7 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * VectorFloat implementation backed by an on-heap float array.
@@ -82,8 +83,15 @@ final public class ArrayVectorFloat implements VectorFloat<float[]>, FloatArray
     @Override
     public void copyFrom(VectorFloat<?> src, int srcOffset, int destOffset, int length)
     {
-        ArrayVectorFloat csrc = (ArrayVectorFloat) src;
-        System.arraycopy(csrc.data, srcOffset, data, destOffset, length);
+        if (src instanceof FloatArray) {
+            System.arraycopy(((FloatArray) src).array(), srcOffset, data, destOffset, length);
+        } else {
+            Objects.checkFromIndexSize(srcOffset, length, src.length());
+            Objects.checkFromIndexSize(destOffset, length, data.length);
+            for (int i = 0; i < length; i++) {
+                data[destOffset + i] = src.get(srcOffset + i);
+            }
+        }
     }
 
     @Override
@@ -130,4 +138,3 @@ final public class ArrayVectorFloat implements VectorFloat<float[]>, FloatArray
         return get();
     }
 }
-

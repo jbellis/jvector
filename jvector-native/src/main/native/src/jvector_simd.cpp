@@ -249,6 +249,17 @@ static const char           *max_isa_env = dispatch.max_isa_env;
 } // namespace
 
 // ---- Public API ------------------------------------------------------------
+int32_t jvector_supports_abi(int32_t abi)
+{
+    // Advertise only contracts whose entry points and calling conventions are
+    // still implemented. Compatible releases retain the same ABI ID.
+    static constexpr std::array<int32_t, 1> supported_abis = {1};
+    for (int32_t supported : supported_abis) {
+        if (abi == supported) return 1;
+    }
+    return 0;
+}
+
 // Each function is a thin wrapper that forwards to the pre-resolved function
 // pointer in `kernels`.
 // Auto-generated from jvector_simd_kernel_list.h
