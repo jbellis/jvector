@@ -23,6 +23,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.Permission;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -235,6 +236,22 @@ public class TestVectorizationProviderSelection {
         assertFalse(output, output.contains("PROVIDER="));
     }
 
+    @Test public void securityPolicyDenialFallsBackUnlessNativeIsForced() throws Exception {
+        Assume.assumeTrue("SecurityManager is disabled in Java 24+", Runtime.version().feature() < 24);
+        Assume.assumeTrue(nativeAvailable());
+        String output = probe(classpath(), HAS_VECTOR_MODULE, true,
+                "-Djava.security.manager=allow", "-Dprovider.test.deny_library_loading=true");
+        assertTrue(output, output.contains("TEST_LIBRARY_LOADING_DENIED"));
+        assertTrue(output, output.contains("PROVIDER=" + javaProvider()));
+        assertTrue(output, output.contains("DOT=14.0 SUM=6.0"));
+        output = probe(classpath(), HAS_VECTOR_MODULE, false,
+                "-Djava.security.manager=allow", "-Dprovider.test.deny_library_loading=true",
+                "-Djvector.vectorization_provider=native");
+        assertTrue(output, output.contains("TEST_LIBRARY_LOADING_DENIED"));
+        assertTrue(output, output.contains("Failed to load forced NativeVectorizationProvider"));
+        assertFalse(output, output.contains("PROVIDER="));
+    }
+
     /// Repro for #751: a `libjvector` without jvector's kernels is selected, and fails at first use.
     ///
     /// ## The bug
@@ -318,7 +335,19 @@ public class TestVectorizationProviderSelection {
     }
 
     public static class Probe {
+        @SuppressWarnings("removal")
         public static void main(String[] args) {
+            if (Boolean.getBoolean("provider.test.deny_library_loading")) {
+                System.setSecurityManager(new SecurityManager() {
+                    @Override public void checkPermission(Permission permission) {}
+                    @Override public void checkLink(String library) {
+                        if (library.equals("jvector")) {
+                            System.err.println("TEST_LIBRARY_LOADING_DENIED");
+                            throw new SecurityException("Native library loading denied by test policy");
+                        }
+                    }
+                });
+            }
             var provider = VectorizationProvider.getInstance();
             var vector = provider.getVectorTypeSupport().createFloatVector(new float[] {1f, 2f, 3f});
             var support = provider.getVectorUtilSupport();
