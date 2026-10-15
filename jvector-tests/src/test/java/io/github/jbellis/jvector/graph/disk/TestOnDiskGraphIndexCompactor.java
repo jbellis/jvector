@@ -19,6 +19,7 @@ package io.github.jbellis.jvector.graph.disk;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import io.github.jbellis.jvector.TestUtil;
+import io.github.jbellis.jvector.disk.RandomAccessReader;
 import io.github.jbellis.jvector.disk.ReaderSupplier;
 import io.github.jbellis.jvector.disk.ReaderSupplierFactory;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
@@ -45,10 +46,16 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 
 import static io.github.jbellis.jvector.TestUtil.createRandomVectors;
@@ -1575,5 +1582,203 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
             assertEquals("merged PQVectors count", total, mergedPqv.count());
         }
         for (var r : rss) r.close();
+    }
+
+    /// Repro for #740: merging hierarchical sources whose dimension is below 8 throws.
+    ///
+    /// ## The bug
+    ///
+    /// When the sources have a hierarchy, the compactor builds cells and trains a "wide" PQ code
+    /// for diversity comparisons with `wideSubspaces()` subspaces, which is
+    /// `max(8, dimension / 4)`. `PQRetrainer.train` passes that straight to
+    /// `ProductQuantization.compute`, which rejects more subspaces than dimensions
+    /// (`getSubvectorSizesAndOffsets` throws `IllegalArgumentException`). So a hierarchical
+    /// merge of 2- to 7-dimensional vectors, with at least 256 live vectors (the training
+    /// minimum), fails before writing anything, even for a single source. Before #740 the same
+    /// inputs compacted.
+    ///
+    /// ## The test
+    ///
+    /// Builds two hierarchical full-precision sources of 1,000 4-dimensional vectors each, compacts
+    /// them, and expects an output graph holding every node. At `d5af1d7b` `compact()` throws
+    /// `IllegalArgumentException: Number of subspaces must be less than or equal to the vector
+    /// dimension`.
+    @Test
+    public void testCompactLowDimensionHierarchicalSources() throws Exception {
+        dimension = 4;
+        int perSource = 1000, nSrc = 2;
+        var vsf = VectorSimilarityFunction.EUCLIDEAN;
+        var rnd = new java.util.Random(20261013);
+        List<ReaderSupplier> rss = new ArrayList<>();
+        try {
+            List<OnDiskGraphIndex> graphs = new ArrayList<>();
+            List<FixedBitSet> live = new ArrayList<>();
+            for (int s = 0; s < nSrc; s++) {
+                Path path = buildPlainSourceGraph(seededVectors(rnd, perSource, dimension), vsf, true, "lowdim_src_" + s);
+                rss.add(ReaderSupplierFactory.open(path));
+                graphs.add(OnDiskGraphIndex.load(rss.get(s)));
+                var lv = new FixedBitSet(perSource);
+                lv.set(0, perSource);
+                live.add(lv);
+            }
+            assertTrue("sources must have a hierarchy for cells", graphs.get(0).getMaxLevel() >= 1);
+            var outputPath = testDirectory.resolve("lowdim_out");
+            new OnDiskGraphIndexCompactor(graphs, live, vsf, null).compact(outputPath);
+            try (ReaderSupplier rs = ReaderSupplierFactory.open(outputPath)) {
+                assertEquals("merged node count", nSrc * perSource, OnDiskGraphIndex.load(rs).size(0));
+            }
+        } finally {
+            for (var r : rss) r.close();
+        }
+    }
+
+    /// Repro for #740: a failed level-0 pass returns while its tasks are still running, and the
+    /// compactor then unmaps the memory those tasks read.
+    ///
+    /// ## The bug
+    ///
+    /// Level 0 runs through `runBatchesWithBackpressure`, which keeps up to `taskWindowSize`
+    /// batches in flight. When one fails, `ecs.take().get()` throws and the method returns at once,
+    /// without cancelling or waiting for the batches still running. The exception then unwinds
+    /// through `compactGraphImpl`'s `finally`, which unmaps the level-1 hub chunks
+    /// (`HubMap.close` calls `invokeCleaner`), and through `compact()`'s `finally`, which releases
+    /// the scratch code-cache mappings and truncates the output file. The surviving tasks keep
+    /// reading those mappings, through the cell walk, the wide decoder and the record writer. That
+    /// is a SIGSEGV, or a SIGBUS once the file is truncated. Every merge now holds a raw-vector
+    /// scratch mapping and, with a hierarchy, the hub mapping, so any failed or interrupted
+    /// level-0 pass is exposed. The same happens when the caller is interrupted.
+    ///
+    /// ## The test
+    ///
+    /// Merges three hierarchical full-precision sources on a 4-thread pool. Their readers fail
+    /// one level-0 read (a read made from `processBaseNode` on a pool thread) after 200 such
+    /// reads. Once that has happened, every other level-0 read waits up to 2 s and then fails too,
+    /// so the surviving tasks stop inside a source read rather than touching a released mapping.
+    /// The failing read itself waits 300 ms before throwing, so the other workers reach a source
+    /// read first. When `compact()` throws, no level-0 task may still be running. At `d5af1d7b`
+    /// `compact()` returns while the other workers are still parked in their reads.
+    @Test(timeout = 120_000)
+    public void testFailedLevel0PassWaitsForItsTasks() throws Exception {
+        int perSource = 3000, nSrc = 3;
+        var vsf = VectorSimilarityFunction.DOT_PRODUCT;
+        var rnd = new java.util.Random(20261013);
+        var pool = new ForkJoinPool(4);
+        var fault = new LevelZeroFault(200);
+        List<ReaderSupplier> rss = new ArrayList<>();
+        try {
+            List<OnDiskGraphIndex> graphs = new ArrayList<>();
+            List<FixedBitSet> live = new ArrayList<>();
+            for (int s = 0; s < nSrc; s++) {
+                var vecs = seededVectors(rnd, perSource, dimension);
+                normalizeAll(vecs);
+                Path path = buildPlainSourceGraph(vecs, vsf, true, "fault_src_" + s);
+                rss.add(new FaultingReaderSupplier(ReaderSupplierFactory.open(path), fault));
+                graphs.add(OnDiskGraphIndex.load(rss.get(s)));
+                var lv = new FixedBitSet(perSource);
+                lv.set(0, perSource);
+                live.add(lv);
+            }
+            assertTrue("sources must have a hierarchy for cells", graphs.get(0).getMaxLevel() >= 1);
+            var compactor = new OnDiskGraphIndexCompactor(graphs, live, vsf, pool);
+
+            fault.armed = true;
+            boolean threw = false;
+            int stillRunning;
+            try {
+                compactor.compact(testDirectory.resolve("fault_out"));
+            } catch (RuntimeException e) {
+                threw = true;
+            } finally {
+                stillRunning = fault.parked.get();
+                fault.released.countDown();
+            }
+            assertTrue("the injected level-0 read failure did not reach the caller", threw);
+            assertTrue("the injected failure never happened", fault.failed.get());
+            assertEquals("compact() returned while level-0 tasks were still running", 0, stillRunning);
+        } finally {
+            fault.released.countDown();
+            pool.shutdown();
+            pool.awaitTermination(30, TimeUnit.SECONDS);
+            for (var r : rss) r.close();
+        }
+    }
+
+    /// Fails the `failAfter`-th level-0 source read on a pool thread, then parks every later one.
+    private static final class LevelZeroFault {
+        private static final long PARK_MILLIS = 2000, FAIL_DELAY_MILLIS = 300;
+        final int failAfter;
+        volatile boolean armed;
+        final AtomicInteger reads = new AtomicInteger();
+        final AtomicBoolean failed = new AtomicBoolean();
+        final AtomicInteger parked = new AtomicInteger();
+        final CountDownLatch released = new CountDownLatch(1);
+
+        LevelZeroFault(int failAfter) { this.failAfter = failAfter; }
+
+        private static boolean inLevelZero() {
+            return StackWalker.getInstance().walk(frames ->
+                    frames.anyMatch(f -> f.getMethodName().equals("processBaseNode")));
+        }
+
+        void check() throws IOException {
+            if (!armed || !(Thread.currentThread() instanceof ForkJoinWorkerThread) || !inLevelZero()) return;
+            if (failed.get()) {
+                parked.incrementAndGet();
+                try {
+                    released.await(PARK_MILLIS, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    parked.decrementAndGet();
+                }
+                throw new IOException("injected: level-0 read after the failure");
+            }
+            if (reads.incrementAndGet() == failAfter && failed.compareAndSet(false, true)) {
+                try {
+                    Thread.sleep(FAIL_DELAY_MILLIS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new IOException("injected level-0 read failure");
+            }
+        }
+    }
+
+    private static final class FaultingReaderSupplier implements ReaderSupplier {
+        private final ReaderSupplier delegate;
+        private final LevelZeroFault fault;
+
+        FaultingReaderSupplier(ReaderSupplier delegate, LevelZeroFault fault) {
+            this.delegate = delegate;
+            this.fault = fault;
+        }
+
+        @Override public RandomAccessReader get() throws IOException { return new FaultingReader(delegate.get(), fault); }
+        @Override public void prefetch(long offset, long length) { delegate.prefetch(offset, length); }
+        @Override public void close() throws IOException { delegate.close(); }
+    }
+
+    private static final class FaultingReader implements RandomAccessReader {
+        private final RandomAccessReader r;
+        private final LevelZeroFault fault;
+
+        FaultingReader(RandomAccessReader r, LevelZeroFault fault) {
+            this.r = r;
+            this.fault = fault;
+        }
+
+        @Override public void seek(long offset) throws IOException { r.seek(offset); }
+        @Override public long getPosition() throws IOException { return r.getPosition(); }
+        @Override public int readInt() throws IOException { fault.check(); return r.readInt(); }
+        @Override public float readFloat() throws IOException { fault.check(); return r.readFloat(); }
+        @Override public long readLong() throws IOException { fault.check(); return r.readLong(); }
+        @Override public void readFully(byte[] bytes) throws IOException { fault.check(); r.readFully(bytes); }
+        @Override public void readFully(ByteBuffer buffer) throws IOException { fault.check(); r.readFully(buffer); }
+        @Override public void readFully(float[] floats) throws IOException { fault.check(); r.readFully(floats); }
+        @Override public void readFully(long[] vector) throws IOException { fault.check(); r.readFully(vector); }
+        @Override public void read(int[] ints, int offset, int count) throws IOException { fault.check(); r.read(ints, offset, count); }
+        @Override public void read(float[] floats, int offset, int count) throws IOException { fault.check(); r.read(floats, offset, count); }
+        @Override public void close() throws IOException { r.close(); }
+        @Override public long length() throws IOException { return r.length(); }
     }
 }

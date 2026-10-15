@@ -1663,17 +1663,21 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         return similarityFunction.compare(base, tmp);
     }
 
-    /**
-     * Executes batches with controlled concurrency using a sliding window approach. Prevents
-     * overwhelming memory by limiting the number of in-flight tasks while maintaining high
-     * throughput via the completion service.
-     */
     private static void writeFully(FileChannel fc, ByteBuffer b, long pos) throws IOException {
         while (b.hasRemaining()) {
             pos += fc.write(b, pos);
         }
     }
 
+    /// Executes batches with controlled concurrency using a sliding window approach. Prevents
+    /// overwhelming memory by limiting the number of in-flight tasks while maintaining high
+    /// throughput via the completion service.
+    ///
+    /// Never returns while a submitted batch is still running, including when a batch fails,
+    /// `onComplete` throws, or the caller is interrupted: the caller's cleanup then unmaps the
+    /// hub and code-cache mappings those batches read, and truncates the file under them. After a
+    /// failure the batches already in flight are awaited (their results discarded) and no new
+    /// ones are submitted; an interrupt during that wait is re-asserted once it ends.
     private <T> void runBatchesWithBackpressure(
             List<BatchSpec> batches,
             ExecutorCompletionService<List<T>> ecs,
@@ -1692,19 +1696,37 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         }
 
         int completed = 0;
-        while (completed < total) {
-            List<T> results = ecs.take().get();
-            onComplete.accept(results);
+        try {
+            while (completed < total) {
+                Future<List<T>> done = ecs.take();
+                inFlight--;
+                onComplete.accept(done.get());
 
-            completed++;
-            inFlight--;
+                completed++;
 
-            if (nextToSubmit < total) {
-                submitOne.accept(batches.get(nextToSubmit++));
-                inFlight++;
+                if (nextToSubmit < total) {
+                    submitOne.accept(batches.get(nextToSubmit++));
+                    inFlight++;
+                }
+                if (completed % 10 == 0) {
+                    log.debug("Compaction I/O progress: {}/{} batches written to disk", completed, total);
+                }
             }
-            if (completed % 10 == 0) {
-                log.debug("Compaction I/O progress: {}/{} batches written to disk", completed, total);
+        } finally {
+            boolean interrupted = false;
+            while (inFlight > 0) {
+                try {
+                    Future<List<T>> done = ecs.take();
+                    inFlight--;
+                    done.get();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                } catch (ExecutionException e) {
+                    // the first failure is already propagating; later ones are dropped
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -2112,9 +2134,11 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                 || f == VectorSimilarityFunction.COSINE;
     }
 
-    /** Subspace count of the wide code: {@link #WIDE_DIMS_PER_SUBSPACE} dimensions each, never fewer than 8. */
+    /// Subspace count of the wide code: [#WIDE_DIMS_PER_SUBSPACE] dimensions each, never fewer
+    /// than 8, and never more than the dimension, since product quantization needs at least one
+    /// dimension per subspace. Below 8 dimensions every subspace is one dimension wide.
     private int wideSubspaces() {
-        return Math.max(8, dimension / WIDE_DIMS_PER_SUBSPACE);
+        return Math.min(dimension, Math.max(8, dimension / WIDE_DIMS_PER_SUBSPACE));
     }
 
     private List<OrdinalMapper> buildRegionOrdinalMappers(ProductQuantization pq) {

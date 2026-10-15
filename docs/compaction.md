@@ -106,7 +106,7 @@ Before level 0 is written, every live vector is copied once into a scratch regio
 
 ### Wide code
 
-The compactor also trains a product quantization with four dimensions per subspace (`max(8, dimension / 4)` subspaces of 256 centroids: 192 bytes per node at 768 dimensions) and encodes every live node into a third cache in the same pass. It serves one purpose: the pairwise diversity comparisons at level 0, where a candidate's vector is decoded from its code rather than read from the merge store, so a node's selection touches one row per candidate instead of one per (candidate, neighbour) pair. Candidate scores against the node stay exact. The coarser code also collapses near-duplicates onto one code, which the diversity rule then prunes, so the degree is spent on distinct neighbours; a finer two-dimensional code kept them apart and merged to lower recall.
+The compactor also trains a product quantization with four dimensions per subspace (`max(8, dimension / 4)` subspaces of 256 centroids, capped at the dimension: 192 bytes per node at 768 dimensions) and encodes every live node into a third cache in the same pass. It serves one purpose: the pairwise diversity comparisons at level 0, where a candidate's vector is decoded from its code rather than read from the merge store, so a node's selection touches one row per candidate instead of one per (candidate, neighbour) pair. Candidate scores against the node stay exact. The coarser code also collapses near-duplicates onto one code, which the diversity rule then prunes, so the degree is spent on distinct neighbours; a finer two-dimensional code kept them apart and merged to lower recall.
 
 ### Hierarchical Levels
 
