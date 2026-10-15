@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class KMeansInitializationTest {
     @Test
-    void initializationMatchesMainArrayArithmetic() {
+    void initializationMatchesMainWithinReductionPrecision() {
         var nativeTypes = new MemorySegmentVectorProvider();
         var javaProvider = new PanamaVectorizationProvider();
         var javaTypes = javaProvider.getVectorTypeSupport();
@@ -70,8 +70,15 @@ class KMeansInitializationTest {
                 main.minInPlace(expectedMin, expectedDistances);
                 assertTrue(support.tryUpdateKMeansDistances(points, centroid, actualMin, actualDistances));
                 for (int i = 0; i < count; i++) {
-                    sameBits(expectedDistances.get(i), actualDistances.get(i));
-                    sameBits(expectedMin.get(i), actualMin.get(i));
+                    sameDistance(expectedDistances.get(i), actualDistances.get(i));
+                    sameDistance(distanceOracle(reference[i], referenceCentroid), actualDistances.get(i));
+                    sameDistance(expectedMin.get(i), actualMin.get(i));
+                    float originalMin = pass == 0 ? Float.MAX_VALUE : switch (i % 8) {
+                        case 0 -> -0.0f; case 1 -> 0.0f; case 2 -> Float.NaN;
+                        case 3 -> Float.POSITIVE_INFINITY; case 4 -> Float.NEGATIVE_INFINITY;
+                        default -> Float.MAX_VALUE;
+                    };
+                    sameBits(Math.min(originalMin, actualDistances.get(i)), actualMin.get(i));
                 }
             }
         }
@@ -91,6 +98,29 @@ class KMeansInitializationTest {
         assertFalse(javaSupport.tryUpdateKMeansDistances(new VectorFloat<?>[]{point}, point, minimum, scratch));
         assertEquals(17, minimum.get(0));
         assertEquals(23, scratch.get(0));
+    }
+
+    private static float distanceOracle(VectorFloat<?> point, VectorFloat<?> centroid) {
+        double sum = 0;
+        for (int i = 0; i < 8; i++) {
+            float difference = point.get(i) - centroid.get(i);
+            float square = difference * difference;
+            sum += square;
+        }
+        return (float) sum;
+    }
+
+    private static void sameDistance(float expected, float actual) {
+        // FloatVector ADD reductions may use any order, even within one JVM.
+        // Eight nonnegative squared terms have at most seven rounded additions;
+        // allow eight ULPs against both the provider and a double-sum oracle.
+        if (Float.isFinite(expected) && expected != 0.0f) {
+            assertTrue(Float.isFinite(actual));
+            assertTrue(Math.abs((double) expected - actual) <= 8.0 * Math.ulp(expected),
+                       "expected=" + expected + " actual=" + actual);
+        } else {
+            sameBits(expected, actual);
+        }
     }
 
     private static void sameBits(float expected, float actual) {
