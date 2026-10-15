@@ -1,0 +1,95 @@
+/*
+ * Copyright DataStax, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.github.jbellis.jvector.vector;
+
+import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+class NativeVectorUtilSupportTest {
+    private final NativeVectorUtilSupport support = new NativeVectorUtilSupport();
+    private final MemorySegmentVectorProvider types = new MemorySegmentVectorProvider();
+
+    @Test
+    void subtractionRejectsShorterRightHandSide() {
+        var a = types.createFloatVector(new float[]{1, 2});
+        var b = types.createFloatVector(new float[]{1});
+        assertThrows(IndexOutOfBoundsException.class, () -> support.sub(a, b));
+        assertThrows(IndexOutOfBoundsException.class, () -> support.sub(a, 0, b, 0, 2));
+    }
+
+    @Test
+    void subtractionChecksBothSourceRanges() {
+        var a = types.createFloatVector(new float[]{1, 2, 3, 4});
+        var b = types.createFloatVector(new float[]{4, 3, 2, 1});
+        // Negative offsets, overruns, negative lengths and overflowing offset + length.
+        int[][] invalidRanges = {{-1, 1}, {3, 2}, {5, 0}, {0, -1},
+                                 {Integer.MAX_VALUE, 1}, {1, Integer.MAX_VALUE}};
+        for (int[] range : invalidRanges) {
+            int offset = range[0];
+            int length = range[1];
+            assertThrows(IndexOutOfBoundsException.class, () -> support.sub(a, offset, b, 0, length));
+            assertThrows(IndexOutOfBoundsException.class, () -> support.sub(a, 0, b, offset, length));
+            assertThrows(IndexOutOfBoundsException.class, () -> support.sub(a, offset, 1f, length));
+        }
+    }
+
+    @Test
+    void hammingRejectsShorterRightHandSide() {
+        assertThrows(IndexOutOfBoundsException.class,
+                     () -> support.hammingDistance(new long[2], new long[1]));
+        assertThrows(IndexOutOfBoundsException.class,
+                     () -> support.hammingDistance(new long[1], new long[0]));
+    }
+
+    @Test
+    void subtractionAcceptsValidRangesAndEmptyEndpoints() {
+        requireNativeProvider();
+        var a = types.createFloatVector(new float[]{1, 2, 3, 4});
+        var b = types.createFloatVector(new float[]{4, 3, 2, 1, 0});
+        assertVectorEquals(new float[]{-1, 1, 3}, support.sub(a, 1, b, 1, 3));
+        assertVectorEquals(new float[]{1, 2, 3}, support.sub(a, 1, 1f, 3));
+        assertVectorEquals(new float[]{-3, -1, 1, 3}, support.sub(a, b));
+        assertVectorEquals(new float[]{0, 1, 2, 3}, support.sub(a, 1f));
+        assertEquals(0, support.sub(a, a.length(), b, b.length(), 0).length());
+        assertEquals(0, support.sub(a, a.length(), 1f, 0).length());
+    }
+
+    @Test
+    void hammingAcceptsEmptyEqualAndLongerRightHandSide() {
+        requireNativeProvider();
+        assertEquals(0, support.hammingDistance(new long[0], new long[0]));
+        assertEquals(0, support.hammingDistance(new long[0], new long[]{-1L}));
+        assertEquals(65, support.hammingDistance(new long[]{0L, 1L}, new long[]{-1L, 0L}));
+        // Like the Java implementation, only the first a.length elements are compared.
+        assertEquals(1, support.hammingDistance(new long[]{1L}, new long[]{0L, -1L}));
+    }
+
+    private static void requireNativeProvider() {
+        assumeTrue(VectorizationProvider.getInstance() instanceof NativeVectorizationProvider,
+                   "Native jvector provider not available");
+    }
+
+    private static void assertVectorEquals(float[] expected, VectorFloat<?> actual) {
+        assertEquals(expected.length, actual.length());
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], actual.get(i));
+        }
+    }
+}

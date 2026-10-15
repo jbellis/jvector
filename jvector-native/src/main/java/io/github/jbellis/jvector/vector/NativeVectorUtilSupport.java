@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.vector;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
@@ -141,6 +142,8 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        Objects.checkFromIndexSize(aOffset, length, a.length());
+        Objects.checkFromIndexSize(bOffset, length, b.length());
         VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
         NativeSimdOps.sub_f32(
                 ((MemorySegmentVectorFloat) a).get(), aOffset,
@@ -151,6 +154,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, float value, int length) {
+        Objects.checkFromIndexSize(aOffset, length, a.length());
         VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
         NativeSimdOps.sub_scalar_f32(
                 ((MemorySegmentVectorFloat) a).get(), aOffset,
@@ -181,6 +185,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public int hammingDistance(long[] a, long[] b) {
+        Objects.checkFromIndexSize(0, a.length, b.length);
         return NativeSimdOps.hamming_distance(MemorySegment.ofArray(a), MemorySegment.ofArray(b), (long) a.length);
     }
 
