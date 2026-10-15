@@ -593,14 +593,27 @@ HWY_FLATTEN float min_f32(const float *HWY_RESTRICT v, size_t length)
     hn::ScalableTag<float> d;
     const size_t lanes = hn::Lanes(d);
     auto accum = hn::Set(d, FLT_MAX);
+    // Highway Min/ReduceMin do not guarantee Java's NaN and signed-zero rules.
+    auto nan = hn::MaskFalse(d);
+    auto negative_zero = hn::MaskFalse(d);
     size_t i = 0;
 #pragma GCC unroll 4
     for (; i + lanes <= length; i += lanes) {
-        accum = hn::Min(accum, hn::LoadU(d, v + i));
+        auto values = hn::LoadU(d, v + i);
+        nan = hn::Or(nan, hn::IsNaN(values));
+        negative_zero = hn::Or(negative_zero,
+                hn::And(hn::Eq(values, hn::Zero(d)), hn::IsNegative(values)));
+        accum = hn::Min(accum, values);
     }
+    if (!hn::AllFalse(d, nan)) return NAN;
     float result = hn::ReduceMin(d, accum);
+    if (result == 0.0f && !hn::AllFalse(d, negative_zero)) result = -0.0f;
     for (; i < length; i++) {
-        if (v[i] < result) result = v[i];
+        const float value = v[i];
+        if (isnan(value)) return value;
+        if (value < result || (value == 0.0f && result == 0.0f && signbit(value))) {
+            result = value;
+        }
     }
     return result;
 }

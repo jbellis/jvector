@@ -81,6 +81,39 @@ class NativeVectorUtilSupportTest {
         assertEquals(1, support.hammingDistance(new long[]{1L}, new long[]{0L, -1L}));
     }
 
+    @Test
+    void minPropagatesNaNInVectorAndTailPositions() {
+        requireNativeProvider();
+        for (int length : new int[]{1, 2, 3, 4, 7, 8, 15, 16, 17, 32, 37, 64, 71, 128, 255}) {
+            for (int pos = 0; pos < length; pos++) {
+                float[] values = new float[length];
+                java.util.Arrays.fill(values, 2f);
+                values[pos] = Float.NaN;
+                assertTrue(Float.isNaN(support.min(types.createFloatVector(values))),
+                           "length=" + length + ", NaN at " + pos);
+            }
+        }
+    }
+
+    @Test
+    void minPreservesSignedZeroInVectorAndTailPositions() {
+        requireNativeProvider();
+        assertEquals(Float.MAX_VALUE, support.min(types.createFloatVector(0)));
+        for (int length : new int[]{1, 2, 3, 4, 7, 8, 15, 16, 17, 32, 37, 64, 71, 128, 255}) {
+            float[] values = new float[length];
+            assertEquals(0, Float.floatToRawIntBits(support.min(types.createFloatVector(values))));
+            for (int pos = 0; pos < length; pos++) {
+                java.util.Arrays.fill(values, 0f);
+                values[pos] = -0f;
+                assertEquals(Float.floatToRawIntBits(-0f),
+                             Float.floatToRawIntBits(support.min(types.createFloatVector(values))),
+                             "length=" + length + ", negative zero at " + pos);
+                values[(pos + 1) % length] = -1f;
+                assertEquals(-1f, support.min(types.createFloatVector(values)));
+            }
+        }
+    }
+
     private static void requireNativeProvider() {
         assumeTrue(VectorizationProvider.getInstance() instanceof NativeVectorizationProvider,
                    "Native jvector provider not available");

@@ -234,6 +234,34 @@ TEST_P(ElementWiseTest, MinF32TailElement)
     EXPECT_FLOAT_EQ(got, -1e6f);
 }
 
+// A NaN must survive later finite values in the same SIMD lane as well as tails.
+TEST_P(ElementWiseTest, MinF32NaNAtEveryPosition)
+{
+    const size_t n = GetParam().length;
+    for (size_t pos = 0; pos < n; ++pos) {
+        std::vector<float> v(n, 2.0f);
+        v[pos] = NAN;
+        EXPECT_TRUE(std::isnan(min_f32(v.data(), n))) << "NaN at " << pos;
+    }
+}
+
+TEST_P(ElementWiseTest, MinF32SignedZeroAtEveryPosition)
+{
+    const size_t n = GetParam().length;
+    std::vector<float> v(n, 0.0f);
+    EXPECT_FALSE(std::signbit(min_f32(v.data(), n)));
+    for (size_t pos = 0; pos < n; ++pos) {
+        v.assign(n, 0.0f);
+        v[pos] = -0.0f;
+        float result = min_f32(v.data(), n);
+        EXPECT_EQ(result, 0.0f);
+        EXPECT_TRUE(std::signbit(result)) << "negative zero at " << pos;
+        // A negative finite minimum still takes precedence over negative zero.
+        v[(pos + 1) % n] = -1.0f;
+        EXPECT_EQ(min_f32(v.data(), n), -1.0f);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // sum_f32: returns the sum of elements
 // ---------------------------------------------------------------------------
