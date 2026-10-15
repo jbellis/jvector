@@ -74,15 +74,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                 && (version.feature() < 21 || (version.feature() == 21 && version.update() < 3));
     }
 
-    private static FloatVector gather(VectorSpecies<Float> species, float[] values, int offset, int[] indices, int indicesOffset) {
-        if (BROKEN_GATHER) {
-            float[] scratch = gatherScratch.get();
-            for (int lane = 0; lane < species.length(); lane++) {
-                scratch[lane] = values[offset + indices[indicesOffset + lane]];
-            }
-            return FloatVector.fromArray(species, scratch, 0);
+    // Called only on JDKs with the indexed-load compiler bug. Modern JDKs use
+    // FloatVector.fromArray at the call site so no vector can escape through a helper.
+    private static FloatVector gatherFallback(VectorSpecies<Float> species, float[] values, int offset, int[] indices, int indicesOffset) {
+        float[] scratch = gatherScratch.get();
+        for (int lane = 0; lane < species.length(); lane++) {
+            scratch[lane] = values[offset + indices[indicesOffset + lane]];
         }
-        return FloatVector.fromArray(species, values, offset, indices, indicesOffset);
+        return FloatVector.fromArray(species, scratch, 0);
     }
 
     private static float[] array(VectorFloat<?> vector) {
@@ -94,7 +93,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset, int[] indices, int indicesOffset) {
-        return gather(SPEC, ((ArrayVectorFloat)vector).get(), offset, indices, indicesOffset);
+        return (BROKEN_GATHER
+                    ? gatherFallback(SPEC, ((ArrayVectorFloat)vector).get(), offset, indices, indicesOffset)
+                    : FloatVector.fromArray(SPEC, ((ArrayVectorFloat)vector).get(), offset, indices, indicesOffset));
     }
 
     protected void intoVectorFloat(FloatVector vector, VectorFloat<?> v, int offset) {
@@ -845,42 +846,34 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float assembleAndSum512(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
-        // Keep concrete SIMD types visible to C2 to avoid temporary vector/array allocations.
+        // Keep the loop compact so C2 can inline it into scoring callers.
         int[] convOffsets = scratchInt512.get();
         FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
-        float[] values = baseOffsetsLength < ByteVector.SPECIES_128.length() ? null : array(data);
         int i = 0;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
         IntVector scale = (IntVector) INT_512_CLASS.cast(IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
             ByteVector bytes = (ByteVector) BYTE_128_CLASS.cast(
-                fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
-            IntVector codes = (IntVector) INT_512_CLASS.cast(
-                bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
+                    fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) INT_512_CLASS.cast(bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
             codes = (IntVector) INT_512_CLASS.cast(codes.and(BYTE_TO_INT_MASK_512));
             codes = (IntVector) INT_512_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
-
-            var offset = i * dataBase;
-            FloatVector gathered = (FloatVector) FLOAT_512_CLASS.cast(gather(FloatVector.SPECIES_512, values, offset, convOffsets, 0));
-            sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(gathered));
+            FloatVector values = (FloatVector) FLOAT_512_CLASS.cast(BROKEN_GATHER
+                    ? gatherFallback(FloatVector.SPECIES_512, ((FloatArray) data).array(), i * dataBase, convOffsets, 0)
+                    : FloatVector.fromArray(FloatVector.SPECIES_512, ((FloatArray) data).array(), i * dataBase, convOffsets, 0));
+            sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(values));
         }
 
-        float res = sum.reduceLanes(VectorOperators.ADD);
-
-        //Process tail
-        for (; i < baseOffsetsLength; i++)
-            res += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset)));
-
-        return res;
+        return finishAssembleAndSum(data, dataBase, baseOffsets, baseOffsetsOffset,
+                i, baseOffsetsLength, sum.reduceLanes(VectorOperators.ADD));
     }
 
     float assembleAndSum256(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
-        // Keep concrete SIMD types visible to C2 to avoid temporary vector/array allocations.
+        // Keep the loop compact so C2 can inline it into scoring callers.
         int[] convOffsets = scratchInt256.get();
         FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
-        float[] values = baseOffsetsLength < ByteVector.SPECIES_64.length() ? null : array(data);
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
         IntVector scale = (IntVector) INT_256_CLASS.cast(IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase));
@@ -888,25 +881,28 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
 
             ByteVector bytes = (ByteVector) BYTE_64_CLASS.cast(
-                fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
-            IntVector codes = (IntVector) INT_256_CLASS.cast(
-                bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
+                    fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) INT_256_CLASS.cast(bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
             codes = (IntVector) INT_256_CLASS.cast(codes.and(BYTE_TO_INT_MASK_256));
             codes = (IntVector) INT_256_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
-
-            var offset = i * dataBase;
-            FloatVector gathered = (FloatVector) FLOAT_256_CLASS.cast(gather(FloatVector.SPECIES_256, values, offset, convOffsets, 0));
-            sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(gathered));
+            FloatVector values = (FloatVector) FLOAT_256_CLASS.cast(BROKEN_GATHER
+                    ? gatherFallback(FloatVector.SPECIES_256, ((FloatArray) data).array(), i * dataBase, convOffsets, 0)
+                    : FloatVector.fromArray(FloatVector.SPECIES_256, ((FloatArray) data).array(), i * dataBase, convOffsets, 0));
+            sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(values));
         }
 
-        float res = sum.reduceLanes(VectorOperators.ADD);
+        return finishAssembleAndSum(data, dataBase, baseOffsets, baseOffsetsOffset,
+                i, baseOffsetsLength, sum.reduceLanes(VectorOperators.ADD));
+    }
 
-        // Process tail
-        for (; i < baseOffsetsLength; i++)
-            res += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset)));
-
-        return res;
+    private static float finishAssembleAndSum(VectorFloat<?> data, int dataBase,
+                                              ByteSequence<?> baseOffsets, int baseOffsetsOffset,
+                                              int i, int length, float sum) {
+        for (; i < length; i++) {
+            sum += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset)));
+        }
+        return sum;
     }
 
     float assembleAndSum128(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
@@ -1013,7 +1009,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             IntVector triangular = lo.mul(lo.sub(1)).lanewise(VectorOperators.LSHR, 1);
             lo.mul(k).sub(triangular).add(hi.sub(lo)).add(scale).intoArray(convOffsets, 0);
             FloatVector chunk = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(
-                    gather(FloatVector.SPECIES_256, partials, i * blockSize, convOffsets, 0));
+                    (BROKEN_GATHER
+                    ? gatherFallback(FloatVector.SPECIES_256, partials, i * blockSize, convOffsets, 0)
+                    : FloatVector.fromArray(FloatVector.SPECIES_256, partials, i * blockSize, convOffsets, 0)));
             sum = (FloatVector) FloatVector.SPECIES_256.vectorType().cast(sum.add(chunk));
         }
 
@@ -1082,7 +1080,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             IntVector triangular = lo.mul(lo.sub(1)).lanewise(VectorOperators.LSHR, 1);
             lo.mul(k).sub(triangular).add(hi.sub(lo)).add(scale).intoArray(convOffsets, 0);
             FloatVector chunk = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(
-                    gather(FloatVector.SPECIES_512, partials, i * blockSize, convOffsets, 0));
+                    (BROKEN_GATHER
+                    ? gatherFallback(FloatVector.SPECIES_512, partials, i * blockSize, convOffsets, 0)
+                    : FloatVector.fromArray(FloatVector.SPECIES_512, partials, i * blockSize, convOffsets, 0)));
             sum = (FloatVector) FloatVector.SPECIES_512.vectorType().cast(sum.add(chunk));
         }
 
@@ -1204,6 +1204,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float pqDecodedCosineSimilarity512(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
+        if (BROKEN_GATHER) {
+            return pqDecodedCosineSimilarityFallback(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude,
+                    FloatVector.SPECIES_512, IntVector.SPECIES_512, ByteVector.SPECIES_128, scratchInt512.get());
+        }
+        return pqDecodedCosineSimilarity512Impl(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
+    }
+
+    private float pqDecodedCosineSimilarity512Impl(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
         // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
         FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
@@ -1225,9 +1233,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             codes.intoArray(convOffsets, 0);
 
             FloatVector partial = (FloatVector) FLOAT_512_CLASS.cast(
-                    gather(FloatVector.SPECIES_512, partials, i * clusterCount, convOffsets, 0));
+                    FloatVector.fromArray(FloatVector.SPECIES_512, partials, i * clusterCount, convOffsets, 0));
             FloatVector magnitude = (FloatVector) FLOAT_512_CLASS.cast(
-                    gather(FloatVector.SPECIES_512, magnitudes, i * clusterCount, convOffsets, 0));
+                    FloatVector.fromArray(FloatVector.SPECIES_512, magnitudes, i * clusterCount, convOffsets, 0));
             sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(partial));
             vaMagnitude = (FloatVector) FLOAT_512_CLASS.cast(vaMagnitude.add(magnitude));
         }
@@ -1238,6 +1246,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float pqDecodedCosineSimilarity256(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
+        if (BROKEN_GATHER) {
+            return pqDecodedCosineSimilarityFallback(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude,
+                    FloatVector.SPECIES_256, IntVector.SPECIES_256, ByteVector.SPECIES_64, scratchInt256.get());
+        }
+        return pqDecodedCosineSimilarity256Impl(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
+    }
+
+    private float pqDecodedCosineSimilarity256Impl(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
         // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
         FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
@@ -1259,9 +1275,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             codes.intoArray(convOffsets, 0);
 
             FloatVector partial = (FloatVector) FLOAT_256_CLASS.cast(
-                    gather(FloatVector.SPECIES_256, partials, i * clusterCount, convOffsets, 0));
+                    FloatVector.fromArray(FloatVector.SPECIES_256, partials, i * clusterCount, convOffsets, 0));
             FloatVector magnitude = (FloatVector) FLOAT_256_CLASS.cast(
-                    gather(FloatVector.SPECIES_256, magnitudes, i * clusterCount, convOffsets, 0));
+                    FloatVector.fromArray(FloatVector.SPECIES_256, magnitudes, i * clusterCount, convOffsets, 0));
             sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(partial));
             vaMagnitude = (FloatVector) FLOAT_256_CLASS.cast(vaMagnitude.add(magnitude));
         }
@@ -1269,6 +1285,43 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         return finishPQCosine(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
                 partialSums, aMagnitude, bMagnitude, i,
                 sum.reduceLanes(VectorOperators.ADD), vaMagnitude.reduceLanes(VectorOperators.ADD));
+    }
+
+    // Keep the old-JDK workaround outside the modern SIMD loops. This method
+    // returns a float, so its vector intermediates never cross a call boundary.
+    private float pqDecodedCosineSimilarityFallback(ByteSequence<?> baseOffsets, int baseOffsetsOffset,
+                                                   int baseOffsetsLength, int clusterCount,
+                                                   VectorFloat<?> partialSums, VectorFloat<?> aMagnitude,
+                                                   float bMagnitude, VectorSpecies<Float> floatSpecies,
+                                                   VectorSpecies<Integer> intSpecies, VectorSpecies<Byte> byteSpecies,
+                                                   int[] convOffsets) {
+        var floatType = floatSpecies.vectorType();
+        var intType = intSpecies.vectorType();
+        var byteType = byteSpecies.vectorType();
+        FloatVector sum = (FloatVector) floatType.cast(FloatVector.zero(floatSpecies));
+        FloatVector magnitudeSum = sum;
+        int limit = byteSpecies.loopBound(baseOffsetsLength);
+        float[] partials = arrayForBlock(partialSums, limit);
+        float[] magnitudes = arrayForBlock(aMagnitude, limit);
+        IntVector scale = (IntVector) intType.cast(IntVector.zero(intSpecies).addIndex(clusterCount));
+        int i = 0;
+        for (; i < limit; i += byteSpecies.length()) {
+            ByteVector bytes = (ByteVector) byteType.cast(
+                    fromByteSequence(byteSpecies, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
+            IntVector codes = (IntVector) intType.cast(bytes.convertShape(VectorOperators.B2I, intSpecies, 0));
+            codes = (IntVector) intType.cast(codes.and(0xff));
+            codes = (IntVector) intType.cast(codes.add(scale));
+            codes.intoArray(convOffsets, 0);
+            FloatVector partial = (FloatVector) floatType.cast(
+                    gatherFallback(floatSpecies, partials, i * clusterCount, convOffsets, 0));
+            FloatVector magnitude = (FloatVector) floatType.cast(
+                    gatherFallback(floatSpecies, magnitudes, i * clusterCount, convOffsets, 0));
+            sum = (FloatVector) floatType.cast(sum.add(partial));
+            magnitudeSum = (FloatVector) floatType.cast(magnitudeSum.add(magnitude));
+        }
+        return finishPQCosine(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                partialSums, aMagnitude, bMagnitude, i,
+                sum.reduceLanes(VectorOperators.ADD), magnitudeSum.reduceLanes(VectorOperators.ADD));
     }
 
     private static float finishPQCosine(ByteSequence<?> baseOffsets, int baseOffsetsOffset,
@@ -1432,6 +1485,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
+        // Keep vector intermediates inside the complete kernel. An out-of-line
+        // vector-returning transform would materialize temporary vectors.
+
         final int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
         final var byteSpecies = NVQ_BYTE_SPECIES;
         final float[] values = vectorizedLength == 0 ? null : array(vector);
@@ -1445,7 +1501,27 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, values, i));
-            arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logisticNQTPreferred(arr, scaledAlpha, scaledX0));
+            {
+                FloatVector blockInput = arr;
+                var floatType = FloatVector.SPECIES_PREFERRED.vectorType();
+                var intType = IntVector.SPECIES_PREFERRED.vectorType();
+                var maskType = FloatVector.SPECIES_PREFERRED.maskType();
+                blockInput = (FloatVector) floatType.cast(blockInput);
+                FloatVector temp = (FloatVector) floatType.cast(blockInput.fma(scaledAlpha, -scaledAlpha * scaledX0));
+                VectorMask<Float> isNegative = maskType.cast(temp.test(VectorOperators.IS_NEGATIVE));
+                VectorMask<Float> isPositive = maskType.cast(isNegative.not());
+                FloatVector roundedInput = (FloatVector) floatType.cast(temp.add(1, isPositive));
+                IntVector p = (IntVector) intType.cast(roundedInput.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+                FloatVector e = (FloatVector) floatType.cast(p.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+                FloatVector fraction = (FloatVector) floatType.cast(temp.sub(e));
+                fraction = (FloatVector) floatType.cast(fraction.fma(0.5f, 1));
+                IntVector m = (IntVector) intType.cast(fraction.reinterpretAsInts());
+                IntVector exponent = (IntVector) intType.cast(p.lanewise(VectorOperators.LSHL, 23));
+                m = (IntVector) intType.cast(m.add(exponent));
+                temp = (FloatVector) floatType.cast(m.reinterpretAsFloats()); // temp = m * 2^p
+                FloatVector denominator = (FloatVector) floatType.cast(temp.add(1));
+                arr = (FloatVector) floatType.cast(temp.div(denominator));
+            }
             arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(logisticBias));
             arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.mul(invLogisticScale));
             arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.add(const05f));
@@ -1474,6 +1550,9 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
+        // Keep vector intermediates inside the complete kernel. An out-of-line
+        // vector-returning transform would materialize temporary vectors.
+
         int constant = (1 << nBits) - 1;
         int vectorizedLength = FloatVector.SPECIES_PREFERRED.loopBound(vector.length());
 
@@ -1489,14 +1568,52 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         for (int i = 0; i < vectorizedLength; i += FloatVector.SPECIES_PREFERRED.length()) {
             FloatVector arr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(FloatVector.fromArray(FloatVector.SPECIES_PREFERRED, array(vector), i));
-            FloatVector recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logisticNQTPreferred(arr, scaledAlpha, scaledX0));
+            FloatVector recArr;
+            {
+                FloatVector blockInput = arr;
+                var floatType = FloatVector.SPECIES_PREFERRED.vectorType();
+                var intType = IntVector.SPECIES_PREFERRED.vectorType();
+                var maskType = FloatVector.SPECIES_PREFERRED.maskType();
+                blockInput = (FloatVector) floatType.cast(blockInput);
+                FloatVector temp = (FloatVector) floatType.cast(blockInput.fma(scaledAlpha, -scaledAlpha * scaledX0));
+                VectorMask<Float> isNegative = maskType.cast(temp.test(VectorOperators.IS_NEGATIVE));
+                VectorMask<Float> isPositive = maskType.cast(isNegative.not());
+                FloatVector roundedInput = (FloatVector) floatType.cast(temp.add(1, isPositive));
+                IntVector p = (IntVector) intType.cast(roundedInput.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
+                FloatVector e = (FloatVector) floatType.cast(p.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+                FloatVector fraction = (FloatVector) floatType.cast(temp.sub(e));
+                fraction = (FloatVector) floatType.cast(fraction.fma(0.5f, 1));
+                IntVector m = (IntVector) intType.cast(fraction.reinterpretAsInts());
+                IntVector exponent = (IntVector) intType.cast(p.lanewise(VectorOperators.LSHL, 23));
+                m = (IntVector) intType.cast(m.add(exponent));
+                temp = (FloatVector) floatType.cast(m.reinterpretAsFloats()); // temp = m * 2^p
+                FloatVector denominator = (FloatVector) floatType.cast(temp.add(1));
+                recArr = (FloatVector) floatType.cast(temp.div(denominator));
+            }
             recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.sub(logisticBias));
             recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.mul(invLogisticScale));
             recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.add(const05f));
             IntVector rounded = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(recArr.convertShape(VectorOperators.F2I, IntVector.SPECIES_PREFERRED, 0));
             recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(rounded.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
             recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(recArr.fma(logisticScale, logisticBias));
-            recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(logitNQT(recArr, invScaledAlpha, scaledX0));
+            {
+                FloatVector blockInput = recArr;
+                // Preserve concrete SIMD types when this kernel is inlined into a larger caller.
+                // Otherwise C2 can materialize temporary blockInput objects and backing arrays.
+                blockInput = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(blockInput);
+                FloatVector denominator = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(const1f.sub(blockInput));
+                FloatVector z = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(blockInput.div(denominator));
+                IntVector temp = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(z.reinterpretAsInts());
+                IntVector exponent = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(temp.and(0x7f800000));
+                exponent = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(exponent.lanewise(VectorOperators.LSHR, 23));
+                exponent = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(exponent.sub(128));
+                FloatVector p = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(exponent.convertShape(VectorOperators.I2F, FloatVector.SPECIES_PREFERRED, 0));
+                IntVector mantissa = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(temp.and(0x007fffff));
+                mantissa = (IntVector) IntVector.SPECIES_PREFERRED.vectorType().cast(mantissa.add(0x3f800000));
+                FloatVector m = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(mantissa.reinterpretAsFloats());
+                FloatVector combined = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(m.add(p));
+                recArr = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(combined.fma(invScaledAlpha, scaledX0));
+            }
 
             FloatVector diff = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(arr.sub(recArr));
             squaredSumVec = (FloatVector) FloatVector.SPECIES_PREFERRED.vectorType().cast(diff.fma(diff, squaredSumVec));

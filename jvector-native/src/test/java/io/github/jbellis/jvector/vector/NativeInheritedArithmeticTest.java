@@ -50,6 +50,33 @@ class NativeInheritedArithmeticTest {
     }
 
     @Test
+    void inheritedCosinePqRetainsNativeStorageAndSlices() {
+        var support = new NativeVectorUtilSupport();
+        int count = 19, clusters = 256;
+        byte[] raw = new byte[count + 6];
+        for (int i = 0; i < count; i++) raw[i + 3] = (byte) (255 - i);
+        var codes = new MemorySegmentByteSequence(raw).slice(3, count);
+        float[] partials = new float[count * clusters], magnitudes = new float[partials.length];
+        for (int i = 0; i < partials.length; i++) {
+            partials[i] = i % 9 - 4;
+            magnitudes[i] = 1 + i % 7;
+        }
+        var table = new MemorySegmentVectorFloat(partials);
+        var norms = new MemorySegmentVectorFloat(magnitudes);
+        for (int length : new int[] {0, 1, 7, 8, 15, 16, 19}) {
+            float sum = 0, magnitude = 0;
+            for (int i = 0; i < length; i++) {
+                int index = i * clusters + Byte.toUnsignedInt(codes.get(i));
+                sum += partials[index];
+                magnitude += magnitudes[index];
+            }
+            float expected = (float) (sum / Math.sqrt(magnitude * 3.25f));
+            assertEquals(expected, support.pqDecodedCosineSimilarity256(codes, 0, length, clusters, table, norms, 3.25f));
+            assertEquals(expected, support.pqDecodedCosineSimilarity512(codes, 0, length, clusters, table, norms, 3.25f));
+        }
+    }
+
+    @Test
     void inheritedDistanceHelpersRetainNativeStorageSupport() {
         var support = new NativeVectorUtilSupport();
         float[] values = new float[137];
