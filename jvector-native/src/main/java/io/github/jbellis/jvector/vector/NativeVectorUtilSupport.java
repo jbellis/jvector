@@ -18,6 +18,7 @@ package io.github.jbellis.jvector.vector;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
@@ -115,6 +116,11 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public void scale(VectorFloat<?> vector, float multiplier) {
+        NativeSimdOps.scale_f32(((MemorySegmentVectorFloat) vector).get(), multiplier, vector.length());
+    }
+
+    @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         NativeSimdOps.sub_in_place_f32(((MemorySegmentVectorFloat) v1).get(), ((MemorySegmentVectorFloat) v2).get(), v1.length());
     }
@@ -125,13 +131,62 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, VectorFloat<?> b) {
+        return sub(a, 0, b, 0, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, float value) {
+        return sub(a, 0, value, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        Objects.checkFromIndexSize(aOffset, length, a.length());
+        Objects.checkFromIndexSize(bOffset, length, b.length());
+        VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
+        NativeSimdOps.sub_f32(
+                ((MemorySegmentVectorFloat) a).get(), aOffset,
+                ((MemorySegmentVectorFloat) b).get(), bOffset,
+                ((MemorySegmentVectorFloat) res).get(), length);
+        return res;
+    }
+
+    @Override
+    public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, float value, int length) {
+        Objects.checkFromIndexSize(aOffset, length, a.length());
+        VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
+        NativeSimdOps.sub_scalar_f32(
+                ((MemorySegmentVectorFloat) a).get(), aOffset,
+                value,
+                ((MemorySegmentVectorFloat) res).get(), length);
+        return res;
+    }
+
+    @Override
     public float max(VectorFloat<?> v) {
         return NativeSimdOps.max_f32(((MemorySegmentVectorFloat) v).get(), v.length());
     }
 
     @Override
+    public float min(VectorFloat<?> v) {
+        return NativeSimdOps.min_f32(((MemorySegmentVectorFloat) v).get(), v.length());
+    }
+
+    @Override
     public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         NativeSimdOps.min_in_place_f32(((MemorySegmentVectorFloat) v1).get(), ((MemorySegmentVectorFloat) v2).get(), v1.length());
+    }
+
+    @Override
+    public float sum(VectorFloat<?> vector) {
+        return NativeSimdOps.sum_f32(((MemorySegmentVectorFloat) vector).get(), vector.length());
+    }
+
+    @Override
+    public int hammingDistance(long[] a, long[] b) {
+        Objects.checkFromIndexSize(0, a.length, b.length);
+        return super.hammingDistance(a, b);
     }
 
     @Override

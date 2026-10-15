@@ -37,13 +37,18 @@
     KERNEL_ENTRY(float, cosine_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, dot_product_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, euclidean_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
-    /* Element-wise in-place arithmetic */ \
+    /* Element-wise arithmetic and reductions */ \
     KERNEL_ENTRY(void, add_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(void, add_scalar_in_place_f32, (float *v1, float value, size_t length), (v1, value, length)) \
     KERNEL_ENTRY(void, sub_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(void, sub_scalar_in_place_f32, (float *v1, float value, size_t length), (v1, value, length)) \
+    KERNEL_ENTRY(void, sub_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, float *res, size_t length), (a, aoffset, b, boffset, res, length)) \
+    KERNEL_ENTRY(void, sub_scalar_f32, (const float *a, size_t aoffset, float value, float *res, size_t length), (a, aoffset, value, res, length)) \
+    KERNEL_ENTRY(void, scale_f32, (float *v, float multiplier, size_t length), (v, multiplier, length)) \
     KERNEL_ENTRY(float, max_f32, (const float *v, size_t length), (v, length)) \
+    KERNEL_ENTRY(float, min_f32, (const float *v, size_t length), (v, length)) \
     KERNEL_ENTRY(void, min_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
+    KERNEL_ENTRY(float, sum_f32, (const float *v, size_t length), (v, length)) \
     /* PQ kernels */ \
     KERNEL_ENTRY(float, assemble_and_sum_f32, (const float *data, int dataBase, const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength), (data, dataBase, baseOffsets, baseOffsetsOffset, baseOffsetsLength)) \
     KERNEL_ENTRY(float, assemble_and_sum_pq_f32, (const float *data, size_t subspaceCount, const unsigned char *baseOffsets1, int baseOffsetsOffset1, const unsigned char *baseOffsets2, int baseOffsetsOffset2, int clusterCount), (data, subspaceCount, baseOffsets1, baseOffsetsOffset1, baseOffsets2, baseOffsetsOffset2, clusterCount)) \

@@ -1571,6 +1571,188 @@ public class NativeSimdOps {
         }
     }
 
+    private static class sub_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("sub_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void sub_f32(const float *a, size_t aoffset, const float *b, size_t boffset, float *res, size_t length)
+     * }
+     */
+    public static FunctionDescriptor sub_f32$descriptor() {
+        return sub_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void sub_f32(const float *a, size_t aoffset, const float *b, size_t boffset, float *res, size_t length)
+     * }
+     */
+    public static MethodHandle sub_f32$handle() {
+        return sub_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void sub_f32(const float *a, size_t aoffset, const float *b, size_t boffset, float *res, size_t length)
+     * }
+     */
+    public static MemorySegment sub_f32$address() {
+        return sub_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void sub_f32(const float *a, size_t aoffset, const float *b, size_t boffset, float *res, size_t length)
+     * }
+     */
+    public static void sub_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, MemorySegment res, long length) {
+        var mh$ = sub_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("sub_f32", a, aoffset, b, boffset, res, length);
+            }
+            mh$.invokeExact(a, aoffset, b, boffset, res, length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class sub_scalar_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("sub_scalar_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void sub_scalar_f32(const float *a, size_t aoffset, float value, float *res, size_t length)
+     * }
+     */
+    public static FunctionDescriptor sub_scalar_f32$descriptor() {
+        return sub_scalar_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void sub_scalar_f32(const float *a, size_t aoffset, float value, float *res, size_t length)
+     * }
+     */
+    public static MethodHandle sub_scalar_f32$handle() {
+        return sub_scalar_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void sub_scalar_f32(const float *a, size_t aoffset, float value, float *res, size_t length)
+     * }
+     */
+    public static MemorySegment sub_scalar_f32$address() {
+        return sub_scalar_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void sub_scalar_f32(const float *a, size_t aoffset, float value, float *res, size_t length)
+     * }
+     */
+    public static void sub_scalar_f32(MemorySegment a, long aoffset, float value, MemorySegment res, long length) {
+        var mh$ = sub_scalar_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("sub_scalar_f32", a, aoffset, value, res, length);
+            }
+            mh$.invokeExact(a, aoffset, value, res, length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class scale_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("scale_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void scale_f32(float *v, float multiplier, size_t length)
+     * }
+     */
+    public static FunctionDescriptor scale_f32$descriptor() {
+        return scale_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void scale_f32(float *v, float multiplier, size_t length)
+     * }
+     */
+    public static MethodHandle scale_f32$handle() {
+        return scale_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void scale_f32(float *v, float multiplier, size_t length)
+     * }
+     */
+    public static MemorySegment scale_f32$address() {
+        return scale_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void scale_f32(float *v, float multiplier, size_t length)
+     * }
+     */
+    public static void scale_f32(MemorySegment v, float multiplier, long length) {
+        var mh$ = scale_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("scale_f32", v, multiplier, length);
+            }
+            mh$.invokeExact(v, multiplier, length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class max_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
@@ -1623,6 +1805,65 @@ public class NativeSimdOps {
         try {
             if (TRACE_DOWNCALLS) {
                 traceDowncall("max_f32", v, length);
+            }
+            return (float)mh$.invokeExact(v, length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class min_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("min_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * float min_f32(const float *v, size_t length)
+     * }
+     */
+    public static FunctionDescriptor min_f32$descriptor() {
+        return min_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * float min_f32(const float *v, size_t length)
+     * }
+     */
+    public static MethodHandle min_f32$handle() {
+        return min_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * float min_f32(const float *v, size_t length)
+     * }
+     */
+    public static MemorySegment min_f32$address() {
+        return min_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float min_f32(const float *v, size_t length)
+     * }
+     */
+    public static float min_f32(MemorySegment v, long length) {
+        var mh$ = min_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("min_f32", v, length);
             }
             return (float)mh$.invokeExact(v, length);
         } catch (Throwable ex$) {
@@ -1684,6 +1925,65 @@ public class NativeSimdOps {
                 traceDowncall("min_in_place_f32", v1, v2, length);
             }
             mh$.invokeExact(v1, v2, length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class sum_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeSimdOps.C_FLOAT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("sum_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * float sum_f32(const float *v, size_t length)
+     * }
+     */
+    public static FunctionDescriptor sum_f32$descriptor() {
+        return sum_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * float sum_f32(const float *v, size_t length)
+     * }
+     */
+    public static MethodHandle sum_f32$handle() {
+        return sum_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * float sum_f32(const float *v, size_t length)
+     * }
+     */
+    public static MemorySegment sum_f32$address() {
+        return sum_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float sum_f32(const float *v, size_t length)
+     * }
+     */
+    public static float sum_f32(MemorySegment v, long length) {
+        var mh$ = sum_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("sum_f32", v, length);
+            }
+            return (float)mh$.invokeExact(v, length);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

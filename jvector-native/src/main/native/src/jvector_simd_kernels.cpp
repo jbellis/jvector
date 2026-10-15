@@ -503,6 +503,82 @@ HWY_FLATTEN void sub_scalar_in_place_f32(float *HWY_RESTRICT v1,
 }
 
 JV_RENAME_REGS
+HWY_FLATTEN void sub_f32(const float *HWY_RESTRICT a, size_t aoffset,
+                         const float *HWY_RESTRICT b, size_t boffset,
+                         float *HWY_RESTRICT res, size_t length)
+{
+    a += aoffset;
+    b += boffset;
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto va = hn::LoadU(d, a + i);
+        auto vb = hn::LoadU(d, b + i);
+        hn::StoreU(hn::Sub(va, vb), d, res + i);
+    }
+    if (i < length) {
+        const size_t rem = length - i;
+        auto va = hn::LoadN(d, a + i, rem);
+        auto vb = hn::LoadN(d, b + i, rem);
+        hn::StoreN(hn::Sub(va, vb), d, res + i, rem);
+    }
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN void sub_scalar_f32(const float *HWY_RESTRICT a, size_t aoffset,
+                                float value,
+                                float *HWY_RESTRICT res, size_t length)
+{
+    a += aoffset;
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    const auto vval = hn::Set(d, value);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto va = hn::LoadU(d, a + i);
+        hn::StoreU(hn::Sub(va, vval), d, res + i);
+    }
+    if (i < length) {
+        const size_t rem = length - i;
+        auto va = hn::LoadN(d, a + i, rem);
+        hn::StoreN(hn::Sub(va, vval), d, res + i, rem);
+    }
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN void scale_f32(float *HWY_RESTRICT v,
+                           float multiplier,
+                           size_t length)
+{
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+#if JV_ARCH_X86_64
+    if (lanes == 16 && length >= 512 && (reinterpret_cast<uintptr_t>(v) & 63) != 0) {
+        // Align long AVX-512 loops to avoid splitting every access across cache lines.
+        const size_t prefix = (64 - (reinterpret_cast<uintptr_t>(v) & 63)) / sizeof(float);
+        for (size_t p = 0; p < prefix; ++p) v[p] *= multiplier;
+        v += prefix;
+        length -= prefix;
+    }
+#endif
+    const auto vmult = hn::Set(d, multiplier);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto a = hn::LoadU(d, v + i);
+        hn::StoreU(hn::Mul(a, vmult), d, v + i);
+    }
+    if (i < length) {
+        const size_t rem = length - i;
+        auto a = hn::LoadN(d, v + i, rem);
+        hn::StoreN(hn::Mul(a, vmult), d, v + i, rem);
+    }
+}
+
+JV_RENAME_REGS
 HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
 {
     hn::ScalableTag<float> d;
@@ -516,6 +592,37 @@ HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
     float result = hn::ReduceMax(d, accum);
     for (; i < length; i++) {
         if (v[i] > result) result = v[i];
+    }
+    return result;
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN float min_f32(const float *HWY_RESTRICT v, size_t length)
+{
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    auto accum = hn::Set(d, FLT_MAX);
+    // Highway Min/ReduceMin do not guarantee Java's NaN and signed-zero rules.
+    auto nan = hn::MaskFalse(d);
+    auto negative_zero = hn::MaskFalse(d);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        auto values = hn::LoadU(d, v + i);
+        nan = hn::Or(nan, hn::IsNaN(values));
+        negative_zero = hn::Or(negative_zero,
+                hn::And(hn::Eq(values, hn::Zero(d)), hn::IsNegative(values)));
+        accum = hn::Min(accum, values);
+    }
+    if (!hn::AllFalse(d, nan)) return NAN;
+    float result = hn::ReduceMin(d, accum);
+    if (result == 0.0f && !hn::AllFalse(d, negative_zero)) result = -0.0f;
+    for (; i < length; i++) {
+        const float value = v[i];
+        if (isnan(value)) return value;
+        if (value < result || (value == 0.0f && result == 0.0f && signbit(value))) {
+            result = value;
+        }
     }
     return result;
 }
@@ -540,6 +647,24 @@ HWY_FLATTEN void min_in_place_f32(float *HWY_RESTRICT v1,
         auto b = hn::LoadN(d, v2 + i, rem);
         hn::StoreN(hn::Min(a, b), d, v1 + i, rem);
     }
+}
+
+JV_RENAME_REGS
+HWY_FLATTEN float sum_f32(const float *HWY_RESTRICT v, size_t length)
+{
+    hn::ScalableTag<float> d;
+    const size_t lanes = hn::Lanes(d);
+    auto accum = hn::Zero(d);
+    size_t i = 0;
+#pragma GCC unroll 4
+    for (; i + lanes <= length; i += lanes) {
+        accum = hn::Add(accum, hn::LoadU(d, v + i));
+    }
+    float result = hn::ReduceSum(d, accum);
+    for (; i < length; i++) {
+        result += v[i];
+    }
+    return result;
 }
 
 // =============================================================================
