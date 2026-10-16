@@ -71,7 +71,7 @@ third_party/highway/          - Google Highway header-only library (git submodul
 Run the build script from this directory:
 
 ```bash
-bash build_native_lib.sh [buildtype] [crossarch]
+bash src/build_native_lib.sh [buildtype] [crossarch]
 ```
 
 Parameters (all optional):
@@ -87,14 +87,14 @@ The script:
 3. Always builds the **native arch** library into `target/meson-build-<arch>/`.
 4. If `crossarch=true`, also cross-compiles the **other arch** library into
    `target/meson-build-<other-arch>/` using the bundled cross-compile file.
-5. Copies each built `.so` to `src/main/resources/libjvector-<arch>.so`.
-   Debug symbols are stripped from the resource copy and saved separately as
-   `target/meson-build-<arch>/libjvector-<arch>.so.debug`.
+5. Copies each built `.so` to `jvector-native/target/meson-build/libjvector-<arch>.so`
+   (relative to the repository root), which Maven includes as a resource.
+   The script does not strip or split debug symbols.
 
 To install all required dependencies automatically and then build, pass `--auto-install-deps` as the first argument:
 
 ```bash
-bash build_native_lib.sh --auto-install-deps
+bash src/build_native_lib.sh --auto-install-deps
 ```
 
 This is the easiest way to get started on a fresh Ubuntu machine. For other
@@ -117,9 +117,10 @@ sudo apt-get install -y g++-aarch64-linux-gnu
 Build both libraries:
 
 ```bash
-bash build_native_lib.sh release true
-# produces: src/main/resources/libjvector-x86_64.so
-#           src/main/resources/libjvector-aarch64.so
+bash src/build_native_lib.sh release true
+# produces (relative to the repository root):
+# jvector-native/target/meson-build/libjvector-x86_64.so
+# jvector-native/target/meson-build/libjvector-aarch64.so
 ```
 
 #### Build x86_64 from an aarch64 host
@@ -133,9 +134,10 @@ sudo apt-get install -y g++-x86-64-linux-gnu
 Build both libraries:
 
 ```bash
-bash build_native_lib.sh release true
-# produces: src/main/resources/libjvector-aarch64.so
-#           src/main/resources/libjvector-x86_64.so
+bash src/build_native_lib.sh release true
+# produces (relative to the repository root):
+# jvector-native/target/meson-build/libjvector-aarch64.so
+# jvector-native/target/meson-build/libjvector-x86_64.so
 ```
 
 The cross-compile file used for each direction lives in this directory:
@@ -200,7 +202,8 @@ meson compile -C ../../../target/meson-build-aarch64
 ```
 
 The versioned output (e.g. `libjvector.so.0.1.0`) is the real file; copy and
-rename it to `src/main/resources/libjvector-<arch>.so` to make it available to
+rename it to `jvector-native/target/meson-build/libjvector-<arch>.so` (relative
+to the repository root) before Maven processes resources to make it available to
 `LibraryLoader`.
 
 ### Generating Java bindings for native code
@@ -210,7 +213,7 @@ These need to be regenerated if the public header file changes. This is done by
 running the jextract script:
 
 ```bash
-bash jextract_generate_bindings.sh  # uses jextract from the PATH
+bash src/jextract_generate_bindings.sh  # uses jextract from the PATH
 ```
 
 After regeneration the script automatically patches the generated file to add
@@ -232,7 +235,7 @@ jextract on the system, or if it's not on the PATH, you can specify the location
 via environment variable:
 
 ```bash
-JEXTRACT_BIN="/opt/jextract-22/bin/jextract" bash jextract_generate_bindings.sh
+JEXTRACT_BIN="/opt/jextract-22/bin/jextract" bash src/jextract_generate_bindings.sh
 ```
 
 The same environment variable can be used when invoking the script through
