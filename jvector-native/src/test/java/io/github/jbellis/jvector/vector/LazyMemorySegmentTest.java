@@ -72,7 +72,7 @@ class LazyMemorySegmentTest {
     }
 
     @Test
-    void copiesZeroBufferAndNativeUseKeepStorageSemantics() throws Exception {
+    void copiesZeroAndBufferKeepStorageSemantics() throws Exception {
         assertThrows(NullPointerException.class, () -> new MemorySegmentVectorFloat((float[]) null));
         float[] data = {-0.0f, Float.intBitsToFloat(0x7fc00123), 2, 3, 4, 5, 6, 7};
         var original = new MemorySegmentVectorFloat(data);
@@ -93,9 +93,16 @@ class LazyMemorySegmentTest {
         var fromBuffer = new MemorySegmentVectorFloat(buffer);
         assertArrayEquals(new float[]{10, 11}, fromBuffer.array());
         assertEquals(2, fromBuffer.length());
-        var support = new NativeVectorizationProvider().getVectorUtilSupport();
-        assertEquals(0, support.squareDistance(fromBuffer, fromBuffer));
         fromBuffer.zero();
         for (float value : fromBuffer.array()) assertEquals(0, Float.floatToRawIntBits(value));
+    }
+
+    @Test
+    void nativeUseKeepsStorageSemantics() {
+        var support = NativeTestSupport.requireNativeProvider().getVectorUtilSupport();
+        var vector = new MemorySegmentVectorFloat(new float[]{10, 11});
+        assertEquals(0, support.squareDistance(vector, vector));
+        vector.zero();
+        for (float value : vector.array()) assertEquals(0, Float.floatToRawIntBits(value));
     }
 }

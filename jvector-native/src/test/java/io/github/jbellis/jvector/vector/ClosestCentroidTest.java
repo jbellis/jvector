@@ -17,11 +17,17 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.vector.types.VectorFloat;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ClosestCentroidTest {
+    @BeforeAll
+    static void requireNativeProvider() {
+        NativeTestSupport.requireNativeProvider();
+    }
+
     private final VectorUtilSupport nativeSupport = new NativeVectorizationProvider().getVectorUtilSupport();
     private final MemorySegmentVectorProvider vectors = new MemorySegmentVectorProvider();
 

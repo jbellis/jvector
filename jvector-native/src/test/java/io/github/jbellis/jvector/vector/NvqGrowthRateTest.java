@@ -17,11 +17,17 @@
 package io.github.jbellis.jvector.vector;
 
 import io.github.jbellis.jvector.quantization.NVQuantization;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NvqGrowthRateTest {
+    @BeforeAll
+    static void requireNativeProvider() {
+        NativeTestSupport.requireNativeProvider();
+    }
+
     private static float reference(VectorFloatInput input) {
         var v = input.vector;
         float baseline = VectorUtil.nvqUniformLoss(v, input.min, input.max, 8);
