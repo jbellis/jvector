@@ -59,7 +59,11 @@ class LazyMemorySegmentTest {
             for (int i = 0; i < 48; i++) tasks.add(pool.submit(() -> {
                 barrier.await();
                 var first = v.get();
-                for (int n = 0; n < 10000; n++) assertSame(first, v.get());
+                for (int n = 0; n < 10000; n++) {
+                    assertSame(first, v.get());
+                    assertEquals(data.length, v.length());
+                    assertEquals(Float.floatToRawIntBits(data[n & 7]), Float.floatToRawIntBits(v.get(n & 7)));
+                }
                 return first;
             }));
             MemorySegment first = tasks.get(0).get();

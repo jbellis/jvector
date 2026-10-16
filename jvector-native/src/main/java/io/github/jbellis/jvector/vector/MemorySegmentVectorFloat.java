@@ -24,6 +24,8 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.nio.Buffer;
 import java.util.Objects;
 
@@ -32,6 +34,15 @@ import java.util.Objects;
  */
 final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment>, FloatArray
 {
+    private static final VarHandle STORAGE;
+    static {
+        try {
+            STORAGE = MethodHandles.lookup().findVarHandle(MemorySegmentVectorFloat.class, "segment", Object.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     // Reuse the original single reference slot: an array until native access,
     // then its MemorySegment view. The view keeps the same array alive.
     private volatile Object segment;
@@ -75,10 +86,13 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
         }
     }
 
+    // Plain reads may keep the original array after native publication: both states
+    // address the same elements. Heap-segment bounds/base/scope metadata is final.
+    // Retain volatile publication in get() and its single shared-view identity.
     @Override
     public float get(int n)
     {
-        Object current = segment;
+        Object current = STORAGE.get(this);
         if (current instanceof float[] data) {
             return data[n];
         }
@@ -93,7 +107,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     @Override
     public void set(int n, float value)
     {
-        Object current = segment;
+        Object current = STORAGE.get(this);
         if (current instanceof float[] data) {
             data[n] = value;
         } else {
@@ -107,7 +121,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
 
     @Override
     public void zero() {
-        Object current = segment;
+        Object current = STORAGE.get(this);
         if (current instanceof float[] data) {
             java.util.Arrays.fill(data, 0.0f);
         } else {
@@ -117,7 +131,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
 
     @Override
     public int length() {
-        Object current = segment;
+        Object current = STORAGE.get(this);
         return current instanceof float[] data
                 ? data.length : (int) (((MemorySegment) current).byteSize() / Float.BYTES);
     }
