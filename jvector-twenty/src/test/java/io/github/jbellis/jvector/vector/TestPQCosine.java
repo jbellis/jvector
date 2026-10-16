@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.vector;
 
 import java.util.Random;
+import java.lang.reflect.Proxy;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import jdk.incubator.vector.*;
@@ -29,7 +30,7 @@ class TestPQCosine {
         var current = new PanamaVectorUtilSupport();
         var reference = new FrozenReference();
         Random random = new Random(4331);
-        for (int count : new int[] {0,1,7,8,9,15,16,17,31,32,33,96,192,193,257}) {
+        for (int count : new int[] {0,1,7,8,9,15,16,17,31,32,33,96,99,103,192,193,257}) {
             for (int stride : new int[] {1,2,16,128,256}) {
                 float[] sums = new float[count * stride];
                 float[] mags = new float[count * stride];
@@ -109,6 +110,36 @@ class TestPQCosine {
         z=r.pqDecodedCosineSimilarity512(b,offset,count,stride,s,m,3.25f);
         assertEquals(z,a,tolerance,"512 count="+count+" offset="+offset);
         assertEquals(oracle,a,Float.isFinite(oracle) ? Math.max(1e-6,Math.abs(oracle)*1e-5) : 0);
+        byte[] padded = new byte[codes.length + 11];
+        System.arraycopy(codes, 0, padded, 5, codes.length);
+        var slice = new ArrayByteSequence(padded).slice(5, codes.length);
+        assertEquals(oracle, c.pqDecodedCosineSimilarity256(slice, offset, count, stride, s, m, 3.25f), tolerance);
+        assertEquals(oracle, c.pqDecodedCosineSimilarity512(slice, offset, count, stride, s, m, 3.25f), tolerance);
+    }
+
+    @Test
+    void shortScalarInputsDoNotRequireBackingArrays() {
+        var data = (VectorFloat<?>) Proxy.newProxyInstance(VectorFloat.class.getClassLoader(),
+                new Class<?>[]{VectorFloat.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("get") && method.getParameterCount() == 1)
+                        return ((Integer) args[0]).floatValue() + 1f;
+                    throw new AssertionError("Unexpected vector access: " + method);
+                });
+        var codes = (ByteSequence<?>) Proxy.newProxyInstance(ByteSequence.class.getClassLoader(),
+                new Class<?>[]{ByteSequence.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("get") && method.getParameterCount() == 1)
+                        return (byte) 255;
+                    throw new AssertionError("Unexpected code access: " + method);
+                });
+        var support = new PanamaVectorUtilSupport();
+        for (int count = 0; count < 16; count++) {
+            float sum = 0;
+            for (int i = 0; i < count; i++) sum += 256 * i + 256;
+            float expected = (float) (sum / Math.sqrt(sum * 3.25f));
+            assertEquals(expected, support.pqDecodedCosineSimilarity512(codes, 3, count, 256, data, data, 3.25f));
+            if (count < 8)
+                assertEquals(expected, support.pqDecodedCosineSimilarity256(codes, 3, count, 256, data, data, 3.25f));
+        }
     }
 
     // Frozen kernels are a numerical regression oracle; reduceLanes(ADD) may reorder additions.

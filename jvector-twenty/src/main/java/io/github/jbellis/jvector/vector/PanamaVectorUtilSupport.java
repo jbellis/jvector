@@ -1221,17 +1221,20 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return pqDecodedCosineSimilarityFallback(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude,
                     FloatVector.SPECIES_512, IntVector.SPECIES_512, ByteVector.SPECIES_128, scratchInt512.get());
         }
-        return pqDecodedCosineSimilarity512Impl(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
+        if (baseOffsetsLength < ByteVector.SPECIES_128.length()) {
+            return pqDecodedCosineSimilarity128(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                    partialSums, aMagnitude, bMagnitude);
+        }
+        return pqDecodedCosineSimilarity512Impl(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                array(partialSums), array(aMagnitude), bMagnitude);
     }
 
-    private float pqDecodedCosineSimilarity512Impl(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
+    private float pqDecodedCosineSimilarity512Impl(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, float[] partials, float[] magnitudes, float bMagnitude) {
         // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
         // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
         FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
         FloatVector vaMagnitude = sum;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
-        float[] partials = arrayForBlock(partialSums, limit);
-        float[] magnitudes = arrayForBlock(aMagnitude, limit);
         int[] convOffsets = scratchInt512.get();
         int i = 0;
         IntVector scale = (IntVector) INT_512_CLASS.cast(IntVector.zero(IntVector.SPECIES_512).addIndex(clusterCount));
@@ -1240,8 +1243,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             ByteVector bytes = (ByteVector) BYTE_128_CLASS.cast(
                     fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
             IntVector codes = (IntVector) INT_512_CLASS.cast(
-                    bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0));
-            codes = (IntVector) INT_512_CLASS.cast(codes.and(BYTE_TO_INT_MASK_512));
+                    bytes.convertShape(VectorOperators.ZERO_EXTEND_B2I, IntVector.SPECIES_512, 0));
             codes = (IntVector) INT_512_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
 
@@ -1253,9 +1255,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             vaMagnitude = (FloatVector) FLOAT_512_CLASS.cast(vaMagnitude.add(magnitude));
         }
 
-        return finishPQCosine(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
-                partialSums, aMagnitude, bMagnitude, i,
-                sum.reduceLanes(VectorOperators.ADD), vaMagnitude.reduceLanes(VectorOperators.ADD));
+        float sumResult = sum.reduceLanes(VectorOperators.ADD);
+        float magnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
+        for (; i < baseOffsetsLength; i++) {
+            int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset));
+            sumResult += partials[offset];
+            magnitudeResult += magnitudes[offset];
+        }
+        return (float) (sumResult / Math.sqrt(magnitudeResult * bMagnitude));
     }
 
     float pqDecodedCosineSimilarity256(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
@@ -1263,17 +1270,20 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             return pqDecodedCosineSimilarityFallback(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude,
                     FloatVector.SPECIES_256, IntVector.SPECIES_256, ByteVector.SPECIES_64, scratchInt256.get());
         }
-        return pqDecodedCosineSimilarity256Impl(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude);
+        if (baseOffsetsLength < ByteVector.SPECIES_64.length()) {
+            return pqDecodedCosineSimilarity128(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                    partialSums, aMagnitude, bMagnitude);
+        }
+        return pqDecodedCosineSimilarity256Impl(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
+                array(partialSums), array(aMagnitude), bMagnitude);
     }
 
-    private float pqDecodedCosineSimilarity256Impl(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
+    private float pqDecodedCosineSimilarity256Impl(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, float[] partials, float[] magnitudes, float bMagnitude) {
         // Keep the complete gather/accumulator chain concrete when inlined into the cosine decoder.
         // Vector intrinsics alone do not guarantee that temporary vectors and arrays are eliminated.
         FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
         FloatVector vaMagnitude = sum;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
-        float[] partials = arrayForBlock(partialSums, limit);
-        float[] magnitudes = arrayForBlock(aMagnitude, limit);
         int[] convOffsets = scratchInt256.get();
         int i = 0;
         IntVector scale = (IntVector) INT_256_CLASS.cast(IntVector.zero(IntVector.SPECIES_256).addIndex(clusterCount));
@@ -1282,8 +1292,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             ByteVector bytes = (ByteVector) BYTE_64_CLASS.cast(
                     fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset));
             IntVector codes = (IntVector) INT_256_CLASS.cast(
-                    bytes.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0));
-            codes = (IntVector) INT_256_CLASS.cast(codes.and(BYTE_TO_INT_MASK_256));
+                    bytes.convertShape(VectorOperators.ZERO_EXTEND_B2I, IntVector.SPECIES_256, 0));
             codes = (IntVector) INT_256_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
 
@@ -1295,9 +1304,14 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             vaMagnitude = (FloatVector) FLOAT_256_CLASS.cast(vaMagnitude.add(magnitude));
         }
 
-        return finishPQCosine(baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount,
-                partialSums, aMagnitude, bMagnitude, i,
-                sum.reduceLanes(VectorOperators.ADD), vaMagnitude.reduceLanes(VectorOperators.ADD));
+        float sumResult = sum.reduceLanes(VectorOperators.ADD);
+        float magnitudeResult = vaMagnitude.reduceLanes(VectorOperators.ADD);
+        for (; i < baseOffsetsLength; i++) {
+            int offset = clusterCount * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset));
+            sumResult += partials[offset];
+            magnitudeResult += magnitudes[offset];
+        }
+        return (float) (sumResult / Math.sqrt(magnitudeResult * bMagnitude));
     }
 
     // Keep the old-JDK workaround outside the modern SIMD loops. This method
