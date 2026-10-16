@@ -1226,7 +1226,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
         FloatVector vaMagnitude = sum;
 
-        int[] convOffsets = scratchInt512.get();
+        int[] convOffsets = getScratchInt512();
         int i = 0;
         int limit = i + ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
 
@@ -1242,8 +1242,8 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                     .intoArray(convOffsets,0);
 
             var offset = i * clusterCount;
-            sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(fromVectorFloat(FloatVector.SPECIES_512, partialSums, offset, convOffsets, 0)));
-            vaMagnitude = (FloatVector) FLOAT_512_CLASS.cast(vaMagnitude.add(fromVectorFloat(FloatVector.SPECIES_512, aMagnitude, offset, convOffsets, 0)));
+            sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(FloatVector.fromArray(FloatVector.SPECIES_512, array(partialSums), offset, convOffsets, 0)));
+            vaMagnitude = (FloatVector) FLOAT_512_CLASS.cast(vaMagnitude.add(FloatVector.fromArray(FloatVector.SPECIES_512, array(aMagnitude), offset, convOffsets, 0)));
         }
 
         float sumResult = sum.reduceLanes(VectorOperators.ADD);
@@ -1256,6 +1256,10 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
 
         return (float) (sumResult / Math.sqrt(aMagnitudeResult * bMagnitude));
+    }
+
+    private static int[] getScratchInt512() {
+        return scratchInt512.get();
     }
 
     private float pqCosineFallback512(ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength,
