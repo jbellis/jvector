@@ -112,7 +112,8 @@ class NvqSIMDTest {
                     }
                     float norm = (float) Math.sqrt(support.dotProduct(query, query));
                     float expected = (1 + (dot / norm) / (float) Math.sqrt(magnitude)) / 2;
-                    float scalarNorm = (float) Math.sqrt(scalar.dotProduct(query, query));
+                    var scalarQuery = new ArrayVectorFloat(zeroQuery ? new float[dim] : queryData.clone());
+                    float scalarNorm = (float) Math.sqrt(scalar.dotProduct(scalarQuery, scalarQuery));
                     float scalarScore = (1 + (scalarDot / scalarNorm) / (float) Math.sqrt(scalarMagnitude)) / 2;
                     float actual = new NVQScorer(nvq).scoreFunctionFor(query, VectorSimilarityFunction.COSINE)
                             .similarityTo(encoded);
