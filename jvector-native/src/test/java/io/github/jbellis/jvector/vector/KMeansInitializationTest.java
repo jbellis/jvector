@@ -19,12 +19,17 @@ package io.github.jbellis.jvector.vector;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
 import java.util.Arrays;
 import java.util.Random;
+import jdk.incubator.vector.FloatVector;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KMeansInitializationTest {
     @Test
     void initializationMatchesPanamaAndScalarWithinReductionPrecision() {
+        String expectedBits = System.getProperty("jvector.test.expected_vector_bits");
+        if (expectedBits != null) {
+            assertEquals(Integer.parseInt(expectedBits), FloatVector.SPECIES_PREFERRED.vectorBitSize());
+        }
         var nativeTypes = new MemorySegmentVectorProvider();
         var javaProvider = new PanamaVectorizationProvider();
         var javaTypes = javaProvider.getVectorTypeSupport();
@@ -79,6 +84,47 @@ class KMeansInitializationTest {
                         default -> Float.MAX_VALUE;
                     };
                     sameBits(Math.min(originalMin, actualDistances.get(i)), actualMin.get(i));
+                }
+            }
+        }
+    }
+
+    @Test
+    void initializationMatchesNativeDistanceAndMinimumLoopsWithinReductionPrecision() {
+        var provider = NativeTestSupport.requireNativeProvider();
+        var types = provider.getVectorTypeSupport();
+        var support = provider.getVectorUtilSupport();
+        var random = new Random(8720);
+        for (int count : new int[]{1, 7, 17, 63, 256, 4099}) {
+            VectorFloat<?>[] points = new VectorFloat<?>[count];
+            for (int i = 0; i < count; i++) {
+                float[] values = new float[8];
+                for (int d = 0; d < values.length; d++) {
+                    values[d] = i == 0 ? -0.0f : Math.scalb(random.nextFloat() - .5f, (i % 17) - 8);
+                }
+                points[i] = types.createFloatVector(values);
+            }
+            var expectedMin = types.createFloatVector(count);
+            var actualMin = types.createFloatVector(count);
+            var expectedDistances = types.createFloatVector(count);
+            var actualDistances = types.createFloatVector(count);
+            for (int i = 0; i < count; i++) {
+                expectedMin.set(i, Float.MAX_VALUE);
+                actualMin.set(i, Float.MAX_VALUE);
+            }
+            for (int pass = 0; pass < 6; pass++) {
+                float[] values = new float[8];
+                for (int d = 0; d < values.length; d++) values[d] = pass == 0 ? 0 : random.nextFloat() - .5f;
+                var centroid = pass == 1 ? points[count - 1].copy() : types.createFloatVector(values);
+                // The former native main path: one Highway distance per point, then native minima.
+                for (int i = 0; i < count; i++)
+                    expectedDistances.set(i, support.squareDistance(points[i], centroid));
+                support.minInPlace(expectedMin, expectedDistances);
+                assertTrue(support.tryUpdateKMeansDistances(points, centroid, actualMin, actualDistances));
+                for (int i = 0; i < count; i++) {
+                    sameDistance(expectedDistances.get(i), actualDistances.get(i));
+                    sameDistance(distanceOracle(points[i], centroid), actualDistances.get(i));
+                    sameDistance(expectedMin.get(i), actualMin.get(i));
                 }
             }
         }
