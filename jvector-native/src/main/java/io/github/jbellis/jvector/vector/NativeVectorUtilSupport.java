@@ -31,9 +31,15 @@ import jdk.incubator.vector.VectorSpecies;
 /**
  * VectorUtilSupport using Highway kernels and inherited Panama operations.
  */
-final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
+class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 {
     public NativeVectorUtilSupport() {}
+
+    /** Select once at provider creation; leave the wide scan and its call site unchanged. */
+    static NativeVectorUtilSupport create() {
+        return FloatVector.SPECIES_PREFERRED.vectorBitSize() < 256
+                ? new NativeVectorUtilSupport128() : new NativeVectorUtilSupport();
+    }
 
     /**
      * Returns the ISA tier that was selected by the native dispatcher at library
@@ -57,6 +63,32 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         MemorySegment ptr = NativeSimdOps.jvector_simd_get_max_isa_env();
         if (ptr.address() == 0L) return null;
         return ptr.reinterpret(Long.MAX_VALUE).getString(0);
+    }
+
+    @Override
+    public boolean tryUpdateKMeansDistances(VectorFloat<?>[] points, VectorFloat<?> centroid,
+                                           VectorFloat<?> minima, VectorFloat<?> scratch) {
+        return NativeKMeansInitialization.update(points, centroid, minima, scratch);
+    }
+
+    @Override
+    public float nvqMin(VectorFloat<?> vector) {
+        return NativeNVQArithmetic.min(vector);
+    }
+
+    @Override
+    public void nvqScale(VectorFloat<?> vector, float multiplier) {
+        NativeNVQArithmetic.scale(vector, multiplier);
+    }
+
+    @Override
+    public VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) {
+        return NativeNVQArithmetic.sub(a, 0, b, 0, a.length());
+    }
+
+    @Override
+    public VectorFloat<?> nvqSub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        return NativeNVQArithmetic.sub(a, aOffset, b, bOffset, length);
     }
 
     @Override
@@ -261,6 +293,52 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public int tryClosestCentroid(VectorFloat<?> point, int pointOffset,
+                               VectorFloat<?> centroids, int centroidCount, int dimension) {
+        if (centroidCount <= 0) {
+            throw new IllegalArgumentException("centroidCount must be positive");
+        }
+        java.util.Objects.checkFromIndexSize(pointOffset, dimension, point.length());
+        if ((long) centroidCount * dimension > centroids.length()) {
+            throw new IndexOutOfBoundsException("centroids do not contain centroidCount vectors");
+        }
+        return NativeSimdOps.closest_centroid_f32(
+                ((MemorySegmentVectorFloat) point).get(), pointOffset,
+                ((MemorySegmentVectorFloat) centroids).get(), centroidCount, dimension);
+    }
+
+    @Override
+    public boolean tryScaleTo(VectorFloat<?> source, VectorFloat<?> destination,
+                              int destinationOffset, float multiplier) {
+        java.util.Objects.checkFromIndexSize(destinationOffset, source.length(), destination.length());
+        var src = ((MemorySegmentVectorFloat) source).get();
+        var dst = ((MemorySegmentVectorFloat) destination).get();
+        if (src.asOverlappingSlice(dst).isPresent()) {
+            throw new IllegalArgumentException("Source and destination storage must not overlap");
+        }
+        NativeSimdOps.scale_to_f32(src, dst, destinationOffset, multiplier, source.length());
+        return true;
+    }
+
+    @Override
+    public boolean trySubtractAddInPlace(VectorFloat<?> oldSum, VectorFloat<?> newSum,
+                                        VectorFloat<?> point) {
+        if (oldSum.length() != point.length() || newSum.length() != point.length()) {
+            throw new IllegalArgumentException("Cluster sums and point must have equal lengths");
+        }
+        var oldSegment = ((MemorySegmentVectorFloat) oldSum).get();
+        var newSegment = ((MemorySegmentVectorFloat) newSum).get();
+        var pointSegment = ((MemorySegmentVectorFloat) point).get();
+        if (oldSegment.asOverlappingSlice(newSegment).isPresent()
+                || oldSegment.asOverlappingSlice(pointSegment).isPresent()
+                || newSegment.asOverlappingSlice(pointSegment).isPresent()) {
+            throw new IllegalArgumentException("Cluster sums and point storage must not overlap");
+        }
+        NativeSimdOps.subtract_add_in_place_f32(oldSegment, newSegment, pointSegment, point.length());
+        return true;
+    }
+
+    @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         var nativeCodebook = ((MemorySegmentVectorFloat) codebook).get();
         var nativeQuery = ((MemorySegmentVectorFloat) query).get();
@@ -299,6 +377,13 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public float tryNvqGrowthRate(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        if (nBits != 8) return Float.NaN;
+        return NativeSimdOps.nvq_growth_rate(((MemorySegmentVectorFloat) vector).get(),
+                                            vector.length(), minValue, maxValue, nBits);
+    }
+
+    @Override
     public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
         return NativeSimdOps.nvq_loss(
                 ((MemorySegmentVectorFloat) vector).get(),
@@ -332,6 +417,20 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
                 ((MemorySegmentByteSequence) quantizedVector).get(),
                 (long) vector.length(),
                 alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public boolean supportsNvqCosine8bitPacked() { return true; }
+
+    @Override
+    public long nvqCosine8bitPacked(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                    float alpha, float x0, float minValue, float maxValue,
+                                    VectorFloat<?> centroid) {
+        return NativeSimdOps.nvq_cosine_8bit_packed(
+                ((MemorySegmentVectorFloat) vector).get(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                (long) vector.length(), alpha, x0, minValue, maxValue,
+                ((MemorySegmentVectorFloat) centroid).get());
     }
 
     @Override

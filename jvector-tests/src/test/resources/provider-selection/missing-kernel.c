@@ -55,3 +55,9 @@ void nvq_square_l2_distance_8bit(void) {}
 void nvq_dot_product_8bit(void) {}
 void nvq_cosine_8bit_packed(void) {}
 void nvq_shuffle_query_in_place_8bit(void) {}
+
+// Additional bindings must not obscure the deliberately missing nvq_loss.
+void closest_centroid_f32(void) {}
+void nvq_growth_rate(void) {}
+void scale_to_f32(void) {}
+void subtract_add_in_place_f32(void) {}

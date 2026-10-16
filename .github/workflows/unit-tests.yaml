@@ -27,6 +27,11 @@ jobs:
           - jdk: 20
             max_isa: sse42
     runs-on: isa-avx512f
+    env:
+      # Cap Java SIMD as well as Highway; argLine alone is overridden by native tests.
+      JAVA_TOOL_OPTIONS: >-
+        ${{ matrix.max_isa == 'sse42' && '-XX:MaxVectorSize=16 -Djvector.test.expected_vector_bits=128' ||
+            matrix.max_isa == 'avx2' && '-XX:MaxVectorSize=32 -Djvector.test.expected_vector_bits=256' || '' }}
     steps:
       - name: verify-avx512
         run: |

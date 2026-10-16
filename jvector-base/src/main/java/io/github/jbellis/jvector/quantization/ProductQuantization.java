@@ -517,6 +517,10 @@ public class ProductQuantization implements VectorCompressor<ByteSequence<?>>, A
         float minDist = Float.MAX_VALUE;
         int subvectorSize = subvectorSizesAndOffsets[m][0];
         int subvectorOffset = subvectorSizesAndOffsets[m][1];
+        int bulkNearest = VectorUtil.tryClosestCentroid(subvector, subvectorOffset, codebook, clusterCount, subvectorSize);
+        if (bulkNearest >= 0) {
+            return bulkNearest;
+        }
         for (int i = 0; i < clusterCount; i++) {
             float dist = VectorUtil.squareL2Distance(subvector, subvectorOffset, codebook, i * subvectorSize, subvectorSize);
             if (dist < minDist) {

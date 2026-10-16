@@ -66,3 +66,9 @@ void nvq_dot_product_8bit(void) {}
 void nvq_cosine_8bit_packed(void) {}
 void nvq_shuffle_query_in_place_8bit(void) {}
 void nvq_loss(void) {}
+
+// Additional kernels required by the Highway batching bindings.
+void closest_centroid_f32(void) {}
+void nvq_growth_rate(void) {}
+void scale_to_f32(void) {}
+void subtract_add_in_place_f32(void) {}
