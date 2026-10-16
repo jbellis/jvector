@@ -22,6 +22,7 @@ import java.util.Random;
 import jdk.incubator.vector.FloatVector;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class KMeansInitializationTest {
     @Test
@@ -30,11 +31,12 @@ class KMeansInitializationTest {
         if (expectedBits != null) {
             assertEquals(Integer.parseInt(expectedBits), FloatVector.SPECIES_PREFERRED.vectorBitSize());
         }
+        assumeTrue(FloatVector.SPECIES_PREFERRED.vectorBitSize() >= 128);
         var nativeTypes = new MemorySegmentVectorProvider();
         var javaProvider = new PanamaVectorizationProvider();
         var javaTypes = javaProvider.getVectorTypeSupport();
         var panama = javaProvider.getVectorUtilSupport();
-        var support = new NativeVectorUtilSupport();
+        var support = NativeVectorUtilSupport.create();
         var random = new Random(8719);
         for (int count : new int[]{1, 7, 17, 63, 256, 4099, 32768}) {
             VectorFloat<?>[] points = new VectorFloat<?>[count];
@@ -91,6 +93,7 @@ class KMeansInitializationTest {
 
     @Test
     void initializationMatchesNativeDistanceAndMinimumLoopsWithinReductionPrecision() {
+        assumeTrue(FloatVector.SPECIES_PREFERRED.vectorBitSize() >= 128);
         var provider = NativeTestSupport.requireNativeProvider();
         var types = provider.getVectorTypeSupport();
         var support = provider.getVectorUtilSupport();
@@ -131,9 +134,45 @@ class KMeansInitializationTest {
     }
 
     @Test
+    void widthSelectionAndArrayOrNativeViewsPreserveInputs() {
+        String expectedBits = System.getProperty("jvector.test.expected_vector_bits");
+        int bits = FloatVector.SPECIES_PREFERRED.vectorBitSize();
+        if (expectedBits != null) assertEquals(Integer.parseInt(expectedBits), bits);
+        float[] values = {1, 2, 3, 4, 5, 6, 7, 8};
+        float[] center = {0, 0, 0, 0, 1, 1, 1, 1};
+        for (boolean nativeViews : new boolean[]{false, true}) {
+            var point = new MemorySegmentVectorFloat(values.clone());
+            var centroid = new MemorySegmentVectorFloat(center.clone());
+            // Odd counts cover the preferred-width minimum loop's tail.
+            VectorFloat<?>[] points = {point, point, point};
+            var minima = new MemorySegmentVectorFloat(new float[]{Float.MAX_VALUE, -0.0f, Float.NaN});
+            var scratch = new MemorySegmentVectorFloat(new float[]{23, 24, 25});
+            if (nativeViews) {
+                point.get(); centroid.get(); minima.get(); scratch.get();
+            }
+            boolean used = NativeVectorUtilSupport.create().tryUpdateKMeansDistances(points, centroid, minima, scratch);
+            assertEquals(bits >= 128, used);
+            if (used) {
+                float expected = distanceOracle(point, centroid);
+                for (int i = 0; i < points.length; i++) sameDistance(expected, scratch.get(i));
+                sameDistance(expected, minima.get(0));
+                sameBits(-0.0f, minima.get(1));
+                assertTrue(Float.isNaN(minima.get(2)));
+            } else {
+                sameBits(Float.MAX_VALUE, minima.get(0));
+                sameBits(-0.0f, minima.get(1));
+                assertTrue(Float.isNaN(minima.get(2)));
+                assertArrayEquals(new float[]{23, 24, 25}, scratch.array());
+            }
+            assertArrayEquals(values, point.array());
+            assertArrayEquals(center, centroid.array());
+        }
+    }
+
+    @Test
     void unsupportedPathsLeaveOutputsAlone() {
         var nativeTypes = new MemorySegmentVectorProvider();
-        var support = new NativeVectorUtilSupport();
+        var support = NativeVectorUtilSupport.create();
         var point = nativeTypes.createFloatVector(new float[4]);
         var minimum = nativeTypes.createFloatVector(new float[]{17});
         var scratch = nativeTypes.createFloatVector(new float[]{23});

@@ -51,7 +51,7 @@ public class NativeVectorizationProvider extends VectorizationProvider {
                       + " (or the jvector module name).";
             throw new UnsupportedOperationException("Failed to load supporting native library." + reason);
         }
-        var support = new NativeVectorUtilSupport();
+        var support = NativeVectorUtilSupport.create();
         try {
             if (SymbolLookup.loaderLookup().find("jvector_supports_abi").isEmpty()) {
                 throw new UnsupportedOperationException("The loaded jvector native library does not export "

@@ -31,9 +31,15 @@ import jdk.incubator.vector.VectorSpecies;
 /**
  * VectorUtilSupport using Highway kernels and inherited Panama operations.
  */
-final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
+class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 {
     public NativeVectorUtilSupport() {}
+
+    /** Select once at provider creation; leave the wide scan and its call site unchanged. */
+    static NativeVectorUtilSupport create() {
+        return FloatVector.SPECIES_PREFERRED.vectorBitSize() < 256
+                ? new NativeVectorUtilSupport128() : new NativeVectorUtilSupport();
+    }
 
     /**
      * Returns the ISA tier that was selected by the native dispatcher at library
