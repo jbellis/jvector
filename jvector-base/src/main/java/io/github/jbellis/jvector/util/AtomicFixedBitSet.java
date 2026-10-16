@@ -29,9 +29,11 @@ public class AtomicFixedBitSet extends BitSet {
     private static final long BASE_RAM_BYTES_USED =
             RamUsageEstimator.shallowSizeOfInstance(AtomicFixedBitSet.class);
 
+    private final int length;
     private final AtomicLongArray storage;
 
     public AtomicFixedBitSet(int numBits) {
+        this.length = numBits;
         int numLongs = (numBits + 63) >>> 6;
         storage = new AtomicLongArray(numLongs);
     }
@@ -46,11 +48,12 @@ public class AtomicFixedBitSet extends BitSet {
 
     @Override
     public int length() {
-        return storage.length() << 6;
+        return length;
     }
 
     @Override
     public void set(int i) {
+        assert i >= 0 && i < length : "index=" + i + ", numBits=" + length;
         int idx = index(i);
         long mask = mask(i);
         storage.getAndAccumulate(idx, mask, (prev, m) -> prev | m);
@@ -58,7 +61,7 @@ public class AtomicFixedBitSet extends BitSet {
 
     @Override
     public boolean get(int i) {
-        if (i >= length()) {
+        if (i >= length) {
             return false;
         }
         int idx = index(i);
@@ -69,6 +72,7 @@ public class AtomicFixedBitSet extends BitSet {
 
     @Override
     public boolean getAndSet(int i) {
+        assert i >= 0 && i < length : "index=" + i + ", numBits=" + length;
         int idx = index(i);
         long mask = mask(i);
         long prev = storage.getAndAccumulate(idx, mask, (p, m) -> p | m);
@@ -84,7 +88,7 @@ public class AtomicFixedBitSet extends BitSet {
 
     @Override
     public void clear(int i) {
-        if (i >= length()) {
+        if (i >= length) {
             return;
         }
         int idx = index(i);
@@ -136,7 +140,7 @@ public class AtomicFixedBitSet extends BitSet {
 
     @Override
     public int prevSetBit(int index) {
-        assert index >= 0 && index < length() : "index=" + index + " length=" + length();
+        assert index >= 0 && index < length : "index=" + index + " length=" + length;
         int i = index(index);
         final int subIndex = index & 63; // index within the word
         long word = (storage.get(i) << (63 - subIndex)); // skip all the bits to the left of index
@@ -157,7 +161,10 @@ public class AtomicFixedBitSet extends BitSet {
 
     @Override
     public int nextSetBit(int index) {
-        assert index >= 0 && index < length() : "index=" + index + ", length=" + length();
+        if (index >= length) {
+            return DocIdSetIterator.NO_MORE_DOCS;
+        }
+        assert index >= 0 : "index=" + index + ", length=" + length;
 
         int i = index(index);
 
@@ -187,7 +194,7 @@ public class AtomicFixedBitSet extends BitSet {
     }
 
     public AtomicFixedBitSet copy() {
-        AtomicFixedBitSet copy = new AtomicFixedBitSet(length());
+        AtomicFixedBitSet copy = new AtomicFixedBitSet(length);
         for (int i = 0; i < storage.length(); i++) {
             copy.storage.set(i, storage.get(i));
         }

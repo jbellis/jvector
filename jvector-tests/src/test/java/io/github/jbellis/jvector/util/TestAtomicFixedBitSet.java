@@ -45,4 +45,12 @@ public class TestAtomicFixedBitSet extends BaseBitSetTestCase<AtomicFixedBitSet>
     final int cardinality = set.cardinality();
     Assert.assertEquals(cardinality, set.approximateCardinality(), cardinality / 20); // 5% error at most
   }
+
+  @Test
+  public void testLength() {
+    for (int length : new int[] {0, 1, 63, 64, 65, 100, 1000}) {
+      AtomicFixedBitSet bitSet = new AtomicFixedBitSet(length);
+      Assert.assertEquals(length, bitSet.length());
+    }
+  }
 }
