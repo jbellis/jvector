@@ -17,6 +17,9 @@
 package io.github.jbellis.jvector.vector;
 
 import java.util.Random;
+import java.lang.reflect.Proxy;
+import io.github.jbellis.jvector.vector.types.ByteSequence;
+import io.github.jbellis.jvector.vector.types.VectorFloat;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -26,7 +29,7 @@ class TestADCAssembly {
     @Test
     void matchesLookupOracleAcrossWidthsOffsetsAndTails() {
         Random random = new Random(991);
-        for (int count : new int[] {0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 96, 128, 192, 256, 257}) {
+        for (int count : new int[] {0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 96, 99, 103, 128, 192, 256, 257}) {
             for (int stride : new int[] {2, 16, 256, 512}) {
                 float[] table = new float[count * stride];
                 for (int i = 0; i < table.length; i++) table[i] = random.nextFloat() * 2 - 1;
@@ -52,6 +55,29 @@ class TestADCAssembly {
         }
     }
 
+    @Test
+    void shortScalarInputsDoNotRequireBackingArrays() {
+        var data = (VectorFloat<?>) Proxy.newProxyInstance(VectorFloat.class.getClassLoader(),
+                new Class<?>[]{VectorFloat.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("get") && method.getParameterCount() == 1)
+                        return ((Integer) args[0]).floatValue() + 1f;
+                    throw new AssertionError("Unexpected vector access: " + method);
+                });
+        var offsets = (ByteSequence<?>) Proxy.newProxyInstance(ByteSequence.class.getClassLoader(),
+                new Class<?>[]{ByteSequence.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("get") && method.getParameterCount() == 1)
+                        return (byte) 255;
+                    throw new AssertionError("Unexpected code access: " + method);
+                });
+        for (int count = 0; count < 16; count++) {
+            float expected = 0;
+            for (int i = 0; i < count; i++) expected += 256 * i + 256;
+            assertEquals(expected, support.assembleAndSum512(data, 256, offsets, 3, count));
+            if (count < 8)
+                assertEquals(expected, support.assembleAndSum256(data, 256, offsets, 3, count));
+        }
+    }
+
     private void check(float[] table, int stride, byte[] codes, int offset, int count) {
         double expected = 0;
         for (int i = 0; i < count; i++) expected += table[i * stride + Byte.toUnsignedInt(codes[offset + i])];
@@ -64,5 +90,10 @@ class TestADCAssembly {
         assertEquals(expected, support.assembleAndSum(data, stride, compact), tolerance);
         assertEquals(expected, support.assembleAndSum256(data, stride, offsets, offset, count), tolerance);
         assertEquals(expected, support.assembleAndSum512(data, stride, offsets, offset, count), tolerance);
+        byte[] padded = new byte[codes.length + 11];
+        System.arraycopy(codes, 0, padded, 5, codes.length);
+        var slice = new ArrayByteSequence(padded).slice(5, codes.length);
+        assertEquals(expected, support.assembleAndSum256(data, stride, slice, offset, count), tolerance);
+        assertEquals(expected, support.assembleAndSum512(data, stride, slice, offset, count), tolerance);
     }
 }

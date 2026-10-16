@@ -846,12 +846,19 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     float assembleAndSum512(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
-        // Keep the loop compact so C2 can inline it into scoring callers.
+        if (baseOffsetsLength < ByteVector.SPECIES_128.length()) {
+            return assembleAndSum128(data, dataBase, baseOffsets, baseOffsetsOffset, baseOffsetsLength);
+        }
+        return assembleAndSum512(array(data), dataBase, baseOffsets,
+                baseOffsetsOffset, baseOffsetsLength);
+    }
+
+    private float assembleAndSum512(float[] dataArray, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
+
         int[] convOffsets = scratchInt512.get();
         FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
         int i = 0;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
-        float[] dataArray = limit == 0 ? null : ((FloatArray) data).array();
         IntVector scale = (IntVector) INT_512_CLASS.cast(IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
@@ -867,17 +874,27 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(values));
         }
 
-        return finishAssembleAndSum(data, dataBase, baseOffsets, baseOffsetsOffset,
-                i, baseOffsetsLength, sum.reduceLanes(VectorOperators.ADD));
+        float result = sum.reduceLanes(VectorOperators.ADD);
+        for (; i < baseOffsetsLength; i++) {
+            result += dataArray[dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset))];
+        }
+        return result;
     }
 
     float assembleAndSum256(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
-        // Keep the loop compact so C2 can inline it into scoring callers.
+        if (baseOffsetsLength < ByteVector.SPECIES_64.length()) {
+            return assembleAndSum128(data, dataBase, baseOffsets, baseOffsetsOffset, baseOffsetsLength);
+        }
+        return assembleAndSum256(array(data), dataBase, baseOffsets,
+                baseOffsetsOffset, baseOffsetsLength);
+    }
+
+    private float assembleAndSum256(float[] dataArray, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
+
         int[] convOffsets = scratchInt256.get();
         FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
-        float[] dataArray = limit == 0 ? null : ((FloatArray) data).array();
         IntVector scale = (IntVector) INT_256_CLASS.cast(IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
@@ -894,17 +911,11 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(values));
         }
 
-        return finishAssembleAndSum(data, dataBase, baseOffsets, baseOffsetsOffset,
-                i, baseOffsetsLength, sum.reduceLanes(VectorOperators.ADD));
-    }
-
-    private static float finishAssembleAndSum(VectorFloat<?> data, int dataBase,
-                                              ByteSequence<?> baseOffsets, int baseOffsetsOffset,
-                                              int i, int length, float sum) {
-        for (; i < length; i++) {
-            sum += data.get(dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset)));
+        float result = sum.reduceLanes(VectorOperators.ADD);
+        for (; i < baseOffsetsLength; i++) {
+            result += dataArray[dataBase * i + Byte.toUnsignedInt(baseOffsets.get(i + baseOffsetsOffset))];
         }
-        return sum;
+        return result;
     }
 
     float assembleAndSum128(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
