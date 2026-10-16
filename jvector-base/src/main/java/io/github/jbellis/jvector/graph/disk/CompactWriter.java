@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
-import java.nio.file.Path;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,7 +62,7 @@ final class CompactWriter implements AutoCloseable {
     private final ThreadLocal<ByteBuffer> bufferPerThread;
     private final ThreadLocal<ByteSequence<?>> zeroPQ;
     private final boolean fusedPQEnabled;
-    private final Path outputPath;
+    private final FileChannel outputChannel;
     private final List<CommonHeader.LayerInfo> configuredLayerInfo;
     private final List<Integer> configuredLayerDegrees;
     private final List<UpperLayerFeatureRecord> level1FeatureRecords;
@@ -78,7 +78,7 @@ final class CompactWriter implements AutoCloseable {
     private ThreadLocal<ByteBuffer> pqCacheViewPerThread;
     private ThreadLocal<byte[]> pqCodeBufPerThread;
 
-    CompactWriter(CompactionDestination.OutputReservation reservation,
+    CompactWriter(CompactionDestination reservation,
                   int maxOrdinal,
                   int numBaseLayerNodes,
                   List<CommonHeader.LayerInfo> layerInfo,
@@ -101,9 +101,9 @@ final class CompactWriter implements AutoCloseable {
             throw new IllegalStateException(
                     "Fused PQ requires a format version that supports it; version " + version + " does not");
         }
-        this.outputPath = reservation.file();
-        this.writer = new BufferedRandomAccessWriter(reservation.file());
-        this.startOffset = reservation.startOffset();
+        this.outputChannel = reservation.channel();
+        this.writer = new BufferedRandomAccessWriter(reservation.channel());
+        this.startOffset = reservation.channel().position();
         this.configuredLayerInfo = new ArrayList<>(layerInfo);
         this.configuredLayerDegrees = new ArrayList<>(layerDegrees);
         this.baseDegree = layerDegrees.get(0);
@@ -201,8 +201,8 @@ final class CompactWriter implements AutoCloseable {
         writer.seek(offset);
     }
 
-    public Path getOutputPath() {
-        return outputPath;
+    public FileChannel getOutputChannel() {
+        return outputChannel;
     }
 
     public void setEntryNodePqCode(ByteSequence<?> code) {

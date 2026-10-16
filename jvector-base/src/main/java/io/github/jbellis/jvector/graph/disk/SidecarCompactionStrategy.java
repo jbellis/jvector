@@ -28,7 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -83,7 +83,7 @@ public final class SidecarCompactionStrategy extends QuantizationCompactionStrat
     }
 
     @Override
-    public void writeSidecar(Path compressedPath, long startOffset) throws IOException {
+    public void writeSidecar(FileChannel channel) throws IOException {
         if (retrainedCompressor == null) {
             throw new IllegalStateException("retrain() must be called before writeSidecar()");
         }
@@ -92,11 +92,11 @@ public final class SidecarCompactionStrategy extends QuantizationCompactionStrat
         final int count = ctx.maxOrdinal + 1;
         final int chunkCount = (count + vectorsPerChunk - 1) / vectorsPerChunk;
 
-        log.info("Streaming {} merged ordinals to {} at offset {} ({} chunks of up to {} entries each)",
-                count, compressedPath, startOffset, chunkCount, vectorsPerChunk);
+        log.info("Streaming {} merged ordinals at offset {} ({} chunks of up to {} entries each)",
+                count, channel.position(), chunkCount, vectorsPerChunk);
 
-        try (var out = new BufferedRandomAccessWriter(compressedPath)) {
-            out.seek(startOffset);
+        try (var out = new BufferedRandomAccessWriter(channel)) {
+            // channel.position() is already at startOffset — no explicit seek needed
             formatHandle.writeSidecarHeader(out, retrainedCompressor, count);
 
             int parallelism = Math.max(ctx.taskWindowSize, 1);
@@ -113,9 +113,9 @@ public final class SidecarCompactionStrategy extends QuantizationCompactionStrat
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Failed to write compressed sidecar to " + compressedPath, e);
+            throw new IOException("Failed to write compressed sidecar", e);
         }
-        log.info("Wrote compacted compressed sidecar to {}", compressedPath);
+        log.info("Wrote compacted compressed sidecar");
     }
 
     @SuppressWarnings("unchecked")

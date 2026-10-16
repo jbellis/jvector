@@ -398,9 +398,8 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
             }
 
             int[] validNodes = new int[size(level)];
-            int upperBound = level == 0 ? getIdUpperBound() : size(level);
             int pos = 0;
-            for (int nodeOrd = 0; nodeOrd < upperBound; nodeOrd++) {
+            for (int nodeOrd = 0; pos < validNodes.length; nodeOrd++) {
                 long nodeOffset = layerOffset + (nodeOrd * thisLayerNodeSide);
                 reader.seek(nodeOffset);
                 int nodeId = reader.readInt();
@@ -517,7 +516,7 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
          * bound.
          */
         private void requireValidNode(int node) {
-            if (node < 0 || node >= idUpperBound) {
+            if (node < 0 || (idUpperBound >= 0 && node >= idUpperBound)) {
                 throw new IllegalArgumentException(
                         "node ordinal " + node + " out of range [0, " + idUpperBound + ") for this graph");
             }
@@ -717,7 +716,7 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
         public boolean contains(int level, int node) {
             try {
                 if (level == 0) {
-                    return node < idUpperBound;
+                    return node >= 0 && (idUpperBound < 0 || node < idUpperBound);
                 } else {
                     // For levels > 0, read from memory
                     var imn = getInMemoryLayers(reader);

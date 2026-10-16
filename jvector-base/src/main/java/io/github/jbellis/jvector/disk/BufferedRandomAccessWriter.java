@@ -22,17 +22,23 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.util.zip.CRC32;
 
 /**
- * Implements RandomAccessWriter as a buffered RandomAccessFile.
+ * Implements RandomAccessWriter as a buffered writer, backed either by a
+ * {@link RandomAccessFile} (path constructor) or a caller-supplied {@link FileChannel}
+ * (channel constructor). The channel variant does not close the channel on {@link #close()};
+ * ownership remains with the caller.
  */
 public class BufferedRandomAccessWriter implements RandomAccessWriter {
-    // Our approach is to create an OutputStream that writes to the RAF,
-    // and then buffer that and wrap it in a DataOutputStream.  Obviously this means
-    // that we need to be careful to flush the buffer when seeking to a new position.
-    private final RandomAccessFile raf;
+    // We buffer writes through a DataOutputStream to batch small writes efficiently.
+    // seek() flushes before repositioning so the buffer never straddles a seek boundary.
+    private final RandomAccessFile raf;    // non-null only for the Path constructor
+    private final FileChannel channel;    // non-null only for the FileChannel constructor
     private final DataOutputStream stream;
 
     /**
@@ -42,7 +48,21 @@ public class BufferedRandomAccessWriter implements RandomAccessWriter {
      */
     public BufferedRandomAccessWriter(Path path) throws FileNotFoundException {
         raf = new RandomAccessFile(path.toFile(), "rw");
+        channel = null;
         stream = new DataOutputStream(new BufferedOutputStream(new RandomAccessOutputStream(raf)));
+    }
+
+    /**
+     * Creates a buffered random access writer on a caller-supplied {@link FileChannel}.
+     * The channel must be open and writable. {@link #close()} flushes buffered data but
+     * does <em>not</em> close the channel — ownership stays with the caller.
+     *
+     * @param fc open, writable {@link FileChannel}
+     */
+    public BufferedRandomAccessWriter(FileChannel fc) {
+        raf = null;
+        channel = fc;
+        stream = new DataOutputStream(new BufferedOutputStream(Channels.newOutputStream(fc)));
     }
 
     private static class RandomAccessOutputStream extends OutputStream {
@@ -71,20 +91,26 @@ public class BufferedRandomAccessWriter implements RandomAccessWriter {
     @Override
     public void seek(long position) throws IOException {
         flush();
-        raf.seek(position);
+        if (raf != null)
+            raf.seek(position);
+        else
+            channel.position(position);
     }
 
     @Override
     public void close() throws IOException {
         flush();
-        stream.close();
-        raf.close();
+        if (raf != null) {
+            stream.close();
+            raf.close();
+        }
+        // channel variant: flush only — channel is owned by the caller
     }
 
     @Override
     public long position() throws IOException {
         flush();
-        return raf.getFilePointer();
+        return raf != null ? raf.getFilePointer() : channel.position();
     }
 
     @Override
@@ -98,14 +124,18 @@ public class BufferedRandomAccessWriter implements RandomAccessWriter {
      * have modified the file, bypassing this writer's buffer.
      * <p>
      * This method flushes any pending writes and then seeks to the current position,
-     * which forces the underlying RandomAccessFile to re-read from disk on the next read.
+     * which forces the underlying file to re-read from disk on the next read.
      *
      * @throws IOException if an I/O error occurs
      */
     public void invalidateCache() throws IOException {
         flush();
-        long currentPos = raf.getFilePointer();
-        raf.seek(currentPos);
+        if (raf != null) {
+            var pos = raf.getFilePointer();
+            raf.seek(pos);
+        } else {
+            channel.position(channel.position());
+        }
     }
 
     /**
@@ -122,10 +152,15 @@ public class BufferedRandomAccessWriter implements RandomAccessWriter {
         seek(startOffset);
         for (long p = startOffset; p < endOffset; ) {
             int toRead = (int) Math.min(a.length, endOffset - p);
-            int read = raf.read(a, 0, toRead);
-            if (read < 0) {
-                throw new IOException("EOF reached before endOffset");
+            int read;
+            if (raf != null) {
+                read = raf.read(a, 0, toRead);
+            } else {
+                var buf = ByteBuffer.wrap(a, 0, toRead);
+                read = channel.read(buf, p);
             }
+            if (read < 0)
+                throw new IOException("EOF reached before endOffset");
             crc.update(a, 0, read);
             p += read;
         }

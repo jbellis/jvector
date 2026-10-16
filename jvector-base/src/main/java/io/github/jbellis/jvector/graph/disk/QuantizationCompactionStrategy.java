@@ -23,7 +23,7 @@ import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
-import java.nio.file.Path;
+import java.nio.channels.FileChannel;
 import java.util.List;
 
 /**
@@ -123,17 +123,16 @@ public abstract class QuantizationCompactionStrategy {
      * release transient resources (e.g. unmap a pre-encode cache and truncate the output file
      * back to its expected size). No-op by default.
      */
-    public void onAfterClose(Path graphPath) {
+    public void onAfterClose(FileChannel channel) {
         // no-op
     }
 
     /**
-     * Writes the merged compressed-vectors sidecar body into {@code compressedPath} starting at
-     * {@code startOffset}. The region {@code [0, startOffset)} is left untouched, allowing the
-     * caller to place its own header there. Called by the compactor after the graph is fully
-     * written. Throws {@link UnsupportedOperationException} by default; sidecar strategies override.
+     * Writes the merged compressed-vectors sidecar body into {@code channel} starting at
+     * {@code channel.position()}. Called by the compactor after the graph is fully written.
+     * Throws {@link UnsupportedOperationException} by default; sidecar strategies override.
      */
-    public void writeSidecar(Path compressedPath, long startOffset) throws IOException {
+    public void writeSidecar(FileChannel channel) throws IOException {
         throw new UnsupportedOperationException(this + " does not write a sidecar");
     }
 

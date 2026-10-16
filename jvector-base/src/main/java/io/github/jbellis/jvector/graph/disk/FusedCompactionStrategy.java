@@ -32,8 +32,6 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -175,7 +173,7 @@ public final class FusedCompactionStrategy extends QuantizationCompactionStrateg
     }
 
     @Override
-    public void onAfterClose(Path graphPath) {
+    public void onAfterClose(FileChannel channel) {
         if (cacheTruncateAt > 0) {
             if (codeCache != null && UNSAFE != null) {
                 try {
@@ -185,12 +183,12 @@ public final class FusedCompactionStrategy extends QuantizationCompactionStrateg
                 }
             }
             codeCache = null;
-            try (FileChannel fc = FileChannel.open(graphPath, StandardOpenOption.WRITE)) {
-                if (fc.size() > cacheTruncateAt) {
-                    fc.truncate(cacheTruncateAt);
+            try {
+                if (channel.size() > cacheTruncateAt) {
+                    channel.truncate(cacheTruncateAt);
                 }
             } catch (IOException e) {
-                throw new RuntimeException("Failed to truncate code-cache section from output file " + graphPath, e);
+                throw new RuntimeException("Failed to truncate code-cache section from output file", e);
             }
             cacheTruncateAt = 0;
         }
@@ -209,12 +207,10 @@ public final class FusedCompactionStrategy extends QuantizationCompactionStrateg
         cacheTruncateAt = tempOffset;
         long totalSize = tempOffset + tempSize;
 
-        try (FileChannel fc = FileChannel.open(writer.getOutputPath(),
-                StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-            ByteBuffer pad = ByteBuffer.wrap(new byte[]{0});
-            fc.write(pad, totalSize - 1);
-            codeCache = fc.map(FileChannel.MapMode.READ_WRITE, tempOffset, tempSize);
-        }
+        var fc = writer.getOutputChannel();
+        ByteBuffer pad = ByteBuffer.wrap(new byte[]{0});
+        fc.write(pad, totalSize - 1);
+        codeCache = fc.map(FileChannel.MapMode.READ_WRITE, tempOffset, tempSize);
 
         final int cs = cacheCodeSize;
         final VectorCompressor<ByteSequence<?>> compressor = retrainedCompressor;

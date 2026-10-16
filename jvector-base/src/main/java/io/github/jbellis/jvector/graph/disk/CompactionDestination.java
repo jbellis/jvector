@@ -19,94 +19,77 @@ package io.github.jbellis.jvector.graph.disk;
 import io.github.jbellis.jvector.annotations.Experimental;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 /**
- * Embedding extension point: tells {@link OnDiskGraphIndexCompactor} where to write its
- * compacted graph so the body lands directly inside the caller's container file (after a
- * header the caller reserves) — eliminating the need for a temp file and a second copy pass.
+ * Tells {@link OnDiskGraphIndexCompactor} where to write its compacted graph so the body
+ * lands directly inside the caller's container file (after a header the caller reserves) —
+ * eliminating the need for a temp file and a second copy pass.
  *
- * <p>The compactor requires a real file: it writes node records at computed absolute byte
- * offsets via random-access I/O, and memory-maps the output for the pre-encode PQ code
- * cache during refinement. A sequential stream is not sufficient.
+ * <p>The compactor works entirely through {@link #channel()}: sequential writes,
+ * positional random-access writes, mmap, truncate, and size measurement all go through
+ * the same open channel with no additional OS opens.
  *
  * <p>Usage:
  * <pre>{@code
- * CompactionDestination destination = () -> new CompactionDestination.OutputReservation() {
- *     public Path file()           { return myContainerPath; }
- *     public long startOffset()    { return myHeaderSize; }
- *     public void commit(long len) { recordBodyLength(len); }
- *     public void close()          { }
- * };
+ * // write header through the channel, leaving it positioned right after
+ * long startOffset = myOpenChannel.position();
+ * var destination = CompactionDestination.channel(myOpenChannel);
  * compactor.compact(destination);
+ * long bodyLength = myOpenChannel.size() - startOffset;
  * }</pre>
  *
- * @see CompactionDestination#file(Path) for the simple standalone-file case
+ * @see #file(Path)       standalone file
+ * @see #channel(FileChannel)  embed in a caller-managed channel
  */
-@FunctionalInterface
 @Experimental
-public interface CompactionDestination {
+public class CompactionDestination {
 
-    /**
-     * Opens a fresh output reservation for one compaction call.
-     * Called exactly once by the compactor at the start of {@code compact(CompactionDestination)}.
-     */
-    OutputReservation open() throws IOException;
+    @FunctionalInterface
+    private interface IORunnable {
+        void run() throws IOException;
+    }
 
-    /**
-     * One compaction's output region and its commit/abort lifecycle.
-     * The compactor opens one instance, writes the graph body into it,
-     * calls {@link #commit} exactly once on success, then always calls {@link #close}.
-     */
-    interface OutputReservation extends AutoCloseable {
+    private final FileChannel channel;
+    private final IORunnable onCommit;
 
-        /**
-         * The container file the graph body is written into.
-         * Must be a real file path; the compactor uses random-access and mmap on it.
-         */
-        Path file();
+    private CompactionDestination(FileChannel channel, IORunnable onCommit) {
+        this.channel = channel;
+        this.onCommit = onCommit;
+    }
 
-        /**
-         * The byte offset within {@link #file()} at which the graph body begins.
-         * The region {@code [0, startOffset)} is left untouched by the compactor,
-         * allowing the caller to place its own header there.
-         */
-        long startOffset();
+    /** The open {@link FileChannel} the graph body is written into. */
+    public FileChannel channel() {
+        return channel;
+    }
 
-        /**
-         * Called exactly once, on the success path, after the body has been fully written.
-         * Reports the byte length of the graph body ({@code file() size - startOffset()},
-         * measured after any transient sections such as the PQ code cache have been removed).
-         * The caller may finalize its container here (e.g. write a footer or checksum).
-         * Must be called before {@link #close()}.
-         */
-        void commit(long bodyLength) throws IOException;
-
-        /**
-         * Always called (try-with-resources), after {@link #commit} on success or directly on
-         * failure. A close without a prior commit means the compaction failed; the caller should
-         * discard the partial output. Releases any caller-owned resources.
-         */
-        @Override
-        void close() throws IOException;
+    /** Called by the compactor when it is done writing. */
+    void commit() throws IOException {
+        onCommit.run();
     }
 
     /**
-     * Creates a standalone destination that writes a self-contained graph file at offset 0.
-     * {@code commit} is a no-op; if {@code close} is reached without a prior {@code commit}
-     * the partial file is deleted.
+     * Opens a new {@link FileChannel} on {@code path} at offset 0.
      */
-    static CompactionDestination file(Path path) {
-        return new FileCompactionDestination(path);
+    public static CompactionDestination file(Path path) {
+        try {
+            var fc = FileChannel.open(path,
+                    StandardOpenOption.READ,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.CREATE);
+            return new CompactionDestination(fc, fc::close);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to open compaction destination: " + path, e);
+        }
     }
 
     /**
-     * Creates a standalone destination that writes into an existing file starting at
-     * {@code startOffset}, leaving the prefix region {@code [0, startOffset)} untouched.
-     * {@code commit} is a no-op; if {@code close} is reached without a prior {@code commit}
-     * the partial file is deleted.
+     * Wraps a caller-supplied {@link FileChannel}.
+     * The caller retains ownership of the channel.
      */
-    static CompactionDestination file(Path path, long startOffset) {
-        return new FileCompactionDestination(path, startOffset);
+    public static CompactionDestination channel(FileChannel channel) {
+        return new CompactionDestination(channel, () -> {});
     }
 }

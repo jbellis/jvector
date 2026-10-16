@@ -21,15 +21,12 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.graph.*;
-import io.github.jbellis.jvector.graph.disk.feature.Feature;
 import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
 import io.github.jbellis.jvector.graph.disk.feature.FusedFeature;
 import io.github.jbellis.jvector.graph.disk.feature.FusedPQ;
@@ -40,7 +37,7 @@ import io.github.jbellis.jvector.util.BitSet;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.graph.similarity.ScoreFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import io.github.jbellis.jvector.disk.SimpleReader;
+import io.github.jbellis.jvector.disk.FileChannelReaderSupplier;
 import io.github.jbellis.jvector.quantization.CompressedVectors;
 import io.github.jbellis.jvector.quantization.ProductQuantization;
 import io.github.jbellis.jvector.quantization.VectorCompressor;
@@ -340,13 +337,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
 
     /**
      * Compaction entry point that writes the graph body directly into a caller-supplied container
-     * file, starting at the offset reported by {@link CompactionDestination.OutputReservation#startOffset()}.
-     * The region {@code [0, startOffset)} is left untouched, allowing the caller to place its own
-     * header there without a temp-file-and-copy pass.
-     * <p>
-     * On success, {@link CompactionDestination.OutputReservation#commit(long)} is called with the
-     * byte length of the written graph body before {@code close()} runs.
-     * On failure, {@code close()} runs without a prior {@code commit}.
+     * file. The region before the channel's current position is left untouched, allowing the caller
+     * to place its own header there without a temp-file-and-copy pass.
      */
     @Experimental
     public void compact(CompactionDestination destination) throws IOException {
@@ -363,38 +355,44 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         QuantizationCompactionStrategy inlineStrategy = detectInlineStrategy();
         QuantizationCompactionStrategy sidecarStrategy = detectSidecarStrategy();
 
-        try (CompactionDestination.OutputReservation reservation = destination.open()) {
+        long startOffset;
+        try {
+            startOffset = destination.channel().position();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try {
             if (sidecarStrategy != QuantizationCompactionStrategy.NONE) {
                 sidecarStrategy.retrain(similarityFunction);
             }
             try {
-                compactGraphImpl(reservation, inlineStrategy);
+                compactGraphImpl(destination, inlineStrategy);
                 if (sidecarStrategy == QuantizationCompactionStrategy.NONE) {
                     releaseSourcesBeforeRefine(inlineStrategy);
                 }
                 if (refineAfterCompaction) {
-                    refineCompactedGraph(reservation, inlineStrategy);
+                    refineCompactedGraph(destination.channel(), startOffset, inlineStrategy);
                 }
             } finally {
                 // Delayed until after refinement so refineCompactedGraph can read from the
                 // pre-encoded code cache appended past the projected EOF; onAfterClose unmaps
                 // it and truncates, leaving the file at its true final size.
-                inlineStrategy.onAfterClose(reservation.file());
+                inlineStrategy.onAfterClose(destination.channel());
             }
 
             if (compressedDestination != null) {
                 if (sidecarStrategy == QuantizationCompactionStrategy.NONE) {
                     throw new IllegalStateException("compressedDestination provided but no sidecar strategy found");
                 }
-                try (CompactionDestination.OutputReservation compressedReservation = compressedDestination.open()) {
-                    sidecarStrategy.writeSidecar(compressedReservation.file(), compressedReservation.startOffset());
-                    long compressedBodyLength = Files.size(compressedReservation.file()) - compressedReservation.startOffset();
-                    compressedReservation.commit(compressedBodyLength);
+                try {
+                    sidecarStrategy.writeSidecar(compressedDestination.channel());
+                } finally {
+                    compressedDestination.commit();
                 }
             }
-
-            long bodyLength = Files.size(reservation.file()) - reservation.startOffset();
-            reservation.commit(bodyLength);
+        } finally {
+            destination.commit();
         }
     }
 
@@ -479,7 +477,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      * mmap cleanup) are delegated to {@code strategy}. For sources with no inline quantization,
      * pass {@link QuantizationCompactionStrategy#NONE} for a fully no-op strategy hook set.
      */
-    private void compactGraphImpl(CompactionDestination.OutputReservation reservation, QuantizationCompactionStrategy strategy) throws FileNotFoundException {
+    private void compactGraphImpl(CompactionDestination reservation, QuantizationCompactionStrategy strategy) throws FileNotFoundException {
         strategy.retrain(similarityFunction);
 
         boolean fusedPQEnabled = strategy.writesCodesInline();
@@ -506,7 +504,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             strategy.onAfterLevels(writer, entryNodeSource, maxDegrees);
 
             writer.writeFooter();
-            log.info("Compaction complete: {}", reservation.file());
+            log.info("Compaction complete");
         } catch (IOException | ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -535,9 +533,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
      * Only L0 records are written. Upper-layer neighbor lists live in an in-memory map after
      * load and have no addressable file offset, so they're left as written by compactLevels.
      */
-    private void refineCompactedGraph(CompactionDestination.OutputReservation reservation, QuantizationCompactionStrategy strategy) {
-        Path outputPath = reservation.file();
-        log.info("Refining compacted graph: {}", outputPath);
+    private void refineCompactedGraph(FileChannel channel, long startOffset, QuantizationCompactionStrategy strategy) {
+        log.info("Refining compacted graph");
         long t0 = System.nanoTime();
 
         final int baseDegree = maxDegrees.get(0);
@@ -557,13 +554,11 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         final java.nio.MappedByteBuffer codeCache = hasFusedPQ ? strategy.getCodeCache() : null;
         final int cacheCodeSize = hasFusedPQ ? strategy.getCacheCodeSize() : 0;
 
-        try (var supplier = new SimpleReader.Supplier(outputPath);
-             FileChannel fc = FileChannel.open(outputPath, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
-
+        try (var supplier = new FileChannelReaderSupplier(channel)) {
             // useFooter=false because the file's logical EOF (where the v6 footer trailer sits) is
             // before the still-attached pre-encode cache section. loadFromFooter() would seek to
             // the actual file length and read garbage as the magic.
-            OnDiskGraphIndex mergedGraph = OnDiskGraphIndex.load(supplier, reservation.startOffset(), false);
+            OnDiskGraphIndex mergedGraph = OnDiskGraphIndex.load(supplier, startOffset, false);
 
             // Pick the iteration set: when there's a hierarchy, refine only L1 nodes (each also
             // lives in L0, so their L0 record is what we rewrite). Mirrors GraphIndexBuilder's
@@ -607,7 +602,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                     RefineScratch scratch = tls.get();
                     for (int i = s; i < e; i++) {
                         int node = ords[i];
-                        refineOneNode(node, scratch, fc, baseDegree, fpq, codeSize, cmp, bw,
+                        refineOneNode(node, scratch, channel, baseDegree, fpq, codeSize, cmp, bw,
                                 graphRef, cache, cacheSz);
                     }
                     return e - s;
@@ -967,9 +962,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                     });
                 };
 
-                var wropts = EnumSet.of(StandardOpenOption.WRITE, StandardOpenOption.READ);
-                try (FileChannel fc = FileChannel.open(writer.getOutputPath(), wropts)) {
-
+                try {
+                    var fc = writer.getOutputChannel();
                     runBatchesWithBackpressure(
                             batches,
                             ecs,
@@ -989,6 +983,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                                 }
                             }
                     );
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
 
                 writer.offsetAfterInline();
