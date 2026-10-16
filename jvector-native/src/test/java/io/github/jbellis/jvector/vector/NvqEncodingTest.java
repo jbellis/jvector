@@ -76,6 +76,19 @@ class NvqEncodingTest {
         }
     }
 
+    @Test void rejectsMismatchedDimensionsWithoutModifyingDestination() throws IOException {
+        var types = VectorizationProvider.getInstance().getVectorTypeSupport();
+        var q = NVQuantization.create(types.createFloatVector(new float[]{1, 2, 3, 4, 5, 6, 7, 8}), 2);
+        q.learn = false;
+        var dest = q.encode(types.createFloatVector(new float[]{8, 7, 6, 5, 4, 3, 2, 1}));
+        byte[] original = bytes(dest);
+        for (int length : new int[]{0, 7, 9}) {
+            var input = types.createFloatVector(new float[length]);
+            assertThrows(IllegalArgumentException.class, () -> q.encodeTo(input, dest), "length=" + length);
+            assertArrayEquals(original, bytes(dest), "Destination changed for length=" + length);
+        }
+    }
+
     @Test void allowsConcurrentCallsWithIndependentDestinations() throws Exception {
         var types = VectorizationProvider.getInstance().getVectorTypeSupport();
         float[] mean = new float[1536], data = new float[1536];

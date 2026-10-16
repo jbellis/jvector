@@ -24,11 +24,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class KMeansInitializationTest {
     @Test
-    void initializationMatchesMainWithinReductionPrecision() {
+    void initializationMatchesPanamaAndScalarWithinReductionPrecision() {
         var nativeTypes = new MemorySegmentVectorProvider();
         var javaProvider = new PanamaVectorizationProvider();
         var javaTypes = javaProvider.getVectorTypeSupport();
-        var main = javaProvider.getVectorUtilSupport();
+        var panama = javaProvider.getVectorUtilSupport();
         var support = new NativeVectorUtilSupport();
         var random = new Random(8719);
         for (int count : new int[]{1, 7, 17, 63, 256, 4099, 32768}) {
@@ -66,8 +66,8 @@ class KMeansInitializationTest {
                 var centroid = nativeTypes.createFloatVector(values);
                 var referenceCentroid = javaTypes.createFloatVector(values);
                 for (int i = 0; i < count; i++)
-                    expectedDistances.set(i, main.squareDistance(reference[i], referenceCentroid));
-                main.minInPlace(expectedMin, expectedDistances);
+                    expectedDistances.set(i, panama.squareDistance(reference[i], referenceCentroid));
+                panama.minInPlace(expectedMin, expectedDistances);
                 assertTrue(support.tryUpdateKMeansDistances(points, centroid, actualMin, actualDistances));
                 for (int i = 0; i < count; i++) {
                     sameDistance(expectedDistances.get(i), actualDistances.get(i));

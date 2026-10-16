@@ -198,10 +198,15 @@ public class NVQuantization implements VectorCompressor<NVQuantization.Quantized
     }
 
     /**
-     * Encodes the input vector using NVQ into dest
+     * Encodes the input vector using NVQ into dest.
+     * @throws IllegalArgumentException if the input dimension differs from the global mean;
+     *         the destination is left unchanged
      */
     @Override
     public void encodeTo(VectorFloat<?> v, NVQuantization.QuantizedVector dest) {
+        if (v.length() != globalMean.length()) {
+            throw new IllegalArgumentException("vector dimensions differ: " + v.length() + "!=" + globalMean.length());
+        }
         // Shift each subvector directly, avoiding a full-vector temporary and slice copies.
         for (int i = 0; i < subvectorSizesAndOffsets.length; i++) {
             int size = subvectorSizesAndOffsets[i][0];

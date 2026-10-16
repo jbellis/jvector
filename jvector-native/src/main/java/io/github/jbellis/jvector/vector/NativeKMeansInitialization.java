@@ -35,7 +35,8 @@ final class NativeKMeansInitialization {
             throw new IllegalArgumentException("Distance vector lengths");
         float[] center = c.array(), distances = m.array(), next = s.array();
         var type = FloatVector.SPECIES_256.vectorType();
-        // Main's exact-width path uses subtraction, multiplication and reduceLanes.
+        // Match the Panama 8D arithmetic: subtraction, multiplication and reduceLanes.
+        // Reduction order can differ from Highway's native distance kernel.
         for (int i = 0; i < points.length; i++) {
             float[] point = ((MemorySegmentVectorFloat) points[i]).array();
             if (point.length != 8) throw new IllegalArgumentException("Point dimensions differ from centroid");

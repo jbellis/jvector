@@ -206,13 +206,31 @@ public interface VectorUtilSupport {
 
     return (float) (sum / Math.sqrt(aMag * bMagnitude));
   }
-  /** NVQ setup arithmetic; defaults preserve the provider's shared implementations. */
+  /**
+   * Like {@link #min(VectorFloat)}, allowing providers to tune NVQ setup separately.
+   * Does not modify the input; returns {@link Float#MAX_VALUE} for an empty vector.
+   * The default delegates to the shared minimum implementation.
+   */
   default float nvqMin(VectorFloat<?> vector) { return min(vector); }
 
+  /**
+   * Multiplies the NVQ setup vector in place. The default delegates to
+   * {@link #scale(VectorFloat, float)}.
+   */
   default void nvqScale(VectorFloat<?> vector, float multiplier) { scale(vector, multiplier); }
 
+  /**
+   * Returns a new NVQ setup vector containing {@code a - b}; neither input is modified.
+   * Inputs must have equal dimensions. The default delegates to {@link #sub(VectorFloat, VectorFloat)}.
+   */
   default VectorFloat<?> nvqSub(VectorFloat<?> a, VectorFloat<?> b) { return sub(a, b); }
 
+  /**
+   * Returns a new vector containing the difference of the specified NVQ setup regions.
+   * Offsets and length are in float elements; both regions must be in bounds.
+   * Neither input is modified, including when their storage overlaps.
+   * The default delegates to the shared subtraction implementation.
+   */
   default VectorFloat<?> nvqSub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
     return sub(a, aOffset, b, bOffset, length);
   }
@@ -257,9 +275,17 @@ public interface VectorUtilSupport {
    */
   float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate, float midpoint, float minValue, float maxValue, VectorFloat<?> centroid);
 
+  /**
+   * Whether NVQ scoring should use the packed cosine result instead of the array result.
+   * The default is false because its packed implementation wraps the array-returning method.
+   */
   default boolean supportsNvqCosine8bitPacked() { return false; }
 
-  /** Low 32 bits: dot sum; high 32 bits: reconstructed squared magnitude. */
+  /**
+   * Like {@link #nvqCosine8bit}, returning two floats as raw bits in a long:
+   * low 32 bits contain the dot sum; high 32 bits contain the reconstructed squared magnitude.
+   * Input layout is unchanged. The default packs the array-returning method's result.
+   */
   default long nvqCosine8bitPacked(VectorFloat<?> vector, ByteSequence<?> bytes, float growthRate,
                                   float midpoint, float minValue, float maxValue, VectorFloat<?> centroid) {
     float[] result = nvqCosine8bit(vector, bytes, growthRate, midpoint, minValue, maxValue, centroid);
