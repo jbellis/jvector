@@ -851,6 +851,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         FloatVector sum = (FloatVector) FLOAT_512_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_512));
         int i = 0;
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
+        float[] dataArray = limit == 0 ? null : ((FloatArray) data).array();
         IntVector scale = (IntVector) INT_512_CLASS.cast(IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_128.length()) {
@@ -861,8 +862,8 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             codes = (IntVector) INT_512_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
             FloatVector values = (FloatVector) FLOAT_512_CLASS.cast(BROKEN_GATHER
-                    ? gatherFallback(FloatVector.SPECIES_512, ((FloatArray) data).array(), i * dataBase, convOffsets, 0)
-                    : FloatVector.fromArray(FloatVector.SPECIES_512, ((FloatArray) data).array(), i * dataBase, convOffsets, 0));
+                    ? gatherFallback(FloatVector.SPECIES_512, dataArray, i * dataBase, convOffsets, 0)
+                    : FloatVector.fromArray(FloatVector.SPECIES_512, dataArray, i * dataBase, convOffsets, 0));
             sum = (FloatVector) FLOAT_512_CLASS.cast(sum.add(values));
         }
 
@@ -876,6 +877,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         FloatVector sum = (FloatVector) FLOAT_256_CLASS.cast(FloatVector.zero(FloatVector.SPECIES_256));
         int i = 0;
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
+        float[] dataArray = limit == 0 ? null : ((FloatArray) data).array();
         IntVector scale = (IntVector) INT_256_CLASS.cast(IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase));
 
         for (; i < limit; i += ByteVector.SPECIES_64.length()) {
@@ -887,8 +889,8 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             codes = (IntVector) INT_256_CLASS.cast(codes.add(scale));
             codes.intoArray(convOffsets, 0);
             FloatVector values = (FloatVector) FLOAT_256_CLASS.cast(BROKEN_GATHER
-                    ? gatherFallback(FloatVector.SPECIES_256, ((FloatArray) data).array(), i * dataBase, convOffsets, 0)
-                    : FloatVector.fromArray(FloatVector.SPECIES_256, ((FloatArray) data).array(), i * dataBase, convOffsets, 0));
+                    ? gatherFallback(FloatVector.SPECIES_256, dataArray, i * dataBase, convOffsets, 0)
+                    : FloatVector.fromArray(FloatVector.SPECIES_256, dataArray, i * dataBase, convOffsets, 0));
             sum = (FloatVector) FLOAT_256_CLASS.cast(sum.add(values));
         }
 
