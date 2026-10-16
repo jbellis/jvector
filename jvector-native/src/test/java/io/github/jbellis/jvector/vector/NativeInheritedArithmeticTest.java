@@ -15,11 +15,18 @@
  */
 package io.github.jbellis.jvector.vector;
 
+import io.github.jbellis.jvector.vector.cnative.LibraryLoader;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class NativeInheritedArithmeticTest {
+    @BeforeAll
+    static void loadNativeLibrary() {
+        assertTrue(LibraryLoader.loadJvector(), "Native library is required for native kernel checks");
+    }
+
     private static final int[] LENGTHS = {0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32, 33, 65, 256, 768, 1536, 3072};
 
     @Test
