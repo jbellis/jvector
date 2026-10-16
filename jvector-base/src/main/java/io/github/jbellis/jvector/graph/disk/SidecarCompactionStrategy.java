@@ -121,11 +121,10 @@ public final class SidecarCompactionStrategy extends QuantizationCompactionStrat
         }
         try {
             cacheCodeSize = retrainedCompressor.compressedVectorSize();
+            // Recorded before the pre-encode can grow the file (see FusedCompactionStrategy.onAfterHeader).
+            cacheTruncateAt = writer.projectedOutputSize();
             codeCache = precomputeCodeCache(ctx, writer, retrainedCompressor,
                                             formatHandle == null ? "Merge-time code pre-encode" : "Sidecar code pre-encode");
-            if (codeCache != null) {
-                cacheTruncateAt = writer.projectedOutputSize();
-            }
         } catch (IOException e) {
             log.warn("Sidecar code pre-encode failed, falling back to re-encode at writeSidecar: {}", e.getMessage());
             closeCache();

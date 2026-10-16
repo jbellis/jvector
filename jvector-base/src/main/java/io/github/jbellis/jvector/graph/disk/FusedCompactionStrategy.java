@@ -117,9 +117,13 @@ public final class FusedCompactionStrategy extends QuantizationCompactionStrateg
         }
         try {
             cacheCodeSize = retrainedCompressor.compressedVectorSize();
+            // The cut point is the projected output size, fixed before any scratch is reserved. It is
+            // recorded first: precomputeCodeCache grows the file before it maps and encodes, and if
+            // the mapping or an encode task fails the fallback below must still truncate that tail,
+            // or the file no longer ends with the footer and the output cannot be loaded.
+            cacheTruncateAt = writer.projectedOutputSize();
             codeCache = precomputeCodeCache(ctx, writer, retrainedCompressor, "Code pre-encode");
             if (codeCache != null) {
-                cacheTruncateAt = writer.projectedOutputSize();
                 writer.enablePqCodeCache(codeCache, cacheCodeSize);
             }
         } catch (IOException e) {
