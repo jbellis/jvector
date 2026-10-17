@@ -62,8 +62,9 @@ public class NodeArray {
     /** Merge score-sorted candidates, preserving the first input's score for existing IDs. */
     static NodeArray merge(NodeArray a1, NodeArray a2) {
         NodeArray merged = new NodeArray(a1.size() + a2.size());
-        var existing = new IntHashSet();
-        var emitted = new IntHashSet();
+        // 2x the element count keeps each set under its 0.65 load factor, so neither rehashes mid-merge
+        var existing = new IntHashSet(2 * a1.size());
+        var emitted = new IntHashSet(2 * (a1.size() + a2.size()));
         for (int i = 0; i < a1.size; i++) existing.add(a1.nodes[i]);
         int i = 0, j = 0;
         while (i < a1.size || j < a2.size) {
