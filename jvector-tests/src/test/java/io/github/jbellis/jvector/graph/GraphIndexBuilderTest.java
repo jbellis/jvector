@@ -21,6 +21,8 @@ import io.github.jbellis.jvector.LuceneTestCase;
 import io.github.jbellis.jvector.TestUtil;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.similarity.BuildScoreProvider;
+import io.github.jbellis.jvector.quantization.PQVectors;
+import io.github.jbellis.jvector.quantization.ProductQuantization;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.VectorizationProvider;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -274,6 +276,25 @@ public class GraphIndexBuilderTest extends LuceneTestCase {
                     builder.cleanup();
                     assertUniqueNeighbors(builder.getGraph());
                 }
+            }
+        }
+    }
+
+    /**
+     * PQ build scores are asymmetric: a node's own search and a backlink from its neighbor can score
+     * the same edge differently, which defeated the old score-local duplicate check.
+     */
+    @Test
+    public void testPQNeighborUniquenessAcrossLayers() throws IOException {
+        var ravv = MockVectorValues.fromValues(createRandomFloatVectors(2000, 32, getRandom()));
+        var pq = ProductQuantization.compute(ravv, 8, 256, true);
+        var bsp = BuildScoreProvider.pqBuildScoreProvider(VectorSimilarityFunction.EUCLIDEAN, (PQVectors) pq.encodeAll(ravv));
+        for (int degree : new int[]{8, 16, 32}) {
+            try (var builder = new GraphIndexBuilder(bsp, ravv.dimension(), degree, 100, 1.2f, 1.2f, true)) {
+                for (int node = 0; node < ravv.size(); node++) builder.addGraphNode(node, ravv.getVector(node));
+                assertUniqueNeighbors(builder.getGraph());
+                builder.cleanup();
+                assertUniqueNeighbors(builder.getGraph());
             }
         }
     }
