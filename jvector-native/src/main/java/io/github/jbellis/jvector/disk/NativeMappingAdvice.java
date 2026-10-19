@@ -31,6 +31,13 @@ import java.nio.ByteBuffer;
 public final class NativeMappingAdvice implements MappingAdvice {
     private static final int POSIX_MADV_WILLNEED = 3;
     private static final long PAGE = 4096;
+    /**
+     * Bytes per {@code madvise} call. The kernel caps one WILLNEED call at the larger of the
+     * device's readahead window and its maximum request (128 KB each on a stock NVMe), and reads
+     * nothing of the span beyond that; separate calls each queue their own reads, all asynchronous,
+     * so a long run is announced as a sequence of calls of this size.
+     */
+    private static final long PIECE = 128L << 10;
     private final MethodHandle madvise;
 
     public NativeMappingAdvice() {
@@ -50,9 +57,11 @@ public final class NativeMappingAdvice implements MappingAdvice {
         long start = whole.address() + offset;
         long aligned = start & -PAGE;                       // madvise wants a page-aligned start
         long end = Math.min(start + length, whole.address() + whole.byteSize());
-        MemorySegment span = MemorySegment.ofAddress(aligned).reinterpret(end - aligned);
         try {
-            int ignored = (int) madvise.invokeExact(span, span.byteSize(), POSIX_MADV_WILLNEED);
+            for (long at = aligned; at < end; at += PIECE) {
+                MemorySegment span = MemorySegment.ofAddress(at).reinterpret(Math.min(PIECE, end - at));
+                int ignored = (int) madvise.invokeExact(span, span.byteSize(), POSIX_MADV_WILLNEED);
+            }
         } catch (Throwable t) {
             // advice is best effort
         }
