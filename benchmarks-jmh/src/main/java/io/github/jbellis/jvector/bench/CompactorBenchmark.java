@@ -704,7 +704,7 @@ public class CompactorBenchmark {
             liveNodes.add(randomLiveNodes(size, liveNodesRate, n));
             globalOrdinal += size;
         }
-        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null);
+        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null, 0);
 
         long startNanos = System.nanoTime();
         compactor.compact(compactOutputPath);

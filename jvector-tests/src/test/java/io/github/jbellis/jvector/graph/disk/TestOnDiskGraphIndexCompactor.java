@@ -270,7 +270,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                 List.of(g0, g1),
                 List.of(live0, live1),
                 List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                vsf, null);
+                vsf, null, 0);
 
         Path outPath = testDirectory.resolve("simple_compact_out");
         compactor.compact(outPath);
@@ -347,7 +347,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                 List.of(g0, g1),
                 List.of(live0, live1),
                 List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                vsf, null);
+                vsf, null, 0);
 
         Path outPath = testDirectory.resolve("del_compact_out");
         compactor.compact(outPath);
@@ -425,7 +425,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                 List.of(g0, g1),
                 List.of(live0, live1),
                 List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                vsf, null);
+                vsf, null, 0);
 
         Path outPath = testDirectory.resolve("remap_compact_out");
         compactor.compact(outPath);
@@ -482,7 +482,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
             liveNodes.add(lives);
         }
 
-        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null);
+        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null, 0);
         int topK = 10;
 
         // Select query vectors from the dataset
@@ -579,7 +579,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
             liveNodes.add(lives);
         }
 
-        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null);
+        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null, 0);
         var outputPath = testDirectory.resolve("test_compact_with_deletions");
 
         compactor.compact(outputPath);
@@ -646,7 +646,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
             liveNodes.add(lives);
         }
 
-        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null);
+        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null, 0);
         var outputPath = testDirectory.resolve("test_compact_with_ordinal_mapping");
 
         compactor.compact(outputPath);
@@ -724,7 +724,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
             liveNodes.add(lives);
         }
 
-        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null);
+        var compactor = new OnDiskGraphIndexCompactor(graphs, liveNodes, remappers, similarityFunction, null, 0);
         var outputPath = testDirectory.resolve("test_compact_deletions_and_mapping");
 
         compactor.compact(outputPath);
@@ -830,7 +830,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                 List.<io.github.jbellis.jvector.quantization.CompressedVectors>of(pqv0, pqv1),
                 List.of(live0, live1),
                 List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                vsf, null);
+                vsf, null, 0);
 
         Path graphOut = testDirectory.resolve("sidecar_graph_out");
         Path compressedOut = testDirectory.resolve("sidecar_pq_out");
@@ -913,7 +913,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                     List.<io.github.jbellis.jvector.quantization.CompressedVectors>of(pqv0, pqv1),
                     List.of(live0, live1),
                     List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                    similarityFunction, null);
+                    similarityFunction, null, 0);
             org.junit.Assert.fail("expected IllegalArgumentException for FUSED_PQ + sourceCompressed");
         } catch (IllegalArgumentException expected) {
             assertTrue("error message mentions FUSED_PQ",
@@ -956,7 +956,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                     List.<io.github.jbellis.jvector.quantization.CompressedVectors>of(pqv0),  // size 1 vs sources size 2
                     List.of(live, live),
                     List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                    vsf, null);
+                    vsf, null, 0);
             org.junit.Assert.fail("expected IllegalArgumentException for size mismatch");
         } catch (IllegalArgumentException expected) {
             assertTrue("error message mentions size",
@@ -992,7 +992,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                 List.of(g0, g1),
                 List.of(live, live),
                 List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                vsf, null);
+                vsf, null, 0);
 
         Path graphOut = testDirectory.resolve("noarg_graph_out");
         Path compressedOut = testDirectory.resolve("noarg_pq_out");
@@ -1052,7 +1052,7 @@ public class TestOnDiskGraphIndexCompactor extends RandomizedTest {
                 List.<io.github.jbellis.jvector.quantization.CompressedVectors>of(pqv0, pqv1),
                 List.of(live0, live1),
                 List.of(new OrdinalMapper.MapMapper(map0), new OrdinalMapper.MapMapper(map1)),
-                vsf, null);
+                vsf, null, 0);
 
         Path graphOut = testDirectory.resolve("delsidecar_graph_out");
         Path compressedOut = testDirectory.resolve("delsidecar_pq_out");

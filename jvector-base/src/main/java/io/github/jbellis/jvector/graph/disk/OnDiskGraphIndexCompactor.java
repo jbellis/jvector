@@ -80,7 +80,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     private final int dimension;
     private int maxOrdinal = -1;
     private int numTotalNodes = 0;
-    private final ForkJoinPool executor;
+    private final ExecutorService executor;
     private final int taskWindowSize;
     private final VectorSimilarityFunction similarityFunction;
     private boolean refineAfterCompaction = false;
@@ -123,7 +123,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     }
     /**
      * Constructs a new OnDiskGraphIndexCompactor for graphs without a non-fused compressed sidecar.
-     * Equivalent to calling the 6-arg constructor with {@code sourceCompressed = null}.
+     * Equivalent to calling the 7-arg constructor with {@code sourceCompressed = null}.
      */
     @Experimental
     public OnDiskGraphIndexCompactor(
@@ -131,8 +131,9 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             List<? extends BitSet> liveNodes,
             List<OrdinalMapper> remappers,
             VectorSimilarityFunction similarityFunction,
-            ForkJoinPool executor) {
-        this(sources, null, liveNodes, remappers, similarityFunction, executor);
+            ExecutorService executor,
+            int parallelism) {
+        this(sources, null, liveNodes, remappers, similarityFunction, executor, parallelism);
     }
 
     /**
@@ -152,11 +153,13 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             List<? extends BitSet> liveNodes,
             List<OrdinalMapper> remappers,
             VectorSimilarityFunction similarityFunction,
-            ForkJoinPool executor) {
+            ExecutorService executor,
+            int parallelism) {
         checkBeforeCompact(sources, sourceCompressed, liveNodes, remappers);
 
         if (executor != null) {
             this.executor = executor;
+            this.taskWindowSize = parallelism;
         } else {
             // Default to the shared physical-core pool. Compaction (PQ encode + parallel record
             // flush + refinement) is compute- and memory-bandwidth-bound, so sizing to logical
@@ -164,10 +167,8 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             // process-wide and shared with index construction and quantization; the compactor
             // never owns or shuts it down.
             this.executor = PhysicalCoreExecutor.pool();
+            this.taskWindowSize = PhysicalCoreExecutor.pool().getParallelism();
         }
-        // Track the pool's real parallelism so task-window / backpressure sizing stays correct
-        // whether the executor is the shared default or a caller-injected pool.
-        this.taskWindowSize = this.executor.getParallelism();
 
         this.sources = sources;
         this.sourceCompressed = (sourceCompressed == null || sourceCompressed.isEmpty()) ? null : sourceCompressed;
