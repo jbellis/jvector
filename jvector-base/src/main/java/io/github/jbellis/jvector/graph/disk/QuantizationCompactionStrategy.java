@@ -257,6 +257,9 @@ public abstract class QuantizationCompactionStrategy {
      * (empty) merge.
      */
     @SuppressWarnings("unchecked")
+    /** Records announced ahead of the read in the new-ordinal-order pre-encode: a few hundred KB in flight per thread. */
+    static final int PREENCODE_AHEAD = 512;
+
     protected PreEncodedCodeCache precomputeCodeCache(CompactionContext ctx, CompactWriter writer,
                                                       VectorCompressor<?> compressor, String label) throws IOException {
         final int codeSize = compressor.compressedVectorSize();
@@ -276,9 +279,9 @@ public abstract class QuantizationCompactionStrategy {
         final PreEncodedCodeCache cache;
         try (FileChannel fc = FileChannel.open(writer.getOutputPath(), StandardOpenOption.READ, StandardOpenOption.WRITE)) {
             fc.write(ByteBuffer.wrap(new byte[]{0}), secondaryOffset + secondaryBytes - 1);
-            cache = PreEncodedCodeCache.map(fc, tempOffset, codeCount, codeSize);
+            cache = PreEncodedCodeCache.map(fc, writer.getOutputPath(), tempOffset, codeCount, codeSize);
             if (secondarySize > 0) {
-                secondaryCache = PreEncodedCodeCache.map(fc, secondaryOffset, codeCount, secondarySize);
+                secondaryCache = PreEncodedCodeCache.map(fc, writer.getOutputPath(), secondaryOffset, codeCount, secondarySize);
             }
         }
         final VectorCompressor<ByteSequence<?>> enc = (VectorCompressor<ByteSequence<?>>) compressor;
@@ -314,8 +317,16 @@ public abstract class QuantizationCompactionStrategy {
                     ByteSequence<?> code2 = enc2 == null ? null : vectorTypeSupport.createByteSequence(secondarySize);
                     VectorFloat<?> vec = vectorTypeSupport.createFloatVector(ctx.dimension);
                     long count = 0;
+                    // The source is read at random here, one record per node. Announce the records
+                    // PREENCODE_AHEAD nodes ahead of the read so that many are in flight per thread;
+                    // read as they come, each thread would wait out one page fault per record.
+                    int ahead = cStart;
                     try (var view = source.getView()) {
                         for (int newOrd = cStart; newOrd < cEnd; newOrd++) {
+                            while (ahead < cEnd && ahead < newOrd + PREENCODE_AHEAD) {
+                                int o = mapper.newToOld(ahead++);
+                                if (o >= 0 && alive.get(o)) source.willNeedL0Record(o);
+                            }
                             int oldOrd = mapper.newToOld(newOrd);
                             if (oldOrd < 0 || !alive.get(oldOrd)) continue;
                             view.getVectorInto(oldOrd, vec, 0);

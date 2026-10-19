@@ -105,31 +105,36 @@ public class TestPreEncodedCodeCache extends RandomizedTest {
     }
 
     /**
-     * {@code stream} announces a row span that crosses chunks (and, with a non-zero file offset,
-     * is not aligned to the file start): it reports the full span, is harmless over a span that
-     * runs to the last row, and leaves every row readable and intact.
+     * {@code readRowsDirect} returns the rows exactly as the mapping wrote them, across chunk
+     * boundaries and from a non-aligned file offset, with the returned offset locating the first
+     * row in the aligned read. Skipped where the file system refuses direct I/O (tmpfs).
      */
     @Test
-    public void testStreamSpansChunksAndKeepsRowsIntact() throws IOException {
+    public void testDirectReadsMatchMapping() throws IOException {
         int codeSize = 40, count = 300, offset = 4096 + 13;
         int maxChunkBytes = codeSize * 11;   // 11 codes per chunk
         Path p = Files.createTempFile("code-cache-", ".bin");
         p.toFile().deleteOnExit();
         try (FileChannel fc = FileChannel.open(p, StandardOpenOption.WRITE)) {
-            fc.write(ByteBuffer.wrap(new byte[]{0}), offset + PreEncodedCodeCache.sectionBytes(count, codeSize) - 1);
+            fc.write(ByteBuffer.wrap(new byte[]{0}), offset + PreEncodedCodeCache.sectionBytes(count, codeSize) + 8192);
         }
         try (FileChannel fc = FileChannel.open(p, StandardOpenOption.READ, StandardOpenOption.WRITE);
-             PreEncodedCodeCache cache = PreEncodedCodeCache.map(fc, offset, count, codeSize, maxChunkBytes)) {
+             PreEncodedCodeCache cache = PreEncodedCodeCache.map(fc, p, offset, count, codeSize, maxChunkBytes)) {
             for (int i = 0; i < count; i++) {
                 cache.put(i, codeFor(i, codeSize));
             }
-            assertEquals(0, cache.stream(5, 0));
-            assertEquals((long) 50 * codeSize, cache.stream(7, 50));                 // crosses several chunks
-            assertEquals((long) (count - 290) * codeSize, cache.stream(290, count - 290));   // to the last row
-            byte[] dst = new byte[codeSize];
-            for (int i = 0; i < count; i++) {
-                cache.get(i, dst);
-                assertCodeMatches(i, codeSize, dst);
+            fc.force(false);
+            org.junit.Assume.assumeTrue("direct I/O not supported on " + p, cache.supportsDirect());
+            assertEquals((long) count * codeSize, cache.sectionBytes());
+            ByteBuffer buf = PreEncodedCodeCache.allocateAligned(cache.directBufferBytes(50));
+            byte[] row = new byte[codeSize];
+            for (int first : new int[]{0, 7, 123, count - 50}) {
+                int at = cache.readRowsDirect(first, 50, buf);
+                for (int r = 0; r < 50; r++) {
+                    buf.position(at + r * codeSize);
+                    buf.get(row, 0, codeSize);
+                    assertCodeMatches(first + r, codeSize, row);
+                }
             }
         }
     }

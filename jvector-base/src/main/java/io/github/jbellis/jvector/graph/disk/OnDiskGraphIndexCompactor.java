@@ -107,8 +107,12 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     private static final int EXACT_JOIN_MAX_RANGE = 1 << 22;
     private static final long EXACT_JOIN_QUERY_BYTES_MIN = 3L << 30;
     private static final long EXACT_JOIN_PAIR_BYTES_MIN = 512L << 20, EXACT_JOIN_PAIR_BYTES_MAX = 32L << 30;
-    private static final int EXACT_JOIN_STREAM_RUN_BYTES = PreEncodedCodeCache.STREAM_BYTES;   // store bytes announced per request
-    private static final int EXACT_JOIN_STREAM_GAP_BYTES = 64 << 10;       // unwanted bytes a streamed run may span
+    // A walk over a store larger than RAM reads it with direct I/O, one request of up to this many
+    // bytes per run of cells (cells less than the gap apart are read as one run); see walkReadsDirect.
+    private static final int EXACT_JOIN_READ_BYTES = 2 << 20;
+    private static final int EXACT_JOIN_READ_GAP_BYTES = 64 << 10;
+    /** {@code jvector.compaction.walkDirect}: {@code auto} (default), {@code true} or {@code false}. */
+    private static final String WALK_DIRECT_PROPERTY = "jvector.compaction.walkDirect";
     private static final int MIN_SEARCH_TOP_K = 2;
     private static final int SEARCH_TOP_K_MULTIPLIER = 4;
 
@@ -166,6 +170,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     // hub map holds the upper layers' vectors, and level 0 scans, scores and diversifies on vectors.
     private boolean exactMode;
     private volatile ExactJoin exactJoin;   // full-precision merge: scan results of the node range level 0 is processing
+    private Boolean walkDirect;             // decided once per compaction by walkReadsDirect
     private final LongAdder finalizeRowsTouched = new LongAdder(), finalizeRowsRequested = new LongAdder();
     private ThreadLocal<Scratch> scratchLocal;  // the per-thread scratch of the current compaction (set by compactLevels)
     // What level 0 evaluates candidates from: the wide code for coded sources, the vectors
@@ -2392,6 +2397,60 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
     }
 
     /**
+     * Whether the cell walk reads the store with direct I/O instead of through its mapping. Every
+     * range of the walk reads the targets' store once from end to end. When the store fits in the
+     * memory left beside the heap, the mapping serves every pass after the first from RAM and is the
+     * right choice. When it does not, a mapping read must evict a resident page for every page it
+     * brings in, and the kernel does that reclaim synchronously inside the reading threads (measured
+     * on a 1.5 TB store against 400 GB: a third of the machine in reclaim, the disks at a fraction of
+     * their rate); a direct read lands in the thread's own buffer and leaves the page cache alone.
+     * The rule is a size test, overridable with {@value #WALK_DIRECT_PROPERTY}.
+     */
+    private boolean walkReadsDirect(PreEncodedCodeCache store) {
+        if (walkDirect != null) {
+            return walkDirect;
+        }
+        String setting = System.getProperty(WALK_DIRECT_PROPERTY, "auto").trim().toLowerCase();
+        boolean direct;
+        long storeBytes = store.sectionBytes();
+        long beyondHeap = memoryBeyondHeap();
+        if (!store.supportsDirect()) {
+            direct = false;
+        } else if (setting.equals("true")) {
+            direct = true;
+        } else if (setting.equals("false")) {
+            direct = false;
+        } else {
+            direct = beyondHeap > 0 && storeBytes > beyondHeap * 9 / 10;
+        }
+        log.info("Cell walk: store of {} MB, {} MB of memory beyond the heap: the walk reads the store {}",
+                 storeBytes >> 20, beyondHeap < 0 ? "unknown" : String.valueOf(beyondHeap >> 20),
+                 direct ? "with direct I/O" : "through its mapping");
+        walkDirect = direct;
+        return direct;
+    }
+
+    /** Physical (or container) memory minus the maximum heap, or -1 when the platform bean is unavailable. */
+    private static long memoryBeyondHeap() {
+        try {
+            var bean = java.lang.management.ManagementFactory.getOperatingSystemMXBean();
+            Class<?> sun = Class.forName("com.sun.management.OperatingSystemMXBean");
+            if (!sun.isInstance(bean)) {
+                return -1;
+            }
+            long total;
+            try {
+                total = (long) sun.getMethod("getTotalMemorySize").invoke(bean);          // JDK 14+, container-aware
+            } catch (NoSuchMethodException e) {
+                total = (long) sun.getMethod("getTotalPhysicalMemorySize").invoke(bean);
+            }
+            return total - Runtime.getRuntime().maxMemory();
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /**
      * Node range size of the cell walk for source {@code src}: at most {@link #EXACT_JOIN_MAX_RANGE}
      * nodes, query vectors within a sixteenth of the heap (at least {@link #EXACT_JOIN_QUERY_BYTES_MIN}),
      * and (cell, node) pairs within an eighth of the heap, so pairs with their growth slack, the
@@ -2447,6 +2506,12 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         final boolean needNorms = similarityFunction != VectorSimilarityFunction.DOT_PRODUCT;
         final VectorFloat<?>[] queries = new VectorFloat<?>[n];
         final float[] queryNorm2 = new float[n];
+        final boolean direct = walkReadsDirect(candidateStore);
+        final int rowBytes = candidateStore.codeSize();
+        final int readRows = Math.max(1, EXACT_JOIN_READ_BYTES / rowBytes);   // rows per direct read
+        final int gapRows = Math.max(1, EXACT_JOIN_READ_GAP_BYTES / rowBytes);
+        final int readBufBytes = candidateStore.directBufferBytes(readRows);
+        final LongAdder directBytes = new LongAdder();
         // phase 1: query vectors and probe cells; (cell << 32 | node index) pairs per target, per task
         final int tasks1 = Math.max(1, Math.min(taskWindowSize * 4, n / 256));
         final int chunk = (n + tasks1 - 1) / tasks1;
@@ -2466,10 +2531,23 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                 long[][] pairs = pairsByTask[task];
                 int[] count = countByTask[task];
                 for (int t = 0; t < j.targets; t++) pairs[t] = new long[Math.max(64, (to - from) * 6)];
+                final ByteBuffer buf = direct ? sc.directBuffer(readBufBytes) : null;
+                int bufLo = 0, bufHi = 0, bufBase = 0;   // rows [bufLo, bufHi) are in buf, row bufLo at bufBase
                 for (int i = from; i < to; i++) {
                     int newOrd = lo + i;
                     VectorFloat<?> q = vectorTypeSupport.createFloatVector(dimension);
-                    sc.wide.decode(newOrd, q);
+                    if (direct) {
+                        if (newOrd >= bufHi) {
+                            int rows = Math.min(readRows, to - i);
+                            bufBase = readRowsDirect(candidateStore, newOrd, rows, buf);
+                            bufLo = newOrd;
+                            bufHi = newOrd + rows;
+                            directBytes.add((long) rows * rowBytes);
+                        }
+                        sc.wide.decode(buf, bufBase + (newOrd - bufLo) * rowBytes, q);
+                    } else {
+                        sc.wide.decode(newOrd, q);
+                    }
                     queries[i] = q;
                     queryNorm2[i] = needNorms ? VectorUtil.dotProduct(q, q) : 0f;
                     int ownCell = cellOf(src, newOrd);
@@ -2503,7 +2581,6 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         final long t1 = System.nanoTime();
         // phase 2: per target, sort the pairs by cell and walk the cells in ordinal order
         long pairTotal = 0, maxTargetPairs = 0;
-        final LongAdder streamedBytes = new LongAdder();
         for (int target = 0; target < sources.size(); target++) {
             final int ti = j.targetIndex[target];
             if (ti < 0) continue;
@@ -2522,9 +2599,6 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
             pairTotal += total;
             maxTargetPairs = Math.max(maxTargetPairs, total);
             final int[] starts = cellStart[target];
-            final int rowBytes = candidateStore.codeSize();
-            final int runRows = Math.max(1, EXACT_JOIN_STREAM_RUN_BYTES / rowBytes);
-            final int gapRows = Math.max(1, EXACT_JOIN_STREAM_GAP_BYTES / rowBytes);
             // split the sorted pairs into contiguous cell ranges for the workers
             int tasks2 = Math.max(1, Math.min(taskWindowSize * 8, total / 4096));
             List<Callable<Void>> phase2 = new ArrayList<>();
@@ -2542,12 +2616,14 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                     final VectorFloat<?>[] chunkQueries = new VectorFloat<?>[EXACT_QUERY_CHUNK];
                     final float[] chunkScores = new float[EXACT_QUERY_CHUNK];
                     int[] probers = new int[256];
-                    // The task's cells are sorted, so the store rows it decodes form ascending runs.
-                    // Announce them to the kernel one run ahead of the decode cursor (see
-                    // PreEncodedCodeCache.stream): qAhead is the first pair whose cell is not yet
-                    // announced, aheadTo the row below which everything is.
-                    int qAhead = from, aheadTo = 0;
-                    long streamed = 0;
+                    // Direct mode reads the store in runs: the task's cells are sorted, so from any cell the
+                    // following cells form an ascending run; one is planned from the current cell while the
+                    // gaps stay small and the run short, and read into buf a piece at a time. Mapped mode
+                    // decodes straight from the mapping, as a store that fits in RAM wants.
+                    final ByteBuffer buf = direct ? sc.directBuffer(readBufBytes) : null;
+                    int bufLo = 0, bufHi = 0, bufBase = 0;   // rows [bufLo, bufHi) are in buf, row bufLo at bufBase
+                    int planHi = 0, qAhead = from;            // rows below planHi belong to the run being read
+                    long read = 0;
                     int a = from;
                     while (a < to) {
                         int cell = (int) (pairs[a] >>> 32);
@@ -2557,28 +2633,34 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                         if (probers.length < count) probers = new int[count * 2];
                         for (int r = a; r < b; r++) probers[r - a] = (int) pairs[r];
                         final int cLo = starts[cell], cHi = starts[cell + 1];
-                        while (qAhead < to && aheadTo < cHi + runRows) {
-                            int nc = (int) (pairs[qAhead] >>> 32);
-                            int nLo = starts[nc], nHi = starts[nc + 1];
-                            while (qAhead < to && (int) (pairs[qAhead] >>> 32) == nc) qAhead++;
-                            if (nHi <= aheadTo) continue;
-                            int runLo = Math.max(nLo, aheadTo), runHi = nHi;
-                            // coalesce the following cells while the gaps are small and the run is short
-                            while (qAhead < to && runHi - runLo < runRows) {
-                                int mc = (int) (pairs[qAhead] >>> 32);
-                                int mLo = starts[mc], mHi = starts[mc + 1];
-                                if (mLo - runHi > gapRows) break;
-                                if (mHi > runHi) runHi = mHi;
-                                while (qAhead < to && (int) (pairs[qAhead] >>> 32) == mc) qAhead++;
-                            }
-                            streamed += candidateStore.stream(runLo, runHi - runLo);
-                            aheadTo = runHi;
-                        }
                         for (int c0 = 0; c0 < count; c0 += EXACT_QUERY_CHUNK) {
                             final int cn = Math.min(EXACT_QUERY_CHUNK, count - c0);
                             for (int r = 0; r < cn; r++) chunkQueries[r] = queries[probers[c0 + r]];
                             for (int newOrd = cLo; newOrd < cHi; newOrd++) {
-                                sc.wide.decode(newOrd, tmp);
+                                if (direct) {
+                                    if (newOrd >= bufHi || newOrd < bufLo) {
+                                        if (newOrd >= planHi) {
+                                            int runHi = cHi;
+                                            if (qAhead < b) qAhead = b;
+                                            while (qAhead < to && runHi - newOrd < readRows) {
+                                                int mc = (int) (pairs[qAhead] >>> 32);
+                                                int mLo = starts[mc], mHi = starts[mc + 1];
+                                                if (mLo - runHi > gapRows) break;
+                                                if (mHi > runHi) runHi = mHi;
+                                                while (qAhead < to && (int) (pairs[qAhead] >>> 32) == mc) qAhead++;
+                                            }
+                                            planHi = runHi;
+                                        }
+                                        int rows = Math.min(readRows, planHi - newOrd);
+                                        bufBase = readRowsDirect(candidateStore, newOrd, rows, buf);
+                                        bufLo = newOrd;
+                                        bufHi = newOrd + rows;
+                                        read += (long) rows * rowBytes;
+                                    }
+                                    sc.wide.decode(buf, bufBase + (newOrd - bufLo) * rowBytes, tmp);
+                                } else {
+                                    sc.wide.decode(newOrd, tmp);
+                                }
                                 VectorUtil.dotProductMulti(tmp, chunkQueries, cn, chunkScores);
                                 float vNorm2 = needNorms ? VectorUtil.dotProduct(tmp, tmp) : 0f;
                                 for (int r = 0; r < cn; r++) {
@@ -2601,7 +2683,7 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
                         }
                         a = b;
                     }
-                    streamedBytes.add(streamed);
+                    directBytes.add(read);
                     return null;
                 });
             }
@@ -2609,12 +2691,20 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         }
         j.pairsWalked = pairTotal;
         j.maxTargetPairs = maxTargetPairs;
-        log.info("Cell walk: source {} ordinals [{}, {}): probes {} ms, {} (cell, node) pairs over {} targets, walk {} ms, {} MB of store streamed",
-                 src, lo, hi, (t1 - t0) / 1_000_000, pairTotal, j.targets, (System.nanoTime() - t1) / 1_000_000, streamedBytes.sum() >> 20);
+        log.info("Cell walk: source {} ordinals [{}, {}): probes {} ms, {} (cell, node) pairs over {} targets, walk {} ms, {} MB of store read directly",
+                 src, lo, hi, (t1 - t0) / 1_000_000, pairTotal, j.targets, (System.nanoTime() - t1) / 1_000_000, directBytes.sum() >> 20);
         return j;
     }
 
     private static final int EXACT_QUERY_CHUNK = 32;   // queries scored together against each vector; 32 x 1.5 KB stays in L1
+
+    private static int readRowsDirect(PreEncodedCodeCache store, int first, int rows, ByteBuffer buf) {
+        try {
+            return store.readRowsDirect(first, rows, buf);
+        } catch (IOException e) {
+            throw new UncheckedIOException("reading the merge store", e);
+        }
+    }
 
     private static final class Scratch implements AutoCloseable {
         final int[] candSrc, candNode;
@@ -2635,6 +2725,14 @@ public final class OnDiskGraphIndexCompactor implements Accountable {
         IntHashSet l1Visited;   // visited set for the probe beam
         int probeNode = -1, probeSrc = -1;
         int[] finalizeOrds;     // full-precision merge: the batch's candidate rows, for the ordered prefetch
+        ByteBuffer directBuf;   // cell walk in direct mode: the thread's aligned read buffer
+
+        ByteBuffer directBuffer(int bytes) {
+            if (directBuf == null || directBuf.capacity() < bytes) {
+                directBuf = PreEncodedCodeCache.allocateAligned(bytes);
+            }
+            return directBuf;
+        }
 
         /**
          * Constructs scratch space with buffers sized for the maximum expected candidates and degree.

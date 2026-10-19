@@ -26,8 +26,9 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
-import io.github.jbellis.jvector.disk.MappingAdvice;
 
 /**
  * A memory-mapped array of pre-encoded fused codes, indexed by new ordinal.
@@ -90,12 +91,15 @@ public final class PreEncodedCodeCache implements AutoCloseable {
     private final ThreadLocal<ByteBuffer[]> viewsPerThread;
     private final ThreadLocal<ByteBuffer> warmByte = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(1));
 
-    /** Largest single request {@link #stream} issues; the kernel's readahead also tops out near this. */
-    static final int STREAM_BYTES = 2 << 20;
-    private final ThreadLocal<ByteBuffer> streamBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(STREAM_BYTES));
+    /** Alignment direct I/O needs for offsets, lengths and buffer addresses (the file system block). */
+    public static final int DIRECT_ALIGN = 4096;
+    private final Path path;                  // null when the cache was mapped without one: no direct reads
+    private volatile FileChannel direct;      // opened on first use, with the direct-I/O option
+    private volatile boolean directUnavailable;
 
     private PreEncodedCodeCache(MappedByteBuffer[] chunks, int codeSize, int codesPerChunk,
-                                FileChannel channel, long baseOffset) {
+                                FileChannel channel, long baseOffset, Path path) {
+        this.path = path;
         this.chunks = chunks;
         this.codeSize = codeSize;
         this.codesPerChunk = codesPerChunk;
@@ -122,11 +126,25 @@ public final class PreEncodedCodeCache implements AutoCloseable {
      */
     public static PreEncodedCodeCache map(FileChannel fc, long offset, int count, int codeSize)
             throws IOException {
-        return map(fc, offset, count, codeSize, MAX_CHUNK_BYTES);
+        return map(fc, null, offset, count, codeSize, MAX_CHUNK_BYTES);
+    }
+
+    /**
+     * As {@link #map(FileChannel, long, int, int)}, also recording the file's path so the cache
+     * can open it a second time for {@link #readRowsDirect direct reads}.
+     */
+    public static PreEncodedCodeCache map(FileChannel fc, Path path, long offset, int count, int codeSize)
+            throws IOException {
+        return map(fc, path, offset, count, codeSize, MAX_CHUNK_BYTES);
     }
 
     /** As {@link #map(FileChannel, long, int, int)} with an explicit chunk target, so tests can exercise the multi-chunk path. */
     static PreEncodedCodeCache map(FileChannel fc, long offset, int count, int codeSize, int maxChunkBytes)
+            throws IOException {
+        return map(fc, null, offset, count, codeSize, maxChunkBytes);
+    }
+
+    static PreEncodedCodeCache map(FileChannel fc, Path path, long offset, int count, int codeSize, int maxChunkBytes)
             throws IOException {
         if (codeSize <= 0) {
             throw new IllegalArgumentException("codeSize must be positive, got " + codeSize);
@@ -153,7 +171,7 @@ public final class PreEncodedCodeCache implements AutoCloseable {
                                offset + firstCode * codeSize,
                                codesHere * codeSize);
         }
-        return new PreEncodedCodeCache(chunks, codeSize, codesPerChunk, fc, offset);
+        return new PreEncodedCodeCache(chunks, codeSize, codesPerChunk, fc, offset, path);
     }
 
     /** Bytes of the mapped region for {@code count} codes. */
@@ -225,55 +243,88 @@ public final class PreEncodedCodeCache implements AutoCloseable {
         }
     }
 
+    /** Bytes of the whole section: every row of every chunk. */
+    public long sectionBytes() {
+        long bytes = 0;
+        for (MappedByteBuffer c : chunks) {
+            bytes += c.capacity();
+        }
+        return bytes;
+    }
+
     /**
-     * Announces that the rows {@code [firstOrdinal, firstOrdinal + count)} are about to be read in
-     * order through the mapping, so the kernel can stream them instead of faulting them in one
-     * readahead window at a time. A fault on the mapping is a synchronous read of one window
-     * (128 KB on a stock block device) and a thread issues the next only after the previous one
-     * landed, which caps a walk over a store larger than RAM at a few GB/s and leaves the device
-     * mostly idle. With the native module the rows are advised {@code POSIX_MADV_WILLNEED}, which
-     * queues the reads asynchronously and costs nothing for pages already resident; without it the
-     * same span is read positionally in {@link #STREAM_BYTES} pieces into a per-thread buffer,
-     * which lands the pages in the shared page cache all the same.
-     *
-     * @return the bytes announced
+     * Whether {@link #readRowsDirect} can be used: the cache knows its file and the file system
+     * accepts the direct-I/O open option (tmpfs, for one, does not).
      */
-    public long stream(int firstOrdinal, int count) {
-        if (count <= 0) {
-            return 0;
+    public boolean supportsDirect() {
+        return directChannel() != null;
+    }
+
+    private FileChannel directChannel() {
+        FileChannel d = direct;
+        if (d != null || directUnavailable || path == null) {
+            return d;
         }
-        long first = (long) firstOrdinal * codeSize;
-        long end = first + (long) count * codeSize;
-        MappingAdvice advice = MappingAdvice.get();
-        if (advice != null) {
-            long pos = first;
-            while (pos < end) {
-                int chunk = (int) (pos / ((long) codesPerChunk * codeSize));
-                long chunkStart = (long) chunk * codesPerChunk * codeSize;
-                long chunkEnd = chunkStart + chunks[chunk].capacity();
-                long stop = Math.min(end, chunkEnd);
-                advice.willNeed(chunks[chunk], (int) (pos - chunkStart), (int) (stop - pos));
-                pos = stop;
-            }
-            return end - first;
-        }
-        ByteBuffer b = streamBuf.get();
-        long pos = baseOffset + first;
-        long stop = baseOffset + end;
-        try {
-            while (pos < stop) {
-                b.clear();
-                b.limit((int) Math.min(STREAM_BYTES, stop - pos));
-                int r = channel.read(b, pos);
-                if (r <= 0) {
-                    break;
+        synchronized (this) {
+            if (direct == null && !directUnavailable) {
+                try {
+                    direct = FileChannel.open(path, StandardOpenOption.READ, com.sun.nio.file.ExtendedOpenOption.DIRECT);
+                } catch (IOException | UnsupportedOperationException | IllegalArgumentException e) {
+                    log.info("Direct reads of {} unavailable ({}); the cache is read through its mapping", path, e.toString());
+                    directUnavailable = true;
                 }
-                pos += r;
             }
-        } catch (IOException e) {
-            // best effort: the mapping reads that follow fault in whatever was not streamed
+            return direct;
         }
-        return pos - (baseOffset + first);
+    }
+
+    /** A direct buffer aligned for {@link #readRowsDirect}, holding at least {@code bytes}. */
+    public static ByteBuffer allocateAligned(int bytes) {
+        return ByteBuffer.allocateDirect(bytes + DIRECT_ALIGN).alignedSlice(DIRECT_ALIGN);
+    }
+
+    /** Buffer capacity {@link #readRowsDirect} needs for {@code count} rows at once. */
+    public int directBufferBytes(int count) {
+        return (int) Math.min(Integer.MAX_VALUE - DIRECT_ALIGN, (long) count * codeSize + 2L * DIRECT_ALIGN);
+    }
+
+    /**
+     * Reads the rows {@code [firstOrdinal, firstOrdinal + count)} straight from the file into
+     * {@code dst}, bypassing the page cache: the bytes land in the caller's buffer and nothing is
+     * cached, mapped or evicted on their account. For a pass that reads a store larger than RAM
+     * once from end to end, this is what keeps the kernel's memory reclaim out of the walk; a
+     * mapping read of the same rows must evict a resident page for every page it brings in.
+     * Offsets and lengths are widened to {@link #DIRECT_ALIGN} as direct I/O requires, so
+     * {@code dst} needs {@link #directBufferBytes} capacity and its contents start at the
+     * returned offset. Callers decide between this and the mapping by whether the store fits
+     * in memory; when it does, the mapping is a memory read and strictly better.
+     *
+     * @return the offset in {@code dst} at which row {@code firstOrdinal} begins
+     */
+    public int readRowsDirect(int firstOrdinal, int count, ByteBuffer dst) throws IOException {
+        FileChannel d = directChannel();
+        if (d == null) {
+            throw new IOException("direct reads unavailable for " + path);
+        }
+        long start = baseOffset + (long) firstOrdinal * codeSize;
+        long end = start + (long) count * codeSize;
+        long alignedStart = start & -(long) DIRECT_ALIGN;
+        long alignedEnd = (end + DIRECT_ALIGN - 1) & -(long) DIRECT_ALIGN;
+        int bytes = (int) (alignedEnd - alignedStart);
+        if (bytes > dst.capacity()) {
+            throw new IllegalArgumentException("buffer of " + dst.capacity() + " bytes cannot hold " + count + " rows (" + bytes + " aligned bytes)");
+        }
+        dst.clear();
+        dst.limit(bytes);
+        long pos = alignedStart;
+        while (dst.hasRemaining()) {
+            int n = d.read(dst, pos);
+            if (n < 0) {
+                throw new IOException("unexpected end of " + path + " at " + pos);
+            }
+            pos += n;
+        }
+        return (int) (start - alignedStart);
     }
 
     /** Copies the code at {@code ordinal} into {@code dst}, which must hold at least {@link #codeSize()} bytes. */
@@ -287,6 +338,15 @@ public final class PreEncodedCodeCache implements AutoCloseable {
 
     @Override
     public void close() {
+        FileChannel d = direct;
+        if (d != null) {
+            direct = null;
+            try {
+                d.close();
+            } catch (IOException ignored) {
+                // the mapping is the cache's state; a stale direct handle is not
+            }
+        }
         if (UNSAFE == null) {
             return;
         }
