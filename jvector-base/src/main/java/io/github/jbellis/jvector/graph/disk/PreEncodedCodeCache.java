@@ -27,6 +27,8 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
+import io.github.jbellis.jvector.disk.MappingAdvice;
+
 /**
  * A memory-mapped array of pre-encoded fused codes, indexed by new ordinal.
  *
@@ -87,6 +89,10 @@ public final class PreEncodedCodeCache implements AutoCloseable {
     private final long baseOffset;
     private final ThreadLocal<ByteBuffer[]> viewsPerThread;
     private final ThreadLocal<ByteBuffer> warmByte = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(1));
+
+    /** Largest single request {@link #stream} issues; the kernel's readahead also tops out near this. */
+    static final int STREAM_BYTES = 2 << 20;
+    private final ThreadLocal<ByteBuffer> streamBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(STREAM_BYTES));
 
     private PreEncodedCodeCache(MappedByteBuffer[] chunks, int codeSize, int codesPerChunk,
                                 FileChannel channel, long baseOffset) {
@@ -217,6 +223,57 @@ public final class PreEncodedCodeCache implements AutoCloseable {
         } catch (IOException e) {
             // warming is best effort: the mapping read that follows will fault the row in anyway
         }
+    }
+
+    /**
+     * Announces that the rows {@code [firstOrdinal, firstOrdinal + count)} are about to be read in
+     * order through the mapping, so the kernel can stream them instead of faulting them in one
+     * readahead window at a time. A fault on the mapping is a synchronous read of one window
+     * (128 KB on a stock block device) and a thread issues the next only after the previous one
+     * landed, which caps a walk over a store larger than RAM at a few GB/s and leaves the device
+     * mostly idle. With the native module the rows are advised {@code POSIX_MADV_WILLNEED}, which
+     * queues the reads asynchronously and costs nothing for pages already resident; without it the
+     * same span is read positionally in {@link #STREAM_BYTES} pieces into a per-thread buffer,
+     * which lands the pages in the shared page cache all the same.
+     *
+     * @return the bytes announced
+     */
+    public long stream(int firstOrdinal, int count) {
+        if (count <= 0) {
+            return 0;
+        }
+        long first = (long) firstOrdinal * codeSize;
+        long end = first + (long) count * codeSize;
+        MappingAdvice advice = MappingAdvice.get();
+        if (advice != null) {
+            long pos = first;
+            while (pos < end) {
+                int chunk = (int) (pos / ((long) codesPerChunk * codeSize));
+                long chunkStart = (long) chunk * codesPerChunk * codeSize;
+                long chunkEnd = chunkStart + chunks[chunk].capacity();
+                long stop = Math.min(end, chunkEnd);
+                advice.willNeed(chunks[chunk], (int) (pos - chunkStart), (int) (stop - pos));
+                pos = stop;
+            }
+            return end - first;
+        }
+        ByteBuffer b = streamBuf.get();
+        long pos = baseOffset + first;
+        long stop = baseOffset + end;
+        try {
+            while (pos < stop) {
+                b.clear();
+                b.limit((int) Math.min(STREAM_BYTES, stop - pos));
+                int r = channel.read(b, pos);
+                if (r <= 0) {
+                    break;
+                }
+                pos += r;
+            }
+        } catch (IOException e) {
+            // best effort: the mapping reads that follow fault in whatever was not streamed
+        }
+        return pos - (baseOffset + first);
     }
 
     /** Copies the code at {@code ordinal} into {@code dst}, which must hold at least {@link #codeSize()} bytes. */
