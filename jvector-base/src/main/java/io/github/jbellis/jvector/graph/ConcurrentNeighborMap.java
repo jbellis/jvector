@@ -295,7 +295,8 @@ public class ConcurrentNeighborMap {
 
             var insertionPoint = insertionPoint(neighborId, score);
             if (insertionPoint == -1) {
-                // Reject duplicate IDs without changing the neighborhood or its pruning state.
+                // Retain the stored edge score and pruning state when rejecting a duplicate ID.
+                // The first installed score can depend on concurrent offer timing.
                 return null;
             }
 
@@ -318,8 +319,6 @@ public class ConcurrentNeighborMap {
                     + Integer.BYTES // nodeId
                     + Integer.BYTES; // diverseBefore
         }
-
-
     }
 
     private static class NeighborWithShortEdges {
