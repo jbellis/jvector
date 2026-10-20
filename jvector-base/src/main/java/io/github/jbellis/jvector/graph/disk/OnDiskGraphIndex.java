@@ -454,23 +454,10 @@ public class OnDiskGraphIndex implements ImmutableGraphIndex, AutoCloseable, Acc
         if (maxNode < minNode) {
             return;
         }
-        long blockBytes = l0BlockBytes();
+        long blockBytes = Integer.BYTES + inlineBlockSize
+                + (long) Integer.BYTES * (layerInfo.get(0).degree + 1);
         long start = neighborsOffset + blockBytes * minNode;
         readerSupplier.prefetch(start, blockBytes * (maxNode - minNode + 1));
-    }
-
-    /**
-     * Asks the kernel to start reading node {@code node}'s level-0 record and returns at once
-     * ({@link ReaderSupplier#willNeed}). A pass that visits records in an order of its own calls
-     * this some way ahead of the read, so that many records are in flight per thread.
-     */
-    public void willNeedL0Record(int node) {
-        long blockBytes = l0BlockBytes();
-        readerSupplier.willNeed(neighborsOffset + blockBytes * node, blockBytes);
-    }
-
-    private long l0BlockBytes() {
-        return Integer.BYTES + inlineBlockSize + (long) Integer.BYTES * (layerInfo.get(0).degree + 1);
     }
 
     // re-declared to specify type

@@ -38,16 +38,6 @@ public interface ReaderSupplier extends AutoCloseable {
      * {@code MADV_RANDOM} and forgo kernel readahead) can warm exactly those, keeping transient
      * cache demand proportional to the window rather than the file.
      */
-    /**
-     * Asks the kernel to start reading {@code [offset, offset + length)} into the page cache and
-     * returns at once ({@code MADV_WILLNEED} on a mapped reader). Unlike {@link #prefetch} it
-     * does not wait for the bytes, so a caller that reads records in an order of its own can keep
-     * many records in flight per thread instead of faulting them in one at a time. Best effort; a
-     * no-op by default.
-     */
-    default void willNeed(long offset, long length) {
-    }
-
     default void prefetch(long offset, long length) {
     }
 

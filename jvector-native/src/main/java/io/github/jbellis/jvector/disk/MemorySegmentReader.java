@@ -25,7 +25,6 @@ import java.lang.foreign.ValueLayout;
 import java.lang.foreign.ValueLayout.OfFloat;
 import java.lang.foreign.ValueLayout.OfInt;
 import java.lang.foreign.ValueLayout.OfLong;
-import java.lang.invoke.MethodHandle;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -47,14 +46,6 @@ public class MemorySegmentReader implements RandomAccessReader {
     private static final Logger logger = LoggerFactory.getLogger(MemorySegmentReader.class);
 
     private static final int MADV_RANDOM = 1; // Value for Linux
-    private static final int MADV_WILLNEED = 3;
-    private static final long PAGE = 4096;
-    /**
-     * Bytes per {@code madvise(WILLNEED)} call. One call reads at most the larger of the device's
-     * readahead window and its maximum request (128 KB each on a stock NVMe) and nothing beyond, so
-     * a longer span is announced as a sequence of calls, each of which queues its own reads.
-     */
-    private static final long WILLNEED_PIECE = 128L << 10;
     private static final OfInt intLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
     private static final OfFloat floatLayout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
     private static final OfLong longLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN);
@@ -158,7 +149,6 @@ public class MemorySegmentReader implements RandomAccessReader {
         private final Arena arena;
         private final MemorySegment memory;
         private final Path path;
-        private final MethodHandle madvise;   // posix_madvise, or null when the symbol is missing
 
         public Supplier(Path path) throws IOException {
             this.path = path;
@@ -170,14 +160,13 @@ public class MemorySegmentReader implements RandomAccessReader {
                 var linker = Linker.nativeLinker();
                 var maybeMadvise = linker.defaultLookup().find("posix_madvise");
                 if (maybeMadvise.isPresent()) {
-                    madvise = linker.downcallHandle(maybeMadvise.get(),
+                    var madvise = linker.downcallHandle(maybeMadvise.get(),
                             FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
                     int result = (int) madvise.invokeExact(memory, memory.byteSize(), MADV_RANDOM);
                     if (result != 0) {
                         throw new IOException("posix_madvise failed with error code: " + result);
                     }
                 } else {
-                    madvise = null;
                     logger.warn("posix_madvise not found, MADV_RANDOM advice not applied");
                 }
             } catch (Throwable e) {
@@ -219,23 +208,6 @@ public class MemorySegmentReader implements RandomAccessReader {
             } catch (IOException e) {
                 logger.warn("ranged prefetch of {} [{}, {}) failed; continuing without warm cache",
                             path, offset, end, e);
-            }
-        }
-
-        @Override
-        public void willNeed(long offset, long length) {
-            if (madvise == null || length <= 0) {
-                return;
-            }
-            long start = Math.max(0, offset) & -PAGE;
-            long end = Math.min(offset + length, memory.byteSize());
-            try {
-                for (long at = start; at < end; at += WILLNEED_PIECE) {
-                    MemorySegment span = memory.asSlice(at, Math.min(WILLNEED_PIECE, end - at));
-                    int ignored = (int) madvise.invokeExact(span, span.byteSize(), MADV_WILLNEED);
-                }
-            } catch (Throwable t) {
-                // advice is best effort
             }
         }
 
