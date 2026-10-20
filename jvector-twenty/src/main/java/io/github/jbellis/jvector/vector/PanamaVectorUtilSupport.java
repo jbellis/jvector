@@ -33,6 +33,11 @@ import jdk.incubator.vector.VectorShape;
 import java.util.List;
 
 class PanamaVectorUtilSupport implements VectorUtilSupport {
+    // JDK 20's incubating Vector API returns incorrect ASH scores on AVX-512, while the same
+    // kernels are correct on later JDKs. Use the portable scalar ASH kernels before JDK 21.
+    static final boolean ASH_SIMD = Runtime.version().feature() >= 21;
+    private static final VectorUtilSupport SCALAR_ASH = new DefaultVectorUtilSupport();
+
     private static final VectorSpecies<Float> ASH_FLOATS = FloatVector.SPECIES_PREFERRED;
     private static final VectorSpecies<Integer> ASH_INTS = VectorSpecies.of(
             int.class, ASH_FLOATS.vectorShape());
@@ -72,7 +77,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     public void ashSymmetricLutScore(byte[] codes, int groups, int stride, int lane, int count,
                                       short[] lut, float[] out, int outOffset) {
         var shorts = ASH_SYM_SHORTS;
-        if (shorts.length() < 16 || shorts.length() > 32) {
+        if (!ASH_SIMD || shorts.length() < 16 || shorts.length() > 32) {
             VectorUtilSupport.super.ashSymmetricLutScore(codes, groups, stride, lane, count, lut, out, outOffset);
             return;
         }
@@ -110,11 +115,12 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public boolean supportsAshSymmetricScoring() { return true; }
+    public boolean supportsAshSymmetricScoring() { return ASH_SIMD; }
 
     @Override
     public float ashSymmetricDot(long[] aBits, byte[] aCodes, long[] bBits, byte[] bCodes,
                                   int dimensions, int bits) {
+        if (!ASH_SIMD) return VectorUtilSupport.super.ashSymmetricDot(aBits, aCodes, bBits, bCodes, dimensions, bits);
         // Keep the Vector API compilation units small and species compile-time constant.
         // A shared, large dispatch body can leave boxed vectors in graph-pruning callers.
         return switch (bits) {
@@ -225,16 +231,18 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     @Override
-    public boolean supportsAshProjectionScoring() { return PanamaASHKernels.supported(); }
+    public boolean supportsAshProjectionScoring() { return ASH_SIMD && PanamaASHKernels.supported(); }
 
     @Override
-    public boolean supportsAshLutScoring() { return PanamaASHKernels.supported(); }
+    public boolean supportsAshLutScoring() { return ASH_SIMD && PanamaASHKernels.supported(); }
 
     @Override
-    public String ashKernelDescription() { return PanamaASHKernels.description(); }
+    public String ashKernelDescription() {
+        return ASH_SIMD ? PanamaASHKernels.description() : VectorUtilSupport.super.ashKernelDescription();
+    }
 
     @Override
-    public boolean usesAshProjectionTuning() { return PanamaASHKernels.projectionTuningEnabled(); }
+    public boolean usesAshProjectionTuning() { return ASH_SIMD && PanamaASHKernels.projectionTuningEnabled(); }
 
     @Override
     public float ashProjectionDotTuned(float[] query, byte[] code, int dimensions, int bitsPerDimension) {
@@ -1864,6 +1872,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public float ashDotRow(float[] Arow, float[] x) {
+        if (!ASH_SIMD) return VectorUtilSupport.super.ashDotRow(Arow, x);
         assert Arow.length == x.length : "Arow.length != x.length";
 
         final VectorSpecies<Float> SPEC = FloatVector.SPECIES_PREFERRED;
@@ -1891,7 +1900,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public boolean supportsAshMaskedLoad() {
-        return true;
+        return ASH_SIMD;
     }
 
     @Override
@@ -1901,6 +1910,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                                   int packedBase,
                                   int d,
                                   int words) {
+        if (!ASH_SIMD) return SCALAR_ASH.ashMaskedAddFlat(tildeQ, qOffset, allPackedVectors, packedBase, d, words);
         final VectorSpecies<Float> SPEC = FloatVector.SPECIES_PREFERRED;
         final int LANES = SPEC.length();
 
@@ -1993,6 +2003,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             int packedBase,
             int d,
             int words) {
+        if (!ASH_SIMD) return SCALAR_ASH.ashMaskedAdd_512(tildeQ, qOffset, allPackedVectors, packedBase, d, words);
         return ashMaskedAdd_512(
                 tildeQ,
                 qOffset,
@@ -2278,6 +2289,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                                         int packedBase,
                                         int d,
                                         int words_not_used) { // TODO words is not used in this version
+        if (!ASH_SIMD) return SCALAR_ASH.ashMaskedAddFlat_dense(tildeQ, qOffset, allPackedVectors, packedBase, d, words_not_used);
         final VectorSpecies<Float> SPEC = FloatVector.SPECIES_PREFERRED;
         final int LANES = SPEC.length();
 
@@ -2331,6 +2343,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                                       long[] packedBits,
                                       int packedBase,
                                       int words) {
+        if (!ASH_SIMD) return VectorUtilSupport.super.ashMaskedAddAllWords(tildeQ, d, packedBits, packedBase, words);
         final VectorSpecies<Float> SPEC = FloatVector.SPECIES_PREFERRED;
         final int LANES = SPEC.length();
         final int upperBoundSafe = d - LANES;
@@ -2409,6 +2422,10 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                                           int laneStart,
                                           int blockLen,
                                           float[] outMaskedAdd) {
+        if (!ASH_SIMD) {
+            VectorUtilSupport.super.ashMaskedAddBlockAllWords(tildeQ, d, packedBits, blockWordBase, words, blockSize, laneStart, blockLen, outMaskedAdd);
+            return;
+        }
 
         // Like in the ASH paper, SIMD lanes are dimensions (SPECIES_PREFERRED),
         // masked load from tildeQ and horizontal sum per neighbor.
@@ -2491,6 +2508,10 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
                                                 int laneStart,
                                                 int blockLen,
                                                 float[] outMaskedAdd) {
+        if (!ASH_SIMD) {
+            VectorUtilSupport.super.ashMaskedAddBlockAllWordsPooled(tildeQPool, tildeBase, d, packedBits, blockWordBase, words, blockSize, laneStart, blockLen, outMaskedAdd);
+            return;
+        }
 
         final VectorSpecies<Float> SPEC = FloatVector.SPECIES_PREFERRED;
         final int LANES = SPEC.length();
