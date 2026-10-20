@@ -141,7 +141,7 @@ public abstract class RandomAccessOnDiskGraphIndexWriter extends AbstractGraphIn
      * Both produce an identical on-disk format.
      *
      * <p>Parallel-specific options ({@link #withParallelWorkerThreads}, {@link #withParallelDirectBuffers},
-     * {@link #withExecutor}) are accepted unconditionally but silently ignored when the sequential
+     * {@link #withExecutor}, {@link #withParallelBatchSize}) are accepted unconditionally but silently ignored when the sequential
      * writer is selected.
      */
     public static class Builder extends AbstractGraphIndexWriter.Builder<RandomAccessOnDiskGraphIndexWriter, RandomAccessWriter> {
@@ -150,6 +150,7 @@ public abstract class RandomAccessOnDiskGraphIndexWriter extends AbstractGraphIn
         private int parallelWorkerThreads = 0;
         private boolean parallelUseDirectBuffers = false;
         private ExecutorService parallelExecutor = null;
+        private int parallelBatchSize = ParallelGraphWriter.DEFAULT_RECORDS_PER_BATCH;
 
         /**
          * Writes to the file at {@code outPath}, which is opened (and created if needed) by
@@ -186,13 +187,23 @@ public abstract class RandomAccessOnDiskGraphIndexWriter extends AbstractGraphIn
             return this;
         }
 
+        /**
+         * Maximum complete L0 records per worker buffer (default 64).
+         * Ignored in sequential mode; this option does not enable parallel writing.
+         */
+        public Builder withParallelBatchSize(int records) {
+            if (records <= 0) throw new IllegalArgumentException("Record batch size must be positive");
+            this.parallelBatchSize = records;
+            return this;
+        }
+
         @Override
         protected RandomAccessOnDiskGraphIndexWriter reallyBuild(int dimension) {
             if (GraphIndexBuilderConfig.getInstance().isParallelBuild()) {
                 logger.debug("graph index write path: parallel (OnDiskParallelGraphIndexWriter)");
                 return new OnDiskParallelGraphIndexWriter(out, version, startOffset, graphIndex,
                         ordinalMapper, dimension, features, filePath,
-                        parallelWorkerThreads, parallelUseDirectBuffers, parallelExecutor);
+                        parallelWorkerThreads, parallelUseDirectBuffers, parallelExecutor, parallelBatchSize);
             } else {
                 logger.debug("graph index write path: sequential (OnDiskGraphIndexWriter)");
                 return new OnDiskGraphIndexWriter(out, version, startOffset, graphIndex,

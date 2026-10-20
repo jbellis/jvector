@@ -36,6 +36,7 @@ import io.github.jbellis.jvector.example.util.FilteredForkJoinPool;
 import io.github.jbellis.jvector.example.util.OnDiskGraphIndexCache;
 import io.github.jbellis.jvector.example.yaml.MetricSelection;
 import io.github.jbellis.jvector.graph.GraphIndex;
+import io.github.jbellis.jvector.management.GraphIndexBuilderConfig;
 import io.github.jbellis.jvector.graph.VectorAccess;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
@@ -47,6 +48,7 @@ import io.github.jbellis.jvector.graph.disk.OrdinalMapper;
 import io.github.jbellis.jvector.graph.disk.RandomAccessOnDiskGraphIndexWriter;
 import io.github.jbellis.jvector.graph.disk.feature.Feature;
 import io.github.jbellis.jvector.graph.disk.feature.FeatureId;
+import io.github.jbellis.jvector.graph.disk.OnDiskParallelGraphIndexWriter;
 import io.github.jbellis.jvector.graph.disk.feature.FusedASH;
 import io.github.jbellis.jvector.graph.disk.feature.FusedPQ;
 import io.github.jbellis.jvector.graph.disk.feature.InlineVectors;
@@ -486,7 +488,6 @@ public class Grid {
 
         // use the inline vectors index as the score provider for graph construction
         Map<Set<FeatureId>, RandomAccessOnDiskGraphIndexWriter> writers = new HashMap<>();
-        Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers = new HashMap<>();
         Map<Set<FeatureId>, Map<FeatureId, Function<VectorFloat<?>, Feature.State>>> inputSuppliers = new HashMap<>();
         RandomAccessOnDiskGraphIndexWriter scoringWriter = null;
         int n = 0;
@@ -520,7 +521,6 @@ public class Grid {
                     constructionMetrics);
             var writer = bws.builder.build();
             writers.put(features, writer);
-            suppliers.put(features, bws.suppliers);
             inputSuppliers.put(features, bws.inputSuppliers);
             if (features.contains(FeatureId.INLINE_VECTORS) || features.contains(FeatureId.NVQ_VECTORS)) {
                 scoringWriter = writer;
@@ -530,11 +530,15 @@ public class Grid {
             throw new IllegalStateException("Bench looks for either NVQ_VECTORS or INLINE_VECTORS feature set for scoring compressed builds.");
         }
 
-        // build the graph incrementally
+        // The parallel writer calls final suppliers from its workers, so original-vector features
+        // can be encoded after cleanup. The sequential writer calls them on one thread, so it keeps
+        // encoding on the insertion threads and writing each node's features inline.
+        boolean deferFeatures = writers.values().stream()
+                .allMatch(writer -> writer instanceof OnDiskParallelGraphIndexWriter);
         long startTime = System.nanoTime();
         if (ds.useDatasetPrefetching()) {
             VectorAccess.forEach(floatVectors, PhysicalCoreExecutor.pool(), (node, vector) -> {
-                writeInlineStates(writers, suppliers, inputSuppliers, node, vector);
+                if (!deferFeatures) writeInlineStates(writers, inputSuppliers, node, vector);
                 // Keep main's original insertion query, not a decoded quantized substitute.
                 if (allSymmetric) builder.addGraphNode(node, bsp.searchProviderFor(node));
                 else builder.addGraphNode(node, vector);
@@ -543,9 +547,10 @@ public class Grid {
             var vv = floatVectors.threadLocalSupplier();
             PhysicalCoreExecutor.pool().submit(() -> {
                 IntStream.range(0, floatVectors.size()).parallel().forEach(node -> {
-                    writeInlineStates(writers, suppliers, null, node, null);
+                    var vector = vv.get().getVector(node);
+                    if (!deferFeatures) writeInlineStates(writers, inputSuppliers, node, vector);
                     if (allSymmetric) builder.addGraphNode(node, bsp.searchProviderFor(node));
-                    else builder.addGraphNode(node, vv.get().getVector(node));
+                    else builder.addGraphNode(node, vector);
                 });
             }).join();
         }
@@ -553,17 +558,19 @@ public class Grid {
         builder.cleanup();
         long cleanupEnd = System.nanoTime();
 
-        // write the edge lists and close the writers
-        // if our feature set contains Fused PQ, we need a Fused ADC write-time supplier (as we don't have neighbor information during writeInline)
+        // With deferred features, supply every feature so the parallel writer emits complete records.
         writers.entrySet().stream().parallel().forEach(entry -> {
             var writer = entry.getValue();
             var features = entry.getKey();
-
-            Map<FeatureId, IntFunction<Feature.State>> writeSuppliers;
-            if (features.contains(FeatureId.FUSED_PQ) || features.contains(FeatureId.FUSED_ASH)) {
-                writeSuppliers = new EnumMap<>(FeatureId.class);
-                var view = builder.getGraph().getView();
-
+            try (var vectors = new FinalWriteVectors(floatVectors);
+                 var view = builder.getGraph().getView();
+                 var closeWriter = writer) {
+                Map<FeatureId, IntFunction<Feature.State>> writeSuppliers = new EnumMap<>(FeatureId.class);
+                if (deferFeatures) {
+                    inputSuppliers.get(features).forEach((id, supplier) ->
+                            writeSuppliers.put(id, ordinal -> supplier.apply(vectors.get(ordinal))));
+                }
+                // Fused features need neighbor information, so they are always supplied at write time.
                 if (features.contains(FeatureId.FUSED_PQ)) {
                     // Safe: such features are only present when pq != null (we skipped them otherwise)
                     writeSuppliers.put(FeatureId.FUSED_PQ, ordinal -> new FusedPQ.State(view, pqFinal, ordinal));
@@ -572,13 +579,7 @@ public class Grid {
                     // Safe: such features are only present when ashVectors != null (we skipped them otherwise)
                     writeSuppliers.put(FeatureId.FUSED_ASH, ordinal -> new FusedASH.State(view, ashVectorsFinal, ordinal));
                 }
-            } else {
-                writeSuppliers = Map.of();
-            }
-
-            try {
                 writer.write(writeSuppliers);
-                writer.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -620,20 +621,74 @@ public class Grid {
         return new BuildOnDiskResult(indexes, fileSizes);
     }
 
+    /// Write one node's original-vector features to every writer during insertion. The borrowed
+    /// vector is encoded and written before the caller advances to another vector.
     private static void writeInlineStates(
             Map<Set<FeatureId>, RandomAccessOnDiskGraphIndexWriter> writers,
-            Map<Set<FeatureId>, Map<FeatureId, IntFunction<Feature.State>>> suppliers,
             Map<Set<FeatureId>, Map<FeatureId, Function<VectorFloat<?>, Feature.State>>> inputSuppliers,
             int node, VectorFloat<?> vector) {
         writers.forEach((features, writer) -> {
             var states = new EnumMap<FeatureId, Feature.State>(FeatureId.class);
-            if (inputSuppliers == null)
-                suppliers.get(features).forEach((id, supplier) -> states.put(id, supplier.apply(node)));
-            else
-                inputSuppliers.get(features).forEach((id, supplier) -> states.put(id, supplier.apply(vector)));
-            try { writer.writeInline(node, states); }
+            inputSuppliers.get(features).forEach((id, supplier) -> states.put(id, supplier.apply(vector)));
+            try { writer.writeFeaturesInline(node, states); }
             catch (IOException e) { throw new UncheckedIOException(e); }
         });
+    }
+
+    /** Worker-local bounded input ranges; a borrowed vector is consumed before advancing. */
+    static final class FinalWriteVectors implements AutoCloseable {
+        private final RandomAccessVectorValues source;
+        private final java.util.concurrent.ConcurrentLinkedQueue<Range> ranges =
+                new java.util.concurrent.ConcurrentLinkedQueue<>();
+        private final ThreadLocal<Range> local = ThreadLocal.withInitial(() -> {
+            var range = new Range();
+            ranges.add(range);
+            return range;
+        });
+
+        FinalWriteVectors(RandomAccessVectorValues source) { this.source = source; }
+
+        VectorFloat<?> get(int ordinal) {
+            Objects.checkIndex(ordinal, source.size());
+            var range = local.get();
+            if (range.cursor == null || ordinal != range.ordinal) {
+                if (range.cursor == null || ordinal != range.ordinal + 1 || ordinal == range.end) {
+                    range.close();
+                    range.end = (int) Math.min(source.size(), (long) ordinal + 64);
+                    range.cursor = VectorAccess.openRange(source, ordinal, range.end);
+                }
+                if (!range.cursor.next() || range.cursor.ordinal() != ordinal)
+                    throw new IllegalStateException("Incomplete final-write input range");
+                range.ordinal = ordinal;
+            }
+            return range.cursor.vector();
+        }
+
+        @Override public void close() {
+            // writer.write joins its workers before cursors and their read-ahead are released.
+            RuntimeException failure = null;
+            try {
+                for (var range : ranges) {
+                    try { range.close(); }
+                    catch (RuntimeException e) {
+                        if (failure == null) failure = e;
+                        else if (failure != e) failure.addSuppressed(e);
+                    }
+                }
+            } finally { ranges.clear(); local.remove(); }
+            if (failure != null) throw failure;
+        }
+
+        private static final class Range {
+            io.github.jbellis.jvector.graph.VectorCursor cursor;
+            int ordinal = -1, end;
+            void close() {
+                if (cursor != null) {
+                    try { cursor.close(); }
+                    finally { cursor = null; ordinal = -1; }
+                }
+            }
+        }
     }
 
     private static BuilderWithSuppliers builderWithSuppliers(Set<FeatureId> features,
@@ -648,6 +703,7 @@ public class Grid {
         var identityMapper = new OrdinalMapper.IdentityMapper(floatVectors.size() - 1);
         var builder = new RandomAccessOnDiskGraphIndexWriter.Builder(onHeapGraph, outPath);
         builder.withMapper(identityMapper);
+        builder.withParallelWorkerThreads(PhysicalCoreExecutor.getPhysicalCoreCount());
 
         Map<FeatureId, IntFunction<Feature.State>> suppliers = new EnumMap<>(FeatureId.class);
         Map<FeatureId, Function<VectorFloat<?>, Feature.State>> inputSuppliers = new EnumMap<>(FeatureId.class);
@@ -689,6 +745,14 @@ public class Grid {
             }
         }
         return new BuilderWithSuppliers(builder, suppliers, inputSuppliers);
+    }
+
+    // Entry-point policy only; the library's writer selection remains unchanged.
+    static void configureWriterForBenchmark() {
+        String value = System.getProperty("jvector.parallel_writer", "true").trim();
+        if (!value.equalsIgnoreCase("true") && !value.equalsIgnoreCase("false"))
+            throw new IllegalArgumentException("jvector.parallel_writer must be true or false");
+        GraphIndexBuilderConfig.getInstance().setParallelBuild(Boolean.parseBoolean(value));
     }
 
     public static void setDiagnosticLevel(int diagLevel) {

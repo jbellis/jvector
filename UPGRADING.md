@@ -1,4 +1,4 @@
-# Upgrading from 4.0.1 to 4.0.2
+# Upgrading from 4.0.2 to 4.0.3
 
 ## Critical API changes
 
@@ -18,10 +18,10 @@ If you only read one thing, read this!
 - **`GraphIndexBuilder.build(RandomAccessVectorValues)` and `getGraph()` now return `PersistableGraphIndex`**, a
   `GraphIndex` that can also be written to disk (see below), and `buildAndMergeNewNodes(...)` returns `GraphIndex`.
   Code that assigns these results to `GraphIndex` compiles unchanged.
-- **Recompile against 4.0.2.** Besides the rename, the nested types are now members of `GraphIndex`, and many
+- **Recompile against 4.0.3.** Besides the rename, the nested types are now members of `GraphIndex`, and many
   signatures that took or returned `ImmutableGraphIndex` (for example `new GraphSearcher(graph)`,
   `GraphSearcher.getView()`, `OnDiskGraphIndex.write`, and the graph writer builders) now use `GraphIndex`.
-  Classes compiled against 4.0.1 will fail to link.
+  Classes compiled against 4.0.2 will fail to link.
 
 ## New features
 

@@ -17,6 +17,7 @@
 package io.github.jbellis.jvector.vector.cnative;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 
 /**
@@ -48,12 +49,20 @@ public class LibraryLoader {
         return null;
     }
 
+    /// Load the jvector native library, from `java.library.path` first and then from the bundled
+    /// classpath resource.
+    ///
+    /// Returns `false` when the library is unavailable, native access is denied to this module
+    /// (`IllegalCallerException`, e.g. with `--illegal-native-access=deny`), or a security policy
+    /// blocks loading (`SecurityException`). The bundled copy isn't retried after access denial.
     public static boolean loadJvector() {
         try {
             System.loadLibrary("jvector");
             return true;
         } catch (UnsatisfiedLinkError e) {
             // ignore
+        } catch (IllegalCallerException | SecurityException e) {
+            return false; // native access or library loading denied
         }
         try {
             // reinventing the wheel instead of picking up deps, so we'll just use the classloader to load the library
@@ -64,18 +73,25 @@ public class LibraryLoader {
             }
             String baseName = resourceName.substring(1, resourceName.lastIndexOf('.'));   // e.g. "libjvector-aarch64"
             String ext      = resourceName.substring(resourceName.lastIndexOf('.'));      // e.g. ".so"
-            File tmpLibFile = File.createTempFile(baseName, ext);
-            try (var in = LibraryLoader.class.getResourceAsStream(resourceName);
-                 var out = Files.newOutputStream(tmpLibFile.toPath())) {
-                if (in != null) {
-                    in.transferTo(out);
-                    out.flush();
-                } else {
+            try (var in = LibraryLoader.class.getResourceAsStream(resourceName)) {
+                if (in == null) {
                     return false; // couldn't find library
                 }
+                File tmpLibFile = File.createTempFile(baseName, ext);
+                try {
+                    try (var out = Files.newOutputStream(tmpLibFile.toPath())) {
+                        in.transferTo(out);
+                    }
+                    System.load(tmpLibFile.getAbsolutePath());
+                    return true;
+                } finally {
+                    try {
+                        Files.deleteIfExists(tmpLibFile.toPath());
+                    } catch (IOException | SecurityException e) {
+                        // Best effort: cleanup failure must not invalidate a loaded library.
+                    }
+                }
             }
-            System.load(tmpLibFile.getAbsolutePath());
-            return true;
         } catch (Exception | UnsatisfiedLinkError e) {
             // ignore
         }

@@ -1336,6 +1336,9 @@ public class GraphIndexBuilder implements Closeable, Accountable {
     /**
      * Convenience method to build a new graph from an existing one, with the addition of new nodes.
      * This is useful when we want to merge a new set of vectors into an existing graph that is already on disk.
+     * <p>
+     * Loading and extending an existing graph does not guarantee removal of previously stored
+     * duplicate neighbor IDs. Rebuild from vectors to regenerate all neighborhoods with ID uniqueness.
      *
      * @param in a reader from which to read the on-heap graph.
      * @param newVectors a super set RAVV containing the new vectors to be added to the graph as well as the old ones that are already in the graph
@@ -1362,6 +1365,9 @@ public class GraphIndexBuilder implements Closeable, Accountable {
     /**
      * Convenience method to build a new graph from an existing one, with the addition of new nodes.
      * This is useful when we want to merge a new set of vectors into an existing graph that is already on disk.
+     * <p>
+     * Loading and extending an existing graph does not guarantee removal of previously stored
+     * duplicate neighbor IDs. Rebuild from vectors to regenerate all neighborhoods with ID uniqueness.
      *
      * @param in a reader from which to read the on-heap graph.
      * @param newVectors a super set RAVV containing the new vectors to be added to the graph as well as the old ones that are already in the graph

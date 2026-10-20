@@ -37,14 +37,23 @@
     KERNEL_ENTRY(float, cosine_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, dot_product_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, euclidean_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
-    /* Element-wise in-place arithmetic */ \
+    /* Element-wise arithmetic and reductions */ \
     KERNEL_ENTRY(void, add_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(void, add_scalar_in_place_f32, (float *v1, float value, size_t length), (v1, value, length)) \
     KERNEL_ENTRY(void, sub_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(void, sub_scalar_in_place_f32, (float *v1, float value, size_t length), (v1, value, length)) \
+    KERNEL_ENTRY(void, sub_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, float *res, size_t length), (a, aoffset, b, boffset, res, length)) \
+    KERNEL_ENTRY(void, sub_scalar_f32, (const float *a, size_t aoffset, float value, float *res, size_t length), (a, aoffset, value, res, length)) \
+    KERNEL_ENTRY(void, scale_f32, (float *v, float multiplier, size_t length), (v, multiplier, length)) \
     KERNEL_ENTRY(float, max_f32, (const float *v, size_t length), (v, length)) \
+    KERNEL_ENTRY(float, min_f32, (const float *v, size_t length), (v, length)) \
     KERNEL_ENTRY(void, min_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
+    KERNEL_ENTRY(float, sum_f32, (const float *v, size_t length), (v, length)) \
+    /* PQ training */ \
+    KERNEL_ENTRY(void, scale_to_f32, (const float *source, float *destination, size_t destinationOffset, float multiplier, size_t length), (source, destination, destinationOffset, multiplier, length)) \
+    KERNEL_ENTRY(void, subtract_add_in_place_f32, (float *oldSum, float *newSum, const float *point, size_t length), (oldSum, newSum, point, length)) \
     /* PQ kernels */ \
+    KERNEL_ENTRY(int, closest_centroid_f32, (const float *point, size_t pointOffset, const float *centroids, int centroidCount, size_t dimension), (point, pointOffset, centroids, centroidCount, dimension)) \
     KERNEL_ENTRY(float, assemble_and_sum_f32, (const float *data, int dataBase, const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength), (data, dataBase, baseOffsets, baseOffsetsOffset, baseOffsetsLength)) \
     KERNEL_ENTRY(float, assemble_and_sum_pq_f32, (const float *data, size_t subspaceCount, const unsigned char *baseOffsets1, int baseOffsetsOffset1, const unsigned char *baseOffsets2, int baseOffsetsOffset2, int clusterCount), (data, subspaceCount, baseOffsets1, baseOffsetsOffset1, baseOffsets2, baseOffsetsOffset2, clusterCount)) \
     KERNEL_ENTRY(float, pq_decoded_cosine_similarity_f32, (const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude), (baseOffsets, baseOffsetsOffset, baseOffsetsLength, clusterCount, partialSums, aMagnitude, bMagnitude)) \
@@ -55,6 +64,7 @@
     KERNEL_ENTRY(void, nvq_quantize_8bit, (const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination), (vector, length, alpha, x0, minValue, maxValue, destination)) \
     KERNEL_ENTRY(float, nvq_loss, (const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, int nBits), (vector, length, alpha, x0, minValue, maxValue, nBits)) \
     KERNEL_ENTRY(float, nvq_uniform_loss, (const float *vector, size_t length, float minValue, float maxValue, int nBits), (vector, length, minValue, maxValue, nBits)) \
+    KERNEL_ENTRY(float, nvq_growth_rate, (const float *vector, size_t length, float minValue, float maxValue, int nBits), (vector, length, minValue, maxValue, nBits)) \
     KERNEL_ENTRY(float, nvq_square_l2_distance_8bit, (const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue), (vector, quantized, length, alpha, x0, minValue, maxValue)) \
     KERNEL_ENTRY(float, nvq_dot_product_8bit, (const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue), (vector, quantized, length, alpha, x0, minValue, maxValue)) \
     KERNEL_ENTRY(int64_t, nvq_cosine_8bit_packed, (const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float *centroid), (vector, quantized, length, alpha, x0, minValue, maxValue, centroid)) \

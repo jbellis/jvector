@@ -71,7 +71,7 @@ third_party/highway/          - Google Highway header-only library (git submodul
 Run the build script from this directory:
 
 ```bash
-bash build_native_lib.sh [buildtype] [crossarch]
+bash src/build_native_lib.sh [buildtype] [crossarch]
 ```
 
 Parameters (all optional):
@@ -87,14 +87,14 @@ The script:
 3. Always builds the **native arch** library into `target/meson-build-<arch>/`.
 4. If `crossarch=true`, also cross-compiles the **other arch** library into
    `target/meson-build-<other-arch>/` using the bundled cross-compile file.
-5. Copies each built `.so` to `src/main/resources/libjvector-<arch>.so`.
-   Debug symbols are stripped from the resource copy and saved separately as
-   `target/meson-build-<arch>/libjvector-<arch>.so.debug`.
+5. Copies each built `.so` to `jvector-native/target/meson-build/libjvector-<arch>.so`
+   (relative to the repository root), which Maven includes as a resource.
+   The script does not strip or split debug symbols.
 
 To install all required dependencies automatically and then build, pass `--auto-install-deps` as the first argument:
 
 ```bash
-bash build_native_lib.sh --auto-install-deps
+bash src/build_native_lib.sh --auto-install-deps
 ```
 
 This is the easiest way to get started on a fresh Ubuntu machine. For other
@@ -117,9 +117,10 @@ sudo apt-get install -y g++-aarch64-linux-gnu
 Build both libraries:
 
 ```bash
-bash build_native_lib.sh release true
-# produces: src/main/resources/libjvector-x86_64.so
-#           src/main/resources/libjvector-aarch64.so
+bash src/build_native_lib.sh release true
+# produces (relative to the repository root):
+# jvector-native/target/meson-build/libjvector-x86_64.so
+# jvector-native/target/meson-build/libjvector-aarch64.so
 ```
 
 #### Build x86_64 from an aarch64 host
@@ -133,9 +134,10 @@ sudo apt-get install -y g++-x86-64-linux-gnu
 Build both libraries:
 
 ```bash
-bash build_native_lib.sh release true
-# produces: src/main/resources/libjvector-aarch64.so
-#           src/main/resources/libjvector-x86_64.so
+bash src/build_native_lib.sh release true
+# produces (relative to the repository root):
+# jvector-native/target/meson-build/libjvector-aarch64.so
+# jvector-native/target/meson-build/libjvector-x86_64.so
 ```
 
 The cross-compile file used for each direction lives in this directory:
@@ -200,7 +202,8 @@ meson compile -C ../../../target/meson-build-aarch64
 ```
 
 The versioned output (e.g. `libjvector.so.0.1.0`) is the real file; copy and
-rename it to `src/main/resources/libjvector-<arch>.so` to make it available to
+rename it to `jvector-native/target/meson-build/libjvector-<arch>.so` (relative
+to the repository root) before Maven processes resources to make it available to
 `LibraryLoader`.
 
 ### Generating Java bindings for native code
@@ -210,7 +213,7 @@ These need to be regenerated if the public header file changes. This is done by
 running the jextract script:
 
 ```bash
-bash jextract_generate_bindings.sh  # uses jextract from the PATH
+bash src/jextract_generate_bindings.sh  # uses jextract from the PATH
 ```
 
 After regeneration the script automatically patches the generated file to add
@@ -232,7 +235,7 @@ jextract on the system, or if it's not on the PATH, you can specify the location
 via environment variable:
 
 ```bash
-JEXTRACT_BIN="/opt/jextract-22/bin/jextract" bash jextract_generate_bindings.sh
+JEXTRACT_BIN="/opt/jextract-22/bin/jextract" bash src/jextract_generate_bindings.sh
 ```
 
 The same environment variable can be used when invoking the script through
@@ -385,8 +388,11 @@ Java caller
    system-installed `.so`), then falls back to reading `os.arch` to select the
    correct resource name (`libjvector-x86_64.so` or `libjvector-aarch64.so`),
    extracting it from the JAR, and loading it from a temp file.
-3. On first call into `NativeSimdOps`, the FFM `SymbolLookup` resolves each
-   exported symbol directly against the loaded library.
+3. The provider checks that `jvector_supports_abi` exists and returns 1 for the
+   ABI required by the Java bindings. See [Native ABI compatibility](#native-abi-compatibility).
+4. The provider checks that all bound symbols exist and calls the ISA accessor
+   before making the provider available. FFM bindings resolve their function
+   addresses lazily; no kernel is called before the ABI check succeeds.
 
 ### ISA dispatch
 
@@ -743,3 +749,78 @@ isa_libs += my_new_tier_lib
 - Update the architecture diagram in the **How it is integrated into JVector**
   section above.
 - Add the new `JVECTOR_MAX_ISA` value to the **ISA cap** section.
+
+## Native ABI compatibility
+
+### Querying support
+
+The Java provider requires ABI 1. Before resolving kernel bindings it calls this
+export from [`src/jvector_simd.h`](src/jvector_simd.h):
+
+```c
+int32_t jvector_supports_abi(int32_t abi);
+```
+
+The native library stores an explicit set of supported ABI IDs, initially `{1}`,
+in [`src/jvector_simd.cpp`](src/jvector_simd.cpp). The query returns exactly 1 for
+a supported ID and 0 for any other ID, including nonpositive and unknown IDs.
+C and C++ consumers can call the same query before using an ABI's entry points.
+The query's name, signature, and return convention are permanent bootstrap
+contracts; they must remain unchanged when new ABIs are introduced.
+
+The Java JAR requires one ABI, rather than a particular native release number.
+For example, if a future Java release requires ABI 2:
+
+| Native supported set | Java requires ABI 1 | Java requires ABI 2 |
+| --- | --- | --- |
+| `{1}` | Accept | Reject |
+| `{1, 2}` | Accept | Accept |
+| `{2}` | Reject | Accept |
+| Query missing | Reject | Reject |
+
+Sets need not be contiguous. A library advertising `{1, 3}` must return 0 for
+ABI 2. Never infer support for older IDs from the highest supported ID.
+
+An unsupported ABI or missing query causes automatic Java provider selection to
+fall back to Panama. Explicitly forcing native fails during initialization.
+Native libraries from before this handshake are rejected, even if their kernels
+might otherwise be compatible. Each release bundles a library supporting its
+required ABI. A system library found through `java.library.path` is checked too;
+if it loads but fails validation, selection falls back to Panama rather than
+trying the bundled native copy.
+
+### Evolving the native library
+
+ABI IDs describe calling contracts, not JVector release numbers. Optimizations,
+bug fixes that preserve the contract, and compatible additions retain the existing
+ABI ID. Required-symbol checks still reject older libraries missing functions
+that a newer Java release needs, even when the ABI ID is supported.
+
+An incompatible change to a signature, data layout, or calling convention requires
+a new ABI ID. To support both IDs, retain the old contract and expose changed
+functions under distinct entry points, such as a new `_v2` name. Never reinterpret
+an existing symbol's signature. Java bindings for each ABI must resolve the
+corresponding entry points. Advertise an old ID only while its contract is still
+implemented; removing it makes Java releases requiring that ID reject the library.
+
+When changing the native interface:
+
+1. Update the public declarations and native implementations. Keep the supported
+   set in `jvector_simd.cpp` accurate. Incompatible changes also require updating
+   `REQUIRED_ABI` in
+   [`NativeVectorizationProvider.java`](../java/io/github/jbellis/jvector/vector/NativeVectorizationProvider.java)
+   and adapting the Java callers to the new entry points.
+2. Regenerate the checked-in `NativeSimdOps.java` bindings with jextract 22 when
+   the public header changes. Follow [Generating Java bindings for native code](#generating-java-bindings-for-native-code).
+3. Rebuild and package the native library along with the Java changes. A Java-only
+   rebuild cannot add new exports to an existing `.so`; build each shipped architecture.
+4. Run `TestVectorizationProviderSelection` against the rebuilt library. It covers
+   the real supported set, noncontiguous test sets, unsupported and missing queries,
+   missing kernels, automatic fallback, and forced-native startup failure. Update
+   the fixtures and assertions when the required ABI or bound functions change.
+5. For release packaging, run `jvector-native/verify_native_lib.sh` from the
+   repository root against the cross-architecture JAR. It requires both shipped
+   libraries and checks their architecture, dependencies, and required exports,
+   including `jvector_supports_abi`, where the inspection tools are available.
+   Export inspection complements the runtime tests; it does not establish ABI
+   support by itself.
