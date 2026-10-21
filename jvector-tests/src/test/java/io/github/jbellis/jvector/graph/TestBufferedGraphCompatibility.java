@@ -36,7 +36,7 @@ import static org.junit.Assert.*;
 
 public class TestBufferedGraphCompatibility {
     /// Every level's adjacency, one "level node: neighbors" line per node in node order.
-    private static List<String> adjacency(ImmutableGraphIndex graph) throws Exception {
+    private static List<String> adjacency(GraphIndex graph) throws Exception {
         var lines = new ArrayList<String>();
         try (var view = graph.getView()) {
             for (int level = 0; level <= graph.getMaxLevel(); level++) {
@@ -141,7 +141,7 @@ public class TestBufferedGraphCompatibility {
                                                                 : new DefaultSearchScoreProvider(reranker);
                                                         var answer = searcher.search(scores, 10, Bits.ALL);
                                                         if (expectedAnswer == null) expectedAnswer = answer;
-                                                        else assertEquals(expectedAnswer, answer);
+                                                        else assertSameAnswer(expectedAnswer, answer);
                                                     }
                                                 } finally { Files.delete(graphFile); }
                                             }
@@ -154,5 +154,20 @@ public class TestBufferedGraphCompatibility {
                 } finally { Files.delete(path); }
             }
         } finally { pool.shutdown(); single.shutdown(); }
+    }
+
+    /**
+     * Searches over byte-identical graphs must return the same nodes in the same order. Scores are compared
+     * with a tolerance: the Panama Vector API can round the last bit differently once C2 compiles the scoring
+     * code mid-run, so exact float equality is flaky where native kernels aren't available (e.g. macOS).
+     */
+    private static void assertSameAnswer(SearchResult expected, SearchResult actual) {
+        var e = expected.getNodes();
+        var a = actual.getNodes();
+        assertArrayEquals(Arrays.stream(e).mapToInt(n -> n.node).toArray(),
+                          Arrays.stream(a).mapToInt(n -> n.node).toArray());
+        for (int i = 0; i < e.length; i++) {
+            assertEquals("score of node " + e[i].node, e[i].score, a[i].score, 1e-6f);
+        }
     }
 }
